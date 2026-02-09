@@ -121,14 +121,6 @@ export default function LoginPage() {
               主管
             </Button>
           </div>
-
-          <div className="text-xs text-center text-muted-foreground space-y-1">
-            <p>示範帳號：</p>
-            <p>PM: pm@example.com</p>
-            <p>成員: member@example.com</p>
-            <p>主管: exec@example.com</p>
-            <p className="text-muted-foreground/70">密碼任意輸入即可</p>
-          </div>
         </CardContent>
       </Card>
     </div>

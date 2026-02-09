@@ -21,7 +21,6 @@ import {
   Settings,
   LogOut,
   User,
-  Plus,
   ClipboardCheck,
   ClipboardList
 } from 'lucide-react'
@@ -35,12 +34,18 @@ interface DashboardLayoutProps {
 }
 
 const navigation = [
-  { name: '儀表板', href: '/dashboard', icon: LayoutDashboard },
+  { name: '儀表板', href: '/dashboard', icon: LayoutDashboard, roles: ['pm', 'executive'] as const },
+  { name: '我的任務', href: '/my-tasks', icon: ClipboardList, roles: ['pm', 'member'] as const },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
-  { name: '我的任務', href: '/my-tasks', icon: ClipboardList },
-  { name: '報告', href: '/reports', icon: FileText },
+  { name: '報告', href: '/reports', icon: FileText, roles: ['pm', 'executive'] as const },
   { name: '審批中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
 ]
+
+const defaultRoute: Record<string, string> = {
+  pm: '/dashboard',
+  member: '/my-tasks',
+  executive: '/dashboard',
+}
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
@@ -71,6 +76,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [user, loading, router])
 
+  // Redirect to role-appropriate page if on a page the role shouldn't access
+  useEffect(() => {
+    if (!loading && user && pathname) {
+      const isOnRestrictedPage = navigation.some(
+        item => (pathname === item.href || pathname.startsWith(item.href + '/')) &&
+                item.roles && !item.roles.includes(user.role)
+      )
+      if (isOnRestrictedPage) {
+        router.replace(defaultRoute[user.role] || '/dashboard')
+      }
+    }
+  }, [user, loading, pathname, router])
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -85,7 +103,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <header className="sticky top-0 z-50 w-full border-b bg-card shadow-sm">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="flex items-center gap-2">
+            <Link href={defaultRoute[user.role] || '/dashboard'} className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <FolderKanban className="h-5 w-5" />
               </div>
