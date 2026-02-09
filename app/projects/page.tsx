@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardLayout } from '@/components/dashboard-layout'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -194,20 +194,18 @@ export default function ProjectsPage() {
         </div>
 
         {/* Projects Grid */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredProjects.map((project) => (
             <Link key={project.id} href={`/projects/${project.id}`}>
-              <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-muted-foreground">{project.projectCode}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {PROJECT_TYPE_LABELS[project.projectType]}
-                        </Badge>
-                      </div>
-                      <CardTitle className="text-lg line-clamp-2">{project.name}</CardTitle>
+              <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
+                <CardContent className="p-4 space-y-2.5">
+                  {/* Row 1: Code + Type + Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-mono text-muted-foreground">{project.projectCode}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {PROJECT_TYPE_LABELS[project.projectType]}
+                      </Badge>
                     </div>
                     <Badge
                       variant="secondary"
@@ -219,42 +217,24 @@ export default function ProjectsPage() {
                       </span>
                     </Badge>
                   </div>
-                  <CardDescription className="line-clamp-2">
-                    {project.objective}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">專案進度</span>
-                      <span className="font-medium">{project.progress}%</span>
-                    </div>
-                    <Progress value={project.progress} className="h-2" />
+
+                  {/* Row 2: Name */}
+                  <h3 className="font-semibold text-base line-clamp-1">{project.name}</h3>
+
+                  {/* Row 3: Progress bar */}
+                  <div className="flex items-center gap-3">
+                    <Progress value={project.progress} className="h-1.5 flex-1" />
+                    <span className="text-sm font-medium w-10 text-right shrink-0">{project.progress}%</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>{project.team.length} 人</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span>{new Date(project.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                    </div>
-                    {/* 一般成員不顯示預算 */}
+                  {/* Row 4: Meta info inline */}
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-1"><Users className="h-3 w-3" />{project.team.length} 人</span>
+                    <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(project.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
                     {user?.role !== 'member' && (
-                      <div className="flex items-center gap-2 col-span-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <span>NT$ {(project.budgetUsed / 1000000).toFixed(1)}M / {(project.budget / 1000000).toFixed(1)}M</span>
-                      </div>
+                      <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{(project.budgetUsed / 1000000).toFixed(1)}M/{(project.budget / 1000000).toFixed(1)}M</span>
                     )}
-                  </div>
-
-                  <div className="pt-3 border-t">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>負責人：{project.owner}</span>
-                      <span>{project.milestones.filter(m => m.status === 'done').length} / {project.milestones.length} 里程碑</span>
-                    </div>
+                    <span className="ml-auto">{project.owner} · {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑</span>
                   </div>
                 </CardContent>
               </Card>
@@ -263,11 +243,9 @@ export default function ProjectsPage() {
         </div>
 
         {filteredProjects.length === 0 && (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">找不到符合條件的專案</p>
-            </CardContent>
-          </Card>
+          <div className="text-center py-12 text-muted-foreground">
+            找不到符合條件的專案
+          </div>
         )}
       </div>
     </DashboardLayout>
