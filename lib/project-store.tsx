@@ -40,14 +40,17 @@ interface ProjectStoreContextType {
 const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(undefined)
 
 const STORAGE_KEY = 'pm-system-projects'
+const STORAGE_VERSION_KEY = 'pm-system-version'
+const CURRENT_VERSION = '2'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    const storedVersion = localStorage.getItem(STORAGE_VERSION_KEY)
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
+    if (stored && storedVersion === CURRENT_VERSION) {
       try {
         setProjects(JSON.parse(stored))
       } catch {
@@ -55,6 +58,7 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       }
     } else {
       setProjects(MOCK_PROJECTS)
+      localStorage.setItem(STORAGE_VERSION_KEY, CURRENT_VERSION)
     }
     setLoaded(true)
   }, [])
