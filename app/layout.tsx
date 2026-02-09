@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/lib/auth-context'
+import { ProjectStoreProvider } from '@/lib/project-store'
 
 import './globals.css'
 
@@ -29,7 +30,9 @@ export default function RootLayout({
     <html lang="zh-TW">
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <AuthProvider>
-          {children}
+          <ProjectStoreProvider>
+            {children}
+          </ProjectStoreProvider>
         </AuthProvider>
       </body>
     </html>

@@ -6,8 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
-import { getAllProjects, type ProjectStatus } from '@/lib/mock-data'
-import { 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { PROJECT_TYPE_LABELS, type ProjectStatus, type ProjectType } from '@/lib/mock-data'
+import { useProjectStore } from '@/lib/project-store'
+import {
   Search,
   Users,
   Calendar,
@@ -15,28 +23,40 @@ import {
   Filter,
   CheckCircle2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Tag
 } from 'lucide-react'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '@/lib/auth-context'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
-  const allProjects = getAllProjects()
+  const { projects: allProjects } = useProjectStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
+  const [typeFilter, setTypeFilter] = useState<ProjectType | 'all'>('all')
+  const [ownerFilter, setOwnerFilter] = useState<string>('all')
 
   // 根據角色過濾專案
   const projects = user?.role === 'member'
     ? allProjects.filter(p => p.team.includes(user.name) || p.owner === user.name)
     : allProjects
 
+  // 取得所有負責人列表
+  const owners = useMemo(() => {
+    const ownerSet = new Set(projects.map(p => p.owner))
+    return Array.from(ownerSet).sort()
+  }, [projects])
+
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         project.objective.toLowerCase().includes(searchQuery.toLowerCase())
+                         project.objective.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         project.projectCode.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === 'all' || project.status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesType = typeFilter === 'all' || project.projectType === typeFilter
+    const matchesOwner = ownerFilter === 'all' || project.owner === ownerFilter
+    return matchesSearch && matchesStatus && matchesType && matchesOwner
   })
 
   const getStatusColor = (status: ProjectStatus) => {
@@ -82,8 +102,8 @@ export default function ProjectsPage() {
               {user?.role === 'member' ? '我的專案' : '專案看板'}
             </h1>
             <p className="text-muted-foreground mt-1">
-              {user?.role === 'member' 
-                ? '您參與的專案列表' 
+              {user?.role === 'member'
+                ? '您參與的專案列表'
                 : user?.role === 'executive'
                   ? '所有專案的整體概覽與追蹤'
                   : '管理和追蹤所有專案的進度與狀態'
@@ -101,51 +121,97 @@ export default function ProjectsPage() {
         {/* Filters */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="搜尋專案名稱或目標..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <div className="flex gap-2">
-                  <Button
-                    variant={statusFilter === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setStatusFilter('all')}
-                  >
-                    全部
-                  </Button>
-                  <Button
-                    variant={statusFilter === 'green' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setStatusFilter('green')}
-                    className={statusFilter === 'green' ? 'bg-success hover:bg-success/90' : ''}
-                  >
-                    正常
-                  </Button>
-                  <Button
-                    variant={statusFilter === 'yellow' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setStatusFilter('yellow')}
-                    className={statusFilter === 'yellow' ? 'bg-warning hover:bg-warning/90' : ''}
-                  >
-                    注意
-                  </Button>
-                  <Button
-                    variant={statusFilter === 'red' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setStatusFilter('red')}
-                    className={statusFilter === 'red' ? 'bg-destructive hover:bg-destructive/90' : ''}
-                  >
-                    風險
-                  </Button>
+            <div className="flex flex-col gap-4">
+              {/* Search + Status */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="搜尋專案名稱、目標或編碼..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
                 </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex gap-2">
+                    <Button
+                      variant={statusFilter === 'all' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('all')}
+                    >
+                      全部
+                    </Button>
+                    <Button
+                      variant={statusFilter === 'green' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('green')}
+                      className={statusFilter === 'green' ? 'bg-success hover:bg-success/90' : ''}
+                    >
+                      正常
+                    </Button>
+                    <Button
+                      variant={statusFilter === 'yellow' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('yellow')}
+                      className={statusFilter === 'yellow' ? 'bg-warning hover:bg-warning/90' : ''}
+                    >
+                      注意
+                    </Button>
+                    <Button
+                      variant={statusFilter === 'red' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('red')}
+                      className={statusFilter === 'red' ? 'bg-destructive hover:bg-destructive/90' : ''}
+                    >
+                      風險
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Type + Owner filters */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">專案類型：</span>
+                  <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ProjectType | 'all')}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部類型</SelectItem>
+                      {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">負責人：</span>
+                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部負責人</SelectItem>
+                      {owners.map(owner => (
+                        <SelectItem key={owner} value={owner}>{owner}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(typeFilter !== 'all' || ownerFilter !== 'all') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setTypeFilter('all'); setOwnerFilter('all') }}
+                  >
+                    清除篩選
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -157,10 +223,18 @@ export default function ProjectsPage() {
             <Link key={project.id} href={`/projects/${project.id}`}>
               <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
                 <CardHeader>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <CardTitle className="text-lg line-clamp-2">{project.name}</CardTitle>
-                    <Badge 
-                      variant="secondary" 
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-mono text-muted-foreground">{project.projectCode}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {PROJECT_TYPE_LABELS[project.projectType]}
+                        </Badge>
+                      </div>
+                      <CardTitle className="text-lg line-clamp-2">{project.name}</CardTitle>
+                    </div>
+                    <Badge
+                      variant="secondary"
                       className={`${getStatusColor(project.status)} shrink-0`}
                     >
                       <span className="flex items-center gap-1">

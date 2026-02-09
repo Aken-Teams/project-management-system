@@ -14,17 +14,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { 
-  LayoutDashboard, 
-  FolderKanban, 
-  GanttChart, 
-  FileText, 
+import {
+  LayoutDashboard,
+  FolderKanban,
+  GanttChart,
+  FileText,
   Settings,
   LogOut,
   User,
-  Plus
+  Plus,
+  ClipboardCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useProjectStore } from '@/lib/project-store'
+import { Badge } from '@/components/ui/badge'
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -35,12 +38,15 @@ const navigation = [
   { name: '專案看板', href: '/projects', icon: FolderKanban },
   { name: '甘特圖', href: '/gantt', icon: GanttChart },
   { name: '報告', href: '/reports', icon: FileText },
+  { name: '審批中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
 ]
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout, switchRole } = useAuth()
+  const { getPendingApprovals } = useProjectStore()
+  const pendingCount = getPendingApprovals().length
 
   const handleLogout = () => {
     logout()
@@ -81,21 +87,29 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </Link>
             
             <nav className="hidden md:flex items-center gap-1">
-              {navigation.map((item) => {
+              {navigation
+                .filter(item => !('roles' in item) || !item.roles || item.roles.includes(user.role))
+                .map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                const showBadge = item.href === '/approvals' && pendingCount > 0
                 return (
                   <Link key={item.name} href={item.href}>
-                    <Button 
+                    <Button
                       variant={isActive ? 'secondary' : 'ghost'}
                       size="sm"
                       className={cn(
-                        'gap-2',
+                        'gap-2 relative',
                         isActive && 'bg-secondary'
                       )}
                     >
                       <Icon className="h-4 w-4" />
                       {item.name}
+                      {showBadge && (
+                        <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                          {pendingCount}
+                        </Badge>
+                      )}
                     </Button>
                   </Link>
                 )
