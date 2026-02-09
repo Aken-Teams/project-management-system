@@ -1,11 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import {
   Select,
   SelectContent,
@@ -16,23 +15,101 @@ import {
 import { useProjectStore } from '@/lib/project-store'
 import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
 import {
-  Download,
-  FileText,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  DollarSign,
-  Users,
-  Target,
-  Calendar,
-  BarChart3,
   Mail,
   FileDown,
+  CheckCircle2,
+  X,
   Printer,
-  X
+  AlertTriangle,
+  Target,
+  DollarSign,
+  BarChart3,
+  Users,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+// ── SVG Donut Chart ──
+function DonutChart({ segments, size = 180, strokeWidth = 26, children }: {
+  segments: { value: number; color: string; label: string }[]
+  size?: number
+  strokeWidth?: number
+  children?: React.ReactNode
+}) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const total = segments.reduce((s, seg) => s + seg.value, 0)
+  let accumulated = 0
+
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        {total === 0 ? (
+          <circle
+            cx={size / 2} cy={size / 2} r={radius}
+            fill="none" stroke="hsl(var(--muted))" strokeWidth={strokeWidth}
+          />
+        ) : (
+          segments.filter(s => s.value > 0).map((seg, i) => {
+            const pct = seg.value / total
+            const dashLength = circumference * pct
+            const dashOffset = circumference * (1 - accumulated / total)
+            accumulated += seg.value
+            return (
+              <circle
+                key={i}
+                cx={size / 2} cy={size / 2} r={radius}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+                strokeDashoffset={dashOffset}
+                strokeLinecap="butt"
+              />
+            )
+          })
+        )}
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ── Mini ring (for project cards) ──
+function MiniRing({ value, size = 44, strokeWidth = 5, color }: {
+  value: number; size?: number; strokeWidth?: number; color: string
+}) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const dashLen = circumference * (value / 100)
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="hsl(var(--muted))" strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
+          strokeDasharray={`${dashLen} ${circumference - dashLen}`} strokeLinecap="round" />
+      </svg>
+      <span className="absolute text-[10px] font-bold">{value}%</span>
+    </div>
+  )
+}
+
+// ── Status dot ──
+function StatusDot({ status }: { status: ProjectStatus }) {
+  const colors: Record<ProjectStatus, string> = {
+    green: 'bg-emerald-500',
+    yellow: 'bg-amber-400',
+    red: 'bg-red-500',
+  }
+  return <span className={cn('inline-block h-2.5 w-2.5 rounded-full', colors[status])} />
+}
+
+function fmtMoney(n: number) {
+  if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`
+  if (n >= 1000) return `$${(n / 1000).toFixed(0)}K`
+  return `$${n}`
+}
 
 export default function ReportsPage() {
   const { projects } = useProjectStore()
@@ -45,59 +122,76 @@ export default function ReportsPage() {
     ? null
     : projects.find(p => p.id === selectedProjectId)
 
-  // Calculate statistics
-  const stats = selectedProject ? {
-    progress: selectedProject.progress,
-    budgetUsed: selectedProject.budgetUsed,
-    budget: selectedProject.budget,
-    teamSize: selectedProject.team.length,
-    completedMilestones: selectedProject.milestones.filter(m => m.status === 'done').length,
-    totalMilestones: selectedProject.milestones.length,
-    completedTasks: selectedProject.tasks.filter(t => t.status === 'done').length,
-    totalTasks: selectedProject.tasks.length,
-    openRisks: selectedProject.risks.filter(r => r.status === 'open').length,
-    status: selectedProject.status,
-    weeklyUpdates: selectedProject.weeklyUpdates.length,
-    delayRequests: selectedProject.delayRequests.length,
-    pendingDelays: selectedProject.delayRequests.filter(r => r.status === 'pending').length,
-  } : {
-    progress: projects.length > 0 ? Math.round(projects.reduce((acc, p) => acc + p.progress, 0) / projects.length) : 0,
-    budgetUsed: projects.reduce((acc, p) => acc + p.budgetUsed, 0),
-    budget: projects.reduce((acc, p) => acc + p.budget, 0),
-    teamSize: new Set(projects.flatMap(p => p.team)).size,
-    completedMilestones: projects.reduce((acc, p) => acc + p.milestones.filter(m => m.status === 'done').length, 0),
-    totalMilestones: projects.reduce((acc, p) => acc + p.milestones.length, 0),
-    completedTasks: projects.reduce((acc, p) => acc + p.tasks.filter(t => t.status === 'done').length, 0),
-    totalTasks: projects.reduce((acc, p) => acc + p.tasks.length, 0),
-    openRisks: projects.reduce((acc, p) => acc + p.risks.filter(r => r.status === 'open').length, 0),
-    status: null as ProjectStatus | null,
-    weeklyUpdates: projects.reduce((acc, p) => acc + p.weeklyUpdates.length, 0),
-    delayRequests: projects.reduce((acc, p) => acc + p.delayRequests.length, 0),
-    pendingDelays: projects.reduce((acc, p) => acc + p.delayRequests.filter(r => r.status === 'pending').length, 0),
-  }
+  const targetProjects = selectedProject ? [selectedProject] : projects
 
-  const budgetUtilization = stats.budget > 0 ? Math.round((stats.budgetUsed / stats.budget) * 100) : 0
-  const milestoneCompletion = stats.totalMilestones > 0 ? Math.round((stats.completedMilestones / stats.totalMilestones) * 100) : 0
-  const taskCompletion = stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0
+  // ── Aggregate stats ──
+  const stats = useMemo(() => {
+    const ps = targetProjects
+    const totalTasks = ps.reduce((a, p) => a + p.tasks.length, 0)
+    const doneTasks = ps.reduce((a, p) => a + p.tasks.filter(t => t.status === 'done').length, 0)
+    const inProgressTasks = ps.reduce((a, p) => a + p.tasks.filter(t => t.status === 'in-progress').length, 0)
+    const blockedTasks = ps.reduce((a, p) => a + p.tasks.filter(t => t.status === 'blocked').length, 0)
+    const todoTasks = totalTasks - doneTasks - inProgressTasks - blockedTasks
 
-  const getHealthStatus = () => {
-    if (selectedProject) {
-      const status = selectedProject.status
-      if (status === 'green') return { text: '健康', icon: CheckCircle2, color: 'text-success' }
-      if (status === 'yellow') return { text: '需注意', icon: Clock, color: 'text-warning' }
-      return { text: '高風險', icon: AlertTriangle, color: 'text-destructive' }
+    const totalMilestones = ps.reduce((a, p) => a + p.milestones.length, 0)
+    const doneMilestones = ps.reduce((a, p) => a + p.milestones.filter(m => m.status === 'done').length, 0)
+
+    const budget = ps.reduce((a, p) => a + p.budget, 0)
+    const budgetUsed = ps.reduce((a, p) => a + p.budgetUsed, 0)
+    const openRisks = ps.reduce((a, p) => a + p.risks.filter(r => r.status === 'open').length, 0)
+    const pendingDelays = ps.reduce((a, p) => a + p.delayRequests.filter(r => r.status === 'pending').length, 0)
+    const teamSize = new Set(ps.flatMap(p => p.team)).size
+    const progress = ps.length > 0 ? Math.round(ps.reduce((a, p) => a + p.progress, 0) / ps.length) : 0
+
+    return {
+      totalTasks, doneTasks, inProgressTasks, blockedTasks, todoTasks,
+      totalMilestones, doneMilestones,
+      budget, budgetUsed,
+      openRisks, pendingDelays, teamSize, progress,
     }
-    const greenCount = projects.filter(p => p.status === 'green').length
-    const totalCount = projects.length
-    const pct = totalCount > 0 ? (greenCount / totalCount) * 100 : 100
-    if (pct >= 70) return { text: '整體健康', icon: CheckCircle2, color: 'text-success' }
-    if (pct >= 40) return { text: '需關注', icon: Clock, color: 'text-warning' }
-    return { text: '需改善', icon: AlertTriangle, color: 'text-destructive' }
-  }
+  }, [targetProjects])
 
-  const healthStatus = getHealthStatus()
-  const HealthIcon = healthStatus.icon
+  const budgetPct = stats.budget > 0 ? Math.round((stats.budgetUsed / stats.budget) * 100) : 0
 
+  // ── Donut segments ──
+  const taskSegments = [
+    { value: stats.doneTasks, color: '#10b981', label: '已完成' },
+    { value: stats.inProgressTasks, color: '#3b82f6', label: '進行中' },
+    { value: stats.todoTasks, color: '#94a3b8', label: '待辦' },
+    { value: stats.blockedTasks, color: '#ef4444', label: '受阻' },
+  ]
+
+  const statusSegments = useMemo(() => {
+    const green = projects.filter(p => p.status === 'green').length
+    const yellow = projects.filter(p => p.status === 'yellow').length
+    const red = projects.filter(p => p.status === 'red').length
+    return [
+      { value: green, color: '#10b981', label: '正常' },
+      { value: yellow, color: '#f59e0b', label: '注意' },
+      { value: red, color: '#ef4444', label: '風險' },
+    ]
+  }, [projects])
+
+  // ── Member workload ──
+  const memberWorkload = useMemo(() => {
+    const map = new Map<string, { total: number; done: number }>()
+    targetProjects.forEach(p => {
+      p.tasks.forEach(t => {
+        const entry = map.get(t.assignee) || { total: 0, done: 0 }
+        entry.total++
+        if (t.status === 'done') entry.done++
+        map.set(t.assignee, entry)
+      })
+    })
+    return [...map.entries()]
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8)
+  }, [targetProjects])
+
+  const maxMemberTasks = Math.max(...memberWorkload.map(m => m.total), 1)
+
+  // ── Export handlers ──
   const handleExport = (format: 'pdf' | 'email') => {
     setExportFormat(format)
     setShowExportModal(true)
@@ -107,474 +201,395 @@ export default function ReportsPage() {
   const handleConfirmExport = () => {
     if (exportFormat === 'email') {
       setEmailSent(true)
-      setTimeout(() => {
-        setShowExportModal(false)
-        setEmailSent(false)
-      }, 2000)
+      setTimeout(() => { setShowExportModal(false); setEmailSent(false) }, 2000)
     } else {
-      // Simulate PDF download
-      setTimeout(() => {
-        setShowExportModal(false)
-      }, 1500)
+      setTimeout(() => setShowExportModal(false), 1500)
     }
   }
 
-  const getStatusColor = (status: ProjectStatus) => {
-    switch (status) {
-      case 'green': return 'bg-success text-success-foreground'
-      case 'yellow': return 'bg-warning text-warning-foreground'
-      case 'red': return 'bg-destructive text-destructive-foreground'
-    }
+  const getStatusRingColor = (status: ProjectStatus) => {
+    if (status === 'green') return '#3b82f6'
+    if (status === 'yellow') return '#f59e0b'
+    return '#ef4444'
   }
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">專案報告</h1>
-            <p className="text-muted-foreground mt-1">
-              專案執行狀況與關鍵指標分析
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => handleExport('email')}>
-              <Mail className="h-4 w-4" />
-              Email 發送
-            </Button>
-            <Button className="gap-2" onClick={() => handleExport('pdf')}>
-              <FileDown className="h-4 w-4" />
-              匯出 PDF
-            </Button>
-          </div>
-        </div>
-
-        {/* Export Modal */}
-        {showExportModal && (
-          <Card className="border-primary/50">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium flex items-center gap-2">
-                  {exportFormat === 'pdf' ? (
-                    <><FileDown className="h-5 w-5 text-primary" /> 匯出 PDF 報告</>
-                  ) : (
-                    <><Mail className="h-5 w-5 text-primary" /> Email 發送報告</>
-                  )}
-                </h3>
-                <Button variant="ghost" size="icon" onClick={() => setShowExportModal(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {emailSent ? (
-                <div className="text-center py-6">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-success" />
-                  <p className="font-medium text-success">報告已發送！</p>
-                  <p className="text-sm text-muted-foreground mt-1">已寄送至所有專案相關人員（示範模式）</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-muted/50 border">
-                    <div className="text-sm space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">報告範圍</span>
-                        <span className="font-medium">{selectedProject ? selectedProject.name : '所有專案（總覽）'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">報告日期</span>
-                        <span className="font-medium">{new Date().toLocaleDateString('zh-TW')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">包含內容</span>
-                        <span className="font-medium">進度、預算、里程碑、風險、更新紀錄</span>
-                      </div>
-                      {exportFormat === 'email' && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">收件人</span>
-                          <span className="font-medium">所有專案相關人員</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">格式</span>
-                        <span className="font-medium">{exportFormat === 'pdf' ? 'PDF 文件' : 'HTML Email + PDF 附件'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Button onClick={handleConfirmExport} className="flex-1 gap-2">
-                      {exportFormat === 'pdf' ? (
-                        <><Printer className="h-4 w-4" /> 產生並下載 PDF</>
-                      ) : (
-                        <><Mail className="h-4 w-4" /> 發送報告</>
-                      )}
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowExportModal(false)}>取消</Button>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground text-center">
-                    （示範模式：實際不會產生檔案或發送郵件）
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Filters */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">選擇專案：</span>
+        <div className="space-y-5">
+          {/* Header */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">專案報告</h1>
               <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="選擇專案" />
+                <SelectTrigger className="w-[220px] h-9 text-sm">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">所有專案（總覽）</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.projectCode} — {project.name}
-                    </SelectItem>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Health Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HealthIcon className={`h-6 w-6 ${healthStatus.color}`} />
-              專案健康度
-            </CardTitle>
-            <CardDescription>
-              {selectedProject ? `${selectedProject.name} 的健康狀況` : '所有專案的整體健康狀況'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3">
-              <div className={`text-4xl font-bold ${healthStatus.color}`}>
-                {healthStatus.text}
-              </div>
-              {stats.status && (
-                <Badge
-                  variant="secondary"
-                  className={getStatusColor(stats.status)}
-                >
-                  {stats.status === 'green' ? '正常運行' : stats.status === 'yellow' ? '需要關注' : '高風險狀態'}
-                </Badge>
-              )}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => handleExport('email')}>
+                <Mail className="h-3.5 w-3.5" /> Email
+              </Button>
+              <Button size="sm" className="gap-1.5" onClick={() => handleExport('pdf')}>
+                <FileDown className="h-3.5 w-3.5" /> 匯出 PDF
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Key Metrics */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                專案進度
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{stats.progress}%</span>
-                  {stats.progress >= 60 ? (
-                    <TrendingUp className="h-4 w-4 text-success" />
-                  ) : (
-                    <TrendingDown className="h-4 w-4 text-warning" />
-                  )}
+          {/* Export Modal */}
+          {showExportModal && (
+            <Card className="border-primary/50">
+              <CardContent className="pt-5 pb-4">
+                {emailSent ? (
+                  <div className="text-center py-4">
+                    <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
+                    <p className="font-medium text-success">報告已發送！</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-sm">
+                      <span className="font-medium">{exportFormat === 'pdf' ? '匯出 PDF' : 'Email 發送'}</span>
+                      <span className="text-muted-foreground ml-2">
+                        {selectedProject ? selectedProject.name : '所有專案'} — {new Date().toLocaleDateString('zh-TW')}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleConfirmExport} className="gap-1.5">
+                        {exportFormat === 'pdf' ? <><Printer className="h-3.5 w-3.5" /> 下載</> : <><Mail className="h-3.5 w-3.5" /> 發送</>}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setShowExportModal(false)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* KPI Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                  <Target className="h-3.5 w-3.5" /> 整體進度
                 </div>
-                <Progress value={stats.progress} className="h-2" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                預算執行
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{budgetUtilization}%</span>
-                  {budgetUtilization <= 100 ? (
-                    <CheckCircle2 className="h-4 w-4 text-success" />
-                  ) : (
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                  )}
+                <div className="text-2xl font-bold">{stats.progress}%</div>
+                <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${stats.progress}%` }} />
                 </div>
-                <Progress value={Math.min(budgetUtilization, 100)} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  ${(stats.budgetUsed / 1000000).toFixed(1)}M / ${(stats.budget / 1000000).toFixed(1)}M
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                里程碑完成
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{milestoneCompletion}%</span>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                  <DollarSign className="h-3.5 w-3.5" /> 預算執行
                 </div>
-                <Progress value={milestoneCompletion} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {stats.completedMilestones} / {stats.totalMilestones} 已完成
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                風險管理
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-3xl font-bold ${stats.openRisks > 0 ? 'text-destructive' : 'text-success'}`}>
+                <div className={cn('text-2xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
+                <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className={cn('h-full rounded-full transition-all', budgetPct > 100 ? 'bg-destructive' : 'bg-emerald-500')} style={{ width: `${Math.min(budgetPct, 100)}%` }} />
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-1">
+                  {fmtMoney(stats.budgetUsed)} / {fmtMoney(stats.budget)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                  <BarChart3 className="h-3.5 w-3.5" /> 里程碑
+                </div>
+                <div className="text-2xl font-bold">{stats.doneMilestones}<span className="text-sm font-normal text-muted-foreground">/{stats.totalMilestones}</span></div>
+                <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${stats.totalMilestones > 0 ? (stats.doneMilestones / stats.totalMilestones) * 100 : 0}%` }} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                  <AlertTriangle className="h-3.5 w-3.5" /> 風險 / 延期
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <div className={cn('text-2xl font-bold', stats.openRisks > 0 ? 'text-destructive' : 'text-emerald-600')}>
                     {stats.openRisks}
-                  </span>
-                  {stats.openRisks === 0 && <CheckCircle2 className="h-4 w-4 text-success" />}
+                  </div>
+                  {stats.pendingDelays > 0 && (
+                    <Badge variant="destructive" className="text-[10px]">{stats.pendingDelays} 待審</Badge>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.openRisks === 0 ? '無未解決風險' : '個未解決風險'}
-                </p>
-                {stats.pendingDelays > 0 && (
-                  <p className="text-xs text-warning">{stats.pendingDelays} 筆延遲申請待審核</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Detailed Statistics */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>執行摘要</CardTitle>
-              <CardDescription>
-                {selectedProject ? selectedProject.name : '所有專案'} 的執行狀況
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b">
-                  <span className="text-sm text-muted-foreground">任務完成率</span>
-                  <span className="font-medium">{taskCompletion}% ({stats.completedTasks}/{stats.totalTasks})</span>
+                <div className="text-[10px] text-muted-foreground mt-1">
+                  {stats.openRisks === 0 ? '無未解決風險' : `${stats.openRisks} 個未解決風險`}
                 </div>
-                <div className="flex items-center justify-between pb-2 border-b">
-                  <span className="text-sm text-muted-foreground">里程碑達成率</span>
-                  <span className="font-medium">{milestoneCompletion}% ({stats.completedMilestones}/{stats.totalMilestones})</span>
-                </div>
-                <div className="flex items-center justify-between pb-2 border-b">
-                  <span className="text-sm text-muted-foreground">預算執行率</span>
-                  <span className={`font-medium ${budgetUtilization > 100 ? 'text-destructive' : ''}`}>
-                    {budgetUtilization}%
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pb-2 border-b">
-                  <span className="text-sm text-muted-foreground">團隊規模</span>
-                  <span className="font-medium flex items-center gap-1">
-                    <Users className="h-3 w-3" />
-                    {stats.teamSize} 人
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pb-2 border-b">
-                  <span className="text-sm text-muted-foreground">累計週更新次數</span>
-                  <span className="font-medium">{stats.weeklyUpdates} 次</span>
-                </div>
-                <div className="flex items-center justify-between pb-2 border-b">
-                  <span className="text-sm text-muted-foreground">延遲申請</span>
-                  <span className="font-medium">
-                    {stats.delayRequests} 次
-                    {stats.pendingDelays > 0 && (
-                      <Badge variant="destructive" className="ml-2 text-xs">{stats.pendingDelays} 待審</Badge>
-                    )}
-                  </span>
-                </div>
-              </div>
+              </CardContent>
+            </Card>
+          </div>
 
-              {selectedProject && (
-                <div className="mt-4 pt-4 border-t space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">專案期間：</span>
-                    <span className="font-medium">
-                      {new Date(selectedProject.startDate).toLocaleDateString('zh-TW')} - {new Date(selectedProject.endDate).toLocaleDateString('zh-TW')}
-                    </span>
+          {/* Donut Charts — 2-col, larger */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Task Status Donut */}
+            <Card>
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm">任務狀態分佈</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-center gap-8 py-6">
+                <DonutChart segments={taskSegments} size={180} strokeWidth={28}>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{stats.totalTasks}</div>
+                    <div className="text-xs text-muted-foreground">總任務</div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">負責人：</span>
-                    <span className="font-medium">{selectedProject.owner}</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>關鍵發現</CardTitle>
-              <CardDescription>需要關注的重點項目</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {stats.progress >= 80 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-success/10 border border-success/20">
-                    <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm text-success">進度良好</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        專案進度達到 {stats.progress}%，執行狀況優異
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {budgetUtilization > 90 && budgetUtilization <= 100 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
-                    <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm text-warning">預算即將用盡</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        預算使用率達 {budgetUtilization}%，建議關注剩餘預算
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {budgetUtilization > 100 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm text-destructive">預算超支</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        預算使用率 {budgetUtilization}%，超出原定預算
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {stats.openRisks > 0 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm text-destructive">風險警報</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        有 {stats.openRisks} 個未解決的風險需要關注
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {stats.pendingDelays > 0 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-warning/10 border border-warning/20">
-                    <Clock className="h-5 w-5 text-warning shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm text-warning">延遲申請待審</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        有 {stats.pendingDelays} 筆延遲申請等待主管審核
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {milestoneCompletion >= 75 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-success/10 border border-success/20">
-                    <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm text-success">里程碑達成良好</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {stats.completedMilestones} / {stats.totalMilestones} 個里程碑已完成
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {stats.progress < 50 && stats.openRisks === 0 && budgetUtilization < 90 && (
-                  <div className="flex gap-3 p-3 rounded-lg bg-muted border">
-                    <CheckCircle2 className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-sm">專案運行穩定</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        目前沒有重大問題，專案按計劃進行中
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Project List (if all projects selected) */}
-        {!selectedProject && (
-          <Card>
-            <CardHeader>
-              <CardTitle>專案列表</CardTitle>
-              <CardDescription>所有專案的狀態概覽</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {projects.map((project) => (
-                  <div key={project.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-muted-foreground">{project.projectCode}</span>
-                        <h4 className="font-medium">{project.name}</h4>
-                        <Badge
-                          variant="secondary"
-                          className={getStatusColor(project.status)}
-                        >
-                          {project.status === 'green' ? '正常' : project.status === 'yellow' ? '注意' : '風險'}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {PROJECT_TYPE_LABELS[project.projectType]}
-                        </Badge>
+                </DonutChart>
+                <div className="space-y-3">
+                  {taskSegments.filter(s => s.value > 0).map(seg => {
+                    const pct = stats.totalTasks > 0 ? Math.round((seg.value / stats.totalTasks) * 100) : 0
+                    return (
+                      <div key={seg.label} className="flex items-center gap-3">
+                        <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                        <div className="min-w-[52px]">
+                          <div className="text-sm font-semibold">{seg.value}</div>
+                          <div className="text-[10px] text-muted-foreground">{seg.label}</div>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{pct}%</span>
                       </div>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>進度 {project.progress}%</span>
-                        <span>預算 {project.budget > 0 ? Math.round((project.budgetUsed / project.budget) * 100) : 0}%</span>
-                        <span>{project.team.length} 人</span>
-                        <span>{project.weeklyUpdates.length} 次更新</span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedProjectId(project.id)}
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Project Health / Milestone Donut */}
+            <Card>
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm">
+                  {selectedProject ? '里程碑狀態' : '專案健康度'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-center gap-8 py-6">
+                {selectedProject ? (
+                  <>
+                    <DonutChart
+                      segments={[
+                        { value: selectedProject.milestones.filter(m => m.status === 'done').length, color: '#10b981', label: '完成' },
+                        { value: selectedProject.milestones.filter(m => m.status === 'in-progress').length, color: '#3b82f6', label: '進行中' },
+                        { value: selectedProject.milestones.filter(m => m.status === 'todo').length, color: '#94a3b8', label: '待辦' },
+                        { value: selectedProject.milestones.filter(m => m.status === 'blocked').length, color: '#ef4444', label: '受阻' },
+                      ]}
+                      size={180} strokeWidth={28}
                     >
-                      檢視報告
-                    </Button>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">{selectedProject.progress}%</div>
+                        <div className="text-xs text-muted-foreground">進度</div>
+                      </div>
+                    </DonutChart>
+                    <div className="space-y-2">
+                      {selectedProject.milestones.map(m => (
+                        <div key={m.id} className="flex items-center gap-2">
+                          <span className={cn(
+                            'h-2.5 w-2.5 rounded-full shrink-0',
+                            m.status === 'done' ? 'bg-emerald-500' :
+                            m.status === 'in-progress' ? 'bg-blue-500' :
+                            m.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
+                          )} />
+                          <span className="text-xs truncate max-w-[140px]">{m.name}</span>
+                          <span className="text-xs font-semibold ml-auto">{m.progress}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <DonutChart segments={statusSegments} size={180} strokeWidth={28}>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">{projects.length}</div>
+                        <div className="text-xs text-muted-foreground">專案</div>
+                      </div>
+                    </DonutChart>
+                    <div className="space-y-3">
+                      {statusSegments.filter(s => s.value > 0).map(seg => {
+                        const pct = projects.length > 0 ? Math.round((seg.value / projects.length) * 100) : 0
+                        return (
+                          <div key={seg.label} className="flex items-center gap-3">
+                            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                            <div className="min-w-[52px]">
+                              <div className="text-sm font-semibold">{seg.value}</div>
+                              <div className="text-[10px] text-muted-foreground">{seg.label}</div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{pct}%</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* All projects view */}
+          {!selectedProject && (
+            <>
+              {/* Project Progress Cards — mini ring per project */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">各專案進度</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {projects.map(p => {
+                      const doneTasks = p.tasks.filter(t => t.status === 'done').length
+                      const doneMs = p.milestones.filter(m => m.status === 'done').length
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedProjectId(p.id)}
+                          className="p-3 rounded-lg border hover:border-primary/40 hover:shadow-sm transition-all text-left flex items-center gap-3"
+                        >
+                          <MiniRing value={p.progress} color={getStatusRingColor(p.status)} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium truncate">{p.name}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <StatusDot status={p.status} />
+                              <span className="text-[10px] text-muted-foreground">{doneTasks}/{p.tasks.length} 任務</span>
+                              <span className="text-[10px] text-muted-foreground">{doneMs}/{p.milestones.length} 里程碑</span>
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
-                ))}
+                </CardContent>
+              </Card>
+
+            </>
+          )}
+
+          {/* Single project view */}
+          {selectedProject && (
+            <>
+              {/* Milestone progress + info in 2 cols */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">里程碑進度</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedProject.milestones.map(m => {
+                      const mTasks = selectedProject.tasks.filter(t => t.milestoneId === m.id)
+                      const done = mTasks.filter(t => t.status === 'done').length
+                      return (
+                        <div key={m.id} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-medium truncate mr-2">{m.name}</span>
+                            <span className="text-muted-foreground shrink-0">{m.progress}% ({done}/{mTasks.length})</span>
+                          </div>
+                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{
+                              width: `${m.progress}%`,
+                              backgroundColor: m.status === 'done' ? '#10b981' : m.status === 'blocked' ? '#ef4444' : '#3b82f6',
+                            }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">專案資訊</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-[10px] text-muted-foreground mb-1">專案類型</div>
+                        <div className="font-medium text-xs">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-[10px] text-muted-foreground mb-1">負責人</div>
+                        <div className="font-medium text-xs">{selectedProject.owner}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-[10px] text-muted-foreground mb-1">專案期間</div>
+                        <div className="font-medium text-xs">
+                          {new Date(selectedProject.startDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })} ~ {new Date(selectedProject.endDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-[10px] text-muted-foreground mb-1">團隊</div>
+                        <div className="font-medium text-xs">{selectedProject.team.length} 人</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-[10px] text-muted-foreground mb-1">預算</div>
+                        <div className="font-medium text-xs">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/50">
+                        <div className="text-[10px] text-muted-foreground mb-1">週報更新</div>
+                        <div className="font-medium text-xs">{selectedProject.weeklyUpdates.length} 次</div>
+                      </div>
+                    </div>
+
+                    {selectedProject.risks.filter(r => r.status === 'open').length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <div className="text-xs font-medium text-muted-foreground">未解決風險</div>
+                        {selectedProject.risks.filter(r => r.status === 'open').map(r => (
+                          <div key={r.id} className="flex items-center gap-2 p-2 rounded border text-xs">
+                            <AlertTriangle className={cn(
+                              'h-3.5 w-3.5 shrink-0',
+                              r.impact === 'high' ? 'text-red-500' : r.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
+                            )} />
+                            <span className="truncate">{r.title}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0 ml-auto">
+                              {r.impact === 'high' ? '高' : r.impact === 'medium' ? '中' : '低'}影響
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+
+              {/* Single project: team workload bar chart */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5" /> 團隊工作量
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {memberWorkload.map(m => (
+                    <div key={m.name} className="flex items-center gap-3">
+                      <span className="text-xs font-medium w-[72px] truncate shrink-0">{m.name}</span>
+                      <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
+                        <div
+                          className="h-full rounded bg-primary/80 transition-all"
+                          style={{ width: `${(m.total / maxMemberTasks) * 100}%` }}
+                        />
+                        <div
+                          className="h-full rounded bg-emerald-500 absolute top-0 left-0 transition-all"
+                          style={{ width: `${(m.done / maxMemberTasks) * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
+                    </div>
+                  ))}
+                  {memberWorkload.length > 0 && (
+                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
+                      <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-emerald-500 inline-block" />已完成</span>
+                      <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-primary/80 inline-block" />總任務</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
     </DashboardLayout>
   )
 }

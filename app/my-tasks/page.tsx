@@ -2,18 +2,17 @@
 
 import { useState, useMemo } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
+import { Progress } from '@/components/ui/progress'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { type Project, type Task, type TaskLog } from '@/lib/mock-data'
+import { type Project, type Task, type Milestone } from '@/lib/mock-data'
 import {
   computeTaskStatus,
   getStatusLabel,
@@ -24,19 +23,16 @@ import {
 import { cn } from '@/lib/utils'
 import {
   ClipboardList,
-  CheckCircle2,
   AlertTriangle,
-  Clock,
   Calendar,
-  ChevronDown,
   FileText,
   Send,
   Flag,
-  User,
-  Link2,
   CalendarClock,
   CircleCheck,
   Undo2,
+  FolderOpen,
+  ChevronRight,
 } from 'lucide-react'
 
 function getStatusBadge(status: ComputedTaskStatus) {
@@ -47,95 +43,108 @@ function getStatusBadge(status: ComputedTaskStatus) {
   )
 }
 
+interface MilestoneGroup {
+  milestone: Milestone
+  project: Project
+  tasks: Task[]
+  completedCount: number
+  totalCount: number
+  worstStatus: ComputedTaskStatus
+}
+
 export default function MyTasksPage() {
   const { user } = useAuth()
   const { projects, addTaskLog, completeTask, uncompleteTask, submitDelayRequest } = useProjectStore()
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
-  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set())
-  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(() => new Set())
-  const [selectedTask, setSelectedTask] = useState<{ task: Task; project: Project } | null>(null)
+  const [selectedMilestone, setSelectedMilestone] = useState<MilestoneGroup | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  // Task detail in sheet
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [logContent, setLogContent] = useState('')
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
 
   if (!user) return null
 
-  // Get all tasks assigned to the current user, grouped by project
-  const userProjectTasks = useMemo(() => {
-    const result: { project: Project; tasks: Task[] }[] = []
+  // Build project → milestone groups for tasks assigned to current user
+  const projectMilestoneGroups = useMemo(() => {
+    const result: { project: Project; milestones: MilestoneGroup[] }[] = []
+
     projects.forEach(p => {
       const userTasks = p.tasks.filter(t => t.assignee === user.name)
-      if (userTasks.length > 0) {
-        result.push({ project: p, tasks: userTasks })
-      }
+      if (userTasks.length === 0) return
+
+      // Group tasks by milestone
+      const milestoneMap = new Map<string, Task[]>()
+      userTasks.forEach(t => {
+        const arr = milestoneMap.get(t.milestoneId) || []
+        arr.push(t)
+        milestoneMap.set(t.milestoneId, arr)
+      })
+
+      const milestoneGroups: MilestoneGroup[] = []
+      milestoneMap.forEach((tasks, milestoneId) => {
+        const milestone = p.milestones.find(m => m.id === milestoneId)
+        if (!milestone) return
+
+        const completedCount = tasks.filter(t => !!t.completedAt).length
+        const statuses = tasks.map(t => computeTaskStatus(t, p.taskLogs))
+        // Worst status priority: overdue > at-risk > on-track > not-started > completed
+        const priority: ComputedTaskStatus[] = ['overdue', 'at-risk', 'on-track', 'not-started', 'completed']
+        const worstStatus = priority.find(s => statuses.includes(s)) || 'on-track'
+
+        milestoneGroups.push({
+          milestone,
+          project: p,
+          tasks,
+          completedCount,
+          totalCount: tasks.length,
+          worstStatus,
+        })
+      })
+
+      // Sort milestones by due date
+      milestoneGroups.sort((a, b) => new Date(a.milestone.dueDate).getTime() - new Date(b.milestone.dueDate).getTime())
+
+      result.push({ project: p, milestones: milestoneGroups })
     })
+
     return result
   }, [projects, user.name])
 
-  // Expand all projects by default on first render
-  useMemo(() => {
-    if (expandedProjects.size === 0 && userProjectTasks.length > 0) {
-      const ids = new Set(userProjectTasks.map(({ project }) => project.id))
-      setExpandedProjects(ids)
-      const msIds = new Set<string>()
-      userProjectTasks.forEach(({ project, tasks }) => {
-        tasks.forEach(t => msIds.add(`${project.id}-${t.milestoneId}`))
-      })
-      setExpandedMilestones(msIds)
-    }
-  }, [userProjectTasks])
+  // Unique projects for filter
+  const userProjects = projectMilestoneGroups.map(g => g.project)
 
-  // Apply project filter
-  const filteredProjectTasks = selectedProjectId === 'all'
-    ? userProjectTasks
-    : userProjectTasks.filter(({ project }) => project.id === selectedProjectId)
+  // Filter
+  const filteredGroups = selectedProjectId === 'all'
+    ? projectMilestoneGroups
+    : projectMilestoneGroups.filter(g => g.project.id === selectedProjectId)
 
   // Stats
-  const allUserTasks = userProjectTasks.flatMap(({ project, tasks }) =>
-    tasks.map(t => ({ task: t, project }))
-  )
-  const totalTasks = allUserTasks.length
-  const completedTasks = allUserTasks.filter(({ task }) => !!task.completedAt).length
-  const atRiskTasks = allUserTasks.filter(({ task, project }) => {
-    const status = computeTaskStatus(task, project.taskLogs)
-    return status === 'at-risk' || status === 'overdue'
-  })
-  const dueThisWeek = allUserTasks.filter(({ task }) => {
-    if (task.completedAt) return false
-    const days = getDaysUntilDeadline(task)
-    return days >= 0 && days <= 7
-  })
+  const allTasks = projectMilestoneGroups.flatMap(g => g.milestones.flatMap(m => m.tasks))
+  const totalTasks = allTasks.length
+  const completedCount = allTasks.filter(t => !!t.completedAt).length
+  const atRiskCount = projectMilestoneGroups.flatMap(g =>
+    g.milestones.flatMap(m =>
+      m.tasks.filter(t => {
+        const s = computeTaskStatus(t, m.project.taskLogs)
+        return s === 'at-risk' || s === 'overdue'
+      })
+    )
+  ).length
 
-  const toggleProject = (id: string) => {
-    setExpandedProjects(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const toggleMilestone = (key: string) => {
-    setExpandedMilestones(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  const openTaskSheet = (task: Task, project: Project) => {
-    setSelectedTask({ task, project })
+  const openMilestoneSheet = (group: MilestoneGroup) => {
+    setSelectedMilestone(group)
+    setExpandedTaskId(null)
     setLogContent('')
     setLogDate(new Date().toISOString().split('T')[0])
     setSheetOpen(true)
   }
 
-  const handleSubmitLog = () => {
-    if (!selectedTask || !logContent.trim()) return
-    addTaskLog(selectedTask.project.id, {
-      taskId: selectedTask.task.id,
+  const handleSubmitLog = (task: Task, project: Project) => {
+    if (!logContent.trim()) return
+    addTaskLog(project.id, {
+      taskId: task.id,
       author: user.name,
       logDate,
       content: logContent.trim(),
@@ -143,26 +152,19 @@ export default function MyTasksPage() {
     setLogContent('')
   }
 
-  const handleCompleteTask = () => {
-    if (!selectedTask) return
-    completeTask(selectedTask.project.id, selectedTask.task.id, user.name)
-    setSheetOpen(false)
+  const handleCompleteTask = (task: Task, project: Project) => {
+    completeTask(project.id, task.id, user.name)
   }
 
-  const handleUncompleteTask = () => {
-    if (!selectedTask) return
-    uncompleteTask(selectedTask.project.id, selectedTask.task.id)
+  const handleUncompleteTask = (task: Task, project: Project) => {
+    uncompleteTask(project.id, task.id)
   }
 
-  const handleRequestExtension = () => {
-    if (!selectedTask) return
-    const { task, project } = selectedTask
+  const handleRequestExtension = (task: Task, project: Project) => {
     const milestone = project.milestones.find(m => m.id === task.milestoneId)
     if (!milestone) return
-
     const proposedDate = new Date(task.endDate)
     proposedDate.setDate(proposedDate.getDate() + 14)
-
     submitDelayRequest(project.id, {
       requestedBy: user.name,
       requestedAt: new Date().toISOString(),
@@ -175,7 +177,13 @@ export default function MyTasksPage() {
       canCatchUp: false,
       supportNeeded: '',
     })
-    setSheetOpen(false)
+  }
+
+  function getMilestoneStatusColor(status: ComputedTaskStatus) {
+    if (status === 'completed') return 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20'
+    if (status === 'overdue') return 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20'
+    if (status === 'at-risk') return 'border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'
+    return ''
   }
 
   return (
@@ -188,443 +196,304 @@ export default function MyTasksPage() {
             我的任務
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {user.name} — 查看與更新您負責的任務進度
+            {user.name} — {totalTasks} 個任務，{completedCount} 已完成{atRiskCount > 0 ? `，${atRiskCount} 需注意` : ''}
           </p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FileText className="h-4 w-4" />
-                總任務
-              </div>
-              <div className="text-2xl font-bold mt-1">{totalTasks}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-2 text-sm text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" />
-                已完成
-              </div>
-              <div className="text-2xl font-bold mt-1 text-emerald-600">{completedTasks}</div>
-            </CardContent>
-          </Card>
-          <Card className={atRiskTasks.length > 0 ? 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/10' : ''}>
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-2 text-sm text-amber-600">
-                <AlertTriangle className="h-4 w-4" />
-                注意 / 逾期
-              </div>
-              <div className="text-2xl font-bold mt-1 text-amber-600">{atRiskTasks.length}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <CalendarClock className="h-4 w-4" />
-                本週到期
-              </div>
-              <div className="text-2xl font-bold mt-1 text-blue-600">{dueThisWeek.length}</div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Project Filter */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setSelectedProjectId('all')}
-            className={cn(
-              'text-xs px-3 py-1 rounded-full border transition-all',
-              selectedProjectId === 'all'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-border hover:bg-muted',
-            )}
-          >
-            全部專案
-          </button>
-          {userProjectTasks.map(({ project }) => (
+        {userProjects.length > 1 && (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              key={project.id}
-              onClick={() => setSelectedProjectId(project.id)}
+              onClick={() => setSelectedProjectId('all')}
               className={cn(
                 'text-xs px-3 py-1 rounded-full border transition-all',
-                selectedProjectId === project.id
+                selectedProjectId === 'all'
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-background text-muted-foreground border-border hover:bg-muted',
               )}
             >
-              {project.name}
+              全部專案
             </button>
-          ))}
-        </div>
-
-        {/* At-risk Warning Banner */}
-        {atRiskTasks.length > 0 && selectedProjectId === 'all' && (
-          <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-700">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <span className="font-medium text-amber-700 dark:text-amber-400">
-                您有 {atRiskTasks.length} 個任務需要注意
-              </span>
-              <span className="text-amber-600 dark:text-amber-500">
-                {' '}— 請盡快提交工作紀錄或考慮申請延期
-              </span>
-            </div>
+            {userProjects.map(project => (
+              <button
+                key={project.id}
+                onClick={() => setSelectedProjectId(project.id)}
+                className={cn(
+                  'text-xs px-3 py-1 rounded-full border transition-all',
+                  selectedProjectId === project.id
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-border hover:bg-muted',
+                )}
+              >
+                {project.name}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* Task List — grouped by project then milestone */}
-        {filteredProjectTasks.length === 0 ? (
+        {/* Project → Milestone Groups */}
+        {filteredGroups.length === 0 ? (
           <Card className="p-8 text-center text-muted-foreground">
             目前沒有指派給您的任務
           </Card>
         ) : (
-          <div className="space-y-4">
-            {filteredProjectTasks.map(({ project, tasks: userTasks }) => {
-              const isProjectExpanded = expandedProjects.has(project.id)
-              // Group tasks by milestone
-              const milestoneGroups = new Map<string, { name: string; tasks: Task[] }>()
-              userTasks.forEach(t => {
-                const ms = project.milestones.find(m => m.id === t.milestoneId)
-                const key = t.milestoneId
-                if (!milestoneGroups.has(key)) {
-                  milestoneGroups.set(key, { name: ms?.name || '未分類', tasks: [] })
-                }
-                milestoneGroups.get(key)!.tasks.push(t)
-              })
+          filteredGroups.map(({ project, milestones }) => (
+            <div key={project.id} className="space-y-3">
+              {/* Project Header */}
+              <div className="flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">{project.name}</h2>
+                <span className="text-xs text-muted-foreground">
+                  {milestones.reduce((s, m) => s + m.completedCount, 0)}/{milestones.reduce((s, m) => s + m.totalCount, 0)} 任務完成
+                </span>
+              </div>
 
-              return (
-                <Collapsible
-                  key={project.id}
-                  open={isProjectExpanded}
-                  onOpenChange={() => toggleProject(project.id)}
-                >
-                  <Card>
-                    <CollapsibleTrigger asChild>
-                      <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors">
-                        <ChevronDown className={cn(
-                          'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                          !isProjectExpanded && '-rotate-90'
-                        )} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-sm">{project.name}</h3>
-                            <Badge variant="outline" className="text-[10px]">{project.projectCode}</Badge>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                            <span>{userTasks.filter(t => !!t.completedAt).length}/{userTasks.length} 完成</span>
+              {/* Milestone Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {milestones.map(group => {
+                  const progressPct = group.totalCount > 0
+                    ? Math.round((group.completedCount / group.totalCount) * 100)
+                    : 0
+
+                  return (
+                    <Card
+                      key={group.milestone.id}
+                      onClick={() => openMilestoneSheet(group)}
+                      className={cn(
+                        'cursor-pointer hover:shadow-md transition-all hover:border-primary/30',
+                        getMilestoneStatusColor(group.worstStatus),
+                      )}
+                    >
+                      <CardContent className="p-4 space-y-3">
+                        {/* Status + Due */}
+                        <div className="flex items-center justify-between">
+                          {getStatusBadge(group.worstStatus)}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(group.milestone.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                          </span>
+                        </div>
+
+                        {/* Milestone Name */}
+                        <h3 className="text-sm font-medium leading-snug line-clamp-2">
+                          {group.milestone.name}
+                        </h3>
+
+                        {/* Progress bar + count */}
+                        <div className="space-y-1.5">
+                          <Progress value={progressPct} className="h-1.5" />
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span>{group.completedCount}/{group.totalCount} 任務完成</span>
                             <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              截止 {new Date(project.endDate).toLocaleDateString('zh-TW')}
+                              詳細 <ChevronRight className="h-3 w-3" />
                             </span>
                           </div>
                         </div>
-                      </div>
-                    </CollapsibleTrigger>
-
-                    <CollapsibleContent>
-                      <div className="px-4 pb-4 space-y-3">
-                        {[...milestoneGroups.entries()].map(([msId, { name, tasks: msTasks }]) => {
-                          const msKey = `${project.id}-${msId}`
-                          const isMsExpanded = expandedMilestones.has(msKey)
-                          const milestone = project.milestones.find(m => m.id === msId)
-
-                          return (
-                            <Collapsible
-                              key={msId}
-                              open={isMsExpanded}
-                              onOpenChange={() => toggleMilestone(msKey)}
-                            >
-                              <CollapsibleTrigger asChild>
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 cursor-pointer hover:bg-muted/60 transition-colors">
-                                  <ChevronDown className={cn(
-                                    'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-                                    !isMsExpanded && '-rotate-90'
-                                  )} />
-                                  <Flag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <span className="text-xs font-medium">{name}</span>
-                                  {milestone && (
-                                    <span className="text-[10px] text-muted-foreground ml-auto">
-                                      截止 {new Date(milestone.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                    </span>
-                                  )}
-                                </div>
-                              </CollapsibleTrigger>
-
-                              <CollapsibleContent>
-                                <div className="mt-1 divide-y">
-                                  {msTasks.map(task => {
-                                    const status = computeTaskStatus(task, project.taskLogs)
-                                    const days = getDaysUntilDeadline(task)
-                                    const taskLogs = project.taskLogs.filter(l => l.taskId === task.id)
-
-                                    return (
-                                      <div
-                                        key={task.id}
-                                        onClick={() => openTaskSheet(task, project)}
-                                        className={cn(
-                                          'flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors rounded-sm',
-                                          (status === 'at-risk' || status === 'overdue') && 'bg-amber-50/50 dark:bg-amber-950/10',
-                                        )}
-                                      >
-                                        {/* Status dot */}
-                                        {getStatusBadge(status)}
-
-                                        {/* Title */}
-                                        <span className={cn(
-                                          'text-sm flex-1 min-w-0 truncate',
-                                          status === 'completed' && 'text-muted-foreground',
-                                        )}>
-                                          {task.title}
-                                        </span>
-
-                                        {/* Log count */}
-                                        {taskLogs.length > 0 && (
-                                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 shrink-0">
-                                            <FileText className="h-3 w-3" />
-                                            {taskLogs.length}
-                                          </span>
-                                        )}
-
-                                        {/* Due date / warning */}
-                                        <span className={cn(
-                                          'text-xs shrink-0',
-                                          status === 'overdue' ? 'text-red-600 font-medium' :
-                                          status === 'at-risk' ? 'text-amber-600' :
-                                          'text-muted-foreground',
-                                        )}>
-                                          {status === 'overdue' ? `逾期 ${Math.abs(days)} 天` :
-                                           status === 'at-risk' ? `${days} 天後到期` :
-                                           status === 'completed' ? task.completedAt && new Date(task.completedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' }) + ' 完成' :
-                                           new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                        </span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </CollapsibleContent>
-                            </Collapsible>
-                          )
-                        })}
-                      </div>
-                    </CollapsibleContent>
-                  </Card>
-                </Collapsible>
-              )
-            })}
-          </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
+          ))
         )}
-
-        {/* Recent Logs Section */}
-        {(() => {
-          const recentLogs = userProjectTasks
-            .flatMap(({ project }) =>
-              project.taskLogs
-                .filter(l => l.author === user.name)
-                .map(l => ({ log: l, project }))
-            )
-            .sort((a, b) => new Date(b.log.createdAt).getTime() - new Date(a.log.createdAt).getTime())
-            .slice(0, 8)
-
-          if (recentLogs.length === 0) return null
-
-          return (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  最近工作紀錄
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-2">
-                  {recentLogs.map(({ log, project }) => {
-                    const task = project.tasks.find(t => t.id === log.taskId)
-                    return (
-                      <div key={log.id} className="flex gap-3 text-sm">
-                        <span className="text-xs text-muted-foreground shrink-0 w-16 pt-0.5">
-                          {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                        </span>
-                        <div className="min-w-0">
-                          <span className="text-xs text-muted-foreground">{task?.title} — </span>
-                          <span className="text-xs">{log.content}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })()}
       </div>
 
-      {/* Task Detail Sheet */}
+      {/* Milestone Detail Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
-          {selectedTask && (() => {
-            const { task, project } = selectedTask
-            const status = computeTaskStatus(task, project.taskLogs)
-            const days = getDaysUntilDeadline(task)
-            const taskLogs = project.taskLogs
-              .filter(l => l.taskId === task.id)
-              .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
-            const milestone = project.milestones.find(m => m.id === task.milestoneId)
-            const isCompleted = !!task.completedAt
+          {selectedMilestone && (() => {
+            const { milestone, project, tasks } = selectedMilestone
+            const progressPct = tasks.length > 0
+              ? Math.round((tasks.filter(t => !!t.completedAt).length / tasks.length) * 100)
+              : 0
 
             return (
               <>
                 <SheetHeader>
-                  <SheetTitle className="text-left">{task.title}</SheetTitle>
+                  <SheetTitle className="text-left">{milestone.name}</SheetTitle>
                   <SheetDescription className="text-left">
-                    {project.name} — {milestone?.name}
+                    {project.name} — 到期日 {new Date(milestone.dueDate).toLocaleDateString('zh-TW')}
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="space-y-5 mt-6">
-                  {/* Status & Info */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusBadge(status)}
-                    {isCompleted && task.completedAt && (
-                      <Badge variant="outline" className="text-xs gap-1">
-                        <CircleCheck className="h-3 w-3" />
-                        {new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* At-risk / Overdue Warning */}
-                  {status === 'at-risk' && (
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-700">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="text-sm text-amber-700 dark:text-amber-400">
-                        此任務將於 <strong>{days} 天後</strong>到期，建議盡快提交工作紀錄。
-                      </div>
+                <div className="space-y-4 mt-5">
+                  {/* Milestone Progress */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>進度</span>
+                      <span>{progressPct}%</span>
                     </div>
-                  )}
-                  {status === 'overdue' && (
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-700">
-                      <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                      <div className="flex-1 text-sm text-red-700 dark:text-red-400">
-                        此任務已逾期 <strong>{Math.abs(days)} 天</strong>。請完成任務或申請延期。
-                      </div>
-                      <Button size="sm" variant="destructive" className="shrink-0 text-xs" onClick={handleRequestExtension}>
-                        申請延期
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Task Details */}
-                  <div className="space-y-3">
-                    {task.description && (
-                      <div>
-                        <div className="text-xs font-medium text-muted-foreground mb-1">描述</div>
-                        <p className="text-sm">{task.description}</p>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          開始日期
-                        </div>
-                        <span className="text-sm">{new Date(task.startDate).toLocaleDateString('zh-TW')}</span>
-                      </div>
-                      <div>
-                        <div className={cn(
-                          'text-xs font-medium mb-1 flex items-center gap-1',
-                          status === 'overdue' ? 'text-red-600' : 'text-muted-foreground',
-                        )}>
-                          <Flag className="h-3 w-3" />
-                          截止日期
-                        </div>
-                        <span className={cn('text-sm', status === 'overdue' && 'text-red-600 font-medium')}>
-                          {new Date(task.endDate).toLocaleDateString('zh-TW')}
-                        </span>
-                      </div>
-                    </div>
+                    <Progress value={progressPct} className="h-2" />
                   </div>
 
                   <Separator />
 
-                  {/* Complete / Uncomplete Actions */}
-                  {!isCompleted ? (
-                    <Button className="w-full gap-2" onClick={handleCompleteTask}>
-                      <CircleCheck className="h-4 w-4" />
-                      標記為已完成
-                    </Button>
-                  ) : (
-                    <Button variant="outline" className="w-full gap-2 text-muted-foreground" onClick={handleUncompleteTask}>
-                      <Undo2 className="h-4 w-4" />
-                      取消完成標記
-                    </Button>
-                  )}
+                  {/* Task List */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      任務列表 ({tasks.length})
+                    </Label>
 
-                  {/* Extension Request for at-risk */}
-                  {status === 'at-risk' && (
-                    <Button variant="outline" className="w-full gap-2 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleRequestExtension}>
-                      <CalendarClock className="h-4 w-4" />
-                      申請延期
-                    </Button>
-                  )}
+                    {tasks.map(task => {
+                      const status = computeTaskStatus(task, project.taskLogs)
+                      const days = getDaysUntilDeadline(task)
+                      const isCompleted = !!task.completedAt
+                      const isExpanded = expandedTaskId === task.id
+                      const taskLogs = project.taskLogs
+                        .filter(l => l.taskId === task.id)
+                        .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
 
-                  <Separator />
-
-                  {/* Work Log Form */}
-                  {!isCompleted && (
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">撰寫工作紀錄</Label>
-                      <div className="flex items-center gap-2">
-                        <Label className="text-xs text-muted-foreground shrink-0">工作日期</Label>
-                        <input
-                          type="date"
-                          value={logDate}
-                          onChange={e => setLogDate(e.target.value)}
-                          className="text-xs border rounded px-2 py-1"
-                        />
-                      </div>
-                      <Textarea
-                        placeholder="描述您今天做了什麼..."
-                        value={logContent}
-                        onChange={e => setLogContent(e.target.value)}
-                        rows={3}
-                      />
-                      <Button
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={!logContent.trim()}
-                        onClick={handleSubmitLog}
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                        提交紀錄
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Log History */}
-                  {taskLogs.length > 0 && (
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium text-muted-foreground">
-                        歷史紀錄 ({taskLogs.length})
-                      </Label>
-                      <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                        {taskLogs.map(log => (
-                          <div key={log.id} className="p-2.5 rounded-lg bg-muted/50 border text-sm">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-medium">{log.author}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {new Date(log.logDate).toLocaleDateString('zh-TW')}
+                      return (
+                        <div
+                          key={task.id}
+                          className={cn(
+                            'rounded-lg border',
+                            isExpanded ? 'bg-muted/30' : 'hover:bg-muted/20',
+                          )}
+                        >
+                          {/* Task Row (clickable) */}
+                          <button
+                            className="w-full flex items-center gap-3 p-3 text-left"
+                            onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                {getStatusBadge(status)}
+                                {isCompleted && task.completedAt && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {new Date(task.completedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 完成
+                                  </span>
+                                )}
+                                {status === 'overdue' && (
+                                  <span className="text-[10px] text-red-600 font-medium">逾期 {Math.abs(days)} 天</span>
+                                )}
+                                {status === 'at-risk' && (
+                                  <span className="text-[10px] text-amber-600">{days} 天後到期</span>
+                                )}
+                              </div>
+                              <span className={cn(
+                                'text-sm font-medium',
+                                isCompleted && 'text-muted-foreground line-through',
+                              )}>
+                                {task.title}
                               </span>
                             </div>
-                            <p className="text-xs text-muted-foreground">{log.content}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                            <ChevronRight className={cn(
+                              'h-4 w-4 text-muted-foreground shrink-0 transition-transform',
+                              isExpanded && 'rotate-90',
+                            )} />
+                          </button>
+
+                          {/* Expanded Detail */}
+                          {isExpanded && (
+                            <div className="px-3 pb-3 space-y-3">
+                              <Separator />
+
+                              {/* Task info */}
+                              {task.description && (
+                                <p className="text-xs text-muted-foreground">{task.description}</p>
+                              )}
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(task.startDate).toLocaleDateString('zh-TW')} ~ {new Date(task.endDate).toLocaleDateString('zh-TW')}
+                                </span>
+                              </div>
+
+                              {/* Warning */}
+                              {status === 'at-risk' && (
+                                <div className="flex items-center gap-2 p-2 rounded bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  即將到期，建議盡快提交紀錄或申請延期
+                                </div>
+                              )}
+                              {status === 'overdue' && (
+                                <div className="flex items-center gap-2 p-2 rounded bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-700 text-xs text-red-700 dark:text-red-400">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  已逾期 {Math.abs(days)} 天，請完成或申請延期
+                                </div>
+                              )}
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {!isCompleted ? (
+                                  <Button size="sm" className="gap-1 text-xs h-7" onClick={() => handleCompleteTask(task, project)}>
+                                    <CircleCheck className="h-3 w-3" />
+                                    標記完成
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-muted-foreground" onClick={() => handleUncompleteTask(task, project)}>
+                                    <Undo2 className="h-3 w-3" />
+                                    取消完成
+                                  </Button>
+                                )}
+                                {(status === 'at-risk' || status === 'overdue') && (
+                                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => handleRequestExtension(task, project)}>
+                                    <CalendarClock className="h-3 w-3" />
+                                    申請延期
+                                  </Button>
+                                )}
+                              </div>
+
+                              {/* Work Log Form */}
+                              {!isCompleted && (
+                                <div className="space-y-2 pt-1">
+                                  <Label className="text-xs font-medium">撰寫工作紀錄</Label>
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-[10px] text-muted-foreground shrink-0">日期</Label>
+                                    <input
+                                      type="date"
+                                      value={logDate}
+                                      onChange={e => setLogDate(e.target.value)}
+                                      className="text-xs border rounded px-2 py-1"
+                                    />
+                                  </div>
+                                  <Textarea
+                                    placeholder="描述您做了什麼..."
+                                    value={logContent}
+                                    onChange={e => setLogContent(e.target.value)}
+                                    rows={2}
+                                    className="text-xs"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    className="gap-1 text-xs h-7"
+                                    disabled={!logContent.trim()}
+                                    onClick={() => handleSubmitLog(task, project)}
+                                  >
+                                    <Send className="h-3 w-3" />
+                                    提交
+                                  </Button>
+                                </div>
+                              )}
+
+                              {/* Log History */}
+                              {taskLogs.length > 0 && (
+                                <div className="space-y-1.5">
+                                  <Label className="text-[10px] text-muted-foreground">
+                                    紀錄 ({taskLogs.length})
+                                  </Label>
+                                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+                                    {taskLogs.map(log => (
+                                      <div key={log.id} className="p-2 rounded bg-muted/50 border text-xs">
+                                        <div className="flex justify-between mb-0.5">
+                                          <span className="font-medium">{log.author}</span>
+                                          <span className="text-[10px] text-muted-foreground">
+                                            {new Date(log.logDate).toLocaleDateString('zh-TW')}
+                                          </span>
+                                        </div>
+                                        <p className="text-muted-foreground">{log.content}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </>
             )

@@ -17,7 +17,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   LayoutDashboard,
   FolderKanban,
-  GanttChart,
   FileText,
   Settings,
   LogOut,
@@ -39,7 +38,6 @@ const navigation = [
   { name: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
   { name: '我的任務', href: '/my-tasks', icon: ClipboardList },
-  { name: '甘特圖', href: '/gantt', icon: GanttChart },
   { name: '報告', href: '/reports', icon: FileText },
   { name: '審批中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
 ]

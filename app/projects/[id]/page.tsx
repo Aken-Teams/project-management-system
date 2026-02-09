@@ -1,6 +1,6 @@
 'use client'
 
-import React from "react"
+import React, { useState, useMemo } from "react"
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
@@ -14,7 +14,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import {
   ArrowLeft,
   Calendar,
@@ -27,7 +39,6 @@ import {
   Clock,
   AlertCircle,
   FileText,
-  ClipboardEdit,
   History,
   Tag,
   LayoutList,
@@ -37,8 +48,654 @@ import {
   Info,
   Milestone,
   HelpCircle,
+  User,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Loader2,
+  X,
+  FileDown,
+  CalendarRange,
 } from 'lucide-react'
 import Link from 'next/link'
+
+// --- Auto-generated weekly activity summary ---
+
+function getWeekMonday(dateStr: string): string {
+  const d = new Date(dateStr)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  const monday = new Date(d)
+  monday.setDate(diff)
+  return monday.toISOString().split('T')[0]
+}
+
+function getWeekSunday(mondayStr: string): string {
+  const d = new Date(mondayStr)
+  d.setDate(d.getDate() + 6)
+  return d.toISOString().split('T')[0]
+}
+
+interface WeekActivity {
+  weekMonday: string
+  completedTasks: { taskId: string; taskName: string; completedBy: string; completedAt: string; milestoneName: string }[]
+  logs: { logId: string; taskId: string; taskName: string; author: string; content: string; logDate: string }[]
+  activeMembers: Set<string>
+}
+
+function buildWeeklyActivities(project: Project): WeekActivity[] {
+  const weekMap = new Map<string, WeekActivity>()
+
+  const getOrCreate = (weekMonday: string): WeekActivity => {
+    if (!weekMap.has(weekMonday)) {
+      weekMap.set(weekMonday, { weekMonday, completedTasks: [], logs: [], activeMembers: new Set() })
+    }
+    return weekMap.get(weekMonday)!
+  }
+
+  project.tasks.forEach(task => {
+    if (task.completedAt) {
+      const monday = getWeekMonday(task.completedAt)
+      const milestone = project.milestones.find(m => m.id === task.milestoneId)
+      const week = getOrCreate(monday)
+      const who = task.completedBy || task.assignee
+      week.completedTasks.push({
+        taskId: task.id,
+        taskName: task.title,
+        completedBy: who,
+        completedAt: task.completedAt,
+        milestoneName: milestone?.name || '',
+      })
+      week.activeMembers.add(who)
+    }
+  })
+
+  project.taskLogs.forEach(log => {
+    const monday = getWeekMonday(log.logDate)
+    const task = project.tasks.find(t => t.id === log.taskId)
+    const week = getOrCreate(monday)
+    week.logs.push({
+      logId: log.id,
+      taskId: log.taskId,
+      taskName: task?.title || log.taskId,
+      author: log.author,
+      content: log.content,
+      logDate: log.logDate,
+    })
+    week.activeMembers.add(log.author)
+  })
+
+  return Array.from(weekMap.values()).sort((a, b) => b.weekMonday.localeCompare(a.weekMonday))
+}
+
+const WEEKS_PER_PAGE = 4
+
+/** Simulate AI report generation with a delay + mock content */
+function generateMockAIReport(
+  project: Project,
+  weeks: WeekActivity[],
+  mode: 'weekly' | 'monthly',
+): string {
+  const totalCompleted = weeks.reduce((s, w) => s + w.completedTasks.length, 0)
+  const totalLogs = weeks.reduce((s, w) => s + w.logs.length, 0)
+  const activeMembers = new Set<string>()
+  weeks.forEach(w => w.activeMembers.forEach(m => activeMembers.add(m)))
+
+  const allMembers = new Set(project.team)
+  const inactiveMembers = [...allMembers].filter(m => !activeMembers.has(m))
+
+  const completedNames = weeks.flatMap(w => w.completedTasks.map(ct => ct.taskName))
+  const completedList = completedNames.length > 0
+    ? completedNames.slice(0, 5).join('、') + (completedNames.length > 5 ? ` 等 ${completedNames.length} 項` : '')
+    : '無'
+
+  const milestoneProgress = project.milestones
+    .map(m => `${m.name} ${m.progress}%`)
+    .join('、')
+
+  const periodLabel = mode === 'weekly' ? '本週' : '本月'
+  const openRisks = project.risks.filter(r => r.status === 'open').length
+  const blockedTasks = project.tasks.filter(t => t.status === 'blocked').length
+
+  let report = `## ${project.name} — ${periodLabel}進度摘要\n\n`
+  report += `**報告期間：** ${weeks.length > 0 ? new Date(weeks[weeks.length - 1].weekMonday).toLocaleDateString('zh-TW') : '—'} 至 ${weeks.length > 0 ? new Date(getWeekSunday(weeks[0].weekMonday)).toLocaleDateString('zh-TW') : '—'}\n\n`
+  report += `### 整體概況\n`
+  report += `- 專案進度：**${project.progress}%**\n`
+  report += `- 里程碑狀態：${milestoneProgress}\n`
+  report += `- ${periodLabel}完成任務：**${totalCompleted}** 項\n`
+  report += `- ${periodLabel}工作紀錄：**${totalLogs}** 筆\n`
+  report += `- 活躍成員：${[...activeMembers].join('、') || '無'}\n`
+  if (inactiveMembers.length > 0) {
+    report += `- 未提交紀錄：${inactiveMembers.join('、')}\n`
+  }
+  report += `\n### 主要成果\n`
+  report += `${completedList !== '無' ? completedList : '本期間無任務完成'}\n\n`
+  if (blockedTasks > 0 || openRisks > 0) {
+    report += `### 需關注事項\n`
+    if (blockedTasks > 0) report += `- ${blockedTasks} 個任務受阻中\n`
+    if (openRisks > 0) report += `- ${openRisks} 個未解決風險\n`
+    report += `\n`
+  }
+  report += `### 下一步\n`
+  const nextTasks = project.tasks.filter(t => t.status === 'in-progress' || t.status === 'todo').slice(0, 3)
+  if (nextTasks.length > 0) {
+    nextTasks.forEach(t => { report += `- ${t.title}（${t.assignee}）\n` })
+  } else {
+    report += `- 所有任務已完成\n`
+  }
+  report += `\n---\n*此報告由 AI 自動產生，資料來源為團隊工作紀錄與任務完成狀態。*`
+  return report
+}
+
+function WeeklyActivitySummary({ project }: { project: Project }) {
+  const allWeeks = useMemo(() => buildWeeklyActivities(project), [project])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedMember, setSelectedMember] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  // Report dialog state
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [reportType, setReportType] = useState<'weekly' | 'monthly'>('weekly')
+  const [reportDateFrom, setReportDateFrom] = useState('')
+  const [reportDateTo, setReportDateTo] = useState('')
+  const [reportFormat, setReportFormat] = useState<'pptx' | 'docx' | 'pdf'>('pptx')
+  const [reportSections, setReportSections] = useState({
+    summary: true,
+    tasks: true,
+    personnel: true,
+    charts: true,
+    rawData: false,
+  })
+  const [reportGenerating, setReportGenerating] = useState(false)
+  const [reportDownloaded, setReportDownloaded] = useState<string | null>(null)
+
+  const allActiveMembers = useMemo(() => {
+    const members = new Set<string>()
+    allWeeks.forEach(w => w.activeMembers.forEach(m => members.add(m)))
+    return [...members].sort()
+  }, [allWeeks])
+
+  const filteredWeeks = useMemo(() => {
+    return allWeeks.filter(week => {
+      if (dateFrom && getWeekSunday(week.weekMonday) < dateFrom) return false
+      if (dateTo && week.weekMonday > dateTo) return false
+      return true
+    }).map(week => {
+      let logs = week.logs
+      let completedTasks = week.completedTasks
+
+      if (selectedMember) {
+        logs = logs.filter(l => l.author === selectedMember)
+        completedTasks = completedTasks.filter(ct => ct.completedBy === selectedMember)
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase()
+        logs = logs.filter(l =>
+          l.taskName.toLowerCase().includes(q) ||
+          l.author.toLowerCase().includes(q) ||
+          l.content.toLowerCase().includes(q)
+        )
+        completedTasks = completedTasks.filter(ct =>
+          ct.taskName.toLowerCase().includes(q) ||
+          ct.completedBy.toLowerCase().includes(q) ||
+          ct.milestoneName.toLowerCase().includes(q)
+        )
+      }
+
+      if (logs.length === 0 && completedTasks.length === 0) return null
+      return { ...week, logs, completedTasks }
+    }).filter(Boolean) as WeekActivity[]
+  }, [allWeeks, selectedMember, searchQuery, dateFrom, dateTo])
+
+  const totalPages = Math.max(1, Math.ceil(filteredWeeks.length / WEEKS_PER_PAGE))
+  const safePage = Math.min(page, totalPages - 1)
+  const pagedWeeks = filteredWeeks.slice(safePage * WEEKS_PER_PAGE, (safePage + 1) * WEEKS_PER_PAGE)
+
+  // Members with active tasks but no recent logs
+  const missingUpdateMembers = useMemo(() => {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const recentLogAuthors = new Set<string>()
+    project.taskLogs.forEach(log => {
+      if (new Date(log.logDate) >= sevenDaysAgo) recentLogAuthors.add(log.author)
+    })
+    const membersWithActiveTasks = new Set<string>()
+    project.tasks.forEach(t => {
+      if (t.status === 'in-progress' || t.status === 'todo') {
+        membersWithActiveTasks.add(t.assignee)
+      }
+    })
+    return [...membersWithActiveTasks].filter(m => !recentLogAuthors.has(m)).sort()
+  }, [project.taskLogs, project.tasks])
+
+  const handleOpenReportDialog = () => {
+    // Pre-fill date range based on current filter or default
+    const today = new Date().toISOString().split('T')[0]
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    setReportDateFrom(reportType === 'weekly' ? oneWeekAgo : oneMonthAgo)
+    setReportDateTo(today)
+    setReportDialogOpen(true)
+  }
+
+  const handleGenerateReport = () => {
+    setReportGenerating(true)
+
+    // Filter weeks by report date range
+    const relevantWeeks = allWeeks.filter(week => {
+      if (reportDateFrom && getWeekSunday(week.weekMonday) < reportDateFrom) return false
+      if (reportDateTo && week.weekMonday > reportDateTo) return false
+      return true
+    })
+
+    setTimeout(() => {
+      const report = generateMockAIReport(project, relevantWeeks, reportType)
+
+      // Build content sections label
+      const sectionLabels: string[] = []
+      if (reportSections.summary) sectionLabels.push('整體進度摘要')
+      if (reportSections.tasks) sectionLabels.push('任務完成狀況')
+      if (reportSections.personnel) sectionLabels.push('人員工作紀錄')
+      if (reportSections.charts) sectionLabels.push('圖表分析')
+      if (reportSections.rawData) sectionLabels.push('原始資料')
+
+      const header = `[報告內容：${sectionLabels.join('、')}]\n\n`
+
+      const typeLabel = reportType === 'weekly' ? '週報' : '月報'
+      const ext = reportFormat
+      const fileName = `${project.name}_${typeLabel}_${new Date().toISOString().split('T')[0]}.${ext}`
+      const blob = new Blob([header + report], { type: 'application/octet-stream' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      setReportGenerating(false)
+      setReportDialogOpen(false)
+      setReportDownloaded(fileName)
+      setTimeout(() => setReportDownloaded(null), 4000)
+    }, 2000)
+  }
+
+  if (allWeeks.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <History className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+          <p className="text-muted-foreground">尚無活動紀錄</p>
+          <p className="text-sm text-muted-foreground mt-1">團隊成員可在「我的任務」中記錄工作內容</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg bg-muted/50 border p-3 space-y-2.5">
+      {/* Row 1: search + date range + report button */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative min-w-[200px] max-w-[280px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="搜尋任務、人員、內容..."
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setPage(0) }}
+            className="pl-8 h-8 text-sm"
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={e => { setDateFrom(e.target.value); setPage(0) }}
+            className="h-8 text-xs w-[140px]"
+          />
+          <span className="text-xs text-muted-foreground">至</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={e => { setDateTo(e.target.value); setPage(0) }}
+            className="h-8 text-xs w-[140px]"
+          />
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => { setDateFrom(''); setDateTo(''); setPage(0) }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+
+        <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5 ml-auto"
+              onClick={handleOpenReportDialog}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              產生報告
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[440px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="pb-0">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="h-4 w-4" />
+                AI 報告產生
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                選擇報告類型、期間和格式，AI 將自動彙整專案資料產生報告文件。
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-1">
+              {/* Report Type + Format — side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">報告類型</Label>
+                  <div className="flex gap-1.5">
+                    {([['weekly', '週報'], ['monthly', '月報']] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        onClick={() => {
+                          setReportType(value)
+                          const today = new Date().toISOString().split('T')[0]
+                          const offset = value === 'weekly' ? 7 : 30
+                          setReportDateFrom(new Date(Date.now() - offset * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+                          setReportDateTo(today)
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-md border text-xs font-medium transition-all ${
+                          reportType === value
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">輸出格式</Label>
+                  <div className="flex gap-1.5">
+                    {([['pptx', 'PPT'], ['docx', 'Word'], ['pdf', 'PDF']] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        onClick={() => setReportFormat(value)}
+                        className={`flex-1 py-1.5 px-2 rounded-md border text-xs font-medium transition-all ${
+                          reportFormat === value
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Date Range */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">報告期間</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={reportDateFrom}
+                    onChange={e => setReportDateFrom(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground shrink-0">至</span>
+                  <Input
+                    type="date"
+                    value={reportDateTo}
+                    onChange={e => setReportDateTo(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Report Sections */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">報告內容</Label>
+                <div className="space-y-1 rounded-md border p-2">
+                  {([
+                    ['summary', '整體進度摘要'],
+                    ['tasks', '任務完成狀況'],
+                    ['personnel', '人員工作紀錄'],
+                    ['charts', '圖表分析'],
+                    ['rawData', '原始資料'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 py-1 px-1 rounded hover:bg-muted/50 cursor-pointer">
+                      <Checkbox
+                        id={`report-${key}`}
+                        checked={reportSections[key]}
+                        onCheckedChange={(checked) =>
+                          setReportSections(prev => ({ ...prev, [key]: !!checked }))
+                        }
+                      />
+                      <span className="text-xs">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-0">
+              <Button variant="outline" size="sm" onClick={() => setReportDialogOpen(false)} disabled={reportGenerating}>
+                取消
+              </Button>
+              <Button size="sm" onClick={handleGenerateReport} disabled={reportGenerating} className="gap-1.5">
+                {reportGenerating ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    產生中...
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="h-3.5 w-3.5" />
+                    產生報告
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Row 2: member chips */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          onClick={() => { setSelectedMember(null); setPage(0) }}
+          className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+            !selectedMember
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-background text-muted-foreground border-border hover:bg-muted'
+          }`}
+        >
+          全部
+        </button>
+        {allActiveMembers.map(name => (
+          <button
+            key={name}
+            onClick={() => { setSelectedMember(selectedMember === name ? null : name); setPage(0) }}
+            className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+              selectedMember === name
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-border hover:bg-muted'
+            }`}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      </div>
+
+      {/* Report download success notification */}
+      {reportDownloaded && (
+        <div className="flex items-center gap-2 py-2 px-3 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <span>報告已產生：{reportDownloaded}</span>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-auto" onClick={() => setReportDownloaded(null)}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
+      {/* Summary line + missing updates */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          系統自動彙整自任務紀錄與完成狀態
+          {filteredWeeks.length !== allWeeks.length
+            ? `，篩選結果：${filteredWeeks.length} 週`
+            : `，共 ${allWeeks.length} 週活動`
+          }
+        </p>
+        {missingUpdateMembers.length > 0 && (
+          <p className="text-xs text-warning flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            {missingUpdateMembers.join('、')} 7 天內未更新
+          </p>
+        )}
+      </div>
+
+      {/* Week cards */}
+      {pagedWeeks.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">無符合條件的紀錄</p>
+          </CardContent>
+        </Card>
+      ) : (
+        pagedWeeks.map(week => {
+          const sunday = getWeekSunday(week.weekMonday)
+          const mondayLabel = new Date(week.weekMonday).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
+          const sundayLabel = new Date(sunday).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
+
+          return (
+            <Card key={week.weekMonday}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium text-sm">{mondayLabel} — {sundayLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {week.completedTasks.length > 0 && (
+                      <Badge variant="default" className="text-xs gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {week.completedTasks.length} 完成
+                      </Badge>
+                    )}
+                    {week.logs.length > 0 && (
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <FileText className="h-3 w-3" />
+                        {week.logs.length} 筆紀錄
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {week.completedTasks.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-success mb-1.5 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      完成的任務
+                    </div>
+                    <div className="space-y-1">
+                      {week.completedTasks.map(ct => (
+                        <div key={ct.taskId} className="flex items-center gap-2 p-1.5 rounded bg-success/5 text-sm">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+                          <span className="font-medium">{ct.taskName}</span>
+                          <span className="text-xs text-muted-foreground">({ct.milestoneName})</span>
+                          <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {ct.completedBy}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {week.logs.length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <FileText className="h-3 w-3" />
+                      工作紀錄
+                    </div>
+                    <div className="space-y-1.5">
+                      {week.logs.map(log => (
+                        <div key={log.logId} className="p-2 rounded border text-sm">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-xs">{log.taskName}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {log.author} · {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground text-sm">{log.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-xs text-muted-foreground">
+            第 {safePage + 1} / {totalPages} 頁
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={safePage === 0}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-7 p-0"
+              disabled={safePage >= totalPages - 1}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Main page ---
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>
@@ -89,7 +746,6 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   const budgetUtilization = Math.round((project.budgetUsed / project.budget) * 100)
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
-  const canUpdate = user?.role === 'pm' || project.owner === user?.name || project.team.includes(user?.name || '')
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
 
@@ -121,25 +777,6 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </Badge>
               </div>
               <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              {canUpdate && (
-                <Link href={`/projects/${project.id}/update`}>
-                  <Button className="gap-2" size="sm">
-                    <ClipboardEdit className="h-4 w-4" />
-                    更新進度
-                  </Button>
-                </Link>
-              )}
-              <Link href={`/gantt?project=${project.id}`}>
-                <Button variant="outline" size="sm">甘特圖</Button>
-              </Link>
-              <Link href={`/reports?project=${project.id}`}>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <FileText className="h-4 w-4" />
-                  報告
-                </Button>
-              </Link>
             </div>
           </div>
 
@@ -223,11 +860,6 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <TabsTrigger value="updates" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <History className="h-4 w-4" />
                 更新紀錄
-                {project.weeklyUpdates.length > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                    {project.weeklyUpdates.length}
-                  </Badge>
-                )}
               </TabsTrigger>
               <TabsTrigger value="risks" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <Shield className="h-4 w-4" />
@@ -345,12 +977,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       <div className="flex items-center justify-between py-2.5 last:pb-0">
                         <span className="text-sm text-muted-foreground flex items-center gap-2">
                           <History className="h-3.5 w-3.5" />
-                          最近更新
+                          最近活動
                         </span>
                         <span className="font-medium">
-                          {project.weeklyUpdates.length > 0
-                            ? new Date(project.weeklyUpdates[0].updatedAt).toLocaleDateString('zh-TW')
-                            : '尚無更新'
+                          {project.taskLogs.length > 0
+                            ? new Date(project.taskLogs[0].createdAt).toLocaleDateString('zh-TW')
+                            : '尚無紀錄'
                           }
                         </span>
                       </div>
@@ -384,105 +1016,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             />
           </TabsContent>
 
-          {/* Updates Tab */}
+          {/* Updates Tab — Auto-generated weekly summaries */}
           <TabsContent value="updates" className="mt-0">
-            <div className="space-y-3">
-              {canUpdate && (
-                <div className="flex justify-end">
-                  <Link href={`/projects/${project.id}/update`}>
-                    <Button className="gap-2" size="sm">
-                      <ClipboardEdit className="h-4 w-4" />
-                      填寫本週更新
-                    </Button>
-                  </Link>
-                </div>
-              )}
-
-              {project.weeklyUpdates.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <History className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-muted-foreground">尚無更新紀錄</p>
-                    {canUpdate && (
-                      <p className="text-sm text-muted-foreground mt-1">點擊上方按鈕開始填寫本週進度</p>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                project.weeklyUpdates.map((update) => (
-                  <Card key={update.id}>
-                    <CardContent className="p-4 space-y-3">
-                      {/* Update header */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <History className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium text-sm">第 {update.weekOf} 週更新</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={update.overallStatus === 'on-time' ? 'default' : 'destructive'} className="text-xs">
-                            {update.overallStatus === 'on-time' ? '準時' : '延遲'}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {update.updatedBy} · {new Date(update.updatedAt).toLocaleDateString('zh-TW')}
-                          </span>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      {/* Milestone updates */}
-                      {update.milestoneUpdates.length > 0 && (
-                        <div className="space-y-1.5">
-                          {update.milestoneUpdates.map((mu) => {
-                            const ms = project.milestones.find(m => m.id === mu.milestoneId)
-                            return (
-                              <div key={mu.milestoneId} className="flex items-center gap-3 p-2 rounded bg-muted/50 text-sm">
-                                <span className="font-medium min-w-[120px]">{ms?.name || mu.milestoneId}</span>
-                                <Progress value={mu.progress} className="h-1.5 flex-1" />
-                                <span className="text-muted-foreground w-10 text-right">{mu.progress}%</span>
-                                {mu.notes && <span className="text-xs text-muted-foreground hidden lg:block">— {mu.notes}</span>}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {/* Achievements & Plans side by side */}
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {update.keyAchievements && (
-                          <div className="p-2.5 rounded-lg border bg-success/5">
-                            <div className="text-xs font-medium text-success mb-1 flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              本週成果
-                            </div>
-                            <p className="text-sm">{update.keyAchievements}</p>
-                          </div>
-                        )}
-                        {update.nextWeekPlan && (
-                          <div className="p-2.5 rounded-lg border">
-                            <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              下週計畫
-                            </div>
-                            <p className="text-sm">{update.nextWeekPlan}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {update.blockers && update.blockers !== '無' && (
-                        <div className="p-2.5 rounded-lg border border-destructive/30 bg-destructive/5">
-                          <div className="text-xs font-medium text-destructive mb-1 flex items-center gap-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            阻礙
-                          </div>
-                          <p className="text-sm">{update.blockers}</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
+            <WeeklyActivitySummary project={project} />
           </TabsContent>
 
           {/* Risks Tab */}
