@@ -331,34 +331,28 @@ export default function ReportsPage() {
             </Card>
           </div>
 
-          {/* Donut Charts — 2-col, larger */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          {/* Donut Charts — 3-col */}
+          <div className="grid gap-4 lg:grid-cols-3">
             {/* Task Status Donut */}
             <Card>
               <CardHeader className="pb-0">
                 <CardTitle className="text-sm">任務狀態分佈</CardTitle>
               </CardHeader>
-              <CardContent className="flex items-center justify-center gap-8 py-6">
-                <DonutChart segments={taskSegments} size={180} strokeWidth={28}>
+              <CardContent className="flex flex-col items-center py-5 gap-4">
+                <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">{stats.totalTasks}</div>
-                    <div className="text-xs text-muted-foreground">總任務</div>
+                    <div className="text-xl font-bold">{stats.totalTasks}</div>
+                    <div className="text-[10px] text-muted-foreground">總任務</div>
                   </div>
                 </DonutChart>
-                <div className="space-y-3">
-                  {taskSegments.filter(s => s.value > 0).map(seg => {
-                    const pct = stats.totalTasks > 0 ? Math.round((seg.value / stats.totalTasks) * 100) : 0
-                    return (
-                      <div key={seg.label} className="flex items-center gap-3">
-                        <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                        <div className="min-w-[52px]">
-                          <div className="text-sm font-semibold">{seg.value}</div>
-                          <div className="text-[10px] text-muted-foreground">{seg.label}</div>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{pct}%</span>
-                      </div>
-                    )
-                  })}
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                  {taskSegments.filter(s => s.value > 0).map(seg => (
+                    <div key={seg.label} className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                      <span className="text-xs text-muted-foreground">{seg.label}</span>
+                      <span className="text-xs font-semibold">{seg.value}</span>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -370,7 +364,7 @@ export default function ReportsPage() {
                   {selectedProject ? '里程碑狀態' : '專案健康度'}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex items-center justify-center gap-8 py-6">
+              <CardContent className="flex flex-col items-center py-5 gap-4">
                 {selectedProject ? (
                   <>
                     <DonutChart
@@ -380,53 +374,80 @@ export default function ReportsPage() {
                         { value: selectedProject.milestones.filter(m => m.status === 'todo').length, color: '#94a3b8', label: '待辦' },
                         { value: selectedProject.milestones.filter(m => m.status === 'blocked').length, color: '#ef4444', label: '受阻' },
                       ]}
-                      size={180} strokeWidth={28}
+                      size={150} strokeWidth={22}
                     >
                       <div className="text-center">
-                        <div className="text-2xl font-bold">{selectedProject.progress}%</div>
-                        <div className="text-xs text-muted-foreground">進度</div>
+                        <div className="text-xl font-bold">{selectedProject.progress}%</div>
+                        <div className="text-[10px] text-muted-foreground">進度</div>
                       </div>
                     </DonutChart>
-                    <div className="space-y-2">
+                    <div className="w-full space-y-1.5 px-2">
                       {selectedProject.milestones.map(m => (
                         <div key={m.id} className="flex items-center gap-2">
                           <span className={cn(
-                            'h-2.5 w-2.5 rounded-full shrink-0',
+                            'h-2 w-2 rounded-full shrink-0',
                             m.status === 'done' ? 'bg-emerald-500' :
                             m.status === 'in-progress' ? 'bg-blue-500' :
                             m.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
                           )} />
-                          <span className="text-xs truncate max-w-[140px]">{m.name}</span>
-                          <span className="text-xs font-semibold ml-auto">{m.progress}%</span>
+                          <span className="text-[11px] truncate">{m.name}</span>
+                          <span className="text-[11px] font-semibold ml-auto">{m.progress}%</span>
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
                   <>
-                    <DonutChart segments={statusSegments} size={180} strokeWidth={28}>
+                    <DonutChart segments={statusSegments} size={150} strokeWidth={22}>
                       <div className="text-center">
-                        <div className="text-2xl font-bold">{projects.length}</div>
-                        <div className="text-xs text-muted-foreground">專案</div>
+                        <div className="text-xl font-bold">{projects.length}</div>
+                        <div className="text-[10px] text-muted-foreground">專案</div>
                       </div>
                     </DonutChart>
-                    <div className="space-y-3">
-                      {statusSegments.filter(s => s.value > 0).map(seg => {
-                        const pct = projects.length > 0 ? Math.round((seg.value / projects.length) * 100) : 0
-                        return (
-                          <div key={seg.label} className="flex items-center gap-3">
-                            <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                            <div className="min-w-[52px]">
-                              <div className="text-sm font-semibold">{seg.value}</div>
-                              <div className="text-[10px] text-muted-foreground">{seg.label}</div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{pct}%</span>
-                          </div>
-                        )
-                      })}
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                      {statusSegments.filter(s => s.value > 0).map(seg => (
+                        <div key={seg.label} className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                          <span className="text-xs text-muted-foreground">{seg.label}</span>
+                          <span className="text-xs font-semibold">{seg.value}</span>
+                        </div>
+                      ))}
                     </div>
                   </>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Budget Donut */}
+            <Card>
+              <CardHeader className="pb-0">
+                <CardTitle className="text-sm">預算執行</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center py-5 gap-4">
+                <DonutChart
+                  segments={[
+                    { value: stats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
+                    { value: Math.max(stats.budget - stats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
+                  ]}
+                  size={150} strokeWidth={22}
+                >
+                  <div className="text-center">
+                    <div className={cn('text-xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
+                    <div className="text-[10px] text-muted-foreground">執行率</div>
+                  </div>
+                </DonutChart>
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
+                    <span className="text-xs text-muted-foreground">已使用</span>
+                    <span className="text-xs font-semibold">{fmtMoney(stats.budgetUsed)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
+                    <span className="text-xs text-muted-foreground">剩餘</span>
+                    <span className="text-xs font-semibold">{fmtMoney(Math.max(stats.budget - stats.budgetUsed, 0))}</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
