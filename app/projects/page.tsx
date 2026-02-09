@@ -20,11 +20,9 @@ import {
   Users,
   Calendar,
   DollarSign,
-  Filter,
   CheckCircle2,
   Clock,
-  AlertCircle,
-  Tag
+  AlertCircle
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
@@ -118,104 +116,82 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-4">
-              {/* Search + Status */}
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="搜尋專案名稱、目標或編碼..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex gap-2">
-                    <Button
-                      variant={statusFilter === 'all' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setStatusFilter('all')}
-                    >
-                      全部
-                    </Button>
-                    <Button
-                      variant={statusFilter === 'green' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setStatusFilter('green')}
-                      className={statusFilter === 'green' ? 'bg-success hover:bg-success/90' : ''}
-                    >
-                      正常
-                    </Button>
-                    <Button
-                      variant={statusFilter === 'yellow' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setStatusFilter('yellow')}
-                      className={statusFilter === 'yellow' ? 'bg-warning hover:bg-warning/90' : ''}
-                    >
-                      注意
-                    </Button>
-                    <Button
-                      variant={statusFilter === 'red' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setStatusFilter('red')}
-                      className={statusFilter === 'red' ? 'bg-destructive hover:bg-destructive/90' : ''}
-                    >
-                      風險
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Type + Owner filters */}
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">專案類型：</span>
-                  <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ProjectType | 'all')}>
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部類型</SelectItem>
-                      {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">負責人：</span>
-                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部負責人</SelectItem>
-                      {owners.map(owner => (
-                        <SelectItem key={owner} value={owner}>{owner}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {(typeFilter !== 'all' || ownerFilter !== 'all') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setTypeFilter('all'); setOwnerFilter('all') }}
-                  >
-                    清除篩選
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Filters - Single Row */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="搜尋專案名稱、目標或編碼..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex gap-1.5">
+            <Button
+              variant={statusFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter('all')}
+            >
+              全部
+            </Button>
+            <Button
+              variant={statusFilter === 'green' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter('green')}
+              className={statusFilter === 'green' ? 'bg-success hover:bg-success/90' : ''}
+            >
+              正常
+            </Button>
+            <Button
+              variant={statusFilter === 'yellow' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter('yellow')}
+              className={statusFilter === 'yellow' ? 'bg-warning hover:bg-warning/90' : ''}
+            >
+              注意
+            </Button>
+            <Button
+              variant={statusFilter === 'red' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter('red')}
+              className={statusFilter === 'red' ? 'bg-destructive hover:bg-destructive/90' : ''}
+            >
+              風險
+            </Button>
+          </div>
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ProjectType | 'all')}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部類型</SelectItem>
+              {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(([key, label]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部負責人</SelectItem>
+              {owners.map(owner => (
+                <SelectItem key={owner} value={owner}>{owner}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {(statusFilter !== 'all' || typeFilter !== 'all' || ownerFilter !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setOwnerFilter('all') }}
+            >
+              清除
+            </Button>
+          )}
+        </div>
 
         {/* Projects Grid */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

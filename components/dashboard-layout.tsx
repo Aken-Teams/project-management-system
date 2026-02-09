@@ -118,16 +118,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 只有 PM 可以建立專案 */}
-            {user.role === 'pm' && (
-              <Link href="/projects/new">
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  新增專案
-                </Button>
-              </Link>
-            )}
-            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2 px-3">
