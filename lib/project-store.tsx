@@ -11,6 +11,7 @@ import {
   type DelayRequest,
   type Milestone,
   type TaskStatus,
+  type TaskLog,
 } from './mock-data'
 
 interface ProjectStoreContextType {
@@ -36,6 +37,10 @@ interface ProjectStoreContextType {
   approveDelayRequest: (projectId: string, requestId: string, reviewedBy: string, reviewNotes: string) => void
   rejectDelayRequest: (projectId: string, requestId: string, reviewedBy: string, reviewNotes: string) => void
   updateTaskStatus: (projectId: string, taskId: string, newStatus: TaskStatus) => void
+  addTaskLog: (projectId: string, log: Omit<TaskLog, 'id' | 'projectId' | 'createdAt'>) => void
+  completeTask: (projectId: string, taskId: string, completedBy: string) => void
+  uncompleteTask: (projectId: string, taskId: string) => void
+  getTasksForUser: (userName: string) => { project: Project; task: import('./mock-data').Task }[]
   getPendingApprovals: () => { project: Project; request: DelayRequest }[]
 }
 
@@ -43,7 +48,7 @@ const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(u
 
 const STORAGE_KEY = 'pm-system-projects'
 const STORAGE_VERSION_KEY = 'pm-system-version'
-const CURRENT_VERSION = '6'
+const CURRENT_VERSION = '7'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -122,6 +127,7 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       risks: [],
       weeklyUpdates: [],
       delayRequests: [],
+      taskLogs: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -140,28 +146,10 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
         projectId,
       }
 
-      // Update milestone progress based on the update
-      const updatedMilestones = p.milestones.map(m => {
-        const mu = update.milestoneUpdates.find(u => u.milestoneId === m.id)
-        if (mu) {
-          return {
-            ...m,
-            progress: mu.progress,
-            status: mu.progress >= 100 ? 'done' as const
-              : mu.progress > 0 ? 'in-progress' as const
-              : m.status,
-          }
-        }
-        return m
-      })
-
-      // Calculate overall progress
-      const totalProgress = updatedMilestones.reduce((acc, m) => acc + m.progress, 0)
-      const avgProgress = Math.round(totalProgress / updatedMilestones.length)
-
-      // Auto-detect status based on baseline comparison
+      // Progress is now task-driven (auto-calculated), no longer overridden by milestoneUpdates.
+      // Auto-detect project status based on baseline comparison and PM's judgment.
       let newStatus = p.status
-      const hasDelay = updatedMilestones.some((m, i) => {
+      const hasDelay = p.milestones.some(m => {
         const baselineMs = p.baseline.find(b => b.id === m.id)
         if (!baselineMs) return false
         return m.status !== 'done' && new Date() > new Date(baselineMs.dueDate)
@@ -170,14 +158,12 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       if (update.overallStatus === 'delay' || hasDelay) {
         const hasHighRisk = p.risks.some(r => r.impact === 'high' && r.status === 'open')
         newStatus = hasHighRisk ? 'red' : 'yellow'
-      } else if (avgProgress >= 80) {
+      } else if (p.progress >= 80) {
         newStatus = 'green'
       }
 
       return {
         ...p,
-        milestones: updatedMilestones,
-        progress: avgProgress,
         status: newStatus,
         weeklyUpdates: [newUpdate, ...p.weeklyUpdates],
         updatedAt: new Date().toISOString(),
@@ -293,6 +279,73 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     }))
   }, [])
 
+  const addTaskLog = useCallback((projectId: string, log: Omit<TaskLog, 'id' | 'projectId' | 'createdAt'>) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p
+      const newLog: TaskLog = {
+        ...log,
+        id: `tl-${Date.now()}`,
+        projectId,
+        createdAt: new Date().toISOString(),
+      }
+      return {
+        ...p,
+        taskLogs: [newLog, ...p.taskLogs],
+        updatedAt: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
+  const recalcProgress = (p: Project, updatedTasks: typeof p.tasks) => {
+    const updatedMilestones = p.milestones.map(m => {
+      const mTasks = updatedTasks.filter(t => t.milestoneId === m.id)
+      if (mTasks.length === 0) return m
+      const avgProgress = Math.round(mTasks.reduce((s, t) => s + t.progress, 0) / mTasks.length)
+      let status: TaskStatus = m.status
+      if (mTasks.every(t => t.status === 'done')) status = 'done'
+      else if (mTasks.some(t => t.status === 'blocked')) status = 'blocked'
+      else if (mTasks.some(t => t.status === 'in-progress' || t.status === 'done')) status = 'in-progress'
+      else status = 'todo'
+      return { ...m, progress: avgProgress, status }
+    })
+    const totalProgress = updatedMilestones.reduce((a, m) => a + m.progress, 0)
+    const avgProgress = Math.round(totalProgress / updatedMilestones.length)
+    return { milestones: updatedMilestones, progress: avgProgress }
+  }
+
+  const completeTask = useCallback((projectId: string, taskId: string, completedBy: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p
+      const updatedTasks = p.tasks.map(t => {
+        if (t.id !== taskId) return t
+        return { ...t, status: 'done' as const, progress: 100, completedAt: new Date().toISOString().split('T')[0], completedBy }
+      })
+      const { milestones, progress } = recalcProgress(p, updatedTasks)
+      return { ...p, tasks: updatedTasks, milestones, progress, updatedAt: new Date().toISOString() }
+    }))
+  }, [])
+
+  const uncompleteTask = useCallback((projectId: string, taskId: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p
+      const updatedTasks = p.tasks.map(t => {
+        if (t.id !== taskId) return t
+        const { completedAt, completedBy, ...rest } = t
+        return { ...rest, status: 'in-progress' as const, progress: 50 }
+      })
+      const { milestones, progress } = recalcProgress(p, updatedTasks)
+      return { ...p, tasks: updatedTasks, milestones, progress, updatedAt: new Date().toISOString() }
+    }))
+  }, [])
+
+  const getTasksForUser = useCallback((userName: string) => {
+    const results: { project: Project; task: import('./mock-data').Task }[] = []
+    projects.forEach(p => {
+      p.tasks.filter(t => t.assignee === userName).forEach(t => results.push({ project: p, task: t }))
+    })
+    return results
+  }, [projects])
+
   const getPendingApprovals = useCallback(() => {
     const results: { project: Project; request: DelayRequest }[] = []
     projects.forEach(p => {
@@ -318,6 +371,10 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       addProject,
       addWeeklyUpdate,
       updateTaskStatus,
+      addTaskLog,
+      completeTask,
+      uncompleteTask,
+      getTasksForUser,
       submitDelayRequest,
       approveDelayRequest,
       rejectDelayRequest,

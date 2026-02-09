@@ -71,6 +71,7 @@ export interface Project {
   risks: Risk[]
   weeklyUpdates: WeeklyUpdate[]
   delayRequests: DelayRequest[]
+  taskLogs: TaskLog[]
   createdAt: string
   updatedAt: string
 }
@@ -88,6 +89,18 @@ export interface Task {
   endDate: string
   dependencies: string[]
   progress: number
+  completedAt?: string
+  completedBy?: string
+}
+
+export interface TaskLog {
+  id: string
+  taskId: string
+  projectId: string
+  author: string
+  logDate: string
+  content: string
+  createdAt: string
 }
 
 export interface Risk {
@@ -161,11 +174,11 @@ export const MOCK_PROJECTS: Project[] = [
       { id: 'ms-5', name: '測試與上線', dueDate: '2024-06-30', status: 'todo', progress: 0 },
     ],
     tasks: [
-      { id: 'task-1', projectId: 'proj-1', milestoneId: 'ms-1', title: '需求訪談與彙整', description: '訪談各部門收集需求', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-01-15', endDate: '2024-02-01', dependencies: [], progress: 100 },
-      { id: 'task-1b', projectId: 'proj-1', milestoneId: 'ms-1', title: '需求規格書撰寫', description: '撰寫完整需求規格文件', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-02-01', endDate: '2024-02-15', dependencies: ['task-1'], progress: 100 },
-      { id: 'task-1c', projectId: 'proj-1', milestoneId: 'ms-2', title: 'UI 線框圖設計', description: '設計主要頁面線框圖', assignee: 'Emma Wu', status: 'done', priority: 'high', startDate: '2024-02-15', endDate: '2024-03-01', dependencies: ['task-1b'], progress: 100 },
-      { id: 'task-1d', projectId: 'proj-1', milestoneId: 'ms-2', title: '視覺設計與元件庫', description: '完成視覺設計並建立元件庫', assignee: 'Emma Wu', status: 'done', priority: 'medium', startDate: '2024-03-01', endDate: '2024-03-15', dependencies: ['task-1c'], progress: 100 },
-      { id: 'task-2', projectId: 'proj-1', milestoneId: 'ms-3', title: '資料庫架構設計', description: '設計資料庫 schema', assignee: 'David Lee', status: 'done', priority: 'high', startDate: '2024-03-15', endDate: '2024-03-30', dependencies: [], progress: 100 },
+      { id: 'task-1', projectId: 'proj-1', milestoneId: 'ms-1', title: '需求訪談與彙整', description: '訪談各部門收集需求', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-01-15', endDate: '2024-02-01', dependencies: [], progress: 100, completedAt: '2024-01-31', completedBy: 'Alice Chen' },
+      { id: 'task-1b', projectId: 'proj-1', milestoneId: 'ms-1', title: '需求規格書撰寫', description: '撰寫完整需求規格文件', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-02-01', endDate: '2024-02-15', dependencies: ['task-1'], progress: 100, completedAt: '2024-02-14', completedBy: 'Alice Chen' },
+      { id: 'task-1c', projectId: 'proj-1', milestoneId: 'ms-2', title: 'UI 線框圖設計', description: '設計主要頁面線框圖', assignee: 'Emma Wu', status: 'done', priority: 'high', startDate: '2024-02-15', endDate: '2024-03-01', dependencies: ['task-1b'], progress: 100, completedAt: '2024-02-28', completedBy: 'Emma Wu' },
+      { id: 'task-1d', projectId: 'proj-1', milestoneId: 'ms-2', title: '視覺設計與元件庫', description: '完成視覺設計並建立元件庫', assignee: 'Emma Wu', status: 'done', priority: 'medium', startDate: '2024-03-01', endDate: '2024-03-15', dependencies: ['task-1c'], progress: 100, completedAt: '2024-03-14', completedBy: 'Emma Wu' },
+      { id: 'task-2', projectId: 'proj-1', milestoneId: 'ms-3', title: '資料庫架構設計', description: '設計資料庫 schema', assignee: 'David Lee', status: 'done', priority: 'high', startDate: '2024-03-15', endDate: '2024-03-30', dependencies: [], progress: 100, completedAt: '2024-03-28', completedBy: 'David Lee' },
       { id: 'task-3', projectId: 'proj-1', milestoneId: 'ms-3', title: 'API 端點設計與開發', description: '設計 RESTful API 端點並實作', assignee: 'Bob Wang', status: 'in-progress', priority: 'high', startDate: '2024-03-20', endDate: '2024-04-10', dependencies: ['task-2'], progress: 75 },
       { id: 'task-3b', projectId: 'proj-1', milestoneId: 'ms-3', title: '認證與授權模組', description: '實作 JWT 認證與角色權限', assignee: 'Bob Wang', status: 'in-progress', priority: 'high', startDate: '2024-04-01', endDate: '2024-04-20', dependencies: ['task-3'], progress: 40 },
       { id: 'task-4', projectId: 'proj-1', milestoneId: 'ms-4', title: '客戶列表頁面', description: '開發客戶列表與篩選功能', assignee: 'Emma Wu', status: 'in-progress', priority: 'medium', startDate: '2024-04-01', endDate: '2024-04-20', dependencies: ['task-3'], progress: 50 },
@@ -211,6 +224,16 @@ export const MOCK_PROJECTS: Project[] = [
       },
     ],
     delayRequests: [],
+    taskLogs: [
+      { id: 'tl-1', taskId: 'task-1', projectId: 'proj-1', author: 'Alice Chen', logDate: '2024-01-25', content: '完成 5 個部門的需求訪談，整理初步需求清單', createdAt: '2024-01-25T17:00:00' },
+      { id: 'tl-2', taskId: 'task-1', projectId: 'proj-1', author: 'Alice Chen', logDate: '2024-01-31', content: '完成所有需求彙整，產出需求摘要報告交由團隊確認', createdAt: '2024-01-31T16:30:00' },
+      { id: 'tl-3', taskId: 'task-1b', projectId: 'proj-1', author: 'Alice Chen', logDate: '2024-02-10', content: '需求規格書初稿完成，送交各部門確認', createdAt: '2024-02-10T15:00:00' },
+      { id: 'tl-4', taskId: 'task-1c', projectId: 'proj-1', author: 'Emma Wu', logDate: '2024-02-22', content: '完成客戶列表、客戶詳情、報價單三個主要頁面的線框圖', createdAt: '2024-02-22T18:00:00' },
+      { id: 'tl-5', taskId: 'task-1d', projectId: 'proj-1', author: 'Emma Wu', logDate: '2024-03-12', content: '完成 Design Token 定義與元件庫 Figma 文件', createdAt: '2024-03-12T17:00:00' },
+      { id: 'tl-6', taskId: 'task-2', projectId: 'proj-1', author: 'David Lee', logDate: '2024-03-25', content: '完成資料庫 ER Diagram 與 schema 設計，通過架構審查', createdAt: '2024-03-25T16:00:00' },
+      { id: 'tl-7', taskId: 'task-3', projectId: 'proj-1', author: 'Bob Wang', logDate: '2024-03-28', content: '完成客戶 CRUD API 與搜尋功能，已通過單元測試', createdAt: '2024-03-28T17:30:00' },
+      { id: 'tl-8', taskId: 'task-3b', projectId: 'proj-1', author: 'Bob Wang', logDate: '2024-04-05', content: 'JWT 認證機制開發完成，正在實作角色權限控制', createdAt: '2024-04-05T16:00:00' },
+    ],
   },
   {
     id: 'proj-2',
@@ -247,9 +270,9 @@ export const MOCK_PROJECTS: Project[] = [
       { id: 'ms-10', name: '正式上線', dueDate: '2024-05-20', status: 'todo', progress: 0 },
     ],
     tasks: [
-      { id: 'task-20', projectId: 'proj-2', milestoneId: 'ms-6', title: 'UI 風格定義', description: '制定新版 App 視覺風格與 Design Token', assignee: 'Grace Liu', status: 'done', priority: 'high', startDate: '2024-02-01', endDate: '2024-02-20', dependencies: [], progress: 100 },
-      { id: 'task-21', projectId: 'proj-2', milestoneId: 'ms-6', title: '頁面 Prototype 設計', description: '完成首頁、商品頁、個人頁 Prototype', assignee: 'Grace Liu', status: 'done', priority: 'high', startDate: '2024-02-20', endDate: '2024-03-10', dependencies: ['task-20'], progress: 100 },
-      { id: 'task-22', projectId: 'proj-2', milestoneId: 'ms-7', title: 'iOS 首頁重構', description: '使用 SwiftUI 重構首頁', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-03-10', endDate: '2024-03-25', dependencies: ['task-21'], progress: 100 },
+      { id: 'task-20', projectId: 'proj-2', milestoneId: 'ms-6', title: 'UI 風格定義', description: '制定新版 App 視覺風格與 Design Token', assignee: 'Grace Liu', status: 'done', priority: 'high', startDate: '2024-02-01', endDate: '2024-02-20', dependencies: [], progress: 100, completedAt: '2024-02-19', completedBy: 'Grace Liu' },
+      { id: 'task-21', projectId: 'proj-2', milestoneId: 'ms-6', title: '頁面 Prototype 設計', description: '完成首頁、商品頁、個人頁 Prototype', assignee: 'Grace Liu', status: 'done', priority: 'high', startDate: '2024-02-20', endDate: '2024-03-10', dependencies: ['task-20'], progress: 100, completedAt: '2024-03-08', completedBy: 'Grace Liu' },
+      { id: 'task-22', projectId: 'proj-2', milestoneId: 'ms-7', title: 'iOS 首頁重構', description: '使用 SwiftUI 重構首頁', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-03-10', endDate: '2024-03-25', dependencies: ['task-21'], progress: 100, completedAt: '2024-03-24', completedBy: 'Alice Chen' },
       { id: 'task-23', projectId: 'proj-2', milestoneId: 'ms-7', title: 'iOS 效能優化', description: '圖片快取與懶載入優化', assignee: 'Alice Chen', status: 'in-progress', priority: 'high', startDate: '2024-03-25', endDate: '2024-04-10', dependencies: ['task-22'], progress: 60 },
       { id: 'task-24', projectId: 'proj-2', milestoneId: 'ms-7', title: 'iOS 推播功能', description: '實作推播通知與深層連結', assignee: 'Alice Chen', status: 'todo', priority: 'medium', startDate: '2024-04-10', endDate: '2024-04-20', dependencies: ['task-23'], progress: 0 },
       { id: 'task-25', projectId: 'proj-2', milestoneId: 'ms-8', title: 'Android 首頁重構', description: '使用 Jetpack Compose 重構首頁', assignee: 'Frank Chen', status: 'in-progress', priority: 'high', startDate: '2024-03-10', endDate: '2024-04-01', dependencies: ['task-21'], progress: 50 },
@@ -296,6 +319,13 @@ export const MOCK_PROJECTS: Project[] = [
         status: 'pending',
       },
     ],
+    taskLogs: [
+      { id: 'tl-10', taskId: 'task-20', projectId: 'proj-2', author: 'Grace Liu', logDate: '2024-02-15', content: '完成 App 新版色彩體系與字型規範定義', createdAt: '2024-02-15T17:00:00' },
+      { id: 'tl-11', taskId: 'task-21', projectId: 'proj-2', author: 'Grace Liu', logDate: '2024-03-05', content: '完成首頁與商品頁 Prototype，進行用戶測試', createdAt: '2024-03-05T16:00:00' },
+      { id: 'tl-12', taskId: 'task-22', projectId: 'proj-2', author: 'Alice Chen', logDate: '2024-03-20', content: '首頁使用 SwiftUI 重構完成，包含動態內容載入', createdAt: '2024-03-20T17:00:00' },
+      { id: 'tl-13', taskId: 'task-23', projectId: 'proj-2', author: 'Alice Chen', logDate: '2024-04-02', content: '完成圖片快取機制優化，載入速度提升 40%', createdAt: '2024-04-02T16:30:00' },
+      { id: 'tl-14', taskId: 'task-25', projectId: 'proj-2', author: 'Frank Chen', logDate: '2024-03-25', content: 'Android 首頁 Compose 版面配置完成，正在處理動畫效果', createdAt: '2024-03-25T18:00:00' },
+    ],
   },
   {
     id: 'proj-3',
@@ -331,8 +361,8 @@ export const MOCK_PROJECTS: Project[] = [
     ],
     tasks: [
       { id: 'task-30', projectId: 'proj-3', milestoneId: 'ms-11', title: 'ERP 資料源對接', description: '建立 ERP 系統資料連線', assignee: 'Henry Chang', status: 'in-progress', priority: 'high', startDate: '2024-03-01', endDate: '2024-03-25', dependencies: [], progress: 30 },
-      { id: 'task-31', projectId: 'proj-3', milestoneId: 'ms-11', title: 'CRM 資料源對接', description: '建立 CRM 系統資料連線', assignee: 'Henry Chang', status: 'done', priority: 'high', startDate: '2024-03-10', endDate: '2024-03-20', dependencies: [], progress: 100 },
-      { id: 'task-32', projectId: 'proj-3', milestoneId: 'ms-11', title: 'HR 系統資料對接', description: '建立人事系統資料連線', assignee: 'Iris Chen', status: 'done', priority: 'medium', startDate: '2024-03-10', endDate: '2024-03-22', dependencies: [], progress: 100 },
+      { id: 'task-31', projectId: 'proj-3', milestoneId: 'ms-11', title: 'CRM 資料源對接', description: '建立 CRM 系統資料連線', assignee: 'Henry Chang', status: 'done', priority: 'high', startDate: '2024-03-10', endDate: '2024-03-20', dependencies: [], progress: 100, completedAt: '2024-03-19', completedBy: 'Henry Chang' },
+      { id: 'task-32', projectId: 'proj-3', milestoneId: 'ms-11', title: 'HR 系統資料對接', description: '建立人事系統資料連線', assignee: 'Iris Chen', status: 'done', priority: 'medium', startDate: '2024-03-10', endDate: '2024-03-22', dependencies: [], progress: 100, completedAt: '2024-03-21', completedBy: 'Iris Chen' },
       { id: 'task-33', projectId: 'proj-3', milestoneId: 'ms-12', title: 'ETL 框架建置', description: '搭建 ETL Pipeline 基礎架構', assignee: 'Henry Chang', status: 'in-progress', priority: 'high', startDate: '2024-03-25', endDate: '2024-04-15', dependencies: ['task-31'], progress: 25 },
       { id: 'task-34', projectId: 'proj-3', milestoneId: 'ms-12', title: 'ETL 轉換規則開發', description: '開發各資料源的清洗與轉換規則', assignee: 'Iris Chen', status: 'blocked', priority: 'high', startDate: '2024-04-01', endDate: '2024-05-15', dependencies: ['task-30', 'task-33'], progress: 10 },
       { id: 'task-35', projectId: 'proj-3', milestoneId: 'ms-13', title: '儀表板 UI 設計', description: '設計分析儀表板介面', assignee: 'Carol Lin', status: 'todo', priority: 'medium', startDate: '2024-05-01', endDate: '2024-05-20', dependencies: [], progress: 0 },
@@ -380,6 +410,11 @@ export const MOCK_PROJECTS: Project[] = [
         status: 'pending',
       },
     ],
+    taskLogs: [
+      { id: 'tl-20', taskId: 'task-31', projectId: 'proj-3', author: 'Henry Chang', logDate: '2024-03-18', content: '完成 CRM 系統 API 連線測試，資料格式驗證通過', createdAt: '2024-03-18T17:00:00' },
+      { id: 'tl-21', taskId: 'task-32', projectId: 'proj-3', author: 'Iris Chen', logDate: '2024-03-20', content: '完成 HR 系統資料欄位對應與連線測試，可正常取得員工資料', createdAt: '2024-03-20T16:30:00' },
+      { id: 'tl-22', taskId: 'task-33', projectId: 'proj-3', author: 'Henry Chang', logDate: '2024-04-05', content: 'ETL Pipeline 基礎架構搭建完成，已可執行簡單的資料抽取任務', createdAt: '2024-04-05T18:00:00' },
+    ],
   },
   {
     id: 'proj-4',
@@ -414,9 +449,9 @@ export const MOCK_PROJECTS: Project[] = [
       { id: 'ms-18', name: '人員培訓與驗證', dueDate: '2024-07-31', status: 'todo', progress: 0 },
     ],
     tasks: [
-      { id: 'task-40', projectId: 'proj-4', milestoneId: 'ms-15', title: '設備規格評估', description: '評估自動化設備規格與報價', assignee: 'Bob Wang', status: 'done', priority: 'high', startDate: '2024-02-15', endDate: '2024-03-05', dependencies: [], progress: 100 },
-      { id: 'task-41', projectId: 'proj-4', milestoneId: 'ms-15', title: '設備採購下單', description: '簽約並下單採購設備', assignee: 'Karen Hsu', status: 'done', priority: 'high', startDate: '2024-03-05', endDate: '2024-03-15', dependencies: ['task-40'], progress: 100 },
-      { id: 'task-42', projectId: 'proj-4', milestoneId: 'ms-15', title: '設備到貨驗收', description: '設備到貨後品質檢驗', assignee: 'Jack Liu', status: 'done', priority: 'high', startDate: '2024-03-15', endDate: '2024-03-31', dependencies: ['task-41'], progress: 100 },
+      { id: 'task-40', projectId: 'proj-4', milestoneId: 'ms-15', title: '設備規格評估', description: '評估自動化設備規格與報價', assignee: 'Bob Wang', status: 'done', priority: 'high', startDate: '2024-02-15', endDate: '2024-03-05', dependencies: [], progress: 100, completedAt: '2024-03-04', completedBy: 'Bob Wang' },
+      { id: 'task-41', projectId: 'proj-4', milestoneId: 'ms-15', title: '設備採購下單', description: '簽約並下單採購設備', assignee: 'Karen Hsu', status: 'done', priority: 'high', startDate: '2024-03-05', endDate: '2024-03-15', dependencies: ['task-40'], progress: 100, completedAt: '2024-03-14', completedBy: 'Karen Hsu' },
+      { id: 'task-42', projectId: 'proj-4', milestoneId: 'ms-15', title: '設備到貨驗收', description: '設備到貨後品質檢驗', assignee: 'Jack Liu', status: 'done', priority: 'high', startDate: '2024-03-15', endDate: '2024-03-31', dependencies: ['task-41'], progress: 100, completedAt: '2024-03-29', completedBy: 'Jack Liu' },
       { id: 'task-43', projectId: 'proj-4', milestoneId: 'ms-16', title: 'A 線設備安裝', description: '監督 A 線設備安裝進度與品質', assignee: 'Jack Liu', status: 'in-progress', priority: 'high', startDate: '2024-04-01', endDate: '2024-04-25', dependencies: ['task-42'], progress: 70 },
       { id: 'task-44', projectId: 'proj-4', milestoneId: 'ms-16', title: 'A 線 PLC 程式開發', description: '撰寫 A 線自動化控制程式', assignee: 'David Lee', status: 'in-progress', priority: 'high', startDate: '2024-04-01', endDate: '2024-05-10', dependencies: ['task-42'], progress: 65 },
       { id: 'task-45', projectId: 'proj-4', milestoneId: 'ms-16', title: 'A 線連動測試', description: 'A 線設備與 PLC 連動調試', assignee: 'David Lee', status: 'todo', priority: 'high', startDate: '2024-04-25', endDate: '2024-05-15', dependencies: ['task-43', 'task-44'], progress: 0 },
@@ -447,6 +482,11 @@ export const MOCK_PROJECTS: Project[] = [
       },
     ],
     delayRequests: [],
+    taskLogs: [
+      { id: 'tl-30', taskId: 'task-40', projectId: 'proj-4', author: 'Bob Wang', logDate: '2024-03-01', content: '完成三家設備供應商規格比較與報價評估，推薦方案提交主管審核', createdAt: '2024-03-01T17:00:00' },
+      { id: 'tl-31', taskId: 'task-41', projectId: 'proj-4', author: 'Karen Hsu', logDate: '2024-03-12', content: '完成採購合約簽署與下單，預計設備兩週內交貨', createdAt: '2024-03-12T16:00:00' },
+      { id: 'tl-32', taskId: 'task-42', projectId: 'proj-4', author: 'Jack Liu', logDate: '2024-03-28', content: '設備到貨完成品質檢驗，所有項目符合規格要求，安排入廠安裝', createdAt: '2024-03-28T17:30:00' },
+    ],
   },
   {
     id: 'proj-5',
@@ -483,8 +523,8 @@ export const MOCK_PROJECTS: Project[] = [
       { id: 'ms-23', name: '上線與教育訓練', dueDate: '2024-09-30', status: 'todo', progress: 0 },
     ],
     tasks: [
-      { id: 'task-50', projectId: 'proj-5', milestoneId: 'ms-19', title: '倉庫現場勘查', description: '實地勘查倉庫動線與設備', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-03-15', endDate: '2024-03-25', dependencies: [], progress: 100 },
-      { id: 'task-51', projectId: 'proj-5', milestoneId: 'ms-19', title: '需求訪談與文件', description: '訪談倉管人員並撰寫需求文件', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-03-25', endDate: '2024-04-15', dependencies: ['task-50'], progress: 100 },
+      { id: 'task-50', projectId: 'proj-5', milestoneId: 'ms-19', title: '倉庫現場勘查', description: '實地勘查倉庫動線與設備', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-03-15', endDate: '2024-03-25', dependencies: [], progress: 100, completedAt: '2024-03-24', completedBy: 'Alice Chen' },
+      { id: 'task-51', projectId: 'proj-5', milestoneId: 'ms-19', title: '需求訪談與文件', description: '訪談倉管人員並撰寫需求文件', assignee: 'Alice Chen', status: 'done', priority: 'high', startDate: '2024-03-25', endDate: '2024-04-15', dependencies: ['task-50'], progress: 100, completedAt: '2024-04-14', completedBy: 'Alice Chen' },
       { id: 'task-52', projectId: 'proj-5', milestoneId: 'ms-20', title: '儲位規劃設計', description: '設計最佳儲位配置', assignee: 'Emma Wu', status: 'in-progress', priority: 'medium', startDate: '2024-04-20', endDate: '2024-05-10', dependencies: ['task-51'], progress: 40 },
       { id: 'task-53', projectId: 'proj-5', milestoneId: 'ms-20', title: '系統架構設計', description: '設計 WMS 系統架構與技術選型', assignee: 'Frank Chen', status: 'in-progress', priority: 'high', startDate: '2024-04-15', endDate: '2024-05-15', dependencies: ['task-51'], progress: 55 },
       { id: 'task-54', projectId: 'proj-5', milestoneId: 'ms-21', title: '入庫模組開發', description: '開發進貨驗收與上架功能', assignee: 'Frank Chen', status: 'todo', priority: 'high', startDate: '2024-05-15', endDate: '2024-06-15', dependencies: ['task-53'], progress: 0 },
@@ -513,6 +553,7 @@ export const MOCK_PROJECTS: Project[] = [
       },
     ],
     delayRequests: [],
+    taskLogs: [],
   },
   {
     id: 'proj-6',
@@ -561,6 +602,7 @@ export const MOCK_PROJECTS: Project[] = [
     ],
     weeklyUpdates: [],
     delayRequests: [],
+    taskLogs: [],
   },
   {
     id: 'proj-7',
@@ -595,11 +637,11 @@ export const MOCK_PROJECTS: Project[] = [
       { id: 'ms-31', name: '成效驗證與報告', dueDate: '2024-05-31', status: 'todo', progress: 0 },
     ],
     tasks: [
-      { id: 'task-70', projectId: 'proj-7', milestoneId: 'ms-28', title: '電表安裝規劃', description: '規劃各區域智慧電表安裝位置', assignee: 'Jack Liu', status: 'done', priority: 'high', startDate: '2024-01-10', endDate: '2024-01-25', dependencies: [], progress: 100 },
-      { id: 'task-71', projectId: 'proj-7', milestoneId: 'ms-28', title: '智慧電表安裝', description: '安裝各區域智慧電表與感測器', assignee: 'Jack Liu', status: 'done', priority: 'high', startDate: '2024-01-25', endDate: '2024-02-28', dependencies: ['task-70'], progress: 100 },
-      { id: 'task-72', projectId: 'proj-7', milestoneId: 'ms-29', title: '數據收集平台開發', description: '開發電力數據即時收集與儲存', assignee: 'Henry Chang', status: 'done', priority: 'high', startDate: '2024-02-15', endDate: '2024-03-15', dependencies: ['task-71'], progress: 100 },
-      { id: 'task-73', projectId: 'proj-7', milestoneId: 'ms-29', title: '能耗分析儀表板', description: '開發各區域用電視覺化分析', assignee: 'Henry Chang', status: 'done', priority: 'high', startDate: '2024-03-10', endDate: '2024-03-31', dependencies: ['task-72'], progress: 100 },
-      { id: 'task-74', projectId: 'proj-7', milestoneId: 'ms-30', title: '照明設備汰換', description: '將傳統燈具更換為 LED', assignee: 'Henry Chang', status: 'done', priority: 'medium', startDate: '2024-03-15', endDate: '2024-04-10', dependencies: [], progress: 100 },
+      { id: 'task-70', projectId: 'proj-7', milestoneId: 'ms-28', title: '電表安裝規劃', description: '規劃各區域智慧電表安裝位置', assignee: 'Jack Liu', status: 'done', priority: 'high', startDate: '2024-01-10', endDate: '2024-01-25', dependencies: [], progress: 100, completedAt: '2024-01-24', completedBy: 'Jack Liu' },
+      { id: 'task-71', projectId: 'proj-7', milestoneId: 'ms-28', title: '智慧電表安裝', description: '安裝各區域智慧電表與感測器', assignee: 'Jack Liu', status: 'done', priority: 'high', startDate: '2024-01-25', endDate: '2024-02-28', dependencies: ['task-70'], progress: 100, completedAt: '2024-02-27', completedBy: 'Jack Liu' },
+      { id: 'task-72', projectId: 'proj-7', milestoneId: 'ms-29', title: '數據收集平台開發', description: '開發電力數據即時收集與儲存', assignee: 'Henry Chang', status: 'done', priority: 'high', startDate: '2024-02-15', endDate: '2024-03-15', dependencies: ['task-71'], progress: 100, completedAt: '2024-03-14', completedBy: 'Henry Chang' },
+      { id: 'task-73', projectId: 'proj-7', milestoneId: 'ms-29', title: '能耗分析儀表板', description: '開發各區域用電視覺化分析', assignee: 'Henry Chang', status: 'done', priority: 'high', startDate: '2024-03-10', endDate: '2024-03-31', dependencies: ['task-72'], progress: 100, completedAt: '2024-03-30', completedBy: 'Henry Chang' },
+      { id: 'task-74', projectId: 'proj-7', milestoneId: 'ms-30', title: '照明設備汰換', description: '將傳統燈具更換為 LED', assignee: 'Henry Chang', status: 'done', priority: 'medium', startDate: '2024-03-15', endDate: '2024-04-10', dependencies: [], progress: 100, completedAt: '2024-04-09', completedBy: 'Henry Chang' },
       { id: 'task-75', projectId: 'proj-7', milestoneId: 'ms-30', title: '空調系統優化', description: '調整空調運轉排程降低尖峰用電', assignee: 'Jack Liu', status: 'in-progress', priority: 'high', startDate: '2024-04-01', endDate: '2024-04-25', dependencies: ['task-73'], progress: 60 },
       { id: 'task-76', projectId: 'proj-7', milestoneId: 'ms-30', title: '尖峰用電管控策略', description: '制定尖峰時段用電管控方案', assignee: 'Carol Lin', status: 'in-progress', priority: 'medium', startDate: '2024-04-10', endDate: '2024-04-30', dependencies: ['task-73'], progress: 40 },
       { id: 'task-77', projectId: 'proj-7', milestoneId: 'ms-31', title: '月報自動化', description: '設定能耗月報自動產出與寄送', assignee: 'Henry Chang', status: 'todo', priority: 'medium', startDate: '2024-04-20', endDate: '2024-05-10', dependencies: ['task-73'], progress: 0 },
@@ -624,6 +666,12 @@ export const MOCK_PROJECTS: Project[] = [
       },
     ],
     delayRequests: [],
+    taskLogs: [
+      { id: 'tl-60', taskId: 'task-70', projectId: 'proj-7', author: 'Jack Liu', logDate: '2024-01-22', content: '完成廠區各區域電表安裝位置規劃圖，共規劃 32 個監測點', createdAt: '2024-01-22T17:00:00' },
+      { id: 'tl-61', taskId: 'task-71', projectId: 'proj-7', author: 'Jack Liu', logDate: '2024-02-20', content: '已完成 28 個監測點的智慧電表安裝，剩餘 4 個預計本週完成', createdAt: '2024-02-20T16:30:00' },
+      { id: 'tl-62', taskId: 'task-72', projectId: 'proj-7', author: 'Henry Chang', logDate: '2024-03-10', content: '數據收集平台上線，可即時接收所有電表數據並存入時序資料庫', createdAt: '2024-03-10T18:00:00' },
+      { id: 'tl-63', taskId: 'task-74', projectId: 'proj-7', author: 'Henry Chang', logDate: '2024-04-08', content: '完成廠區 A、B 棟照明設備 LED 汰換，預估年省電費 80 萬元', createdAt: '2024-04-08T17:00:00' },
+    ],
   },
 ]
 

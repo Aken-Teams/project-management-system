@@ -23,10 +23,12 @@ import {
   LogOut,
   User,
   Plus,
-  ClipboardCheck
+  ClipboardCheck,
+  ClipboardList
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProjectStore } from '@/lib/project-store'
+import { computeTaskStatus } from '@/lib/task-utils'
 import { Badge } from '@/components/ui/badge'
 
 interface DashboardLayoutProps {
@@ -36,6 +38,7 @@ interface DashboardLayoutProps {
 const navigation = [
   { name: '儀表板', href: '/dashboard', icon: LayoutDashboard },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
+  { name: '我的任務', href: '/my-tasks', icon: ClipboardList },
   { name: '甘特圖', href: '/gantt', icon: GanttChart },
   { name: '報告', href: '/reports', icon: FileText },
   { name: '審批中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
@@ -45,8 +48,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout, switchRole } = useAuth()
-  const { getPendingApprovals } = useProjectStore()
+  const { getPendingApprovals, getTasksForUser, projects } = useProjectStore()
   const pendingCount = getPendingApprovals().length
+  const userTasks = user ? getTasksForUser(user.name) : []
+  const atRiskCount = userTasks.filter(({ project, task }) => {
+    const status = computeTaskStatus(task, project.taskLogs)
+    return status === 'at-risk' || status === 'overdue'
+  }).length
 
   const handleLogout = () => {
     logout()
@@ -92,7 +100,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 .map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-                const showBadge = item.href === '/approvals' && pendingCount > 0
+                const badgeValue = item.href === '/approvals' ? pendingCount : item.href === '/my-tasks' ? atRiskCount : 0
+                const showBadge = badgeValue > 0
                 return (
                   <Link key={item.name} href={item.href}>
                     <Button
@@ -106,8 +115,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       <Icon className="h-4 w-4" />
                       {item.name}
                       {showBadge && (
-                        <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                          {pendingCount}
+                        <Badge variant={item.href === '/my-tasks' ? 'secondary' : 'destructive'} className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                          {badgeValue}
                         </Badge>
                       )}
                     </Button>

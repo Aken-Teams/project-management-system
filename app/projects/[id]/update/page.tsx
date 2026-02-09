@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Slider } from '@/components/ui/slider'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
@@ -46,13 +45,11 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
   const project = getProject(id)
 
   const [weekOf, setWeekOf] = useState(getMondayOfCurrentWeek())
-  const [milestoneUpdates, setMilestoneUpdates] = useState<
-    Record<string, { progress: number; notes: string }>
-  >(() => {
+  const [milestoneNotes, setMilestoneNotes] = useState<Record<string, string>>(() => {
     if (!project) return {}
-    const initial: Record<string, { progress: number; notes: string }> = {}
+    const initial: Record<string, string> = {}
     project.milestones.forEach((m) => {
-      initial[m.id] = { progress: m.progress, notes: '' }
+      initial[m.id] = ''
     })
     return initial
   })
@@ -127,13 +124,11 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
     setIsSubmitting(true)
 
     try {
-      const milestoneUpdateArray = Object.entries(milestoneUpdates).map(
-        ([milestoneId, data]) => ({
-          milestoneId,
-          progress: data.progress,
-          notes: data.notes,
-        })
-      )
+      const milestoneUpdateArray = project.milestones.map((m) => ({
+        milestoneId: m.id,
+        progress: m.progress,
+        notes: milestoneNotes[m.id] || '',
+      }))
 
       addWeeklyUpdate(id, {
         weekOf,
@@ -268,21 +263,20 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
           <div>
             <h2 className="text-xl font-semibold flex items-center gap-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
-              里程碑進度更新
+              里程碑進度
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              請更新每個里程碑的整體完成度。里程碑進度的平均值 = 專案整體完成度。
+              里程碑進度由任務完成狀態自動計算，您可在下方確認整體狀態並填寫備註。
             </p>
           </div>
 
           {project.milestones.map((milestone, index) => {
-            const msUpdate = milestoneUpdates[milestone.id] || {
-              progress: milestone.progress,
-              notes: '',
-            }
+            const msNotes = milestoneNotes[milestone.id] || ''
             const baselineMilestone = project.baseline.find(
               (b) => b.id === milestone.id
             )
+            const milestoneTasks = project.tasks.filter(t => t.milestoneId === milestone.id)
+            const completedCount = milestoneTasks.filter(t => t.status === 'done').length
 
             return (
               <Card key={milestone.id}>
@@ -323,83 +317,68 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Tasks under this milestone (read-only) */}
-                  {(() => {
-                    const milestoneTasks = project.tasks.filter(t => t.milestoneId === milestone.id)
-                    if (milestoneTasks.length === 0) return null
-                    return (
-                      <div className="p-3 rounded-lg bg-muted/50 border">
-                        <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3 w-3" />
-                          此里程碑的任務 ({milestoneTasks.filter(t => t.status === 'done').length}/{milestoneTasks.length} 已完成)
-                        </div>
-                        <div className="space-y-1">
-                          {milestoneTasks.map(task => (
-                            <div key={task.id} className="flex items-center gap-2 text-xs">
-                              <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
-                                {task.status === 'done' ? '完成' : task.status === 'in-progress' ? '進行中' : task.status === 'blocked' ? '受阻' : '待辦'}
-                              </Badge>
-                              <span className={task.status === 'done' ? 'text-muted-foreground' : ''}>
-                                {task.title}
-                              </span>
-                              <span className="text-muted-foreground ml-auto shrink-0">{task.assignee}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })()}
-
-                  {/* Progress Slider */}
-                  <div className="space-y-3">
+                  {/* Auto-calculated progress (read-only) */}
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label>目前進度</Label>
+                      <span className="text-sm text-muted-foreground">
+                        自動計算進度
+                        {milestoneTasks.length > 0 && (
+                          <span className="ml-1.5">（{completedCount}/{milestoneTasks.length} 任務完成）</span>
+                        )}
+                      </span>
                       <span className="text-sm font-semibold text-primary">
-                        {msUpdate.progress}%
+                        {milestone.progress}%
                       </span>
                     </div>
-                    <Slider
-                      value={[msUpdate.progress]}
-                      onValueChange={(value: number[]) => {
-                        setMilestoneUpdates((prev) => ({
-                          ...prev,
-                          [milestone.id]: { ...prev[milestone.id], progress: value[0] },
-                        }))
-                      }}
-                      max={100}
-                      min={0}
-                      step={5}
-                      className="w-full"
-                    />
-                    <Progress value={msUpdate.progress} className="h-1.5" />
+                    <Progress value={milestone.progress} className="h-2" />
                   </div>
+
+                  {/* Tasks under this milestone (read-only) */}
+                  {milestoneTasks.length > 0 && (
+                    <div className="p-3 rounded-lg bg-muted/50 border">
+                      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3 w-3" />
+                        任務列表
+                      </div>
+                      <div className="space-y-1">
+                        {milestoneTasks.map(task => (
+                          <div key={task.id} className="flex items-center gap-2 text-xs">
+                            <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
+                              {task.status === 'done' ? '完成' : task.status === 'in-progress' ? '進行中' : task.status === 'blocked' ? '受阻' : '待辦'}
+                            </Badge>
+                            <span className={task.status === 'done' ? 'text-muted-foreground' : ''}>
+                              {task.title}
+                            </span>
+                            <span className="text-muted-foreground ml-auto shrink-0">{task.assignee}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Notes */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor={`notes-${milestone.id}`}>本週說明</Label>
+                      <Label htmlFor={`notes-${milestone.id}`}>備註</Label>
                       <VoiceButton
                         fieldName={`milestone-${milestone.id}`}
                         fieldSetter={(val) =>
-                          setMilestoneUpdates((prev) => ({
+                          setMilestoneNotes((prev) => ({
                             ...prev,
-                            [milestone.id]: { ...prev[milestone.id], notes: val },
+                            [milestone.id]: val,
                           }))
                         }
-                        currentVal={msUpdate.notes}
+                        currentVal={msNotes}
                       />
                     </div>
                     <Textarea
                       id={`notes-${milestone.id}`}
-                      placeholder="說明本週此里程碑的進展..."
-                      value={msUpdate.notes}
+                      placeholder="補充說明此里程碑的狀況..."
+                      value={msNotes}
                       onChange={(e) =>
-                        setMilestoneUpdates((prev) => ({
+                        setMilestoneNotes((prev) => ({
                           ...prev,
-                          [milestone.id]: {
-                            ...prev[milestone.id],
-                            notes: e.target.value,
-                          },
+                          [milestone.id]: e.target.value,
                         }))
                       }
                       rows={2}
