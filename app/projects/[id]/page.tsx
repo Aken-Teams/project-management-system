@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { KanbanBoard } from '@/components/kanban-board'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
@@ -36,6 +37,7 @@ import {
   TimerReset,
   Info,
   Milestone,
+  HelpCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -302,52 +304,63 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="divide-y">
-                    <div className="flex items-center justify-between py-2.5 first:pt-0">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Milestone className="h-3.5 w-3.5" />
-                        已完成里程碑
-                      </span>
-                      <span className="font-medium">{completedMilestones} / {project.milestones.length}</span>
+                  <TooltipProvider delayDuration={200}>
+                    <div className="divide-y">
+                      <div className="flex items-center justify-between py-2.5 first:pt-0">
+                        <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <Milestone className="h-3.5 w-3.5" />
+                          已完成里程碑
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[200px]">
+                              <p className="text-xs">里程碑是專案的階段性交付目標，整體進度 = 所有里程碑進度的平均值</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                        <span className="font-medium">{completedMilestones} / {project.milestones.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2.5">
+                        <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          已完成任務
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[200px]">
+                              <p className="text-xs">任務是里程碑下的具體工作項目，可在「看板」頁籤中查看與管理</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                        <span className="font-medium">
+                          {project.tasks.filter(t => t.status === 'done').length} / {project.tasks.length}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2.5">
+                        <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          未解決風險
+                        </span>
+                        <span className="font-medium text-destructive">
+                          {project.risks.filter(r => r.status === 'open').length}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2.5 last:pb-0">
+                        <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <History className="h-3.5 w-3.5" />
+                          最近更新
+                        </span>
+                        <span className="font-medium">
+                          {project.weeklyUpdates.length > 0
+                            ? new Date(project.weeklyUpdates[0].updatedAt).toLocaleDateString('zh-TW')
+                            : '尚無更新'
+                          }
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between py-2.5">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <LayoutList className="h-3.5 w-3.5" />
-                        任務總數
-                      </span>
-                      <span className="font-medium">{project.tasks.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2.5">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        已完成任務
-                      </span>
-                      <span className="font-medium">
-                        {project.tasks.filter(t => t.status === 'done').length} / {project.tasks.length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between py-2.5">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        未解決風險
-                      </span>
-                      <span className="font-medium text-destructive">
-                        {project.risks.filter(r => r.status === 'open').length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between py-2.5 last:pb-0">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <History className="h-3.5 w-3.5" />
-                        最近更新
-                      </span>
-                      <span className="font-medium">
-                        {project.weeklyUpdates.length > 0
-                          ? new Date(project.weeklyUpdates[0].updatedAt).toLocaleDateString('zh-TW')
-                          : '尚無更新'
-                        }
-                      </span>
-                    </div>
-                  </div>
+                  </TooltipProvider>
 
                   {/* Team members */}
                   <Separator className="my-3" />
