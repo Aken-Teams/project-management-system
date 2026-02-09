@@ -47,7 +47,7 @@ interface ProjectPageProps {
 export default function ProjectPage({ params }: ProjectPageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { getProject, updateTaskStatus } = useProjectStore()
+  const { getProject } = useProjectStore()
   const { user } = useAuth()
   const project = getProject(id)
 
@@ -381,7 +381,6 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           <TabsContent value="work-items" className="mt-0">
             <MilestoneTaskView
               project={project}
-              onTaskStatusChange={(taskId, newStatus) => updateTaskStatus(project.id, taskId, newStatus)}
             />
           </TabsContent>
 
