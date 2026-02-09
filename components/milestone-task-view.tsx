@@ -8,6 +8,8 @@ import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
 import { type Project, type Task, type TaskStatus } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
@@ -18,9 +20,12 @@ import {
   GanttChart as GanttIcon,
   AlertTriangle,
   User,
+  Users,
   Link2,
   Flag,
   Clock,
+  Filter,
+  X,
 } from 'lucide-react'
 
 interface MilestoneTaskViewProps {
@@ -34,14 +39,56 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
   )
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
+  const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
+
+  // Unique assignees for filter
+  const uniqueAssignees = useMemo(() => {
+    return [...new Set(project.tasks.map(t => t.assignee).filter(Boolean))].sort()
+  }, [project.tasks])
+
+  const toggleStatusFilter = (status: TaskStatus) => {
+    setStatusFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
+
+  const toggleAssigneeFilter = (name: string) => {
+    setAssigneeFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
+  const clearFilters = () => {
+    setStatusFilter(new Set())
+    setAssigneeFilter(new Set())
+  }
+
+  const hasFilters = statusFilter.size > 0 || assigneeFilter.size > 0
+
+  // Filter tasks
+  const filteredTasks = useMemo(() => {
+    return project.tasks.filter(task => {
+      const es = task.progress >= 100 ? 'done' : task.status
+      if (statusFilter.size > 0 && !statusFilter.has(es as TaskStatus)) return false
+      if (assigneeFilter.size > 0 && !assigneeFilter.has(task.assignee)) return false
+      return true
+    })
+  }, [project.tasks, statusFilter, assigneeFilter])
 
   const tasksByMilestone = useMemo(() => {
     const map = new Map<string, Task[]>()
     project.milestones.forEach(m => {
-      map.set(m.id, project.tasks.filter(t => t.milestoneId === m.id))
+      map.set(m.id, filteredTasks.filter(t => t.milestoneId === m.id))
     })
     return map
-  }, [project.milestones, project.tasks])
+  }, [project.milestones, filteredTasks])
 
   const toggleMilestone = (id: string) => {
     setExpandedMilestones(prev => {
@@ -131,40 +178,124 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
     return assigneeColorMap.get(name) || AVATAR_COLORS[0]
   }
 
+  const STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
+    { value: 'in-progress', label: '進行中', color: 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200' },
+    { value: 'done', label: '已完成', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200' },
+    { value: 'todo', label: '待辦', color: 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200' },
+    { value: 'blocked', label: '受阻', color: 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' },
+  ]
+
   return (
     <div className="space-y-4">
-      {/* View toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 rounded-lg border p-1">
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'ghost'}
-            size="sm"
-            className="gap-2 h-8"
-            onClick={() => setViewMode('list')}
-          >
-            <LayoutList className="h-4 w-4" />
-            列表檢視
-          </Button>
-          <Button
-            variant={viewMode === 'gantt' ? 'default' : 'ghost'}
-            size="sm"
-            className="gap-2 h-8"
-            onClick={() => setViewMode('gantt')}
-          >
-            <GanttIcon className="h-4 w-4" />
-            甘特圖
-          </Button>
-        </div>
-        {viewMode === 'list' && (
-          <div className="text-sm text-muted-foreground">
-            {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
+      {/* View toggle + Filters */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* View toggle */}
+          <div className="flex items-center gap-1 rounded-lg border p-1">
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              className="gap-2 h-8"
+              onClick={() => setViewMode('list')}
+            >
+              <LayoutList className="h-4 w-4" />
+              列表檢視
+            </Button>
+            <Button
+              variant={viewMode === 'gantt' ? 'default' : 'ghost'}
+              size="sm"
+              className="gap-2 h-8"
+              onClick={() => setViewMode('gantt')}
+            >
+              <GanttIcon className="h-4 w-4" />
+              甘特圖
+            </Button>
           </div>
-        )}
+
+          {/* Status filter */}
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+            {STATUS_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => toggleStatusFilter(opt.value)}
+                className={cn(
+                  'text-[11px] px-2 py-0.5 rounded-full border transition-all',
+                  statusFilter.has(opt.value)
+                    ? cn(opt.color, 'ring-1 ring-offset-1 ring-current font-medium')
+                    : 'bg-background text-muted-foreground border-border hover:bg-muted',
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Assignee filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'h-7 text-xs gap-1.5',
+                  assigneeFilter.size > 0 && 'border-primary text-primary',
+                )}
+              >
+                <Users className="h-3.5 w-3.5" />
+                負責人
+                {assigneeFilter.size > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5">
+                    {assigneeFilter.size}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              <div className="space-y-1 max-h-[240px] overflow-y-auto">
+                {uniqueAssignees.map(name => (
+                  <label
+                    key={name}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-muted cursor-pointer text-sm"
+                  >
+                    <Checkbox
+                      checked={assigneeFilter.has(name)}
+                      onCheckedChange={() => toggleAssigneeFilter(name)}
+                    />
+                    {name}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Clear filters */}
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1 text-muted-foreground"
+              onClick={clearFilters}
+            >
+              <X className="h-3 w-3" />
+              清除篩選
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          {hasFilters && (
+            <span className="text-xs">
+              {filteredTasks.length}/{project.tasks.length} 任務
+            </span>
+          )}
+          {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
+        </div>
       </div>
 
       {viewMode === 'gantt' ? (
         <GanttChart
-          tasks={project.tasks}
+          tasks={filteredTasks}
           milestones={project.milestones}
           baseline={project.baseline}
           startDate={project.startDate}
@@ -264,7 +395,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                                     {overdue && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
                                     <span className={cn(
                                       'text-xs truncate',
-                                      effectiveStatus(task) === 'done' && 'line-through text-muted-foreground',
+                                      effectiveStatus(task) === 'done' && 'text-muted-foreground',
                                     )}>{task.title}</span>
                                   </div>
                                   {/* Status */}

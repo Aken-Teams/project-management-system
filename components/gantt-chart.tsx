@@ -35,7 +35,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
   'todo': { bg: '#94a3b8', border: '#64748b' },
 }
 
-const BASELINE_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }
+const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
 export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -370,14 +370,15 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                       )}
                     </div>
                   </div>
-                  <div className="flex-1 relative h-10">
+                  <div className={cn('flex-1 relative', delayed && blMs ? 'h-14' : 'h-10')}>
                     <WeekGrid />
                     {/* Baseline bar (ghost) */}
                     {blMs && delayed && msTasks.length > 0 && (
                       <div
-                        className="absolute h-3 rounded-sm top-1 border border-dashed opacity-50"
+                        className="absolute h-4 rounded-sm border opacity-80"
                         style={{
                           ...barStyle(msBar.start, blMs.dueDate),
+                          top: 4,
                           backgroundColor: BASELINE_COLOR.bg,
                           borderColor: BASELINE_COLOR.border,
                         }}
@@ -389,7 +390,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                         className="absolute h-4 rounded-sm border"
                         style={{
                           ...barStyle(msBar.start, milestone.dueDate),
-                          top: delayed && blMs ? 16 : 12,
+                          top: delayed && blMs ? 26 : 12,
                           backgroundColor: colors.bg,
                           borderColor: colors.border,
                           opacity: 0.7,
@@ -430,7 +431,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                           />
                           <span className={cn(
                             'text-[11px] truncate',
-                            effectiveStatus(task) === 'done' && 'line-through text-muted-foreground',
+                            effectiveStatus(task) === 'done' && 'text-muted-foreground',
                             taskOverdue && 'text-red-600 dark:text-red-400',
                           )}>{task.title}</span>
                           {taskOverdue && (
@@ -500,7 +501,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
           </div>
           <span className="text-muted-foreground">|</span>
           <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-2 rounded-sm border border-dashed opacity-50" style={{ backgroundColor: BASELINE_COLOR.bg, borderColor: BASELINE_COLOR.border }} />
+            <div className="w-3.5 h-2 rounded-sm border opacity-80" style={{ backgroundColor: BASELINE_COLOR.bg, borderColor: BASELINE_COLOR.border }} />
             <span>基線計畫</span>
           </div>
           {showToday && (

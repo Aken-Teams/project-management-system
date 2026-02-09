@@ -339,7 +339,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                               <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
                                 {task.status === 'done' ? '完成' : task.status === 'in-progress' ? '進行中' : task.status === 'blocked' ? '受阻' : '待辦'}
                               </Badge>
-                              <span className={task.status === 'done' ? 'line-through text-muted-foreground' : ''}>
+                              <span className={task.status === 'done' ? 'text-muted-foreground' : ''}>
                                 {task.title}
                               </span>
                               <span className="text-muted-foreground ml-auto shrink-0">{task.assignee}</span>
