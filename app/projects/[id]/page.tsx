@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { KanbanBoard } from '@/components/kanban-board'
+import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
@@ -29,10 +29,9 @@ import {
   FileText,
   ClipboardEdit,
   History,
-  GitCompareArrows,
   Tag,
   LayoutList,
-  Columns3,
+  ListTodo,
   Shield,
   TimerReset,
   Info,
@@ -48,7 +47,7 @@ interface ProjectPageProps {
 export default function ProjectPage({ params }: ProjectPageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { getProject } = useProjectStore()
+  const { getProject, updateTaskStatus } = useProjectStore()
   const { user } = useAuth()
   const project = getProject(id)
 
@@ -217,13 +216,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <Info className="h-4 w-4" />
                 概覽
               </TabsTrigger>
-              <TabsTrigger value="kanban" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
-                <Columns3 className="h-4 w-4" />
-                看板
-              </TabsTrigger>
-              <TabsTrigger value="milestones" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
-                <GitCompareArrows className="h-4 w-4" />
-                里程碑
+              <TabsTrigger value="work-items" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
+                <ListTodo className="h-4 w-4" />
+                工作項目
               </TabsTrigger>
               <TabsTrigger value="updates" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <History className="h-4 w-4" />
@@ -330,7 +325,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[200px]">
-                              <p className="text-xs">任務是里程碑下的具體工作項目，可在「看板」頁籤中查看與管理</p>
+                              <p className="text-xs">任務是里程碑下的具體工作項目，可在「工作項目」頁籤中查看與管理</p>
                             </TooltipContent>
                           </Tooltip>
                         </span>
@@ -382,70 +377,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             </div>
           </TabsContent>
 
-          {/* Kanban Tab */}
-          <TabsContent value="kanban" className="mt-0">
-            <KanbanBoard tasks={project.tasks} projectId={project.id} />
-          </TabsContent>
-
-          {/* Milestones Tab */}
-          <TabsContent value="milestones" className="mt-0">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <GitCompareArrows className="h-4 w-4 text-muted-foreground" />
-                    里程碑 vs Baseline
-                  </CardTitle>
-                  <span className="text-sm text-muted-foreground">
-                    {completedMilestones} / {project.milestones.length} 已完成
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {project.milestones.map((milestone, index) => {
-                  const baselineMs = project.baseline.find(b => b.id === milestone.id)
-                  const isDelayed = baselineMs && milestone.dueDate > baselineMs.dueDate
-                  const delayDays = baselineMs
-                    ? Math.ceil((new Date(milestone.dueDate).getTime() - new Date(baselineMs.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-                    : 0
-
-                  return (
-                    <div key={milestone.id} className={`flex items-start gap-3 p-3 rounded-lg border ${isDelayed ? 'border-warning/50 bg-warning/5' : ''}`}>
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <h4 className="font-medium text-sm">{milestone.name}</h4>
-                          <div className="flex items-center gap-1.5">
-                            {isDelayed && (
-                              <Badge variant="secondary" className="bg-warning text-warning-foreground text-xs">
-                                +{delayDays}天
-                              </Badge>
-                            )}
-                            <Badge variant={milestone.status === 'done' ? 'default' : milestone.status === 'blocked' ? 'destructive' : 'secondary'} className="text-xs">
-                              {milestone.status === 'done' ? '已完成' : milestone.status === 'in-progress' ? '進行中' : milestone.status === 'blocked' ? '受阻' : '待辦'}
-                            </Badge>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mb-1.5">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(milestone.dueDate).toLocaleDateString('zh-TW')}
-                          </span>
-                          {baselineMs && isDelayed && (
-                            <span className="flex items-center gap-1 text-warning line-through">
-                              {new Date(baselineMs.dueDate).toLocaleDateString('zh-TW')}
-                            </span>
-                          )}
-                        </div>
-                        <Progress value={milestone.progress} className="h-1.5" />
-                      </div>
-                    </div>
-                  )
-                })}
-              </CardContent>
-            </Card>
+          {/* Work Items Tab (Milestones + Tasks unified view) */}
+          <TabsContent value="work-items" className="mt-0">
+            <MilestoneTaskView
+              project={project}
+              onTaskStatusChange={(taskId, newStatus) => updateTaskStatus(project.id, taskId, newStatus)}
+            />
           </TabsContent>
 
           {/* Updates Tab */}

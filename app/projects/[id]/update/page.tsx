@@ -265,10 +265,15 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
 
         {/* Milestone Progress Cards */}
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Clock className="h-5 w-5 text-muted-foreground" />
-            里程碑進度更新
-          </h2>
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-muted-foreground" />
+              里程碑進度更新
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              請更新每個里程碑的整體完成度。里程碑進度的平均值 = 專案整體完成度。
+            </p>
+          </div>
 
           {project.milestones.map((milestone, index) => {
             const msUpdate = milestoneUpdates[milestone.id] || {
@@ -318,6 +323,33 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Tasks under this milestone (read-only) */}
+                  {(() => {
+                    const milestoneTasks = project.tasks.filter(t => t.milestoneId === milestone.id)
+                    if (milestoneTasks.length === 0) return null
+                    return (
+                      <div className="p-3 rounded-lg bg-muted/50 border">
+                        <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3 w-3" />
+                          此里程碑的任務 ({milestoneTasks.filter(t => t.status === 'done').length}/{milestoneTasks.length} 已完成)
+                        </div>
+                        <div className="space-y-1">
+                          {milestoneTasks.map(task => (
+                            <div key={task.id} className="flex items-center gap-2 text-xs">
+                              <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
+                                {task.status === 'done' ? '完成' : task.status === 'in-progress' ? '進行中' : task.status === 'blocked' ? '受阻' : '待辦'}
+                              </Badge>
+                              <span className={task.status === 'done' ? 'line-through text-muted-foreground' : ''}>
+                                {task.title}
+                              </span>
+                              <span className="text-muted-foreground ml-auto shrink-0">{task.assignee}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
                   {/* Progress Slider */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">

@@ -10,6 +10,7 @@ import {
   type WeeklyUpdate,
   type DelayRequest,
   type Milestone,
+  type TaskStatus,
 } from './mock-data'
 
 interface ProjectStoreContextType {
@@ -34,6 +35,7 @@ interface ProjectStoreContextType {
   submitDelayRequest: (projectId: string, request: Omit<DelayRequest, 'id' | 'projectId' | 'status'>) => void
   approveDelayRequest: (projectId: string, requestId: string, reviewedBy: string, reviewNotes: string) => void
   rejectDelayRequest: (projectId: string, requestId: string, reviewedBy: string, reviewNotes: string) => void
+  updateTaskStatus: (projectId: string, taskId: string, newStatus: TaskStatus) => void
   getPendingApprovals: () => { project: Project; request: DelayRequest }[]
 }
 
@@ -41,7 +43,7 @@ const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(u
 
 const STORAGE_KEY = 'pm-system-projects'
 const STORAGE_VERSION_KEY = 'pm-system-version'
-const CURRENT_VERSION = '4'
+const CURRENT_VERSION = '6'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -242,6 +244,55 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     }))
   }, [])
 
+  const updateTaskStatus = useCallback((projectId: string, taskId: string, newStatus: TaskStatus) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p
+
+      const updatedTasks = p.tasks.map(t => {
+        if (t.id !== taskId) return t
+        return {
+          ...t,
+          status: newStatus,
+          progress: newStatus === 'done' ? 100 : newStatus === 'todo' ? 0 : t.progress,
+        }
+      })
+
+      // Recalculate milestone progress based on its tasks
+      const updatedMilestones = p.milestones.map(m => {
+        const milestoneTasks = updatedTasks.filter(t => t.milestoneId === m.id)
+        if (milestoneTasks.length === 0) return m
+
+        const avgProgress = Math.round(
+          milestoneTasks.reduce((sum, t) => sum + t.progress, 0) / milestoneTasks.length
+        )
+
+        let milestoneStatus: TaskStatus = m.status
+        if (milestoneTasks.every(t => t.status === 'done')) {
+          milestoneStatus = 'done'
+        } else if (milestoneTasks.some(t => t.status === 'blocked')) {
+          milestoneStatus = 'blocked'
+        } else if (milestoneTasks.some(t => t.status === 'in-progress' || t.status === 'done')) {
+          milestoneStatus = 'in-progress'
+        } else {
+          milestoneStatus = 'todo'
+        }
+
+        return { ...m, progress: avgProgress, status: milestoneStatus }
+      })
+
+      const totalProgress = updatedMilestones.reduce((acc, m) => acc + m.progress, 0)
+      const avgProgress = Math.round(totalProgress / updatedMilestones.length)
+
+      return {
+        ...p,
+        tasks: updatedTasks,
+        milestones: updatedMilestones,
+        progress: avgProgress,
+        updatedAt: new Date().toISOString(),
+      }
+    }))
+  }, [])
+
   const getPendingApprovals = useCallback(() => {
     const results: { project: Project; request: DelayRequest }[] = []
     projects.forEach(p => {
@@ -266,6 +317,7 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       getProject,
       addProject,
       addWeeklyUpdate,
+      updateTaskStatus,
       submitDelayRequest,
       approveDelayRequest,
       rejectDelayRequest,
