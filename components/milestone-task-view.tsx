@@ -99,8 +99,14 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
     }
   }
 
+  // Normalize: progress >= 100 should always be treated as 'done'
+  const effectiveStatus = (task: Task) => {
+    if (task.progress >= 100) return 'done' as const
+    return task.status
+  }
+
   const isTaskOverdue = (task: Task) => {
-    if (task.status === 'done') return false
+    if (effectiveStatus(task) === 'done') return false
     return new Date() > new Date(task.endDate)
   }
 
@@ -160,6 +166,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
         <GanttChart
           tasks={project.tasks}
           milestones={project.milestones}
+          baseline={project.baseline}
           startDate={project.startDate}
           endDate={project.endDate}
         />
@@ -257,11 +264,11 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                                     {overdue && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
                                     <span className={cn(
                                       'text-xs truncate',
-                                      task.status === 'done' && 'line-through text-muted-foreground',
+                                      effectiveStatus(task) === 'done' && 'line-through text-muted-foreground',
                                     )}>{task.title}</span>
                                   </div>
                                   {/* Status */}
-                                  <div>{getStatusBadge(task.status)}</div>
+                                  <div>{getStatusBadge(effectiveStatus(task))}</div>
                                   {/* Priority */}
                                   <div>{getPriorityBadge(task.priority)}</div>
                                   {/* Assignee */}
@@ -311,7 +318,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                 <div className="space-y-5 mt-6">
                   {/* Status & Priority & Overdue */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusBadgeLarge(selectedTask.status)}
+                    {getStatusBadgeLarge(effectiveStatus(selectedTask))}
                     <Badge className={cn('text-xs', getPriorityColor(selectedTask.priority))}>
                       {getPriorityText(selectedTask.priority)}優先
                     </Badge>

@@ -122,6 +122,7 @@ export default function GanttPage() {
           <GanttChart
             tasks={selectedProject.tasks}
             milestones={selectedProject.milestones}
+            baseline={selectedProject.baseline}
             startDate={selectedProject.startDate}
             endDate={selectedProject.endDate}
           />
