@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,9 @@ import {
   Clock,
   AlertCircle,
   ListChecks,
+  ArrowRight,
+  ArrowLeft,
+  Info,
 } from 'lucide-react'
 
 function getStatusDot(status: ComputedTaskStatus) {
@@ -77,6 +80,10 @@ export default function MyTasksPage() {
   const [dialogTask, setDialogTask] = useState<{ task: Task; project: Project } | null>(null)
   const [logContent, setLogContent] = useState('')
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [showExtensionForm, setShowExtensionForm] = useState(false)
+  const [extensionReason, setExtensionReason] = useState('')
+  const [extensionDate, setExtensionDate] = useState('')
+  const [extensionSupport, setExtensionSupport] = useState('')
 
   if (!user) return null
 
@@ -149,6 +156,10 @@ export default function MyTasksPage() {
     setDialogTask({ task, project })
     setLogContent('')
     setLogDate(new Date().toISOString().split('T')[0])
+    setShowExtensionForm(false)
+    setExtensionReason('')
+    setExtensionDate('')
+    setExtensionSupport('')
     setDialogOpen(true)
   }
 
@@ -175,24 +186,27 @@ export default function MyTasksPage() {
     setDialogOpen(false)
   }
 
-  const handleRequestExtension = () => {
-    if (!dialogTask) return
+  const handleSubmitExtension = () => {
+    if (!dialogTask || !extensionReason.trim()) return
     const { task, project } = dialogTask
     const milestone = project.milestones.find(m => m.id === task.milestoneId)
     if (!milestone) return
-    const proposedDate = new Date(task.endDate)
-    proposedDate.setDate(proposedDate.getDate() + 14)
+    const proposedDate = extensionDate || (() => {
+      const d = new Date(task.endDate)
+      d.setDate(d.getDate() + 14)
+      return d.toISOString().split('T')[0]
+    })()
     submitDelayRequest(project.id, {
       requestedBy: user.name,
       requestedAt: new Date().toISOString(),
-      reason: `任務「${task.title}」需要延期，目前截止日 ${task.endDate} 無法如期完成。`,
+      reason: extensionReason.trim(),
       affectedMilestones: [{
         milestoneId: milestone.id,
         originalDate: milestone.dueDate,
-        proposedDate: proposedDate.toISOString().split('T')[0],
+        proposedDate,
       }],
       canCatchUp: false,
-      supportNeeded: '',
+      supportNeeded: extensionSupport.trim(),
     })
     setDialogOpen(false)
   }
@@ -283,94 +297,101 @@ export default function MyTasksPage() {
           </div>
         )}
 
-        {/* Project Cards with Tasks */}
+        {/* Project Cards — 3 per row */}
         {filteredGroups.length === 0 ? (
           <Card className="p-8 text-center text-muted-foreground">
             目前沒有指派給您的任務
           </Card>
         ) : (
-          filteredGroups.map(({ project, milestoneGroups, completedCount: pCompleted, totalCount: pTotal }) => {
-            const isCollapsed = collapsedProjects.has(project.id)
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredGroups.map(({ project, milestoneGroups, completedCount: pCompleted, totalCount: pTotal }) => {
+              const isCollapsed = collapsedProjects.has(project.id)
 
-            return (
-              <Card key={project.id}>
-                {/* Project Header */}
-                <CardHeader
-                  className="py-3 px-4 flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => toggleProject(project.id)}
-                >
-                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                    <ChevronDown className={cn(
-                      'h-4 w-4 text-muted-foreground transition-transform',
-                      isCollapsed && '-rotate-90',
-                    )} />
-                    {project.name}
-                  </CardTitle>
-                  <span className="text-xs text-muted-foreground">{pCompleted}/{pTotal} 完成</span>
-                </CardHeader>
+              return (
+                <Card key={project.id} className="flex flex-col">
+                  {/* Project Header */}
+                  <CardHeader
+                    className="py-3 px-4 flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => toggleProject(project.id)}
+                  >
+                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                      <ChevronDown className={cn(
+                        'h-4 w-4 text-muted-foreground transition-transform',
+                        isCollapsed && '-rotate-90',
+                      )} />
+                      {project.name}
+                    </CardTitle>
+                    <span className="text-xs text-muted-foreground">{pCompleted}/{pTotal}</span>
+                  </CardHeader>
 
-                {!isCollapsed && (
-                  <CardContent className="px-4 pb-4 pt-0 space-y-4">
-                    {milestoneGroups.map(mg => (
-                      <div key={mg.milestoneId}>
-                        {/* Milestone section header */}
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">{mg.milestoneName}</span>
-                          <Badge variant="outline" className="text-[10px] font-mono px-1">
-                            {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                          </Badge>
+                  {!isCollapsed && (
+                    <CardContent className="px-4 pb-3 pt-0 flex-1">
+                      <div className="divide-y divide-border">
+                      {milestoneGroups.map(mg => (
+                        <div key={mg.milestoneId} className="py-2 first:pt-0 last:pb-0">
+                          {/* Milestone label */}
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-medium text-muted-foreground">{mg.milestoneName}</span>
+                            <Badge variant="outline" className="text-[10px] font-mono px-1">
+                              {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                            </Badge>
+                          </div>
+
+                          {/* Tasks — compact lines */}
+                          <div className="divide-y divide-border/40">
+                            {mg.tasks.map(task => {
+                              const status = computeTaskStatus(task, project.taskLogs)
+                              const days = getDaysUntilDeadline(task)
+                              const isCompleted = !!task.completedAt
+
+                              return (
+                                <button
+                                  key={task.id}
+                                  onClick={() => openTaskDialog(task, project)}
+                                  className="w-full flex items-center gap-2 px-1 py-1.5 text-left transition-colors hover:bg-muted/40 rounded-sm"
+                                >
+                                  {getStatusDot(status)}
+                                  <span className={cn(
+                                    'text-sm flex-1 min-w-0 truncate',
+                                    isCompleted && 'text-muted-foreground',
+                                  )}>
+                                    {task.title}
+                                  </span>
+                                  {status === 'overdue' && (
+                                    <span className="text-xs text-destructive font-medium shrink-0">
+                                      逾期{Math.abs(days)}天
+                                    </span>
+                                  )}
+                                  {status === 'at-risk' && (
+                                    <span className="text-xs text-amber-600 font-medium shrink-0">
+                                      剩{days}天
+                                    </span>
+                                  )}
+                                  {isCompleted && (
+                                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
                         </div>
-
-                        {/* Tasks — flat list */}
-                        <div className="space-y-1">
-                          {mg.tasks.map(task => {
-                            const status = computeTaskStatus(task, project.taskLogs)
-                            const days = getDaysUntilDeadline(task)
-                            const isCompleted = !!task.completedAt
-
-                            return (
-                              <button
-                                key={task.id}
-                                onClick={() => openTaskDialog(task, project)}
-                                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors border hover:bg-muted/40 hover:border-primary/30"
-                              >
-                                {getStatusDot(status)}
-                                <span className={cn(
-                                  'text-sm flex-1 min-w-0 truncate',
-                                  isCompleted && 'text-muted-foreground',
-                                )}>
-                                  {task.title}
-                                </span>
-                                {status === 'overdue' && (
-                                  <Badge variant="secondary" className="text-[10px] bg-destructive/10 text-destructive shrink-0">
-                                    逾期 {Math.abs(days)} 天
-                                  </Badge>
-                                )}
-                                {status === 'at-risk' && (
-                                  <Badge variant="secondary" className="text-[10px] bg-warning/10 text-warning shrink-0">
-                                    剩 {days} 天
-                                  </Badge>
-                                )}
-                                {isCompleted && (
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                                )}
-                              </button>
-                            )
-                          })}
-                        </div>
+                      ))}
                       </div>
-                    ))}
-                  </CardContent>
-                )}
-              </Card>
-            )
-          })
+                    </CardContent>
+                  )}
+                </Card>
+              )
+            })}
+          </div>
         )}
       </div>
 
-      {/* Task Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+      {/* Task Dialog — Tab-based */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        setDialogOpen(open)
+        if (!open) setShowExtensionForm(false)
+      }}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
           {currentDialogTask && currentDialogProject && (() => {
             const task = currentDialogTask
             const project = currentDialogProject
@@ -382,54 +403,284 @@ export default function MyTasksPage() {
               .filter(l => l.taskId === task.id)
               .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
 
+            // Dependency analysis
+            const upstreamTasks = task.dependencies
+              .map(depId => {
+                const depTask = project.tasks.find(t => t.id === depId)
+                if (!depTask) return null
+                return { task: depTask, status: computeTaskStatus(depTask, project.taskLogs) }
+              })
+              .filter(Boolean) as { task: Task; status: ComputedTaskStatus }[]
+
+            const downstreamTasks = project.tasks
+              .filter(t => t.dependencies.includes(task.id))
+              .map(t => ({ task: t, status: computeTaskStatus(t, project.taskLogs) }))
+
+            const hasBlockedUpstream = upstreamTasks.some(u => u.status !== 'completed')
+
             return (
               <>
-                <DialogHeader>
-                  <div className="flex items-center gap-2">
-                    {getStatusBadge(status)}
-                    <DialogTitle className={cn('text-left', isCompleted && 'text-muted-foreground')}>
-                      {task.title}
-                    </DialogTitle>
-                  </div>
-                  <DialogDescription className="text-left">
-                    {project.name}{milestone ? ` — ${milestone.name}` : ''}
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 mt-2">
-                  {/* Task Info */}
-                  <div className="space-y-2">
-                    {task.description && (
-                      <p className="text-sm text-muted-foreground">{task.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>{new Date(task.startDate).toLocaleDateString('zh-TW')} ~ {new Date(task.endDate).toLocaleDateString('zh-TW')}</span>
+                {/* Header */}
+                <div className="px-6 pt-6 pb-3">
+                  <DialogHeader>
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(status)}
+                      <DialogTitle className={cn('text-left', isCompleted && 'text-muted-foreground')}>
+                        {task.title}
+                      </DialogTitle>
                     </div>
-                    {isCompleted && task.completedAt && (
-                      <div className="flex items-center gap-2 text-xs text-green-600">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>{new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成</span>
+                    <DialogDescription className="text-left">
+                      {project.name}{milestone ? ` — ${milestone.name}` : ''}
+                    </DialogDescription>
+                  </DialogHeader>
+                </div>
+
+                {/* Warning banners */}
+                {(status === 'at-risk' || status === 'overdue' || hasBlockedUpstream) && (
+                  <div className="px-6 space-y-2">
+                    {hasBlockedUpstream && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-400">
+                        <Info className="h-3.5 w-3.5 shrink-0" />
+                        前置任務尚未完成，可能影響此任務進度
+                      </div>
+                    )}
+                    {status === 'at-risk' && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        即將到期（剩 {days} 天）
+                      </div>
+                    )}
+                    {status === 'overdue' && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-700 text-xs text-red-700 dark:text-red-400">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        已逾期 {Math.abs(days)} 天
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Warning */}
-                  {status === 'at-risk' && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                      即將到期（剩 {days} 天），建議盡快提交紀錄或申請延期
-                    </div>
-                  )}
-                  {status === 'overdue' && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-700 text-xs text-red-700 dark:text-red-400">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                      已逾期 {Math.abs(days)} 天，請完成任務或申請延期
-                    </div>
-                  )}
+                {/* Tabs */}
+                <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
+                  <div className="px-6">
+                    <TabsList className="w-full">
+                      <TabsTrigger value="log" className="flex-1">回報進度</TabsTrigger>
+                      <TabsTrigger value="info" className="flex-1">任務資訊</TabsTrigger>
+                      <TabsTrigger value="history" className="flex-1">
+                        歷史紀錄
+                        {taskLogs.length > 0 && (
+                          <span className="ml-1 text-[10px] text-muted-foreground">({taskLogs.length})</span>
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  {/* Tab: 回報進度 */}
+                  <TabsContent value="log" className="flex-1 overflow-y-auto px-6 pb-2">
+                    {isCompleted ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <CheckCircle2 className="h-8 w-8 text-green-500 mb-2" />
+                        <p className="text-sm text-muted-foreground">此任務已完成</p>
+                        {task.completedAt && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs text-muted-foreground shrink-0">日期</Label>
+                          <input
+                            type="date"
+                            value={logDate}
+                            onChange={e => setLogDate(e.target.value)}
+                            className="text-sm border rounded px-2 py-1.5"
+                          />
+                        </div>
+                        <Textarea
+                          placeholder="描述您今天做了什麼..."
+                          value={logContent}
+                          onChange={e => setLogContent(e.target.value)}
+                          rows={4}
+                          className="text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={!logContent.trim()}
+                          onClick={handleSubmitLog}
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          提交紀錄
+                        </Button>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  {/* Tab: 任務資訊 */}
+                  <TabsContent value="info" className="flex-1 overflow-y-auto px-6 pb-2">
+                    <div className="space-y-4 py-2">
+                      {/* Basic info */}
+                      {task.description && (
+                        <p className="text-sm text-muted-foreground">{task.description}</p>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">起始日期</Label>
+                          <p className="mt-0.5">{new Date(task.startDate).toLocaleDateString('zh-TW')}</p>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">截止日期</Label>
+                          <p className="mt-0.5">{new Date(task.endDate).toLocaleDateString('zh-TW')}</p>
+                        </div>
+                      </div>
+
+                      {isCompleted && task.completedAt && (
+                        <div className="flex items-center gap-2 text-xs text-green-600">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>{new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成</span>
+                          {task.completedBy && <span>（{task.completedBy}）</span>}
+                        </div>
+                      )}
+
+                      {/* Upstream dependencies */}
+                      {upstreamTasks.length > 0 && (
+                        <>
+                          <Separator />
+                          <div>
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                              <ArrowLeft className="h-3 w-3" />
+                              前置任務
+                            </Label>
+                            <div className="space-y-1">
+                              {upstreamTasks.map(({ task: dep, status: depStatus }) => (
+                                <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
+                                  {getStatusDot(depStatus)}
+                                  <span className="flex-1 truncate">{dep.title}</span>
+                                  {getStatusBadge(depStatus)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Downstream dependencies */}
+                      {downstreamTasks.length > 0 && (
+                        <>
+                          <Separator />
+                          <div>
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                              <ArrowRight className="h-3 w-3" />
+                              後續任務
+                            </Label>
+                            <div className="space-y-1">
+                              {downstreamTasks.map(({ task: dep, status: depStatus }) => (
+                                <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
+                                  {getStatusDot(depStatus)}
+                                  <span className="flex-1 truncate">{dep.title}</span>
+                                  {getStatusBadge(depStatus)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (
+                        <>
+                          <Separator />
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            此任務無上下游依賴關係
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  {/* Tab: 歷史紀錄 */}
+                  <TabsContent value="history" className="flex-1 overflow-y-auto px-6 pb-2">
+                    {taskLogs.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <p className="text-sm text-muted-foreground">尚無工作紀錄</p>
+                        <p className="text-xs text-muted-foreground mt-1">在「回報進度」分頁提交您的第一筆紀錄</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 py-2">
+                        {taskLogs.map(log => (
+                          <div key={log.id} className="p-2.5 rounded-lg bg-muted/50 border text-sm">
+                            <div className="flex justify-between mb-1">
+                              <span className="text-xs font-medium">{log.author}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(log.logDate).toLocaleDateString('zh-TW')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{log.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+
+                {/* Extension Form (expandable) */}
+                {showExtensionForm && (
+                  <div className="px-6 py-3 border-t bg-muted/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">申請延期</Label>
+                      <button
+                        onClick={() => setShowExtensionForm(false)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        取消
+                      </button>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">延遲原因 *</Label>
+                      <Textarea
+                        placeholder="說明延遲的原因..."
+                        value={extensionReason}
+                        onChange={e => setExtensionReason(e.target.value)}
+                        rows={2}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <Label className="text-xs text-muted-foreground">建議新日期</Label>
+                        <input
+                          type="date"
+                          value={extensionDate}
+                          onChange={e => setExtensionDate(e.target.value)}
+                          className="w-full text-sm border rounded px-2 py-1.5 mt-1"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">是否需要協助</Label>
+                      <Textarea
+                        placeholder="說明您需要什麼支援（選填）..."
+                        value={extensionSupport}
+                        onChange={e => setExtensionSupport(e.target.value)}
+                        rows={2}
+                        className="text-sm mt-1"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 w-full"
+                      disabled={!extensionReason.trim()}
+                      onClick={handleSubmitExtension}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      送出延期申請
+                    </Button>
+                  </div>
+                )}
+
+                {/* Bottom fixed action bar */}
+                <div className="px-6 py-3 border-t flex items-center justify-between">
+                  <div>
                     {!isCompleted ? (
                       <Button size="sm" className="gap-1.5" onClick={handleCompleteTask}>
                         <CircleCheck className="h-3.5 w-3.5" />
@@ -441,69 +692,17 @@ export default function MyTasksPage() {
                         取消完成
                       </Button>
                     )}
-                    {(status === 'at-risk' || status === 'overdue') && (
-                      <Button size="sm" variant="outline" className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleRequestExtension}>
-                        <CalendarClock className="h-3.5 w-3.5" />
-                        申請延期
-                      </Button>
-                    )}
                   </div>
-
-                  <Separator />
-
-                  {/* Work Log Form */}
-                  {!isCompleted && (
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">撰寫工作紀錄</Label>
-                      <div className="flex items-center gap-2">
-                        <Label className="text-xs text-muted-foreground shrink-0">日期</Label>
-                        <input
-                          type="date"
-                          value={logDate}
-                          onChange={e => setLogDate(e.target.value)}
-                          className="text-sm border rounded px-2 py-1.5"
-                        />
-                      </div>
-                      <Textarea
-                        placeholder="描述您今天做了什麼..."
-                        value={logContent}
-                        onChange={e => setLogContent(e.target.value)}
-                        rows={3}
-                        className="text-sm"
-                      />
-                      <Button
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={!logContent.trim()}
-                        onClick={handleSubmitLog}
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                        提交紀錄
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Log History */}
-                  {taskLogs.length > 0 && (
-                    <>
-                      {!isCompleted && <Separator />}
-                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">歷史紀錄 ({taskLogs.length})</Label>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                          {taskLogs.map(log => (
-                            <div key={log.id} className="p-2.5 rounded-lg bg-muted/50 border text-sm">
-                              <div className="flex justify-between mb-1">
-                                <span className="text-xs font-medium">{log.author}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(log.logDate).toLocaleDateString('zh-TW')}
-                                </span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">{log.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
+                  {(status === 'at-risk' || status === 'overdue') && !showExtensionForm && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                      onClick={() => setShowExtensionForm(true)}
+                    >
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      申請延期
+                    </Button>
                   )}
                 </div>
               </>
