@@ -12,6 +12,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useProjectStore } from '@/lib/project-store'
 import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
 import {
@@ -114,9 +125,13 @@ function fmtMoney(n: number) {
 export default function ReportsPage() {
   const { projects } = useProjectStore()
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
-  const [showExportModal, setShowExportModal] = useState(false)
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'email' | null>(null)
-  const [emailSent, setEmailSent] = useState(false)
+  const [showPdfDialog, setShowPdfDialog] = useState(false)
+  const [showEmailDialog, setShowEmailDialog] = useState(false)
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
+  const [emailRecipients, setEmailRecipients] = useState('')
+  const [selectedReports, setSelectedReports] = useState<string[]>(['summary', 'tasks', 'milestones'])
+  const [exportSuccess, setExportSuccess] = useState(false)
+  const [emailSuccess, setEmailSuccess] = useState(false)
 
   const selectedProject = selectedProjectId === 'all'
     ? null
@@ -192,19 +207,60 @@ export default function ReportsPage() {
   const maxMemberTasks = Math.max(...memberWorkload.map(m => m.total), 1)
 
   // ── Export handlers ──
-  const handleExport = (format: 'pdf' | 'email') => {
-    setExportFormat(format)
-    setShowExportModal(true)
-    setEmailSent(false)
+  const handleOpenPdfDialog = () => {
+    setSelectedProjectIds(projects.map(p => p.id))
+    setShowPdfDialog(true)
+    setExportSuccess(false)
   }
 
-  const handleConfirmExport = () => {
-    if (exportFormat === 'email') {
-      setEmailSent(true)
-      setTimeout(() => { setShowExportModal(false); setEmailSent(false) }, 2000)
-    } else {
-      setTimeout(() => setShowExportModal(false), 1500)
-    }
+  const handleOpenEmailDialog = () => {
+    setSelectedProjectIds(projects.map(p => p.id))
+    setEmailRecipients('')
+    setSelectedReports(['summary', 'tasks', 'milestones'])
+    setShowEmailDialog(true)
+    setEmailSuccess(false)
+  }
+
+  const handleToggleProject = (projectId: string) => {
+    setSelectedProjectIds(prev =>
+      prev.includes(projectId)
+        ? prev.filter(id => id !== projectId)
+        : [...prev, projectId]
+    )
+  }
+
+  const handleSelectAllProjects = () => {
+    setSelectedProjectIds(projects.map(p => p.id))
+  }
+
+  const handleDeselectAllProjects = () => {
+    setSelectedProjectIds([])
+  }
+
+  const handleToggleReport = (reportId: string) => {
+    setSelectedReports(prev =>
+      prev.includes(reportId)
+        ? prev.filter(id => id !== reportId)
+        : [...prev, reportId]
+    )
+  }
+
+  const handleExportPdf = () => {
+    // Mock PDF export
+    setExportSuccess(true)
+    setTimeout(() => {
+      setShowPdfDialog(false)
+      setExportSuccess(false)
+    }, 2000)
+  }
+
+  const handleSendEmail = () => {
+    // Mock email send
+    setEmailSuccess(true)
+    setTimeout(() => {
+      setShowEmailDialog(false)
+      setEmailSuccess(false)
+    }, 2000)
   }
 
   const getStatusRingColor = (status: ProjectStatus) => {
@@ -234,45 +290,293 @@ export default function ReportsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => handleExport('email')}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpenEmailDialog}>
                 <Mail className="h-3.5 w-3.5" /> Email
               </Button>
-              <Button size="sm" className="gap-1.5" onClick={() => handleExport('pdf')}>
+              <Button size="sm" className="gap-1.5" onClick={handleOpenPdfDialog}>
                 <FileDown className="h-3.5 w-3.5" /> 匯出 PDF
               </Button>
             </div>
           </div>
 
-          {/* Export Modal */}
-          {showExportModal && (
-            <Card className="border-primary/50">
-              <CardContent className="pt-5 pb-4">
-                {emailSent ? (
-                  <div className="text-center py-4">
-                    <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
-                    <p className="font-medium text-success">報告已發送！</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-sm">
-                      <span className="font-medium">{exportFormat === 'pdf' ? '匯出 PDF' : 'Email 發送'}</span>
-                      <span className="text-muted-foreground ml-2">
-                        {selectedProject ? selectedProject.name : '所有專案'} — {new Date().toLocaleDateString('zh-TW')}
-                      </span>
+          {/* PDF Export Dialog */}
+          <Dialog open={showPdfDialog} onOpenChange={setShowPdfDialog}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>匯出 PDF 報告</DialogTitle>
+                <DialogDescription>
+                  選擇要匯出的專案，系統將產生包含所選專案的完整報告
+                </DialogDescription>
+              </DialogHeader>
+
+              {exportSuccess ? (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500" />
+                  <p className="font-medium text-emerald-600">PDF 報告已成功匯出！</p>
+                  <p className="text-sm text-muted-foreground mt-1">檔案已下載至您的電腦</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">選擇專案</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleSelectAllProjects}
+                          className="h-8 text-sm"
+                        >
+                          全選
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleDeselectAllProjects}
+                          className="h-8 text-sm"
+                        >
+                          清除
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleConfirmExport} className="gap-1.5">
-                        {exportFormat === 'pdf' ? <><Printer className="h-3.5 w-3.5" /> 下載</> : <><Mail className="h-3.5 w-3.5" /> 發送</>}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setShowExportModal(false)}>
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
+
+                    <div className="border rounded-lg p-3 space-y-2 max-h-[300px] overflow-y-auto">
+                      {projects.map(project => (
+                        <div key={project.id} className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id={`pdf-project-${project.id}`}
+                            checked={selectedProjectIds.includes(project.id)}
+                            onCheckedChange={() => handleToggleProject(project.id)}
+                            className="h-5 w-5"
+                          />
+                          <label
+                            htmlFor={`pdf-project-${project.id}`}
+                            className="flex-1 text-base cursor-pointer flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <StatusDot status={project.status} />
+                              <span className="font-medium">{project.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span>{project.progress}%</span>
+                              <Badge variant="outline" className="text-xs">
+                                {PROJECT_TYPE_LABELS[project.projectType]}
+                              </Badge>
+                            </div>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="text-sm text-muted-foreground">
+                      已選擇 {selectedProjectIds.length} 個專案
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowPdfDialog(false)} size="lg">
+                      取消
+                    </Button>
+                    <Button
+                      onClick={handleExportPdf}
+                      disabled={selectedProjectIds.length === 0}
+                      className="gap-2"
+                      size="lg"
+                    >
+                      <FileDown className="h-4 w-4" />
+                      下載 PDF ({selectedProjectIds.length})
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Email Dialog */}
+          <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Email 報告</DialogTitle>
+                <DialogDescription>
+                  輸入收件人並選擇要寄送的報告內容
+                </DialogDescription>
+              </DialogHeader>
+
+              {emailSuccess ? (
+                <div className="text-center py-8">
+                  <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500" />
+                  <p className="font-medium text-emerald-600">Email 已成功發送！</p>
+                  <p className="text-sm text-muted-foreground mt-1">報告已寄送至指定收件人</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {/* Email Recipients */}
+                    <div className="space-y-2">
+                      <Label htmlFor="email-recipients" className="text-base font-medium">
+                        收件人
+                      </Label>
+                      <Input
+                        id="email-recipients"
+                        type="text"
+                        placeholder="輸入 email 地址，多個 email 請用逗號分隔"
+                        value={emailRecipients}
+                        onChange={(e) => setEmailRecipients(e.target.value)}
+                        className="text-base h-11"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        範例: user1@example.com, user2@example.com
+                      </p>
+                    </div>
+
+                    {/* Select Projects */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-medium">選擇專案</Label>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleSelectAllProjects}
+                            className="h-8 text-sm"
+                          >
+                            全選
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleDeselectAllProjects}
+                            className="h-8 text-sm"
+                          >
+                            清除
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="border rounded-lg p-3 space-y-2 max-h-[200px] overflow-y-auto">
+                        {projects.map(project => (
+                          <div key={project.id} className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                            <Checkbox
+                              id={`email-project-${project.id}`}
+                              checked={selectedProjectIds.includes(project.id)}
+                              onCheckedChange={() => handleToggleProject(project.id)}
+                              className="h-5 w-5"
+                            />
+                            <label
+                              htmlFor={`email-project-${project.id}`}
+                              className="flex-1 text-base cursor-pointer flex items-center justify-between"
+                            >
+                              <div className="flex items-center gap-2">
+                                <StatusDot status={project.status} />
+                                <span className="font-medium">{project.name}</span>
+                              </div>
+                              <Badge variant="outline" className="text-xs">
+                                {PROJECT_TYPE_LABELS[project.projectType]}
+                              </Badge>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Select Report Sections */}
+                    <div className="space-y-2">
+                      <Label className="text-base font-medium">報告內容</Label>
+                      <div className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id="report-summary"
+                            checked={selectedReports.includes('summary')}
+                            onCheckedChange={() => handleToggleReport('summary')}
+                            className="h-5 w-5"
+                          />
+                          <label htmlFor="report-summary" className="flex-1 cursor-pointer">
+                            <div className="font-medium text-base">專案摘要</div>
+                            <div className="text-sm text-muted-foreground">包含專案基本資訊、目標、範圍等</div>
+                          </label>
+                        </div>
+
+                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id="report-tasks"
+                            checked={selectedReports.includes('tasks')}
+                            onCheckedChange={() => handleToggleReport('tasks')}
+                            className="h-5 w-5"
+                          />
+                          <label htmlFor="report-tasks" className="flex-1 cursor-pointer">
+                            <div className="font-medium text-base">任務進度</div>
+                            <div className="text-sm text-muted-foreground">任務狀態、完成度、團隊工作量分析</div>
+                          </label>
+                        </div>
+
+                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id="report-milestones"
+                            checked={selectedReports.includes('milestones')}
+                            onCheckedChange={() => handleToggleReport('milestones')}
+                            className="h-5 w-5"
+                          />
+                          <label htmlFor="report-milestones" className="flex-1 cursor-pointer">
+                            <div className="font-medium text-base">里程碑追蹤</div>
+                            <div className="text-sm text-muted-foreground">里程碑達成狀況、時程分析</div>
+                          </label>
+                        </div>
+
+                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id="report-budget"
+                            checked={selectedReports.includes('budget')}
+                            onCheckedChange={() => handleToggleReport('budget')}
+                            className="h-5 w-5"
+                          />
+                          <label htmlFor="report-budget" className="flex-1 cursor-pointer">
+                            <div className="font-medium text-base">預算執行</div>
+                            <div className="text-sm text-muted-foreground">預算使用情況、成本分析</div>
+                          </label>
+                        </div>
+
+                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
+                          <Checkbox
+                            id="report-risks"
+                            checked={selectedReports.includes('risks')}
+                            onCheckedChange={() => handleToggleReport('risks')}
+                            className="h-5 w-5"
+                          />
+                          <label htmlFor="report-risks" className="flex-1 cursor-pointer">
+                            <div className="font-medium text-base">風險管理</div>
+                            <div className="text-sm text-muted-foreground">未解決風險、延期請求狀態</div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-muted-foreground">
+                      已選擇 {selectedProjectIds.length} 個專案，{selectedReports.length} 個報告區塊
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowEmailDialog(false)} size="lg">
+                      取消
+                    </Button>
+                    <Button
+                      onClick={handleSendEmail}
+                      disabled={!emailRecipients.trim() || selectedProjectIds.length === 0 || selectedReports.length === 0}
+                      className="gap-2"
+                      size="lg"
+                    >
+                      <Mail className="h-4 w-4" />
+                      發送 Email
+                    </Button>
+                  </DialogFooter>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* KPI Row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
