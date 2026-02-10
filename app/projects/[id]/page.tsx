@@ -195,6 +195,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
   const [page, setPage] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [selectedWeekMonday, setSelectedWeekMonday] = useState<string | null>(null)
 
   // Report dialog state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -218,42 +219,20 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
     return [...members].sort()
   }, [allWeeks])
 
-  const filteredWeeks = useMemo(() => {
+  // Date-only filtered weeks for matrix (no member/search filter)
+  const matrixWeeks = useMemo(() => {
     return allWeeks.filter(week => {
       if (dateFrom && getWeekSunday(week.weekMonday) < dateFrom) return false
       if (dateTo && week.weekMonday > dateTo) return false
       return true
-    }).map(week => {
-      let logs = week.logs
-      let completedTasks = week.completedTasks
+    })
+  }, [allWeeks, dateFrom, dateTo])
 
-      if (selectedMember) {
-        logs = logs.filter(l => l.author === selectedMember)
-        completedTasks = completedTasks.filter(ct => ct.completedBy === selectedMember)
-      }
+  const projectMembers = useMemo(() => [...new Set(project.team)].sort(), [project.team])
 
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase()
-        logs = logs.filter(l =>
-          l.taskName.toLowerCase().includes(q) ||
-          l.author.toLowerCase().includes(q) ||
-          l.content.toLowerCase().includes(q)
-        )
-        completedTasks = completedTasks.filter(ct =>
-          ct.taskName.toLowerCase().includes(q) ||
-          ct.completedBy.toLowerCase().includes(q) ||
-          ct.milestoneName.toLowerCase().includes(q)
-        )
-      }
-
-      if (logs.length === 0 && completedTasks.length === 0) return null
-      return { ...week, logs, completedTasks }
-    }).filter(Boolean) as WeekActivity[]
-  }, [allWeeks, selectedMember, searchQuery, dateFrom, dateTo])
-
-  const totalPages = Math.max(1, Math.ceil(filteredWeeks.length / WEEKS_PER_PAGE))
+  const totalPages = Math.max(1, Math.ceil(matrixWeeks.length / WEEKS_PER_PAGE))
   const safePage = Math.min(page, totalPages - 1)
-  const pagedWeeks = filteredWeeks.slice(safePage * WEEKS_PER_PAGE, (safePage + 1) * WEEKS_PER_PAGE)
+  const pagedMatrixWeeks = matrixWeeks.slice(safePage * WEEKS_PER_PAGE, (safePage + 1) * WEEKS_PER_PAGE)
 
   // Members with active tasks but no recent logs
   const missingUpdateMembers = useMemo(() => {
@@ -561,8 +540,8 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <p className="text-xs text-muted-foreground">
           系統自動彙整自任務紀錄與完成狀態
-          {filteredWeeks.length !== allWeeks.length
-            ? `，篩選結果：${filteredWeeks.length} 週`
+          {matrixWeeks.length !== allWeeks.length
+            ? `，篩選結果：${matrixWeeks.length} 週`
             : `，共 ${allWeeks.length} 週活動`
           }
         </p>
@@ -574,8 +553,8 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
         )}
       </div>
 
-      {/* Week cards */}
-      {pagedWeeks.length === 0 ? (
+      {/* Member × Week Matrix */}
+      {pagedMatrixWeeks.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
@@ -583,84 +562,180 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
           </CardContent>
         </Card>
       ) : (
-        pagedWeeks.map(week => {
-          const sunday = getWeekSunday(week.weekMonday)
-          const mondayLabel = new Date(week.weekMonday).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
-          const sundayLabel = new Date(sunday).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
-
-          return (
-            <Card key={week.weekMonday}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium text-sm">{mondayLabel} — {sundayLabel}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {week.completedTasks.length > 0 && (
-                      <Badge variant="default" className="text-xs gap-1">
-                        <CheckCircle2 className="h-3 w-3" />
-                        {week.completedTasks.length} 完成
-                      </Badge>
-                    )}
-                    {week.logs.length > 0 && (
-                      <Badge variant="secondary" className="text-xs gap-1">
-                        <FileText className="h-3 w-3" />
-                        {week.logs.length} 筆紀錄
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {week.completedTasks.length > 0 && (
-                  <div>
-                    <div className="text-xs font-medium text-success mb-1.5 flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      完成的任務
-                    </div>
-                    <div className="space-y-1">
-                      {week.completedTasks.map(ct => (
-                        <div key={ct.taskId} className="flex items-center gap-2 p-1.5 rounded bg-success/5 text-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
-                          <span className="font-medium">{ct.taskName}</span>
-                          <span className="text-xs text-muted-foreground">({ct.milestoneName})</span>
-                          <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {ct.completedBy}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {week.logs.length > 0 && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <FileText className="h-3 w-3" />
-                      工作紀錄
-                    </div>
-                    <div className="space-y-1.5">
-                      {week.logs.map(log => (
-                        <div key={log.logId} className="p-2 rounded border text-sm">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="font-medium text-xs">{log.taskName}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {log.author} · {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
-                            </span>
+        <>
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-medium text-sm text-muted-foreground w-[180px]">
+                      成員
+                    </th>
+                    {pagedMatrixWeeks.map(week => {
+                      const sunday = getWeekSunday(week.weekMonday)
+                      const mLabel = new Date(week.weekMonday).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
+                      const sLabel = new Date(sunday).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+                      const isSelected = selectedWeekMonday === week.weekMonday
+                      return (
+                        <th
+                          key={week.weekMonday}
+                          className={`text-center py-3 px-4 font-medium text-sm cursor-pointer transition-colors hover:bg-muted/50 whitespace-nowrap ${isSelected ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+                          onClick={() => setSelectedWeekMonday(isSelected ? null : week.weekMonday)}
+                        >
+                          {mLabel}~{sLabel}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectMembers.map(member => {
+                    const isHighlighted = selectedMember === member
+                    return (
+                      <tr key={member} className={`border-b last:border-0 transition-colors ${isHighlighted ? 'bg-primary/5' : ''}`}>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-7 w-7 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium shrink-0">
+                              {member.charAt(0)}
+                            </div>
+                            <span className="text-sm font-medium truncate">{member}</span>
                           </div>
-                          <p className="text-muted-foreground text-sm">{log.content}</p>
+                        </td>
+                        {pagedMatrixWeeks.map(week => {
+                          const logCount = week.logs.filter(l => l.author === member).length
+                          const completedCount = week.completedTasks.filter(ct => ct.completedBy === member).length
+                          const total = logCount + completedCount
+                          const isSelectedWeek = selectedWeekMonday === week.weekMonday
+                          return (
+                            <td key={week.weekMonday} className={`text-center py-3 px-4 ${isSelectedWeek ? 'bg-primary/5' : ''}`}>
+                              {total > 0 ? (
+                                <span className="inline-flex items-center gap-1.5 text-sm">
+                                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                                  <span className="text-green-700 dark:text-green-400 font-medium tabular-nums">{total}筆</span>
+                                </span>
+                              ) : (
+                                <span className="text-sm text-muted-foreground/30">—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center gap-1.5 px-4 py-2 text-xs text-muted-foreground/60 border-t">
+              <Info className="h-3.5 w-3.5 shrink-0" />
+              點擊上方日期欄位可展開該週詳細紀錄
+            </div>
+          </Card>
+
+          {/* Detail dialog for selected week */}
+          <Dialog open={!!selectedWeekMonday} onOpenChange={(open) => { if (!open) setSelectedWeekMonday(null) }}>
+            <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
+              {selectedWeekMonday && (() => {
+                const week = matrixWeeks.find(w => w.weekMonday === selectedWeekMonday)
+                if (!week) return null
+                const sunday = getWeekSunday(week.weekMonday)
+                // Apply member/search filters for detail
+                let detailLogs = week.logs
+                let detailCompleted = week.completedTasks
+                if (selectedMember) {
+                  detailLogs = detailLogs.filter(l => l.author === selectedMember)
+                  detailCompleted = detailCompleted.filter(ct => ct.completedBy === selectedMember)
+                }
+                if (searchQuery.trim()) {
+                  const q = searchQuery.trim().toLowerCase()
+                  detailLogs = detailLogs.filter(l =>
+                    l.taskName.toLowerCase().includes(q) || l.author.toLowerCase().includes(q) || l.content.toLowerCase().includes(q)
+                  )
+                  detailCompleted = detailCompleted.filter(ct =>
+                    ct.taskName.toLowerCase().includes(q) || ct.completedBy.toLowerCase().includes(q) || ct.milestoneName.toLowerCase().includes(q)
+                  )
+                }
+                const mondayLabel = new Date(week.weekMonday).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
+                const sundayLabel = new Date(sunday).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+
+                return (
+                  <>
+                    <DialogHeader className="px-5 pt-5 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <DialogTitle className="text-base">{mondayLabel} — {sundayLabel}</DialogTitle>
+                      </div>
+                      <DialogDescription asChild>
+                        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                          {detailCompleted.length > 0 && (
+                            <Badge variant="default" className="text-xs gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {detailCompleted.length} 完成
+                            </Badge>
+                          )}
+                          {detailLogs.length > 0 && (
+                            <Badge variant="secondary" className="text-xs gap-1">
+                              <FileText className="h-3 w-3" />
+                              {detailLogs.length} 筆紀錄
+                            </Badge>
+                          )}
+                          {detailLogs.length === 0 && detailCompleted.length === 0 && (
+                            <span className="text-xs">此週無紀錄</span>
+                          )}
                         </div>
-                      ))}
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-4">
+                      {detailCompleted.length > 0 && (
+                        <div>
+                          <div className="text-xs font-medium text-success mb-2 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            完成的任務
+                          </div>
+                          <div className="space-y-1.5">
+                            {detailCompleted.map(ct => (
+                              <div key={ct.taskId} className="flex items-center gap-2 p-2.5 rounded-lg bg-success/5 border border-success/10 text-sm">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+                                <span className="font-medium">{ct.taskName}</span>
+                                <span className="text-xs text-muted-foreground">({ct.milestoneName})</span>
+                                <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  {ct.completedBy}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {detailLogs.length > 0 && (
+                        <div>
+                          <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            工作紀錄
+                          </div>
+                          <div className="space-y-2">
+                            {detailLogs.map(log => (
+                              <div key={log.logId} className="p-3 rounded-lg border text-sm">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <span className="font-medium text-xs">{log.taskName}</span>
+                                  <span className="text-[11px] text-muted-foreground shrink-0">
+                                    {log.author} · {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                                  </span>
+                                </div>
+                                <p className="text-muted-foreground text-sm leading-relaxed">{log.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })
+                  </>
+                )
+              })()}
+            </DialogContent>
+          </Dialog>
+        </>
       )}
 
       {/* Pagination */}
