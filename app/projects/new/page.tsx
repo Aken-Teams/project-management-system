@@ -676,7 +676,7 @@ export default function NewProjectPage() {
           {/* Manual Mode — Step Wizard */}
           <TabsContent value="manual" className="space-y-6 mt-6">
             {/* Step Indicator */}
-            <div className="flex items-center justify-between px-2">
+            <div className="flex items-center justify-between rounded-xl border bg-card p-4">
               {STEPS.map((step, index) => {
                 const Icon = step.icon
                 const isCompleted = index < currentStep
@@ -694,7 +694,7 @@ export default function NewProjectPage() {
                       type="button"
                       onClick={() => goToStep(index)}
                       disabled={!isClickable && !isCurrent}
-                      className={`flex items-center gap-2 transition-colors ${
+                      className={`flex flex-col items-center gap-1.5 transition-colors ${
                         isCurrent
                           ? 'text-primary'
                           : isCompleted
@@ -702,21 +702,21 @@ export default function NewProjectPage() {
                             : 'text-muted-foreground/50'
                       } ${isClickable || isCurrent ? 'cursor-pointer' : 'cursor-default'}`}
                     >
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-medium transition-colors ${
                         isCurrent
-                          ? 'bg-primary text-primary-foreground'
+                          ? 'bg-primary text-primary-foreground shadow-md'
                           : isCompleted
                             ? 'bg-primary/10 text-primary'
                             : 'bg-muted text-muted-foreground/50'
                       }`}>
-                        {isCompleted ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                        {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                       </div>
-                      <span className={`text-sm hidden sm:inline ${isCurrent ? 'font-medium' : ''}`}>
+                      <span className={`text-xs hidden sm:inline ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
                         {step.label}
                       </span>
                     </button>
                     {index < STEPS.length - 1 && (
-                      <div className={`flex-1 h-px mx-3 ${
+                      <div className={`flex-1 h-0.5 mx-2 rounded-full ${
                         index < currentStep ? 'bg-primary/30' : 'bg-border'
                       }`} />
                     )}

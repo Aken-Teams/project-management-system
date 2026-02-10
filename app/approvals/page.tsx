@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useAuth } from '@/lib/auth-context'
 import { useProjectStore } from '@/lib/project-store'
 import { PROJECT_TYPE_LABELS, type DelayRequest, type Project } from '@/lib/mock-data'
@@ -245,18 +245,18 @@ export default function ApprovalsPage() {
         )}
       </div>
 
-      {/* Detail Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
+      {/* Detail Dialog */}
+      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           {selectedItem && (() => {
             const { project, request } = selectedItem
             const isPending = request.status === 'pending'
             return (
               <>
-                <SheetHeader className="pb-2">
-                  <SheetTitle className="text-lg">{project.name}</SheetTitle>
-                  <SheetDescription className="sr-only">延遲申請詳情</SheetDescription>
-                </SheetHeader>
+                <DialogHeader className="pb-2">
+                  <DialogTitle className="text-lg">{project.name}</DialogTitle>
+                  <DialogDescription className="sr-only">延遲申請詳情</DialogDescription>
+                </DialogHeader>
                 <div className="flex items-center gap-2 flex-wrap pb-3">
                   <Badge variant="outline" className="font-mono text-[10px]">{project.projectCode}</Badge>
                   <Badge variant="secondary" className="text-[10px]">{PROJECT_TYPE_LABELS[project.projectType]}</Badge>
@@ -417,8 +417,8 @@ export default function ApprovalsPage() {
               </>
             )
           })()}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
