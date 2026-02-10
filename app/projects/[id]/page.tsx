@@ -119,7 +119,7 @@ const RISK_TYPE_CONFIG: Record<AutoRiskType, {
 
 function ProjectRiskTab({ project }: { project: Project }) {
   const autoRisks = useMemo(() => computeProjectRisks(project), [project])
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<AutoRiskType>>(new Set())
+  const [expandedCards, setExpandedCards] = useState<Set<AutoRiskType>>(new Set())
 
   const riskGroups = useMemo(() => {
     const grouped = new Map<AutoRiskType, AutoRisk[]>()
@@ -133,8 +133,8 @@ function ProjectRiskTab({ project }: { project: Project }) {
       .map(type => ({ type, risks: grouped.get(type)! }))
   }, [autoRisks])
 
-  const toggleGroup = (type: AutoRiskType) => {
-    setCollapsedGroups(prev => {
+  const toggleCard = (type: AutoRiskType) => {
+    setExpandedCards(prev => {
       const next = new Set(prev)
       if (next.has(type)) next.delete(type)
       else next.add(type)
@@ -179,95 +179,84 @@ function ProjectRiskTab({ project }: { project: Project }) {
         </div>
       </div>
 
-      {/* Risk groups */}
-      {riskGroups.map(({ type, risks }) => {
-        const config = RISK_TYPE_CONFIG[type]
-        const isCollapsed = collapsedGroups.has(type)
-        const isSupport = type === 'support-needed'
+      {/* Risk cards grid — collapsed by default, click to expand */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {riskGroups.map(({ type, risks }) => {
+          const config = RISK_TYPE_CONFIG[type]
+          const isSupport = type === 'support-needed'
+          const isExpanded = expandedCards.has(type)
+          const highInGroup = risks.filter(r => r.severity === 'high').length
 
-        return (
-          <Card key={type} className={isSupport ? `${config.borderColor} ${config.bgColor}` : ''}>
-            {/* Group header — clickable */}
-            <button
-              onClick={() => toggleGroup(type)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-            >
-              <div className={`shrink-0 ${config.color}`}>{config.icon}</div>
-              <span className="text-sm font-medium flex-1">{getRiskTypeLabel(type)}</span>
-              <Badge variant="secondary" className="text-xs">{risks.length}</Badge>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
-            </button>
+          return (
+            <Card key={type} className={`flex flex-col overflow-hidden ${isSupport ? `${config.borderColor} ${config.bgColor}` : ''}`}>
+              {/* Card header — always visible, clickable */}
+              <button
+                onClick={() => toggleCard(type)}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+              >
+                <div className={`shrink-0 ${config.color}`}>{config.icon}</div>
+                <span className="text-sm font-medium flex-1">{getRiskTypeLabel(type)}</span>
+                <Badge variant={highInGroup > 0 ? 'destructive' : 'secondary'} className="text-xs">{risks.length}</Badge>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+              </button>
 
-            {/* Group content */}
-            {!isCollapsed && (
-              <div className="px-4 pb-3">
-                {isSupport ? (
-                  /* Support needed — prominent cards */
-                  <div className="space-y-2">
-                    {risks.map(risk => (
-                      <div key={risk.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background">
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{risk.assignee} 需要協助</span>
-                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">高</Badge>
+              {/* Card body — expanded details */}
+              {isExpanded && (
+                <div className="border-t overflow-auto max-h-[260px]">
+                  {isSupport ? (
+                    <div className="p-3 space-y-2">
+                      {risks.map(risk => (
+                        <div key={risk.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background">
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{risk.assignee} 需要協助</span>
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">高</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{risk.description}</p>
                           </div>
-                          <p className="text-sm text-muted-foreground">{risk.description}</p>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : type === 'milestone-delay' ? (
-                  /* Milestone delay — compact rows */
-                  <div className="rounded-lg border overflow-hidden">
-                    <div className="grid grid-cols-[1fr_80px_90px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
-                      <span>里程碑</span>
-                      <span>進度</span>
-                      <span className="text-right">逾期</span>
+                      ))}
                     </div>
-                    {risks.map(risk => (
-                      <div key={risk.id} className="grid grid-cols-[1fr_80px_90px] gap-2 px-3 py-2 border-t items-center">
-                        <span className="text-sm truncate">{risk.title}</span>
-                        <span className="text-xs text-muted-foreground">{risk.description.match(/進度 (\d+%)/)?.[1] || '—'}</span>
-                        <span className="text-xs text-right text-red-600 font-medium">
-                          {risk.description.match(/(\d+) 天/)?.[1] || '—'} 天
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : type === 'pending-delay' ? (
-                  /* Pending delay — info cards */
-                  <div className="space-y-2">
-                    {risks.map(risk => (
-                      <div key={risk.id} className="p-3 rounded-lg border text-sm space-y-1">
-                        <p className="text-muted-foreground">{risk.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  /* Default: overdue-task, blocked-chain, no-update — compact table */
-                  <div className="rounded-lg border overflow-hidden">
-                    <div className="grid grid-cols-[1fr_100px_1fr] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
-                      <span>任務</span>
-                      <span>負責人</span>
-                      <span>狀況</span>
-                    </div>
-                    {risks.map(risk => (
-                      <div key={risk.id} className="grid grid-cols-[1fr_100px_1fr] gap-2 px-3 py-2 border-t items-center">
-                        <span className="text-sm truncate">{risk.title}</span>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <User className="h-3 w-3 text-muted-foreground shrink-0" />
-                          <span className="text-xs text-muted-foreground truncate">{risk.assignee || '—'}</span>
+                  ) : type === 'milestone-delay' ? (
+                    <div className="divide-y">
+                      {risks.map(risk => (
+                        <div key={risk.id} className="flex items-center justify-between gap-2 px-4 py-2.5">
+                          <span className="text-sm truncate flex-1">{risk.title}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{risk.description.match(/進度 (\d+%)/)?.[1] || '—'}</span>
+                          <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">
+                            逾期 {risk.description.match(/(\d+) 天/)?.[1] || '—'} 天
+                          </Badge>
                         </div>
-                        <span className="text-xs text-muted-foreground truncate">{risk.description}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-        )
-      })}
+                      ))}
+                    </div>
+                  ) : type === 'pending-delay' ? (
+                    <div className="p-3 space-y-2">
+                      {risks.map(risk => (
+                        <div key={risk.id} className="p-3 rounded-lg border text-sm space-y-1">
+                          <p className="text-muted-foreground">{risk.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {risks.map(risk => (
+                        <div key={risk.id} className="flex items-center gap-3 px-4 py-2.5">
+                          <span className="text-sm truncate flex-1">{risk.title}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{risk.assignee || '—'}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0 max-w-[140px] truncate">{risk.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          )
+        })}
+      </div>
 
       <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
         <Info className="h-3.5 w-3.5 shrink-0" />
