@@ -57,110 +57,46 @@ import {
   X,
   FileDown,
   CalendarRange,
-  ChevronDown,
 } from 'lucide-react'
 import Link from 'next/link'
-import { computeProjectRisks, getRiskTypeLabel, type AutoRisk, type AutoRiskType } from '@/lib/risk-utils'
+import { type Risk } from '@/lib/mock-data'
 
-// --- Risk Tab component ---
+// --- Risk Tab component (Static risks from project creation) ---
 
-// Display groups: 'progress-delay' merges milestone-delay + overdue-task
-type RiskDisplayGroup = 'support-needed' | 'progress-delay' | 'blocked-chain' | 'pending-delay' | 'no-update'
+const IMPACT_LABELS: Record<string, string> = { high: '高', medium: '中', low: '低' }
+const PROBABILITY_LABELS: Record<string, string> = { high: '高', medium: '中', low: '低' }
+const STATUS_LABELS: Record<string, string> = { open: '未處理', mitigated: '已緩解', closed: '已關閉' }
 
-const DISPLAY_GROUP_ORDER: RiskDisplayGroup[] = [
-  'support-needed',
-  'progress-delay',
-  'blocked-chain',
-  'pending-delay',
-  'no-update',
-]
-
-const DISPLAY_GROUP_CONFIG: Record<RiskDisplayGroup, {
-  label: string
-  icon: React.ReactNode
-  color: string
-  bgColor: string
-  borderColor: string
-}> = {
-  'support-needed': {
-    label: '需要協助',
-    icon: <HelpCircle className="h-4 w-4" />,
-    color: 'text-red-600 dark:text-red-400',
-    bgColor: 'bg-red-50 dark:bg-red-950/20',
-    borderColor: 'border-red-200 dark:border-red-900',
-  },
-  'progress-delay': {
-    label: '進度延誤',
-    icon: <AlertTriangle className="h-4 w-4" />,
-    color: 'text-red-500',
-    bgColor: 'bg-red-50/50 dark:bg-red-950/10',
-    borderColor: 'border-red-200 dark:border-red-900',
-  },
-  'blocked-chain': {
-    label: '任務受阻',
-    icon: <AlertCircle className="h-4 w-4" />,
-    color: 'text-orange-500',
-    bgColor: 'bg-orange-50/50 dark:bg-orange-950/10',
-    borderColor: 'border-orange-200 dark:border-orange-900',
-  },
-  'pending-delay': {
-    label: '待審延期',
-    icon: <TimerReset className="h-4 w-4" />,
-    color: 'text-amber-500',
-    bgColor: 'bg-amber-50/30 dark:bg-amber-950/10',
-    borderColor: 'border-amber-200 dark:border-amber-800',
-  },
-  'no-update': {
-    label: '長期無更新',
-    icon: <Clock className="h-4 w-4" />,
-    color: 'text-slate-500',
-    bgColor: 'bg-slate-50/50 dark:bg-slate-950/10',
-    borderColor: 'border-slate-200 dark:border-slate-800',
-  },
+function getRiskLevelColor(level: string) {
+  switch (level) {
+    case 'high': return 'bg-destructive text-destructive-foreground'
+    case 'medium': return 'bg-warning text-warning-foreground'
+    case 'low': return 'bg-muted text-muted-foreground'
+    default: return 'bg-muted text-muted-foreground'
+  }
 }
 
-function toDisplayGroup(type: AutoRiskType): RiskDisplayGroup {
-  if (type === 'milestone-delay' || type === 'overdue-task') return 'progress-delay'
-  return type as RiskDisplayGroup
+function getRiskStatusColor(status: string) {
+  switch (status) {
+    case 'open': return 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/10'
+    case 'mitigated': return 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/10'
+    case 'closed': return 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/10'
+    default: return ''
+  }
 }
 
 function ProjectRiskTab({ project }: { project: Project }) {
-  const autoRisks = useMemo(() => computeProjectRisks(project), [project])
-  const [expandedCards, setExpandedCards] = useState<Set<RiskDisplayGroup>>(new Set())
+  const openRisks = project.risks.filter(r => r.status === 'open')
+  const mitigatedRisks = project.risks.filter(r => r.status === 'mitigated')
+  const closedRisks = project.risks.filter(r => r.status === 'closed')
 
-  const riskGroups = useMemo(() => {
-    const grouped = new Map<RiskDisplayGroup, AutoRisk[]>()
-    autoRisks.forEach(risk => {
-      const group = toDisplayGroup(risk.type)
-      const arr = grouped.get(group) || []
-      arr.push(risk)
-      grouped.set(group, arr)
-    })
-    return DISPLAY_GROUP_ORDER
-      .filter(group => grouped.has(group))
-      .map(group => ({ group, risks: grouped.get(group)! }))
-  }, [autoRisks])
-
-  const toggleCard = (group: RiskDisplayGroup) => {
-    setExpandedCards(prev => {
-      const next = new Set(prev)
-      if (next.has(group)) next.delete(group)
-      else next.add(group)
-      return next
-    })
-  }
-
-  const highCount = autoRisks.filter(r => r.severity === 'high').length
-  const mediumCount = autoRisks.filter(r => r.severity === 'medium').length
-  const lowCount = autoRisks.filter(r => r.severity === 'low').length
-
-  if (autoRisks.length === 0) {
+  if (project.risks.length === 0) {
     return (
       <Card>
         <CardContent className="py-12 text-center">
-          <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
-          <p className="text-sm font-medium">目前沒有偵測到風險</p>
-          <p className="text-xs text-muted-foreground mt-1">系統會自動監控任務逾期、進度停滯等狀況</p>
+          <Shield className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+          <p className="text-sm font-medium">尚未登記風險項目</p>
+          <p className="text-xs text-muted-foreground mt-1">開案時可預先識別已知風險，評估影響程度和發生機率</p>
         </CardContent>
       </Card>
     )
@@ -172,142 +108,74 @@ function ProjectRiskTab({ project }: { project: Project }) {
       <div className="flex items-center justify-between gap-3 flex-wrap rounded-lg bg-muted/50 border px-4 py-2.5">
         <div className="flex items-center gap-1.5 text-sm">
           <Shield className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">系統偵測到 {autoRisks.length} 項風險</span>
+          <span className="font-medium">已識別 {project.risks.length} 項風險</span>
         </div>
         <div className="flex items-center gap-2">
-          {highCount > 0 && (
-            <Badge variant="destructive" className="text-xs">{highCount} 高</Badge>
+          {openRisks.length > 0 && (
+            <Badge variant="destructive" className="text-xs">{openRisks.length} 未處理</Badge>
           )}
-          {mediumCount > 0 && (
-            <Badge className="text-xs bg-warning text-warning-foreground">{mediumCount} 中</Badge>
+          {mitigatedRisks.length > 0 && (
+            <Badge className="text-xs bg-warning text-warning-foreground">{mitigatedRisks.length} 已緩解</Badge>
           )}
-          {lowCount > 0 && (
-            <Badge variant="secondary" className="text-xs">{lowCount} 低</Badge>
+          {closedRisks.length > 0 && (
+            <Badge variant="secondary" className="text-xs">{closedRisks.length} 已關閉</Badge>
           )}
         </div>
       </div>
 
-      {/* Risk cards grid — collapsed by default, click to expand */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {riskGroups.map(({ group, risks }) => {
-          const config = DISPLAY_GROUP_CONFIG[group]
-          const isSupport = group === 'support-needed'
-          const isProgressDelay = group === 'progress-delay'
-          const isExpanded = expandedCards.has(group)
-          const highInGroup = risks.filter(r => r.severity === 'high').length
+      {/* Risk list */}
+      <div className="space-y-3">
+        {project.risks.map(risk => (
+          <Card key={risk.id} className={getRiskStatusColor(risk.status)}>
+            <div className="p-4 space-y-3">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                  <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${risk.status === 'closed' ? 'text-muted-foreground' : risk.impact === 'high' ? 'text-destructive' : 'text-warning'}`} />
+                  <div className="min-w-0">
+                    <h4 className={`text-sm font-medium ${risk.status === 'closed' ? 'text-muted-foreground line-through' : ''}`}>{risk.title}</h4>
+                    <p className="text-sm text-muted-foreground mt-1">{risk.description}</p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-xs shrink-0">
+                  {STATUS_LABELS[risk.status]}
+                </Badge>
+              </div>
 
-          // Split progress-delay into milestone + task sub-groups
-          const milestoneRisks = isProgressDelay ? risks.filter(r => r.type === 'milestone-delay') : []
-          const taskRisks = isProgressDelay ? risks.filter(r => r.type === 'overdue-task') : []
+              {/* Impact + Probability badges */}
+              <div className="flex items-center gap-2 pl-6.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">影響程度</span>
+                  <Badge className={`text-[10px] px-1.5 ${getRiskLevelColor(risk.impact)}`}>
+                    {IMPACT_LABELS[risk.impact]}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">發生機率</span>
+                  <Badge className={`text-[10px] px-1.5 ${getRiskLevelColor(risk.probability)}`}>
+                    {PROBABILITY_LABELS[risk.probability]}
+                  </Badge>
+                </div>
+              </div>
 
-          return (
-            <Card key={group} className={`flex flex-col overflow-hidden ${isSupport ? `${config.borderColor} ${config.bgColor}` : ''}`}>
-              {/* Card header — always visible, clickable */}
-              <button
-                onClick={() => toggleCard(group)}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-              >
-                <div className={`shrink-0 ${config.color}`}>{config.icon}</div>
-                <span className="text-sm font-medium flex-1">{config.label}</span>
-                <Badge variant={highInGroup > 0 ? 'destructive' : 'secondary'} className="text-xs">{risks.length}</Badge>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-              </button>
-
-              {/* Card body — expanded details */}
-              {isExpanded && (
-                <div className="border-t overflow-auto max-h-[260px]">
-                  {isSupport ? (
-                    <div className="p-3 space-y-2">
-                      {risks.map(risk => (
-                        <div key={risk.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background">
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{risk.assignee} 需要協助</span>
-                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">高</Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{risk.description}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : isProgressDelay ? (
-                    <div>
-                      {/* Milestones first */}
-                      {milestoneRisks.length > 0 && (
-                        <>
-                          <div className="px-4 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                            <Milestone className="h-3 w-3" />
-                            里程碑 ({milestoneRisks.length})
-                          </div>
-                          <div className="divide-y">
-                            {milestoneRisks.map(risk => (
-                              <div key={risk.id} className="flex items-center justify-between gap-2 px-4 py-2">
-                                <span className="text-sm truncate flex-1">{risk.title}</span>
-                                <span className="text-xs text-muted-foreground shrink-0">{risk.description.match(/進度 (\d+%)/)?.[1] || '—'}</span>
-                                <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">
-                                  {risk.description.match(/(\d+) 天/)?.[1] || '—'}天
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      {/* Tasks */}
-                      {taskRisks.length > 0 && (
-                        <>
-                          <div className={`px-4 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 ${milestoneRisks.length > 0 ? 'border-t' : ''}`}>
-                            <ListTodo className="h-3 w-3" />
-                            任務 ({taskRisks.length})
-                          </div>
-                          <div className="divide-y">
-                            {taskRisks.map(risk => (
-                              <div key={risk.id} className="flex items-center gap-3 px-4 py-2">
-                                <span className="text-sm truncate flex-1">{risk.title}</span>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <User className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-xs text-muted-foreground">{risk.assignee || '—'}</span>
-                                </div>
-                                <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">
-                                  {risk.description.match(/(\d+) 天/)?.[1] || '—'}天
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ) : group === 'pending-delay' ? (
-                    <div className="p-3 space-y-2">
-                      {risks.map(risk => (
-                        <div key={risk.id} className="p-3 rounded-lg border text-sm space-y-1">
-                          <p className="text-muted-foreground">{risk.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="divide-y">
-                      {risks.map(risk => (
-                        <div key={risk.id} className="flex items-center gap-3 px-4 py-2.5">
-                          <span className="text-sm truncate flex-1">{risk.title}</span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <User className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">{risk.assignee || '—'}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground shrink-0 max-w-[140px] truncate">{risk.description}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+              {/* Mitigation */}
+              {risk.mitigation && (
+                <div className="pl-6.5 pt-1 border-t">
+                  <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    緩解措施
+                  </div>
+                  <p className="text-sm text-muted-foreground">{risk.mitigation}</p>
                 </div>
               )}
-            </Card>
-          )
-        })}
+            </div>
+          </Card>
+        ))}
       </div>
 
       <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
         <Info className="h-3.5 w-3.5 shrink-0" />
-        風險由系統自動偵測，當問題解決後會自動消除
+        風險於開案時識別登記，用於評估專案潛在問題與準備緩解措施
       </p>
     </div>
   )
@@ -1076,7 +944,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-  const autoRisks = useMemo(() => computeProjectRisks(project), [project])
+  const openRisks = project.risks.filter(r => r.status === 'open')
 
   return (
     <DashboardLayout>
@@ -1193,9 +1061,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <TabsTrigger value="risks" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <Shield className="h-4 w-4" />
                 風險
-                {autoRisks.length > 0 && (
+                {openRisks.length > 0 && (
                   <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
-                    {autoRisks.length}
+                    {openRisks.length}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -1302,10 +1170,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       <div className="flex items-center justify-between py-2.5">
                         <span className="text-sm text-muted-foreground flex items-center gap-2">
                           <AlertTriangle className="h-3.5 w-3.5" />
-                          未解決風險
+                          未處理風險
                         </span>
-                        <span className="font-medium text-destructive">
-                          {autoRisks.length}
+                        <span className={`font-medium ${openRisks.length > 0 ? 'text-destructive' : ''}`}>
+                          {openRisks.length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between py-2.5 last:pb-0">
@@ -1355,7 +1223,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <WeeklyActivitySummary project={project} />
           </TabsContent>
 
-          {/* Risks Tab — Auto-computed, grouped */}
+          {/* Risks Tab — Static risks from project creation */}
           <TabsContent value="risks" className="mt-0">
             <ProjectRiskTab project={project} />
           </TabsContent>

@@ -12,6 +12,7 @@ import {
   type Milestone,
   type TaskStatus,
   type TaskLog,
+  type Risk,
 } from './mock-data'
 
 interface ProjectStoreContextType {
@@ -31,6 +32,7 @@ interface ProjectStoreContextType {
     owner: string
     team: string[]
     milestones: Omit<Milestone, 'status' | 'progress'>[]
+    risks?: Omit<Risk, 'id' | 'projectId'>[]
   }) => Project
   addWeeklyUpdate: (projectId: string, update: Omit<WeeklyUpdate, 'id' | 'projectId'>) => void
   submitDelayRequest: (projectId: string, request: Omit<DelayRequest, 'id' | 'projectId' | 'status'>) => void
@@ -50,7 +52,7 @@ const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(u
 
 const STORAGE_KEY = 'pm-system-projects'
 const STORAGE_VERSION_KEY = 'pm-system-version'
-const CURRENT_VERSION = '9'
+const CURRENT_VERSION = '10'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -96,6 +98,7 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     owner: string
     team: string[]
     milestones: Omit<Milestone, 'status' | 'progress'>[]
+    risks?: Omit<Risk, 'id' | 'projectId'>[]
   }) => {
     const id = `proj-${Date.now()}`
     const projectCode = generateProjectCode(data.projectType)
@@ -103,6 +106,12 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       ...m,
       status: 'todo' as const,
       progress: 0,
+    }))
+
+    const risks: Risk[] = (data.risks || []).map((r, i) => ({
+      ...r,
+      id: `risk-${Date.now()}-${i}`,
+      projectId: id,
     }))
 
     const newProject: Project = {
@@ -126,7 +135,7 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       milestones,
       baseline: milestones.map(m => ({ ...m })),
       tasks: [],
-      risks: [],
+      risks,
       weeklyUpdates: [],
       delayRequests: [],
       taskLogs: [],

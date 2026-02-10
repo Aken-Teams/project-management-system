@@ -26,11 +26,20 @@ import {
   Plus,
   Trash2,
   Hash,
+  Shield,
 } from 'lucide-react'
 
 interface ManualMilestone {
   name: string
   dueDate: string
+}
+
+interface ManualRisk {
+  title: string
+  description: string
+  impact: 'low' | 'medium' | 'high'
+  probability: 'low' | 'medium' | 'high'
+  mitigation: string
 }
 
 export default function NewProjectPage() {
@@ -62,6 +71,7 @@ export default function NewProjectPage() {
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([
     { name: '', dueDate: '' },
   ])
+  const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
 
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
@@ -104,6 +114,21 @@ export default function NewProjectPage() {
     )
   }
 
+  // Risk helpers
+  const addRisk = () => {
+    setManualRisks([...manualRisks, { title: '', description: '', impact: 'medium', probability: 'medium', mitigation: '' }])
+  }
+
+  const removeRisk = (index: number) => {
+    setManualRisks(manualRisks.filter((_, i) => i !== index))
+  }
+
+  const updateRisk = (index: number, field: keyof ManualRisk, value: string) => {
+    setManualRisks(
+      manualRisks.map((r, i) => (i === index ? { ...r, [field]: value } : r))
+    )
+  }
+
   const handleAIParse = async () => {
     if (!requirements.trim()) return
 
@@ -129,6 +154,15 @@ export default function NewProjectPage() {
       dueDate: parsedData.startDate,
     }))
 
+    const risks = parsedData.identifiedRisks.map(r => ({
+      title: r.title,
+      description: r.description,
+      impact: r.impact,
+      probability: r.probability,
+      mitigation: '',
+      status: 'open' as const,
+    }))
+
     const newProject = addProject({
       projectType: aiProjectType,
       name: parsedData.name,
@@ -143,6 +177,7 @@ export default function NewProjectPage() {
       owner: ownerName,
       team: [ownerName],
       milestones,
+      risks,
     })
 
     router.push(`/projects/${newProject.id}`)
@@ -159,6 +194,13 @@ export default function NewProjectPage() {
         dueDate: m.dueDate,
       }))
 
+    const validRisks = manualRisks
+      .filter(r => r.title.trim())
+      .map(r => ({
+        ...r,
+        status: 'open' as const,
+      }))
+
     const newProject = addProject({
       projectType: manualProjectType,
       name: manualData.name,
@@ -173,6 +215,7 @@ export default function NewProjectPage() {
       owner: ownerName,
       team: [ownerName],
       milestones: validMilestones,
+      risks: validRisks,
     })
 
     router.push(`/projects/${newProject.id}`)
@@ -690,6 +733,107 @@ export default function NewProjectPage() {
                         </Button>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Risks Section */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-medium flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                      風險識別
+                    </Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addRisk} className="gap-1">
+                      <Plus className="h-3.5 w-3.5" />
+                      新增風險
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    預先識別專案可能面臨的風險，評估影響程度和發生機率
+                  </p>
+                  <div className="space-y-3">
+                    {manualRisks.map((risk, index) => (
+                      <div
+                        key={index}
+                        className="p-3 rounded-lg border bg-card space-y-3"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-xs font-medium mt-1">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 space-y-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">風險名稱</Label>
+                              <Input
+                                placeholder="例如：供應商交期不穩定"
+                                value={risk.title}
+                                onChange={(e) => updateRisk(index, 'title', e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">風險描述</Label>
+                              <Textarea
+                                placeholder="描述此風險的具體內容"
+                                value={risk.description}
+                                onChange={(e) => updateRisk(index, 'description', e.target.value)}
+                                rows={2}
+                              />
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">影響程度</Label>
+                                <Select value={risk.impact} onValueChange={(v) => updateRisk(index, 'impact', v)}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="high">高</SelectItem>
+                                    <SelectItem value="medium">中</SelectItem>
+                                    <SelectItem value="low">低</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">發生機率</Label>
+                                <Select value={risk.probability} onValueChange={(v) => updateRisk(index, 'probability', v)}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="high">高</SelectItem>
+                                    <SelectItem value="medium">中</SelectItem>
+                                    <SelectItem value="low">低</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">緩解措施</Label>
+                              <Textarea
+                                placeholder="描述如何降低或避免此風險"
+                                value={risk.mitigation}
+                                onChange={(e) => updateRisk(index, 'mitigation', e.target.value)}
+                                rows={2}
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeRisk(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {manualRisks.length === 0 && (
+                      <div className="text-center py-4 text-sm text-muted-foreground border border-dashed rounded-lg">
+                        尚未新增風險項目，點擊上方按鈕新增
+                      </div>
+                    )}
                   </div>
                 </div>
 
