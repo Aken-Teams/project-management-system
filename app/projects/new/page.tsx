@@ -1911,10 +1911,7 @@ export default function NewProjectPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="purpose" className="flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4 text-amber-500" />
-                      專案目的
-                    </Label>
+                    <Label htmlFor="purpose">專案目的</Label>
                     <Textarea
                       id="purpose"
                       placeholder="說明為何要執行此專案"
@@ -1925,10 +1922,7 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="scope" className="flex items-center gap-2">
-                      <Layers className="h-4 w-4 text-blue-500" />
-                      專案範圍
-                    </Label>
+                    <Label htmlFor="scope">專案範圍</Label>
                     <Textarea
                       id="scope"
                       placeholder="定義專案的範圍與邊界"
@@ -1939,10 +1933,7 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="roi" className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-violet-500" />
-                      投資報酬 (ROI)
-                    </Label>
+                    <Label htmlFor="roi">投資報酬 (ROI)</Label>
                     <Textarea
                       id="roi"
                       placeholder="描述預期的投資報酬"
@@ -1953,10 +1944,7 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="expectedBenefits" className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-green-500" />
-                      預期效益
-                    </Label>
+                    <Label htmlFor="expectedBenefits">預期效益</Label>
                     <Textarea
                       id="expectedBenefits"
                       placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
