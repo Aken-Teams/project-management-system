@@ -746,7 +746,8 @@ export default function NewProjectPage() {
     switch (step) {
       case 0: return !!manualData.name.trim()
       case 1: return !!smartObjective.specific.trim() // SMART 至少要有具體目標
-      case 2: return !!manualData.startDate && !!manualData.endDate
+      case 2: return !!manualData.purpose.trim() // 專案定義至少要有目的
+      case 3: return !!manualData.startDate && !!manualData.endDate
       default: return true
     }
   }
@@ -1803,33 +1804,18 @@ export default function NewProjectPage() {
               </Card>
             )}
 
-            {/* Step 2: 專案定義 */}
+            {/* Step 1: SMART 目標 */}
             {currentStep === 1 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-muted-foreground" />
-                    專案定義
+                    <Target className="h-5 w-5 text-primary" />
+                    SMART 目標
                   </CardTitle>
-                  <CardDescription>描述專案的目標、目的、範圍和預期效益</CardDescription>
+                  <CardDescription>依據 SMART 原則設定專案目標（具體、可衡量、可達成、相關性、時限性）</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* SMART 目標 */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base font-medium flex items-center gap-2">
-                        <Target className="h-4 w-4 text-primary" />
-                        專案目標（SMART 原則）<span className="text-destructive">*</span>
-                      </Label>
-                      <Badge variant="secondary" className="text-xs">
-                        具體、可衡量、可達成、相關性、時限性
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      依據 SMART 原則設定專案目標，確保目標明確且可追蹤
-                    </p>
-
-                    <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+                <CardContent className="space-y-4">
+                  <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="smart-specific" className="flex items-center gap-2">
                           <Badge variant="outline" className="text-xs">S</Badge>
@@ -1909,10 +1895,21 @@ export default function NewProjectPage() {
                         />
                       </div>
                     </div>
-                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                  <Separator />
-
+            {/* Step 2: 專案定義 */}
+            {currentStep === 2 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-amber-500" />
+                    專案定義
+                  </CardTitle>
+                  <CardDescription>描述專案的目的、範圍和預期效益</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="purpose" className="flex items-center gap-2">
                       <Lightbulb className="h-4 w-4 text-amber-500" />
@@ -1942,20 +1939,6 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="expectedBenefits" className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-green-500" />
-                      預期效益
-                    </Label>
-                    <Textarea
-                      id="expectedBenefits"
-                      placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
-                      value={manualData.expectedBenefits}
-                      onChange={(e) => setManualData({ ...manualData, expectedBenefits: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
                     <Label htmlFor="roi" className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-violet-500" />
                       投資報酬 (ROI)
@@ -1968,12 +1951,26 @@ export default function NewProjectPage() {
                       rows={2}
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="expectedBenefits" className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      預期效益
+                    </Label>
+                    <Textarea
+                      id="expectedBenefits"
+                      placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
+                      value={manualData.expectedBenefits}
+                      onChange={(e) => setManualData({ ...manualData, expectedBenefits: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             )}
 
             {/* Step 3: 時程與里程碑 */}
-            {currentStep === 2 && (
+            {currentStep === 3 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -2050,7 +2047,7 @@ export default function NewProjectPage() {
             )}
 
             {/* Step 4: 團隊與風險 */}
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
