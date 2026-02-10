@@ -38,6 +38,8 @@ import { cn } from '@/lib/utils'
 import { useProjectStore } from '@/lib/project-store'
 import { computeTaskStatus } from '@/lib/task-utils'
 import { Badge } from '@/components/ui/badge'
+import { NotificationBell } from '@/components/notification-bell'
+import { useNotificationStore } from '@/lib/notification-store'
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -69,7 +71,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout, switchRole } = useAuth()
-  const { getPendingApprovals, getTasksForUser } = useProjectStore()
+  const { projects, getPendingApprovals, getTasksForUser } = useProjectStore()
+  const { generateDemoNotifications } = useNotificationStore()
   const pendingCount = getPendingApprovals().length
   const userTasks = user ? getTasksForUser(user.name) : []
   const atRiskCount = userTasks.filter(({ project, task }) => {
@@ -120,6 +123,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     setMobileOpen(false)
   }, [pathname])
 
+  // Seed demo notifications on first load
+  useEffect(() => {
+    if (user && projects.length > 0) {
+      generateDemoNotifications(projects, user)
+    }
+  }, [user, projects, generateDemoNotifications])
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -143,7 +153,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="flex flex-col h-full">
         {/* Logo */}
         <div className={cn('flex items-center h-16 px-4 border-b border-border/50', collapsed && 'justify-center px-2')}>
-          <Link href={defaultRoute[user.role] || '/dashboard'} className="flex items-center gap-3 min-w-0">
+          <Link href={defaultRoute[user.role] || '/dashboard'} className="flex items-center gap-3 min-w-0 flex-1">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <FolderKanban className="h-5 w-5" />
             </div>
@@ -151,6 +161,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="text-base font-semibold truncate">專案管理系統</span>
             )}
           </Link>
+          {!collapsed && <NotificationBell />}
         </div>
 
         {/* Navigation */}
@@ -253,11 +264,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             >
               <DropdownMenuLabel>我的帳號</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/profile')}>
                 <User className="mr-2 h-4 w-4" />
                 個人資料
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 設定
               </DropdownMenuItem>
@@ -329,7 +340,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <span className="ml-3 font-semibold text-sm">專案管理系統</span>
+          <span className="ml-3 font-semibold text-sm flex-1">專案管理系統</span>
+          <NotificationBell />
         </header>
 
         {/* Page Content */}

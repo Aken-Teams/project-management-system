@@ -1,8 +1,11 @@
 import React from "react"
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
+import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/lib/auth-context'
 import { ProjectStoreProvider } from '@/lib/project-store'
+import { NotificationStoreProvider } from '@/lib/notification-store'
+import { Toaster } from '@/components/ui/sonner'
 
 import './globals.css'
 
@@ -27,13 +30,18 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="zh-TW">
+    <html lang="zh-TW" suppressHydrationWarning>
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <AuthProvider>
-          <ProjectStoreProvider>
-            {children}
-          </ProjectStoreProvider>
-        </AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AuthProvider>
+            <ProjectStoreProvider>
+              <NotificationStoreProvider>
+                {children}
+              </NotificationStoreProvider>
+            </ProjectStoreProvider>
+          </AuthProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   )
