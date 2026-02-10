@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -436,32 +436,27 @@ export default function NewProjectPage() {
   // Recalculate dates when milestones or start date changes
   const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate)
 
+  // Track the last milestone's end date (only changes when milestones actually change)
+  const lastMilestoneEndDate = useMemo(() => {
+    const lastMilestone = [...recalculatedMilestones]
+      .reverse()
+      .find(m => m.endDate && m.durationWeeks > 0)
+    return lastMilestone?.endDate || ''
+  }, [recalculatedMilestones])
+
   // Get the minimum allowed end date (last milestone's end date)
   const getMinEndDate = () => {
-    const lastMilestone = [...recalculatedMilestones]
-      .reverse()
-      .find(m => m.endDate && m.durationWeeks > 0)
-    return lastMilestone?.endDate || manualData.startDate || ''
+    return lastMilestoneEndDate || manualData.startDate || ''
   }
 
-  // Auto-update project end date based on milestones
+  // Auto-update project end date when milestones change
   useEffect(() => {
-    if (!manualData.startDate || recalculatedMilestones.length === 0) return
+    if (!manualData.startDate || !lastMilestoneEndDate) return
 
-    // Find the last milestone with an end date
-    const lastMilestone = [...recalculatedMilestones]
-      .reverse()
-      .find(m => m.endDate && m.durationWeeks > 0)
-
-    if (!lastMilestone?.endDate) return
-
-    // Auto-update end date if:
-    // 1. No end date is set yet, OR
-    // 2. Last milestone's end date is greater than current end date (milestones extended)
-    if (!manualData.endDate || lastMilestone.endDate > manualData.endDate) {
-      setManualData(prev => ({ ...prev, endDate: lastMilestone.endDate }))
-    }
-  }, [recalculatedMilestones, manualData.startDate, manualData.endDate])
+    // Only update when the last milestone's end date actually changes
+    // This allows users to manually extend the end date without it being reset
+    setManualData(prev => ({ ...prev, endDate: lastMilestoneEndDate }))
+  }, [lastMilestoneEndDate, manualData.startDate])
 
   // Milestone helpers
   const addMilestone = () => {
