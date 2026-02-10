@@ -436,6 +436,23 @@ export default function NewProjectPage() {
   // Recalculate dates when milestones or start date changes
   const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate)
 
+  // Auto-update project end date if milestones exceed it
+  useEffect(() => {
+    if (!manualData.startDate || recalculatedMilestones.length === 0) return
+
+    // Find the last milestone with an end date
+    const lastMilestone = [...recalculatedMilestones]
+      .reverse()
+      .find(m => m.endDate && m.durationWeeks > 0)
+
+    if (!lastMilestone?.endDate) return
+
+    // If no project end date is set, or if last milestone exceeds it, update automatically
+    if (!manualData.endDate || new Date(lastMilestone.endDate) > new Date(manualData.endDate)) {
+      setManualData(prev => ({ ...prev, endDate: lastMilestone.endDate! }))
+    }
+  }, [recalculatedMilestones, manualData.startDate]) // Removed manualData.endDate to avoid loop
+
   // Milestone helpers
   const addMilestone = () => {
     const newId = `milestone-${Date.now()}`
@@ -1517,7 +1534,7 @@ export default function NewProjectPage() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      拖動左側圖標可改變里程碑順序。輸入週數後系統將自動計算日期。
+                      拖動左側圖標可改變里程碑順序。輸入週數後系統將自動計算日期。專案結束日期會根據里程碑自動調整。
                     </p>
                     <DndContext
                       sensors={sensors}
