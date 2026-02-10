@@ -64,52 +64,54 @@ import { computeProjectRisks, getRiskTypeLabel, type AutoRisk, type AutoRiskType
 
 // --- Risk Tab component ---
 
-const RISK_GROUP_ORDER: AutoRiskType[] = [
+// Display groups: 'progress-delay' merges milestone-delay + overdue-task
+type RiskDisplayGroup = 'support-needed' | 'progress-delay' | 'blocked-chain' | 'pending-delay' | 'no-update'
+
+const DISPLAY_GROUP_ORDER: RiskDisplayGroup[] = [
   'support-needed',
-  'overdue-task',
-  'milestone-delay',
+  'progress-delay',
   'blocked-chain',
   'pending-delay',
   'no-update',
 ]
 
-const RISK_TYPE_CONFIG: Record<AutoRiskType, {
+const DISPLAY_GROUP_CONFIG: Record<RiskDisplayGroup, {
+  label: string
   icon: React.ReactNode
   color: string
   bgColor: string
   borderColor: string
 }> = {
   'support-needed': {
+    label: '需要協助',
     icon: <HelpCircle className="h-4 w-4" />,
     color: 'text-red-600 dark:text-red-400',
     bgColor: 'bg-red-50 dark:bg-red-950/20',
     borderColor: 'border-red-200 dark:border-red-900',
   },
-  'overdue-task': {
+  'progress-delay': {
+    label: '進度延誤',
     icon: <AlertTriangle className="h-4 w-4" />,
     color: 'text-red-500',
     bgColor: 'bg-red-50/50 dark:bg-red-950/10',
     borderColor: 'border-red-200 dark:border-red-900',
   },
-  'milestone-delay': {
-    icon: <Milestone className="h-4 w-4" />,
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-50/50 dark:bg-amber-950/10',
-    borderColor: 'border-amber-200 dark:border-amber-900',
-  },
   'blocked-chain': {
+    label: '任務受阻',
     icon: <AlertCircle className="h-4 w-4" />,
     color: 'text-orange-500',
     bgColor: 'bg-orange-50/50 dark:bg-orange-950/10',
     borderColor: 'border-orange-200 dark:border-orange-900',
   },
   'pending-delay': {
+    label: '待審延期',
     icon: <TimerReset className="h-4 w-4" />,
     color: 'text-amber-500',
     bgColor: 'bg-amber-50/30 dark:bg-amber-950/10',
     borderColor: 'border-amber-200 dark:border-amber-800',
   },
   'no-update': {
+    label: '長期無更新',
     icon: <Clock className="h-4 w-4" />,
     color: 'text-slate-500',
     bgColor: 'bg-slate-50/50 dark:bg-slate-950/10',
@@ -117,27 +119,33 @@ const RISK_TYPE_CONFIG: Record<AutoRiskType, {
   },
 }
 
+function toDisplayGroup(type: AutoRiskType): RiskDisplayGroup {
+  if (type === 'milestone-delay' || type === 'overdue-task') return 'progress-delay'
+  return type as RiskDisplayGroup
+}
+
 function ProjectRiskTab({ project }: { project: Project }) {
   const autoRisks = useMemo(() => computeProjectRisks(project), [project])
-  const [expandedCards, setExpandedCards] = useState<Set<AutoRiskType>>(new Set())
+  const [expandedCards, setExpandedCards] = useState<Set<RiskDisplayGroup>>(new Set())
 
   const riskGroups = useMemo(() => {
-    const grouped = new Map<AutoRiskType, AutoRisk[]>()
+    const grouped = new Map<RiskDisplayGroup, AutoRisk[]>()
     autoRisks.forEach(risk => {
-      const arr = grouped.get(risk.type) || []
+      const group = toDisplayGroup(risk.type)
+      const arr = grouped.get(group) || []
       arr.push(risk)
-      grouped.set(risk.type, arr)
+      grouped.set(group, arr)
     })
-    return RISK_GROUP_ORDER
-      .filter(type => grouped.has(type))
-      .map(type => ({ type, risks: grouped.get(type)! }))
+    return DISPLAY_GROUP_ORDER
+      .filter(group => grouped.has(group))
+      .map(group => ({ group, risks: grouped.get(group)! }))
   }, [autoRisks])
 
-  const toggleCard = (type: AutoRiskType) => {
+  const toggleCard = (group: RiskDisplayGroup) => {
     setExpandedCards(prev => {
       const next = new Set(prev)
-      if (next.has(type)) next.delete(type)
-      else next.add(type)
+      if (next.has(group)) next.delete(group)
+      else next.add(group)
       return next
     })
   }
@@ -181,21 +189,26 @@ function ProjectRiskTab({ project }: { project: Project }) {
 
       {/* Risk cards grid — collapsed by default, click to expand */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {riskGroups.map(({ type, risks }) => {
-          const config = RISK_TYPE_CONFIG[type]
-          const isSupport = type === 'support-needed'
-          const isExpanded = expandedCards.has(type)
+        {riskGroups.map(({ group, risks }) => {
+          const config = DISPLAY_GROUP_CONFIG[group]
+          const isSupport = group === 'support-needed'
+          const isProgressDelay = group === 'progress-delay'
+          const isExpanded = expandedCards.has(group)
           const highInGroup = risks.filter(r => r.severity === 'high').length
 
+          // Split progress-delay into milestone + task sub-groups
+          const milestoneRisks = isProgressDelay ? risks.filter(r => r.type === 'milestone-delay') : []
+          const taskRisks = isProgressDelay ? risks.filter(r => r.type === 'overdue-task') : []
+
           return (
-            <Card key={type} className={`flex flex-col overflow-hidden ${isSupport ? `${config.borderColor} ${config.bgColor}` : ''}`}>
+            <Card key={group} className={`flex flex-col overflow-hidden ${isSupport ? `${config.borderColor} ${config.bgColor}` : ''}`}>
               {/* Card header — always visible, clickable */}
               <button
-                onClick={() => toggleCard(type)}
+                onClick={() => toggleCard(group)}
                 className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
               >
                 <div className={`shrink-0 ${config.color}`}>{config.icon}</div>
-                <span className="text-sm font-medium flex-1">{getRiskTypeLabel(type)}</span>
+                <span className="text-sm font-medium flex-1">{config.label}</span>
                 <Badge variant={highInGroup > 0 ? 'destructive' : 'secondary'} className="text-xs">{risks.length}</Badge>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
               </button>
@@ -217,19 +230,53 @@ function ProjectRiskTab({ project }: { project: Project }) {
                         </div>
                       ))}
                     </div>
-                  ) : type === 'milestone-delay' ? (
-                    <div className="divide-y">
-                      {risks.map(risk => (
-                        <div key={risk.id} className="flex items-center justify-between gap-2 px-4 py-2.5">
-                          <span className="text-sm truncate flex-1">{risk.title}</span>
-                          <span className="text-xs text-muted-foreground shrink-0">{risk.description.match(/進度 (\d+%)/)?.[1] || '—'}</span>
-                          <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">
-                            逾期 {risk.description.match(/(\d+) 天/)?.[1] || '—'} 天
-                          </Badge>
-                        </div>
-                      ))}
+                  ) : isProgressDelay ? (
+                    <div>
+                      {/* Milestones first */}
+                      {milestoneRisks.length > 0 && (
+                        <>
+                          <div className="px-4 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Milestone className="h-3 w-3" />
+                            里程碑 ({milestoneRisks.length})
+                          </div>
+                          <div className="divide-y">
+                            {milestoneRisks.map(risk => (
+                              <div key={risk.id} className="flex items-center justify-between gap-2 px-4 py-2">
+                                <span className="text-sm truncate flex-1">{risk.title}</span>
+                                <span className="text-xs text-muted-foreground shrink-0">{risk.description.match(/進度 (\d+%)/)?.[1] || '—'}</span>
+                                <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">
+                                  {risk.description.match(/(\d+) 天/)?.[1] || '—'}天
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {/* Tasks */}
+                      {taskRisks.length > 0 && (
+                        <>
+                          <div className={`px-4 pt-2.5 pb-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 ${milestoneRisks.length > 0 ? 'border-t' : ''}`}>
+                            <ListTodo className="h-3 w-3" />
+                            任務 ({taskRisks.length})
+                          </div>
+                          <div className="divide-y">
+                            {taskRisks.map(risk => (
+                              <div key={risk.id} className="flex items-center gap-3 px-4 py-2">
+                                <span className="text-sm truncate flex-1">{risk.title}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <User className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">{risk.assignee || '—'}</span>
+                                </div>
+                                <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">
+                                  {risk.description.match(/(\d+) 天/)?.[1] || '—'}天
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
-                  ) : type === 'pending-delay' ? (
+                  ) : group === 'pending-delay' ? (
                     <div className="p-3 space-y-2">
                       {risks.map(risk => (
                         <div key={risk.id} className="p-3 rounded-lg border text-sm space-y-1">
