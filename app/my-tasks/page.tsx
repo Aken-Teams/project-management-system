@@ -457,7 +457,7 @@ export default function MyTasksPage() {
         setDialogOpen(open)
         if (!open) setShowExtensionForm(false)
       }}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           {currentDialogTask && currentDialogProject && (() => {
             const task = currentDialogTask
             const project = currentDialogProject
@@ -495,38 +495,50 @@ export default function MyTasksPage() {
             return (
               <>
                 {/* Header */}
-                <div className="px-6 pt-6 pb-2">
+                <div className="px-6 pt-5 pb-3">
                   <DialogHeader>
-                    <div className="flex items-center gap-2">
-                      <Badge className={cn('text-[10px] px-1.5 py-0 shrink-0', getStatusColor(status))}>
-                        {badgeText}
-                      </Badge>
-                      <DialogTitle className={cn('text-left', isCompleted && 'text-muted-foreground')}>
-                        {task.title}
-                      </DialogTitle>
-                    </div>
-                    <DialogDescription className="text-left flex items-center gap-2 flex-wrap">
-                      <span>{project.name}{milestone ? ` — ${milestone.name}` : ''}</span>
-                      <span className="text-muted-foreground/50">·</span>
-                      <span className="font-mono text-[11px]">
-                        {new Date(task.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                        {' ~ '}
-                        {new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                      </span>
-                      {hasBlockedUpstream && (
-                        <>
-                          <span className="text-muted-foreground/50">·</span>
-                          <span className="text-blue-600 flex items-center gap-1">
-                            <Info className="h-3 w-3" />
-                            前置任務未完成
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                        isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400' :
+                        status === 'overdue' ? 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400' :
+                        status === 'at-risk' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
+                        'bg-primary/10 text-primary'
+                      )}>
+                        {isCompleted ? <CheckCircle2 className="h-5 w-5" /> :
+                         status === 'overdue' ? <AlertTriangle className="h-5 w-5" /> :
+                         status === 'at-risk' ? <AlertCircle className="h-5 w-5" /> :
+                         <ListChecks className="h-5 w-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <DialogTitle className={cn('text-base text-left leading-tight', isCompleted && 'text-muted-foreground')}>
+                            {task.title}
+                          </DialogTitle>
+                          <Badge className={cn('text-[10px] px-1.5 py-0 shrink-0', getStatusColor(status))}>
+                            {badgeText}
+                          </Badge>
+                        </div>
+                        <DialogDescription className="text-left text-xs">
+                          <span className="text-muted-foreground">{project.name}</span>
+                          {milestone && <span className="text-muted-foreground"> · {milestone.name}</span>}
+                          <span className="text-muted-foreground"> · </span>
+                          <span className="font-mono text-muted-foreground/80">
+                            {new Date(task.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                            {' ~ '}
+                            {new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                           </span>
-                        </>
-                      )}
-                    </DialogDescription>
+                        </DialogDescription>
+                        {hasBlockedUpstream && (
+                          <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+                            <div className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
+                            前置任務尚未完成
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </DialogHeader>
                 </div>
-
-                <Separator />
 
                 {/* Hidden file inputs */}
                 <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileSelect(e, 'image')} />
@@ -534,175 +546,204 @@ export default function MyTasksPage() {
 
                 {/* 3 Tabs */}
                 <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
-                  <div className="px-6 pt-2">
-                    <TabsList className="w-full">
-                      <TabsTrigger value="log" className="flex-1">工作紀錄</TabsTrigger>
-                      <TabsTrigger value="history" className="flex-1">
+                  <div className="px-6 pt-1 pb-0 border-b">
+                    <TabsList className="w-full bg-transparent h-auto p-0 rounded-none gap-0">
+                      <TabsTrigger value="log" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
+                        工作紀錄
+                      </TabsTrigger>
+                      <TabsTrigger value="history" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
                         過往紀錄
                         {taskLogs.length > 0 && (
-                          <span className="ml-1 text-[10px] text-muted-foreground">({taskLogs.length})</span>
+                          <Badge variant="secondary" className="ml-1.5 h-4 min-w-4 px-1 text-[10px] rounded-full">
+                            {taskLogs.length}
+                          </Badge>
                         )}
                       </TabsTrigger>
-                      <TabsTrigger value="info" className="flex-1">任務資訊</TabsTrigger>
+                      <TabsTrigger value="info" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
+                        任務資訊
+                      </TabsTrigger>
                     </TabsList>
                   </div>
 
                   {/* Tab: 工作紀錄 — input form + two-step flow */}
-                  <TabsContent value="log" className="flex-1 overflow-y-auto px-6">
-                    <div className="py-3 space-y-3">
+                  <TabsContent value="log" className="flex-1 overflow-y-auto px-6 mt-0">
+                    <div className="py-4 space-y-4">
                       {isCompleted ? (
-                        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-700">
-                          <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                          <div className="text-sm">
-                            <span className="text-green-700 dark:text-green-400">此任務已完成</span>
+                        <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-100 dark:bg-green-950/20 dark:border-green-900">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-green-700 dark:text-green-400">此任務已完成</p>
                             {task.completedAt && (
-                              <span className="text-green-600/70 dark:text-green-400/70 ml-1">
-                                （{new Date(task.completedAt).toLocaleDateString('zh-TW')}）
-                              </span>
+                              <p className="text-xs text-green-600/70 dark:text-green-400/70 mt-0.5">
+                                完成於 {new Date(task.completedAt).toLocaleDateString('zh-TW')}
+                              </p>
                             )}
                           </div>
                         </div>
                       ) : !showActions ? (
                         /* Step 1: Input form */
-                        <>
-                          <div className="flex items-center gap-2">
-                            <Label className="text-xs text-muted-foreground shrink-0">日期</Label>
-                            <input
-                              type="date"
-                              value={logDate}
-                              onChange={e => setLogDate(e.target.value)}
-                              className="text-sm border rounded px-2 py-1.5"
-                            />
-                          </div>
-
-                          <div className="relative">
-                            <Textarea
-                              placeholder="描述您今天做了什麼..."
-                              value={logContent}
-                              onChange={e => setLogContent(e.target.value)}
-                              rows={4}
-                              className={cn('text-sm pr-10', isListening && 'border-red-400 ring-1 ring-red-200')}
-                            />
-                            {/* Voice button inside textarea */}
-                            <button
-                              type="button"
-                              onClick={toggleVoiceInput}
-                              className={cn(
-                                'absolute top-2 right-2 p-1.5 rounded-full transition-colors',
-                                isListening
-                                  ? 'bg-red-100 text-red-600 animate-pulse'
-                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                              )}
-                              title={isListening ? '停止語音' : '語音輸入'}
-                            >
-                              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                            </button>
-                          </div>
-
-                          {/* Attachments display */}
-                          {attachments.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {attachments.map((name, i) => (
-                                <Badge key={i} variant="secondary" className="text-xs gap-1">
-                                  {name}
-                                  <button
-                                    onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                                    className="ml-0.5 text-muted-foreground hover:text-foreground"
-                                  >
-                                    ×
-                                  </button>
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Action buttons row */}
-                          <div className="flex items-center justify-between">
-                            {/* Left: upload buttons */}
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => imageInputRef.current?.click()}
-                                className="p-1.5 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                title="上傳圖片"
-                              >
-                                <ImagePlus className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="p-1.5 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                                title="上傳檔案"
-                              >
-                                <Paperclip className="h-4 w-4" />
-                              </button>
-                            </div>
-
-                            {/* Right: submit + skip */}
+                        showExtensionForm ? (
+                          /* When extension form is open, hide input area */
+                          null
+                        ) : (
+                          <>
                             <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="gap-1 text-muted-foreground"
-                                onClick={() => setShowActions(true)}
-                              >
-                                <SkipForward className="h-3.5 w-3.5" />
-                                跳過
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="gap-1"
-                                disabled={!logContent.trim()}
-                                onClick={handleSubmitLog}
-                              >
-                                <Send className="h-3.5 w-3.5" />
-                                提交紀錄
-                              </Button>
+                              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                              <input
+                                type="date"
+                                value={logDate}
+                                onChange={e => setLogDate(e.target.value)}
+                                className="text-sm border rounded-lg px-2.5 py-1.5 bg-background"
+                              />
                             </div>
-                          </div>
-                        </>
+
+                            {/* Editable chat-style input box */}
+                            <>
+                              <div className={cn(
+                                'rounded-xl border bg-muted/30 transition-colors overflow-hidden',
+                                isListening && 'border-red-400 ring-2 ring-red-100 dark:ring-red-900/30',
+                                !isListening && 'border-muted-foreground/20 focus-within:border-primary/40 focus-within:bg-background'
+                              )}>
+                                <Textarea
+                                  placeholder="描述您今天做了什麼..."
+                                  value={logContent}
+                                  onChange={e => setLogContent(e.target.value)}
+                                  rows={3}
+                                  className="text-sm resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 rounded-none"
+                                />
+
+                                {/* Attachments inside box */}
+                                {attachments.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+                                    {attachments.map((name, i) => (
+                                      <Badge key={i} variant="secondary" className="text-xs gap-1 rounded-md py-0.5">
+                                        {name}
+                                        <button
+                                          onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                                          className="ml-0.5 text-muted-foreground hover:text-foreground"
+                                        >
+                                          ×
+                                        </button>
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Toolbar inside box */}
+                                <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/40">
+                                  <div className="flex items-center gap-0.5">
+                                    <button
+                                      type="button"
+                                      onClick={toggleVoiceInput}
+                                      className={cn(
+                                        'p-1.5 rounded-md transition-all',
+                                        isListening
+                                          ? 'bg-red-100 text-red-600 animate-pulse dark:bg-red-900/50'
+                                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                      )}
+                                      title={isListening ? '停止語音' : '語音輸入'}
+                                    >
+                                      {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => imageInputRef.current?.click()}
+                                      className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                      title="上傳圖片"
+                                    >
+                                      <ImagePlus className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => fileInputRef.current?.click()}
+                                      className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                      title="上傳檔案"
+                                    >
+                                      <Paperclip className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    className="gap-1.5 rounded-lg shadow-sm h-7 px-3 text-xs"
+                                    disabled={!logContent.trim()}
+                                    onClick={handleSubmitLog}
+                                  >
+                                    <Send className="h-3 w-3" />
+                                    提交
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {/* Skip button */}
+                              <div className="flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="gap-1.5 text-xs"
+                                  onClick={() => setShowActions(true)}
+                                >
+                                  跳過，直接操作
+                                  <ArrowRight className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </>
+                          </>
+                        )
                       ) : (
                         /* Step 2: Action buttons (after submit/skip) */
-                        <div className="space-y-3 animate-in slide-in-from-bottom-2 duration-200">
-                          <p className="text-xs text-muted-foreground text-center">紀錄已提交，請選擇下一步操作：</p>
+                        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>紀錄已提交，請選擇下一步操作</span>
+                          </div>
 
-                          <div className="grid grid-cols-2 gap-3">
-                            <Button
-                              className="gap-1.5 h-auto py-3 flex-col"
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              className="group flex items-center gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all text-left"
                               onClick={handleCompleteTask}
                             >
-                              <CircleCheck className="h-5 w-5" />
-                              <span className="text-sm">標記完成</span>
-                            </Button>
+                              <CircleCheck className="h-5 w-5 shrink-0 text-primary" />
+                              <div>
+                                <p className="text-sm font-medium">標記完成</p>
+                                <p className="text-[11px] text-muted-foreground">已完成所有工作</p>
+                              </div>
+                            </button>
 
                             {(status === 'at-risk' || status === 'overdue') ? (
-                              <Button
-                                variant="outline"
-                                className="gap-1.5 h-auto py-3 flex-col border-amber-300 text-amber-700 hover:bg-amber-50"
+                              <button
+                                className="group flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 transition-all text-left"
                                 onClick={() => {
                                   setShowActions(false)
                                   setShowExtensionForm(true)
                                 }}
                               >
-                                <CalendarClock className="h-5 w-5" />
-                                <span className="text-sm">申請延期</span>
-                              </Button>
+                                <CalendarClock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                                <div>
+                                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">申請延期</p>
+                                  <p className="text-[11px] text-muted-foreground">需要更多時間</p>
+                                </div>
+                              </button>
                             ) : (
-                              <Button
-                                variant="outline"
-                                className="gap-1.5 h-auto py-3 flex-col text-muted-foreground"
+                              <button
+                                className="group flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/50 transition-all text-left"
                                 onClick={() => setDialogOpen(false)}
                               >
-                                <ArrowRight className="h-5 w-5" />
-                                <span className="text-sm">完成回報</span>
-                              </Button>
+                                <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm font-medium">完成回報</p>
+                                  <p className="text-[11px] text-muted-foreground">關閉此視窗</p>
+                                </div>
+                              </button>
                             )}
                           </div>
 
                           <button
-                            className="text-xs text-muted-foreground hover:text-foreground w-full text-center py-1"
+                            className="text-xs text-muted-foreground hover:text-foreground w-full text-center py-1 transition-colors"
                             onClick={() => setShowActions(false)}
                           >
+                            <ArrowLeft className="h-3 w-3 inline mr-1" />
                             返回繼續填寫
                           </button>
                         </div>
@@ -711,44 +752,66 @@ export default function MyTasksPage() {
                   </TabsContent>
 
                   {/* Tab: 過往紀錄 */}
-                  <TabsContent value="history" className="flex-1 overflow-y-auto px-6">
+                  <TabsContent value="history" className="flex-1 px-6 mt-0 overflow-hidden">
                     {taskLogs.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-6 text-center">
+                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                          <Clock className="h-5 w-5 text-muted-foreground" />
+                        </div>
                         <p className="text-sm text-muted-foreground">尚無工作紀錄</p>
+                        <p className="text-xs text-muted-foreground/60 mt-1">提交第一筆紀錄後會顯示在這裡</p>
                       </div>
                     ) : (
-                      <div className="space-y-1.5 py-3">
-                        {taskLogs.map(log => (
-                          <div key={log.id} className="px-3 py-2 rounded-lg bg-muted/40 text-sm">
-                            <div className="flex justify-between mb-0.5">
-                              <span className="text-xs font-medium">{log.author}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(log.logDate).toLocaleDateString('zh-TW')}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground whitespace-pre-line">{log.content}</p>
+                      <div className="py-4 max-h-[320px] overflow-y-auto">
+                        <div className="relative pl-6">
+                          {/* Timeline line */}
+                          <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
+
+                          <div className="space-y-4">
+                            {taskLogs.map((log, i) => (
+                              <div key={log.id} className="relative">
+                                {/* Timeline dot */}
+                                <div className={cn(
+                                  'absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background',
+                                  i === 0 ? 'bg-primary' : 'bg-muted-foreground/30'
+                                )} />
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium">{log.author}</span>
+                                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                                      {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.content}</p>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        </div>
                       </div>
                     )}
                   </TabsContent>
 
                   {/* Tab: 任務資訊 */}
-                  <TabsContent value="info" className="flex-1 overflow-y-auto px-6">
-                    <div className="space-y-3 py-3">
+                  <TabsContent value="info" className="flex-1 overflow-y-auto px-6 mt-0">
+                    <div className="space-y-4 py-4">
                       {task.description && (
-                        <p className="text-sm text-muted-foreground">{task.description}</p>
+                        <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
+                          <p className="text-sm text-muted-foreground leading-relaxed">{task.description}</p>
+                        </div>
                       )}
 
                       {upstreamTasks.length > 0 && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-1.5">
-                            <ArrowLeft className="h-3 w-3" />
-                            前置任務
-                          </Label>
-                          <div className="space-y-1">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
+                              <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground">前置任務</span>
+                          </div>
+                          <div className="space-y-1.5 ml-7">
                             {upstreamTasks.map(({ task: dep, status: depStatus }) => (
-                              <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
+                              <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
                                 {getStatusDot(depStatus)}
                                 <span className="flex-1 truncate">{dep.title}</span>
                                 {getStatusBadge(depStatus)}
@@ -759,14 +822,16 @@ export default function MyTasksPage() {
                       )}
 
                       {downstreamTasks.length > 0 && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-1.5">
-                            <ArrowRight className="h-3 w-3" />
-                            後續任務
-                          </Label>
-                          <div className="space-y-1">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
+                              <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground">後續任務</span>
+                          </div>
+                          <div className="space-y-1.5 ml-7">
                             {downstreamTasks.map(({ task: dep, status: depStatus }) => (
-                              <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
+                              <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
                                 {getStatusDot(depStatus)}
                                 <span className="flex-1 truncate">{dep.title}</span>
                                 {getStatusBadge(depStatus)}
@@ -777,9 +842,12 @@ export default function MyTasksPage() {
                       )}
 
                       {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-3">
-                          此任務無上下游依賴關係
-                        </p>
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                            <Info className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <p className="text-sm text-muted-foreground">此任務無上下游依賴關係</p>
+                        </div>
                       )}
                     </div>
                   </TabsContent>
@@ -787,24 +855,21 @@ export default function MyTasksPage() {
 
                 {/* Extension Form (expandable) */}
                 {showExtensionForm && (
-                  <div className="px-6 py-3 border-t bg-muted/20 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">申請延期</Label>
-                      <button
-                        onClick={() => setShowExtensionForm(false)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        取消
-                      </button>
+                  <div className="px-6 py-4 border-t bg-amber-50/30 dark:bg-amber-950/10 space-y-3 animate-in slide-in-from-bottom-2 duration-200">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">
+                        <CalendarClock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <span className="text-sm font-medium">申請延期</span>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">延遲原因 *</Label>
+                      <Label className="text-xs text-muted-foreground">延遲原因 <span className="text-red-500">*</span></Label>
                       <Textarea
                         placeholder="說明延遲的原因..."
                         value={extensionReason}
                         onChange={e => setExtensionReason(e.target.value)}
                         rows={2}
-                        className="text-sm mt-1"
+                        className="text-sm mt-1.5 rounded-lg"
                       />
                     </div>
                     <div>
@@ -813,35 +878,49 @@ export default function MyTasksPage() {
                         type="date"
                         value={extensionDate}
                         onChange={e => setExtensionDate(e.target.value)}
-                        className="w-full text-sm border rounded px-2 py-1.5 mt-1"
+                        className="w-full text-sm border rounded-lg px-2.5 py-1.5 mt-1.5 bg-background"
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">是否需要協助</Label>
+                      <Label className="text-xs text-muted-foreground">需要協助</Label>
                       <Textarea
-                        placeholder="說明您需要什麼支援（選填）..."
+                        placeholder="選填，說明是否需要額外資源或支援..."
                         value={extensionSupport}
                         onChange={e => setExtensionSupport(e.target.value)}
                         rows={2}
-                        className="text-sm mt-1"
+                        className="text-sm mt-1.5 rounded-lg"
                       />
                     </div>
-                    <Button
-                      size="sm"
-                      className="gap-1.5 w-full"
-                      disabled={!extensionReason.trim()}
-                      onClick={handleSubmitExtension}
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      送出延期申請
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-lg"
+                        onClick={() => {
+                          setShowExtensionForm(false)
+                          setShowActions(true)
+                        }}
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        取消
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-1.5 flex-1 rounded-lg shadow-sm"
+                        disabled={!extensionReason.trim()}
+                        onClick={handleSubmitExtension}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        送出延期申請
+                      </Button>
+                    </div>
                   </div>
                 )}
 
                 {/* Bottom bar: only for completed tasks (undo) */}
                 {isCompleted && (
-                  <div className="px-6 py-3 border-t flex items-center">
-                    <Button size="sm" variant="outline" className="gap-1.5 text-muted-foreground" onClick={handleUncompleteTask}>
+                  <div className="px-6 py-3 border-t flex items-center bg-muted/20">
+                    <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={handleUncompleteTask}>
                       <Undo2 className="h-3.5 w-3.5" />
                       取消完成
                     </Button>
