@@ -19,6 +19,9 @@ import {
   FolderKanban,
   ClipboardCheck,
   AlertTriangle,
+  CalendarClock,
+  FileX,
+  ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -76,7 +79,33 @@ export default function DashboardPage() {
         .filter(r => user?.role !== 'executive' || r.impact === 'high')
         .map(risk => ({ ...risk, projectName: p.name }))
     )
-    .slice(0, 3)
+
+  // 即將到期的里程碑（未完成 + 30 天內到期）
+  const today = new Date()
+  const upcomingMilestones = userProjects
+    .flatMap(p =>
+      p.milestones
+        .filter(m => m.status !== 'done')
+        .map(m => {
+          const due = new Date(m.dueDate)
+          const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          return { ...m, projectName: p.name, projectId: p.id, projectStatus: p.status, diffDays }
+        })
+    )
+    .filter(m => m.diffDays <= 30)
+    .sort((a, b) => a.diffDays - b.diffDays)
+
+  // 本週尚未更新週報的專案
+  const getMonday = (d: Date) => {
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    return new Date(d.getFullYear(), d.getMonth(), diff).toISOString().split('T')[0]
+  }
+  const thisMonday = getMonday(today)
+  const missingUpdates = userProjects.filter(p => {
+    const hasThisWeek = p.weeklyUpdates.some(u => u.weekOf === thisMonday)
+    return !hasThisWeek
+  })
 
   return (
     <DashboardLayout>
@@ -208,34 +237,125 @@ export default function DashboardPage() {
 
           {/* Risk Summary - Takes 1 column */}
           <Card>
-            <CardHeader className="py-3 px-4">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning" />
                 風險摘要
               </CardTitle>
+              {openRisks.length > 3 && (
+                <span className="text-xs text-muted-foreground">共 {openRisks.length} 項</span>
+              )}
             </CardHeader>
-            <CardContent className="px-4 pb-3 space-y-2">
+            <CardContent className="px-4 pb-3">
               {openRisks.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <CheckCircle2 className="h-8 w-8 mx-auto mb-1.5 text-success" />
                   <p className="text-sm">目前無風險</p>
                 </div>
               ) : (
-                openRisks.map((risk) => (
-                  <div key={risk.id} className="p-2.5 rounded-md border text-sm space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">{risk.projectName}</Badge>
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}`}
-                      >
-                        {risk.impact === 'high' ? '高' : '中'}
-                      </Badge>
+                <div className="max-h-[258px] overflow-y-auto space-y-2">
+                  {openRisks.map((risk) => (
+                    <div key={risk.id} className="p-2.5 rounded-md border text-sm space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">{risk.projectName}</Badge>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}`}
+                        >
+                          {risk.impact === 'high' ? '高' : '中'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs font-medium">{risk.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{risk.mitigation}</p>
                     </div>
-                    <p className="text-xs font-medium">{risk.title}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-1">{risk.mitigation}</p>
-                  </div>
-                ))
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Bottom Row: Upcoming Milestones + Missing Weekly Updates */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* Upcoming Milestones */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-primary" />
+                即將到期的里程碑
+              </CardTitle>
+              {upcomingMilestones.length > 3 && (
+                <span className="text-xs text-muted-foreground">共 {upcomingMilestones.length} 項</span>
+              )}
+            </CardHeader>
+            <CardContent className="px-4 pb-3">
+              {upcomingMilestones.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <CheckCircle2 className="h-8 w-8 mx-auto mb-1.5 text-success" />
+                  <p className="text-sm">近期無到期里程碑</p>
+                </div>
+              ) : (
+                <div className="max-h-[126px] overflow-y-auto divide-y divide-border/50">
+                  {upcomingMilestones.map((m) => (
+                    <Link key={m.id} href={`/projects/${m.projectId}`}>
+                      <div className="flex items-center gap-3 px-2 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
+                        <Badge
+                          variant="outline"
+                          className={`text-[11px] shrink-0 font-mono px-1.5 ${m.diffDays < 0 ? 'border-destructive/40 text-destructive' : m.diffDays <= 7 ? 'border-warning/40 text-warning' : ''}`}
+                        >
+                          {new Date(m.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                        </Badge>
+                        <span className="text-sm truncate flex-1 min-w-0">{m.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">{m.projectName}</span>
+                        <Badge
+                          variant="secondary"
+                          className={`text-[11px] shrink-0 ${m.diffDays < 0 ? 'bg-destructive/10 text-destructive' : m.diffDays <= 7 ? 'bg-warning/10 text-warning' : 'bg-muted'}`}
+                        >
+                          {m.diffDays < 0 ? `逾期 ${Math.abs(m.diffDays)} 天` : m.diffDays === 0 ? '今天到期' : `剩 ${m.diffDays} 天`}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Missing Weekly Updates */}
+          <Card>
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileX className="h-4 w-4 text-warning" />
+                本週未更新
+              </CardTitle>
+              {missingUpdates.length > 3 && (
+                <span className="text-xs text-muted-foreground">共 {missingUpdates.length} 項</span>
+              )}
+            </CardHeader>
+            <CardContent className="px-4 pb-3">
+              {missingUpdates.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <CheckCircle2 className="h-8 w-8 mx-auto mb-1.5 text-success" />
+                  <p className="text-sm">所有專案皆已更新</p>
+                </div>
+              ) : (
+                <div className="max-h-[126px] overflow-y-auto divide-y divide-border/50">
+                  {missingUpdates.map((p) => {
+                    const lastUpdate = p.weeklyUpdates.length > 0 ? p.weeklyUpdates[p.weeklyUpdates.length - 1].weekOf : null
+                    return (
+                      <Link key={p.id} href={`/projects/${p.id}`}>
+                        <div className="flex items-center gap-3 px-2 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
+                          <div className={`h-2 w-2 rounded-full shrink-0 ${p.status === 'red' ? 'bg-destructive' : p.status === 'yellow' ? 'bg-warning' : 'bg-success'}`} />
+                          <span className="text-sm truncate flex-1 min-w-0">{p.name}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{p.owner}</span>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>
