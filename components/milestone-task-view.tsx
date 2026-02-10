@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
@@ -433,122 +433,176 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
         </div>
       )}
 
-      {/* Task Detail Sheet */}
-      <Sheet open={taskDetailOpen} onOpenChange={setTaskDetailOpen}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
+      {/* Task Detail Dialog */}
+      <Dialog open={taskDetailOpen} onOpenChange={setTaskDetailOpen}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
           {selectedTask && (() => {
             const taskOverdue = isTaskOverdue(selectedTask)
+            const milestone = project.milestones.find(m => m.id === selectedTask.milestoneId)
+            const downstreamTasks = project.tasks.filter(t => t.dependencies.includes(selectedTask.id))
             return (
               <>
-                <SheetHeader>
-                  <SheetTitle className="text-left">{selectedTask.title}</SheetTitle>
-                  <SheetDescription className="text-left">
-                    {project.milestones.find(m => m.id === selectedTask.milestoneId)?.name}
-                  </SheetDescription>
-                </SheetHeader>
-                <div className="space-y-5 mt-6">
-                  {/* Status & Priority & Overdue */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusBadgeLarge(effectiveStatus(selectedTask))}
-                    <Badge className={cn('text-xs', getPriorityColor(selectedTask.priority))}>
-                      {getPriorityText(selectedTask.priority)}優先
-                    </Badge>
-                    {taskOverdue && (
-                      <Badge variant="destructive" className="text-xs gap-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        逾期
-                      </Badge>
-                    )}
-                  </div>
+                {/* Header */}
+                <div className="px-6 pt-5 pb-3">
+                  <DialogHeader>
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                        effectiveStatus(selectedTask) === 'done' ? 'bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400' :
+                        taskOverdue ? 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400' :
+                        effectiveStatus(selectedTask) === 'blocked' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
+                        'bg-primary/10 text-primary'
+                      )}>
+                        {effectiveStatus(selectedTask) === 'done' ? <Clock className="h-5 w-5" /> :
+                         taskOverdue ? <AlertTriangle className="h-5 w-5" /> :
+                         <Flag className="h-5 w-5" />}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <DialogTitle className="text-base text-left leading-tight">{selectedTask.title}</DialogTitle>
+                        </div>
+                        <DialogDescription className="text-left text-xs">
+                          <span className="text-muted-foreground">{project.name}</span>
+                          {milestone && <span className="text-muted-foreground"> · {milestone.name}</span>}
+                          <span className="text-muted-foreground"> · </span>
+                          <span className="font-mono text-muted-foreground/80">
+                            {new Date(selectedTask.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                            {' ~ '}
+                            {new Date(selectedTask.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                          </span>
+                        </DialogDescription>
+                      </div>
+                    </div>
+                  </DialogHeader>
+                </div>
 
-                  {/* Progress */}
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1.5">進度</div>
+                {/* Content */}
+                <div className="max-h-[60vh] overflow-y-auto">
+                  {/* Status badges + Progress */}
+                  <div className="px-6 py-4 border-t space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {getStatusBadgeLarge(effectiveStatus(selectedTask))}
+                      <Badge className={cn('text-xs', getPriorityColor(selectedTask.priority))}>
+                        {getPriorityText(selectedTask.priority)}優先
+                      </Badge>
+                      {taskOverdue && (
+                        <Badge variant="destructive" className="text-xs gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          逾期
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-3">
                       <Progress value={selectedTask.progress} className="h-2 flex-1" />
-                      <span className="text-sm font-medium">{selectedTask.progress}%</span>
+                      <span className="text-sm font-medium tabular-nums">{selectedTask.progress}%</span>
                     </div>
                   </div>
 
                   {/* Description */}
                   {selectedTask.description && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1.5">描述</div>
-                      <p className="text-sm">{selectedTask.description}</p>
+                    <div className="px-6 py-3 border-t bg-muted/20">
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedTask.description}</p>
                     </div>
                   )}
 
-                  {/* Assignee */}
-                  <div className="flex items-center gap-3">
-                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                      <User className="h-3 w-3" />
-                      負責人
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className={cn('text-xs text-white', getAvatarColor(selectedTask.assignee))}>
-                          {selectedTask.assignee.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{selectedTask.assignee}</span>
+                  {/* Info grid: Assignee + Dates */}
+                  <div className="px-6 py-4 border-t">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
+                          <User className="h-3 w-3" />
+                          負責人
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className={cn('text-xs text-white', getAvatarColor(selectedTask.assignee))}>
+                              {selectedTask.assignee.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm font-medium">{selectedTask.assignee}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
+                          <Calendar className="h-3 w-3" />
+                          開始日期
+                        </div>
+                        <span className="text-sm font-medium">{new Date(selectedTask.startDate).toLocaleDateString('zh-TW')}</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className={cn(
+                          'text-[11px] font-medium uppercase tracking-wider flex items-center gap-1.5',
+                          taskOverdue ? 'text-destructive/70' : 'text-muted-foreground/70',
+                        )}>
+                          <Flag className="h-3 w-3" />
+                          結束日期
+                        </div>
+                        <span className={cn('text-sm font-medium', taskOverdue && 'text-destructive')}>
+                          {new Date(selectedTask.endDate).toLocaleDateString('zh-TW')}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Dates */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-                        <Calendar className="h-3 w-3" />
-                        開始日期
-                      </div>
-                      <span className="text-sm">{new Date(selectedTask.startDate).toLocaleDateString('zh-TW')}</span>
-                    </div>
-                    <div>
-                      <div className={cn(
-                        'text-xs font-medium mb-1 flex items-center gap-1.5',
-                        taskOverdue ? 'text-destructive' : 'text-muted-foreground',
-                      )}>
-                        <Flag className="h-3 w-3" />
-                        結束日期
-                      </div>
-                      <span className={cn('text-sm', taskOverdue && 'text-destructive font-medium')}>
-                        {new Date(selectedTask.endDate).toLocaleDateString('zh-TW')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Dependencies */}
-                  {selectedTask.dependencies.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                        <Link2 className="h-3 w-3" />
-                        依賴任務
-                      </div>
-                      <div className="space-y-1">
-                        {selectedTask.dependencies.map(depId => {
-                          const depTask = project.tasks.find(t => t.id === depId)
-                          return (
-                            <div key={depId} className="flex items-center gap-2 text-sm p-1.5 rounded bg-muted/50">
-                              {depTask ? (
-                                <>
-                                  {getStatusBadge(depTask.status)}
-                                  <span className="truncate">{depTask.title}</span>
-                                </>
-                              ) : (
-                                <span className="text-muted-foreground">{depId}</span>
-                              )}
+                  {/* Dependencies section */}
+                  {(selectedTask.dependencies.length > 0 || downstreamTasks.length > 0) && (
+                    <div className="px-6 py-4 border-t space-y-4">
+                      {/* Upstream */}
+                      {selectedTask.dependencies.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
+                              <Link2 className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                             </div>
-                          )
-                        })}
-                      </div>
+                            <span className="text-xs font-medium text-muted-foreground">前置任務</span>
+                          </div>
+                          <div className="space-y-1.5 ml-7">
+                            {selectedTask.dependencies.map(depId => {
+                              const depTask = project.tasks.find(t => t.id === depId)
+                              return (
+                                <div key={depId} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
+                                  {depTask ? (
+                                    <>
+                                      {getStatusBadge(effectiveStatus(depTask))}
+                                      <span className="flex-1 truncate">{depTask.title}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">{depId}</span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Downstream */}
+                      {downstreamTasks.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
+                              <Link2 className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                            </div>
+                            <span className="text-xs font-medium text-muted-foreground">後續任務</span>
+                          </div>
+                          <div className="space-y-1.5 ml-7">
+                            {downstreamTasks.map(dep => (
+                              <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
+                                {getStatusBadge(effectiveStatus(dep))}
+                                <span className="flex-1 truncate">{dep.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </>
             )
           })()}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
