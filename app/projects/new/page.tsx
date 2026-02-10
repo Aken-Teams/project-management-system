@@ -32,11 +32,40 @@ import {
   ArrowLeft,
   Target,
   X,
+  Lightbulb,
+  Layers,
+  TrendingUp,
+  ClipboardList,
+  FolderKanban,
+  Hash,
+  Briefcase,
+  Banknote,
+  GripVertical,
 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface ManualMilestone {
+  id: string
   name: string
-  dueDate: string
+  durationWeeks: number
+  startDate?: string
+  endDate?: string
 }
 
 interface ManualRisk {
@@ -53,6 +82,96 @@ const STEPS = [
   { label: '時程里程碑', icon: Calendar },
   { label: '團隊與風險', icon: Users },
 ]
+
+// Sortable Milestone Item Component
+function SortableMilestoneItem({
+  milestone,
+  index,
+  onUpdate,
+  onRemove,
+  canRemove,
+}: {
+  milestone: ManualMilestone & { startDate?: string; endDate?: string }
+  index: number
+  onUpdate: (index: number, field: keyof ManualMilestone, value: string | number) => void
+  onRemove: (index: number) => void
+  canRemove: boolean
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: milestone.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted cursor-grab active:cursor-grabbing mt-1"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="flex-1 grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">里程碑名稱</Label>
+          <Input
+            placeholder="例如：需求分析完成"
+            value={milestone.name}
+            onChange={(e) => onUpdate(index, 'name', e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">期程（週）</Label>
+          <Input
+            type="number"
+            min="0"
+            placeholder="例如：3"
+            value={milestone.durationWeeks || ''}
+            onChange={(e) => onUpdate(index, 'durationWeeks', Number(e.target.value) || 0)}
+          />
+        </div>
+        {milestone.startDate && milestone.endDate && (
+          <div className="md:col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">計算日期</Label>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span className="font-medium">{milestone.startDate}</span>
+              <span>至</span>
+              <span className="font-medium">{milestone.endDate}</span>
+              <span className="text-xs">
+                ({milestone.durationWeeks} 週)
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
+        onClick={() => onRemove(index)}
+        disabled={!canRemove}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+}
 
 export default function NewProjectPage() {
   const router = useRouter()
@@ -94,7 +213,7 @@ export default function NewProjectPage() {
   })
   const [manualProjectType, setManualProjectType] = useState<ProjectType>('other')
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([
-    { name: '', dueDate: '' },
+    { id: 'milestone-1', name: '', durationWeeks: 0 },
   ])
   const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
   const [manualTeamMembers, setManualTeamMembers] = useState<string[]>([])
@@ -125,9 +244,41 @@ export default function NewProjectPage() {
     updateProjectCodePreview(type)
   }
 
+  // Calculate milestone dates based on duration weeks
+  const calculateMilestoneDates = (milestones: ManualMilestone[], projectStartDate: string) => {
+    if (!projectStartDate) return milestones
+
+    let currentDate = new Date(projectStartDate)
+
+    return milestones.map((milestone) => {
+      if (milestone.durationWeeks <= 0) {
+        return { ...milestone, startDate: undefined, endDate: undefined }
+      }
+
+      const startDate = new Date(currentDate)
+      const daysToAdd = milestone.durationWeeks * 7 - 1 // weeks to days, -1 because start day is included
+      const endDate = new Date(currentDate)
+      endDate.setDate(endDate.getDate() + daysToAdd)
+
+      // Update current date for next milestone
+      currentDate = new Date(endDate)
+      currentDate.setDate(currentDate.getDate() + 1) // Next milestone starts the day after
+
+      return {
+        ...milestone,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+      }
+    })
+  }
+
+  // Recalculate dates when milestones or start date changes
+  const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate)
+
   // Milestone helpers
   const addMilestone = () => {
-    setManualMilestones([...manualMilestones, { name: '', dueDate: '' }])
+    const newId = `milestone-${Date.now()}`
+    setManualMilestones([...manualMilestones, { id: newId, name: '', durationWeeks: 0 }])
   }
 
   const removeMilestone = (index: number) => {
@@ -135,10 +286,30 @@ export default function NewProjectPage() {
     setManualMilestones(manualMilestones.filter((_, i) => i !== index))
   }
 
-  const updateMilestone = (index: number, field: keyof ManualMilestone, value: string) => {
+  const updateMilestone = (index: number, field: keyof ManualMilestone, value: string | number) => {
     setManualMilestones(
       manualMilestones.map((m, i) => (i === index ? { ...m, [field]: value } : m))
     )
+  }
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setManualMilestones((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id)
+        const newIndex = items.findIndex((item) => item.id === over.id)
+        return arrayMove(items, oldIndex, newIndex)
+      })
+    }
   }
 
   // Risk helpers
@@ -262,12 +433,12 @@ export default function NewProjectPage() {
   const handleManualCreate = () => {
     const ownerName = user?.name || 'Unknown'
 
-    const validMilestones = manualMilestones
-      .filter((m) => m.name.trim() && m.dueDate)
+    const validMilestones = recalculatedMilestones
+      .filter((m) => m.name.trim() && m.durationWeeks > 0 && m.endDate)
       .map((m, index) => ({
         id: `ms-new-${index}`,
         name: m.name,
-        dueDate: m.dueDate,
+        dueDate: m.endDate!,
       }))
 
     const validRisks = manualRisks
@@ -762,7 +933,10 @@ export default function NewProjectPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="manual-project-type">專案類型 <span className="text-destructive">*</span></Label>
+                      <Label htmlFor="manual-project-type" className="flex items-center gap-2">
+                        <FolderKanban className="h-4 w-4 text-indigo-500" />
+                        專案類型 <span className="text-destructive">*</span>
+                      </Label>
                       <Select
                         value={manualProjectType}
                         onValueChange={(v) => handleManualTypeChange(v as ProjectType)}
@@ -782,7 +956,10 @@ export default function NewProjectPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>專案代碼預覽</Label>
+                      <Label className="flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-gray-500" />
+                        專案代碼預覽
+                      </Label>
                       <div className="flex h-10 items-center rounded-md border bg-muted/50 px-3 text-sm font-mono text-muted-foreground">
                         {previewCode || '選擇類型後自動產生'}
                       </div>
@@ -791,7 +968,10 @@ export default function NewProjectPage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name">專案名稱 <span className="text-destructive">*</span></Label>
+                      <Label htmlFor="name" className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4 text-cyan-500" />
+                        專案名稱 <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         id="name"
                         placeholder="輸入專案名稱"
@@ -800,7 +980,10 @@ export default function NewProjectPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="budget">投資預算 (NT$)</Label>
+                      <Label htmlFor="budget" className="flex items-center gap-2">
+                        <Banknote className="h-4 w-4 text-emerald-500" />
+                        投資預算 (NT$)
+                      </Label>
                       <Input
                         id="budget"
                         type="number"
@@ -812,7 +995,10 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="created-reason">開案原因</Label>
+                    <Label htmlFor="created-reason" className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-slate-500" />
+                      開案原因
+                    </Label>
                     <Textarea
                       id="created-reason"
                       placeholder="說明開立此專案的原因或背景"
@@ -938,7 +1124,10 @@ export default function NewProjectPage() {
                   <Separator />
 
                   <div className="space-y-2">
-                    <Label htmlFor="purpose">專案目的</Label>
+                    <Label htmlFor="purpose" className="flex items-center gap-2">
+                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      專案目的
+                    </Label>
                     <Textarea
                       id="purpose"
                       placeholder="說明為何要執行此專案"
@@ -949,7 +1138,10 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="scope">專案範圍</Label>
+                    <Label htmlFor="scope" className="flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-blue-500" />
+                      專案範圍
+                    </Label>
                     <Textarea
                       id="scope"
                       placeholder="定義專案的範圍與邊界"
@@ -960,7 +1152,10 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="expectedBenefits">預期效益</Label>
+                    <Label htmlFor="expectedBenefits" className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      預期效益
+                    </Label>
                     <Textarea
                       id="expectedBenefits"
                       placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
@@ -971,7 +1166,10 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="roi">投資報酬 (ROI)</Label>
+                    <Label htmlFor="roi" className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-violet-500" />
+                      投資報酬 (ROI)
+                    </Label>
                     <Textarea
                       id="roi"
                       placeholder="描述預期的投資報酬"
@@ -1029,46 +1227,32 @@ export default function NewProjectPage() {
                         新增里程碑
                       </Button>
                     </div>
-                    <div className="space-y-3">
-                      {manualMilestones.map((milestone, index) => (
-                        <div
-                          key={index}
-                          className="flex items-start gap-3 p-3 rounded-lg border bg-card"
-                        >
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium mt-1">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 grid gap-3 md:grid-cols-2">
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">里程碑名稱</Label>
-                              <Input
-                                placeholder="例如：需求分析完成"
-                                value={milestone.name}
-                                onChange={(e) => updateMilestone(index, 'name', e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">到期日</Label>
-                              <Input
-                                type="date"
-                                value={milestone.dueDate}
-                                onChange={(e) => updateMilestone(index, 'dueDate', e.target.value)}
-                              />
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeMilestone(index)}
-                            disabled={manualMilestones.length <= 1}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                    <p className="text-xs text-muted-foreground">
+                      拖動左側圖標可改變里程碑順序。輸入週數後系統將自動計算日期。
+                    </p>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={manualMilestones.map(m => m.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-3">
+                          {recalculatedMilestones.map((milestone, index) => (
+                            <SortableMilestoneItem
+                              key={milestone.id}
+                              milestone={milestone}
+                              index={index}
+                              onUpdate={updateMilestone}
+                              onRemove={removeMilestone}
+                              canRemove={manualMilestones.length > 1}
+                            />
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
                   </div>
                 </CardContent>
               </Card>
@@ -1208,10 +1392,7 @@ export default function NewProjectPage() {
                   </Button>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  步驟 {currentStep + 1} / {STEPS.length}
-                </span>
+              <div>
                 {currentStep < STEPS.length - 1 ? (
                   <Button
                     size="lg"
