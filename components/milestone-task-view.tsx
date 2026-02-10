@@ -26,6 +26,8 @@ import {
   Clock,
   Filter,
   X,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from 'lucide-react'
 
 interface MilestoneTaskViewProps {
@@ -34,9 +36,8 @@ interface MilestoneTaskViewProps {
 
 export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list')
-  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(
-    () => new Set(project.milestones.map(m => m.id))
-  )
+  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
+  const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
@@ -289,7 +290,40 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
               {filteredTasks.length}/{project.tasks.length} 任務
             </span>
           )}
-          {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
+          <span className="text-xs">
+            {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
+          </span>
+          {(() => {
+            const currentExpanded = viewMode === 'list' ? expandedMilestones : ganttExpandedMs
+            const allExpanded = currentExpanded.size === project.milestones.length
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                onClick={() => {
+                  const next = allExpanded ? new Set<string>() : new Set(project.milestones.map(m => m.id))
+                  if (viewMode === 'list') {
+                    setExpandedMilestones(next)
+                  } else {
+                    setGanttExpandedMs(next)
+                  }
+                }}
+              >
+                {allExpanded ? (
+                  <>
+                    <ChevronsDownUp className="h-3.5 w-3.5" />
+                    全部收合
+                  </>
+                ) : (
+                  <>
+                    <ChevronsUpDown className="h-3.5 w-3.5" />
+                    全部展開
+                  </>
+                )}
+              </Button>
+            )
+          })()}
         </div>
       </div>
 
@@ -301,6 +335,8 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
           startDate={project.startDate}
           endDate={project.endDate}
           onTaskClick={handleTaskClick}
+          expandedMilestoneIds={ganttExpandedMs}
+          onExpandedMilestoneIdsChange={setGanttExpandedMs}
         />
       ) : (
         <div className="space-y-3">

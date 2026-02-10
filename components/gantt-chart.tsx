@@ -3,15 +3,12 @@
 import { useRef, useState, useCallback, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { type Task, type Milestone } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import {
   ChevronRight,
   ChevronDown,
   AlertTriangle,
-  ChevronsDownUp,
-  ChevronsUpDown,
 } from 'lucide-react'
 
 interface GanttChartProps {
@@ -21,6 +18,8 @@ interface GanttChartProps {
   startDate: string
   endDate: string
   onTaskClick?: (task: Task) => void
+  expandedMilestoneIds?: Set<string>
+  onExpandedMilestoneIdsChange?: (ids: Set<string>) => void
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
@@ -32,30 +31,22 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 
 const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
-  const [expandedMs, setExpandedMs] = useState<Set<string>>(new Set())
+
+  // Use controlled state if provided, otherwise internal
+  const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(new Set())
+  const expandedMs = expandedMilestoneIds ?? internalExpandedMs
+  const setExpandedMs = onExpandedMilestoneIdsChange ?? setInternalExpandedMs
 
   const toggleMs = useCallback((msId: string) => {
-    setExpandedMs(prev => {
-      const next = new Set(prev)
-      if (next.has(msId)) next.delete(msId)
-      else next.add(msId)
-      return next
-    })
-  }, [])
-
-  const expandAll = useCallback(() => {
-    setExpandedMs(new Set(milestones.map(m => m.id)))
-  }, [milestones])
-
-  const collapseAll = useCallback(() => {
-    setExpandedMs(new Set())
-  }, [])
-
-  const allExpanded = expandedMs.size === milestones.length && milestones.length > 0
+    const next = new Set(expandedMs)
+    if (next.has(msId)) next.delete(msId)
+    else next.add(msId)
+    setExpandedMs(next)
+  }, [expandedMs, setExpandedMs])
 
   // Build baseline lookup
   const baselineMap = useMemo(() => {
@@ -204,28 +195,6 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
 
   return (
     <div className="space-y-3">
-      {/* Expand/Collapse controls */}
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs gap-1.5"
-          onClick={allExpanded ? collapseAll : expandAll}
-        >
-          {allExpanded ? (
-            <>
-              <ChevronsDownUp className="h-3.5 w-3.5" />
-              全部收合
-            </>
-          ) : (
-            <>
-              <ChevronsUpDown className="h-3.5 w-3.5" />
-              全部展開
-            </>
-          )}
-        </Button>
-      </div>
-
       <Card className="overflow-x-auto">
         <div
           ref={timelineRef}
