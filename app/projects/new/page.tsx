@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 import { parseProjectRequirements, type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
@@ -41,6 +50,9 @@ import {
   Briefcase,
   Banknote,
   GripVertical,
+  Save,
+  FolderOpen,
+  Clock,
 } from 'lucide-react'
 import {
   DndContext,
@@ -75,6 +87,50 @@ interface ManualRisk {
   probability: 'low' | 'medium' | 'high'
   mitigation: string
 }
+
+interface ProjectDraft {
+  id: string
+  mode: 'manual' | 'ai'
+  createdAt: string
+  updatedAt: string
+  title: string
+  data: {
+    // Manual mode
+    manualData?: {
+      name: string
+      objective: string
+      purpose: string
+      scope: string
+      roi: string
+      createdReason: string
+      startDate: string
+      endDate: string
+      budget: string
+      expectedBenefits: string
+    }
+    smartObjective?: {
+      specific: string
+      measurable: string
+      achievable: string
+      relevant: string
+      timeBound: string
+    }
+    manualProjectType?: ProjectType
+    manualMilestones?: ManualMilestone[]
+    manualRisks?: ManualRisk[]
+    manualTeamMembers?: string[]
+    currentStep?: number
+    // AI mode
+    aiProjectType?: ProjectType
+    aiCreatedReason?: string
+    aiExpectedBenefits?: string
+    requirements?: string
+    parsedData?: ParsedProjectData | null
+    aiTeamMembers?: string[]
+  }
+}
+
+const DRAFTS_STORAGE_KEY = 'project-drafts'
 
 const STEPS = [
   { label: '基本資訊', icon: FileText },
@@ -177,7 +233,10 @@ export default function NewProjectPage() {
   const router = useRouter()
   const { addProject } = useProjectStore()
   const { user } = useAuth()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai')
+  const [showDraftsDialog, setShowDraftsDialog] = useState(false)
+  const [savedDrafts, setSavedDrafts] = useState<ProjectDraft[]>([])
 
   // AI Mode
   const [requirements, setRequirements] = useState('')
@@ -221,6 +280,99 @@ export default function NewProjectPage() {
 
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
+
+  // Load drafts from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(DRAFTS_STORAGE_KEY)
+    if (stored) {
+      try {
+        setSavedDrafts(JSON.parse(stored))
+      } catch (e) {
+        console.error('Failed to load drafts:', e)
+      }
+    }
+  }, [])
+
+  // Save current state as draft
+  const saveDraft = () => {
+    const draftTitle = activeTab === 'manual'
+      ? manualData.name || '未命名專案'
+      : parsedData?.name || requirements.slice(0, 30) || '未命名專案'
+
+    const draft: ProjectDraft = {
+      id: `draft-${Date.now()}`,
+      mode: activeTab,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      title: draftTitle,
+      data: {
+        // Manual mode data
+        manualData: activeTab === 'manual' ? manualData : undefined,
+        smartObjective: activeTab === 'manual' ? smartObjective : undefined,
+        manualProjectType: activeTab === 'manual' ? manualProjectType : undefined,
+        manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
+        manualRisks: activeTab === 'manual' ? manualRisks : undefined,
+        manualTeamMembers: activeTab === 'manual' ? manualTeamMembers : undefined,
+        currentStep: activeTab === 'manual' ? currentStep : undefined,
+        // AI mode data
+        aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
+        aiCreatedReason: activeTab === 'ai' ? aiCreatedReason : undefined,
+        aiExpectedBenefits: activeTab === 'ai' ? aiExpectedBenefits : undefined,
+        requirements: activeTab === 'ai' ? requirements : undefined,
+        parsedData: activeTab === 'ai' ? parsedData : undefined,
+        aiTeamMembers: activeTab === 'ai' ? aiTeamMembers : undefined,
+      }
+    }
+
+    const updatedDrafts = [draft, ...savedDrafts]
+    setSavedDrafts(updatedDrafts)
+    localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(updatedDrafts))
+
+    toast({
+      title: '草稿已儲存',
+      description: `「${draftTitle}」已成功儲存`,
+    })
+  }
+
+  // Load draft
+  const loadDraft = (draft: ProjectDraft) => {
+    setActiveTab(draft.mode)
+
+    if (draft.mode === 'manual' && draft.data.manualData) {
+      setManualData(draft.data.manualData)
+      if (draft.data.smartObjective) setSmartObjective(draft.data.smartObjective)
+      if (draft.data.manualProjectType) setManualProjectType(draft.data.manualProjectType)
+      if (draft.data.manualMilestones) setManualMilestones(draft.data.manualMilestones)
+      if (draft.data.manualRisks) setManualRisks(draft.data.manualRisks)
+      if (draft.data.manualTeamMembers) setManualTeamMembers(draft.data.manualTeamMembers)
+      if (draft.data.currentStep !== undefined) setCurrentStep(draft.data.currentStep)
+    } else if (draft.mode === 'ai') {
+      if (draft.data.aiProjectType) setAiProjectType(draft.data.aiProjectType)
+      if (draft.data.aiCreatedReason) setAiCreatedReason(draft.data.aiCreatedReason)
+      if (draft.data.aiExpectedBenefits) setAiExpectedBenefits(draft.data.aiExpectedBenefits)
+      if (draft.data.requirements) setRequirements(draft.data.requirements)
+      if (draft.data.parsedData) setParsedData(draft.data.parsedData)
+      if (draft.data.aiTeamMembers) setAiTeamMembers(draft.data.aiTeamMembers)
+    }
+
+    setShowDraftsDialog(false)
+    toast({
+      title: '草稿已載入',
+      description: `「${draft.title}」已成功載入`,
+    })
+  }
+
+  // Delete draft
+  const deleteDraft = (draftId: string) => {
+    const updatedDrafts = savedDrafts.filter(d => d.id !== draftId)
+    setSavedDrafts(updatedDrafts)
+    localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(updatedDrafts))
+
+    toast({
+      title: '草稿已刪除',
+      description: '草稿已從清單中移除',
+    })
+  }
 
   const updateProjectCodePreview = (type: ProjectType) => {
     const prefix: Record<ProjectType, string> = {
@@ -534,11 +686,87 @@ export default function NewProjectPage() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">建立新專案</h1>
-          <p className="text-muted-foreground mt-1">
-            使用 AI 快速產生專案規劃，或手動逐步輸入專案資訊
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">建立新專案</h1>
+            <p className="text-muted-foreground mt-1">
+              使用 AI 快速產生專案規劃，或手動逐步輸入專案資訊
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={saveDraft} className="gap-2">
+              <Save className="h-4 w-4" />
+              儲存草稿
+            </Button>
+            <Dialog open={showDraftsDialog} onOpenChange={setShowDraftsDialog}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <FolderOpen className="h-4 w-4" />
+                  載入草稿
+                  {savedDrafts.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1">
+                      {savedDrafts.length}
+                    </Badge>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>載入草稿</DialogTitle>
+                  <DialogDescription>
+                    選擇先前儲存的草稿繼續編輯
+                  </DialogDescription>
+                </DialogHeader>
+                {savedDrafts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                    <p>尚無儲存的草稿</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {savedDrafts.map((draft) => (
+                      <div
+                        key={draft.id}
+                        className="flex items-start justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-accent transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium truncate">{draft.title}</h4>
+                            <Badge variant={draft.mode === 'ai' ? 'default' : 'secondary'} className="text-xs">
+                              {draft.mode === 'ai' ? 'AI 模式' : '手動模式'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {new Date(draft.updatedAt).toLocaleString('zh-TW')}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => loadDraft(draft)}
+                          >
+                            載入
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deleteDraft(draft.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'manual' | 'ai')}>
