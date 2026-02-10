@@ -66,6 +66,7 @@ export default function NewProjectPage() {
   const [parsedData, setParsedData] = useState<ParsedProjectData | null>(null)
   const [aiProjectType, setAiProjectType] = useState<ProjectType>('other')
   const [aiCreatedReason, setAiCreatedReason] = useState('')
+  const [aiExpectedBenefits, setAiExpectedBenefits] = useState('')
   const [aiTeamMembers, setAiTeamMembers] = useState<string[]>([])
   const [aiTeamInput, setAiTeamInput] = useState('')
 
@@ -81,6 +82,15 @@ export default function NewProjectPage() {
     startDate: '',
     endDate: '',
     budget: '',
+    expectedBenefits: '',
+  })
+  // SMART 目標結構化數據
+  const [smartObjective, setSmartObjective] = useState({
+    specific: '',      // 具體目標
+    measurable: '',    // 可衡量指標
+    achievable: '',    // 可達成性
+    relevant: '',      // 相關性
+    timeBound: '',     // 時限性
   })
   const [manualProjectType, setManualProjectType] = useState<ProjectType>('other')
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([
@@ -164,7 +174,7 @@ export default function NewProjectPage() {
   const canProceed = (step: number) => {
     switch (step) {
       case 0: return !!manualData.name.trim()
-      case 1: return !!manualData.objective.trim()
+      case 1: return !!smartObjective.specific.trim() // SMART 至少要有具體目標
       case 2: return !!manualData.startDate && !!manualData.endDate
       default: return true
     }
@@ -236,6 +246,7 @@ export default function NewProjectPage() {
       scope: parsedData.scope,
       roi: parsedData.roi,
       createdReason: aiCreatedReason || parsedData.purpose,
+      expectedBenefits: aiExpectedBenefits,
       startDate: parsedData.startDate,
       endDate: parsedData.endDate,
       budget: parsedData.estimatedBudget,
@@ -274,6 +285,8 @@ export default function NewProjectPage() {
       scope: manualData.scope,
       roi: manualData.roi,
       createdReason: manualData.createdReason,
+      expectedBenefits: manualData.expectedBenefits,
+      smartObjective: smartObjective,
       startDate: manualData.startDate,
       endDate: manualData.endDate,
       budget: Number(manualData.budget) || 0,
@@ -418,6 +431,17 @@ export default function NewProjectPage() {
                     placeholder="說明開立此專案的原因或背景"
                     value={aiCreatedReason}
                     onChange={(e) => setAiCreatedReason(e.target.value)}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ai-expected-benefits">預期效益</Label>
+                  <Textarea
+                    id="ai-expected-benefits"
+                    placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
+                    value={aiExpectedBenefits}
+                    onChange={(e) => setAiExpectedBenefits(e.target.value)}
                     rows={2}
                   />
                 </div>
@@ -776,7 +800,7 @@ export default function NewProjectPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="budget">預算 (NT$)</Label>
+                      <Label htmlFor="budget">投資預算 (NT$)</Label>
                       <Input
                         id="budget"
                         type="number"
@@ -813,17 +837,105 @@ export default function NewProjectPage() {
                   </CardTitle>
                   <CardDescription>描述專案的目標、目的、範圍和預期效益</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="objective">專案目標 <span className="text-destructive">*</span></Label>
-                    <Textarea
-                      id="objective"
-                      placeholder="描述專案的主要目標"
-                      value={manualData.objective}
-                      onChange={(e) => setManualData({ ...manualData, objective: e.target.value })}
-                      rows={3}
-                    />
+                <CardContent className="space-y-6">
+                  {/* SMART 目標 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium flex items-center gap-2">
+                        <Target className="h-4 w-4 text-primary" />
+                        專案目標（SMART 原則）<span className="text-destructive">*</span>
+                      </Label>
+                      <Badge variant="secondary" className="text-xs">
+                        具體、可衡量、可達成、相關性、時限性
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      依據 SMART 原則設定專案目標，確保目標明確且可追蹤
+                    </p>
+
+                    <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="smart-specific" className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">S</Badge>
+                          具體目標 (Specific)
+                        </Label>
+                        <Textarea
+                          id="smart-specific"
+                          placeholder="具體要達成什麼？例如：開發一套客戶關係管理系統，整合現有 3 個獨立的客戶資料庫"
+                          value={smartObjective.specific}
+                          onChange={(e) => {
+                            setSmartObjective({ ...smartObjective, specific: e.target.value })
+                            // 自動組合生成 objective
+                            const combined = `${e.target.value}${smartObjective.measurable ? '，' + smartObjective.measurable : ''}`
+                            setManualData({ ...manualData, objective: combined })
+                          }}
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="smart-measurable" className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">M</Badge>
+                          可衡量指標 (Measurable)
+                        </Label>
+                        <Textarea
+                          id="smart-measurable"
+                          placeholder="如何衡量成功？例如：提升客戶資料查詢效率 50%，減少資料重複率至 5% 以下"
+                          value={smartObjective.measurable}
+                          onChange={(e) => {
+                            setSmartObjective({ ...smartObjective, measurable: e.target.value })
+                            const combined = `${smartObjective.specific}${e.target.value ? '，' + e.target.value : ''}`
+                            setManualData({ ...manualData, objective: combined })
+                          }}
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="smart-achievable" className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">A</Badge>
+                          可達成性 (Achievable)
+                        </Label>
+                        <Textarea
+                          id="smart-achievable"
+                          placeholder="有哪些資源和能力支持？例如：現有 IT 團隊 5 人、預算 500 萬、已有技術架構基礎"
+                          value={smartObjective.achievable}
+                          onChange={(e) => setSmartObjective({ ...smartObjective, achievable: e.target.value })}
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="smart-relevant" className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">R</Badge>
+                          相關性 (Relevant)
+                        </Label>
+                        <Textarea
+                          id="smart-relevant"
+                          placeholder="與組織目標的關聯？例如：支持公司 2026 年業績成長 30% 的戰略目標"
+                          value={smartObjective.relevant}
+                          onChange={(e) => setSmartObjective({ ...smartObjective, relevant: e.target.value })}
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="smart-timebound" className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">T</Badge>
+                          時限性 (Time-bound)
+                        </Label>
+                        <Textarea
+                          id="smart-timebound"
+                          placeholder="預期完成時間？例如：2026 年 Q2 完成開發，Q3 上線運行"
+                          value={smartObjective.timeBound}
+                          onChange={(e) => setSmartObjective({ ...smartObjective, timeBound: e.target.value })}
+                          rows={2}
+                        />
+                      </div>
+                    </div>
                   </div>
+
+                  <Separator />
 
                   <div className="space-y-2">
                     <Label htmlFor="purpose">專案目的</Label>
@@ -843,6 +955,17 @@ export default function NewProjectPage() {
                       placeholder="定義專案的範圍與邊界"
                       value={manualData.scope}
                       onChange={(e) => setManualData({ ...manualData, scope: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="expectedBenefits">預期效益</Label>
+                    <Textarea
+                      id="expectedBenefits"
+                      placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
+                      value={manualData.expectedBenefits}
+                      onChange={(e) => setManualData({ ...manualData, expectedBenefits: e.target.value })}
                       rows={3}
                     />
                   </div>
@@ -1105,7 +1228,7 @@ export default function NewProjectPage() {
                     onClick={handleManualCreate}
                     disabled={
                       !manualData.name ||
-                      !manualData.objective ||
+                      !smartObjective.specific.trim() ||
                       !manualData.startDate ||
                       !manualData.endDate
                     }

@@ -13,6 +13,7 @@ import {
   type TaskStatus,
   type TaskLog,
   type Risk,
+  type SmartObjective,
 } from './mock-data'
 
 interface ProjectStoreContextType {
@@ -26,6 +27,8 @@ interface ProjectStoreContextType {
     scope: string
     roi: string
     createdReason: string
+    expectedBenefits?: string
+    smartObjective?: SmartObjective
     startDate: string
     endDate: string
     budget: number
@@ -92,6 +95,8 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     scope: string
     roi: string
     createdReason: string
+    expectedBenefits?: string
+    smartObjective?: SmartObjective
     startDate: string
     endDate: string
     budget: number
@@ -124,6 +129,8 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       scope: data.scope,
       roi: data.roi,
       createdReason: data.createdReason,
+      expectedBenefits: data.expectedBenefits,
+      smartObjective: data.smartObjective,
       startDate: data.startDate,
       endDate: data.endDate,
       status: 'green',

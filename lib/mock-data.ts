@@ -51,6 +51,14 @@ export interface DelayRequest {
   supportResolvedNotes?: string
 }
 
+export interface SmartObjective {
+  specific: string      // 具體目標
+  measurable: string    // 可衡量指標
+  achievable: string    // 可達成性
+  relevant: string      // 相關性
+  timeBound: string     // 時限性
+}
+
 export interface Project {
   id: string
   projectCode: string
@@ -61,6 +69,8 @@ export interface Project {
   scope: string
   roi: string
   createdReason: string
+  expectedBenefits?: string
+  smartObjective?: SmartObjective
   startDate: string
   endDate: string
   status: ProjectStatus
