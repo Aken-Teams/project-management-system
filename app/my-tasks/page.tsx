@@ -544,8 +544,8 @@ export default function MyTasksPage() {
                 <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileSelect(e, 'image')} />
                 <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFileSelect(e, 'file')} />
 
-                {/* 3 Tabs */}
-                <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
+                {/* 3 Tabs — hidden when extension form is open */}
+                {!showExtensionForm && <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
                   <div className="px-6 pt-1 pb-0 border-b">
                     <TabsList className="w-full bg-transparent h-auto p-0 rounded-none gap-0">
                       <TabsTrigger value="log" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
@@ -851,7 +851,7 @@ export default function MyTasksPage() {
                       )}
                     </div>
                   </TabsContent>
-                </Tabs>
+                </Tabs>}
 
                 {/* Extension Form (expandable) */}
                 {showExtensionForm && (
