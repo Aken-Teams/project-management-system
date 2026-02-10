@@ -177,13 +177,11 @@ export default function MyTasksPage() {
   const handleCompleteTask = () => {
     if (!dialogTask) return
     completeTask(dialogTask.project.id, dialogTask.task.id, user.name)
-    setDialogOpen(false)
   }
 
   const handleUncompleteTask = () => {
     if (!dialogTask) return
     uncompleteTask(dialogTask.project.id, dialogTask.task.id)
-    setDialogOpen(false)
   }
 
   const handleSubmitExtension = () => {
@@ -420,8 +418,8 @@ export default function MyTasksPage() {
 
             return (
               <>
-                {/* Header */}
-                <div className="px-6 pt-6 pb-3">
+                {/* Header — compact */}
+                <div className="px-6 pt-6 pb-2 space-y-1.5">
                   <DialogHeader>
                     <div className="flex items-center gap-2">
                       {getStatusBadge(status)}
@@ -429,39 +427,54 @@ export default function MyTasksPage() {
                         {task.title}
                       </DialogTitle>
                     </div>
-                    <DialogDescription className="text-left">
-                      {project.name}{milestone ? ` — ${milestone.name}` : ''}
+                    <DialogDescription className="text-left flex items-center gap-2">
+                      <span>{project.name}{milestone ? ` — ${milestone.name}` : ''}</span>
+                      <span className="text-muted-foreground/50">·</span>
+                      <span className="font-mono text-[11px]">
+                        {new Date(task.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                        {' ~ '}
+                        {new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                      </span>
                     </DialogDescription>
                   </DialogHeader>
+
+                  {/* Inline warnings */}
+                  {(status === 'at-risk' || status === 'overdue' || hasBlockedUpstream) && (
+                    <div className="flex items-center gap-3 flex-wrap text-xs">
+                      {status === 'overdue' && (
+                        <span className="flex items-center gap-1 text-destructive">
+                          <AlertTriangle className="h-3 w-3" />
+                          已逾期 {Math.abs(days)} 天
+                        </span>
+                      )}
+                      {status === 'at-risk' && (
+                        <span className="flex items-center gap-1 text-amber-600">
+                          <AlertTriangle className="h-3 w-3" />
+                          剩 {days} 天到期
+                        </span>
+                      )}
+                      {hasBlockedUpstream && (
+                        <span className="flex items-center gap-1 text-blue-600">
+                          <Info className="h-3 w-3" />
+                          前置任務未完成
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {isCompleted && task.completedAt && (
+                    <div className="flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成
+                    </div>
+                  )}
                 </div>
 
-                {/* Warning banners */}
-                {(status === 'at-risk' || status === 'overdue' || hasBlockedUpstream) && (
-                  <div className="px-6 space-y-2">
-                    {hasBlockedUpstream && (
-                      <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-950/20 dark:border-blue-700 text-xs text-blue-700 dark:text-blue-400">
-                        <Info className="h-3.5 w-3.5 shrink-0" />
-                        前置任務尚未完成，可能影響此任務進度
-                      </div>
-                    )}
-                    {status === 'at-risk' && (
-                      <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                        即將到期（剩 {days} 天）
-                      </div>
-                    )}
-                    {status === 'overdue' && (
-                      <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-700 text-xs text-red-700 dark:text-red-400">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                        已逾期 {Math.abs(days)} 天
-                      </div>
-                    )}
-                  </div>
-                )}
+                <Separator />
 
                 {/* Tabs */}
                 <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
-                  <div className="px-6">
+                  <div className="px-6 pt-2">
                     <TabsList className="w-full">
                       <TabsTrigger value="log" className="flex-1">回報進度</TabsTrigger>
                       <TabsTrigger value="info" className="flex-1">任務資訊</TabsTrigger>
@@ -475,19 +488,14 @@ export default function MyTasksPage() {
                   </div>
 
                   {/* Tab: 回報進度 */}
-                  <TabsContent value="log" className="flex-1 overflow-y-auto px-6 pb-2">
+                  <TabsContent value="log" className="flex-1 overflow-y-auto px-6">
                     {isCompleted ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="flex flex-col items-center justify-center py-6 text-center">
                         <CheckCircle2 className="h-8 w-8 text-green-500 mb-2" />
                         <p className="text-sm text-muted-foreground">此任務已完成</p>
-                        {task.completedAt && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成
-                          </p>
-                        )}
                       </div>
                     ) : (
-                      <div className="space-y-3 py-2">
+                      <div className="space-y-3 py-3">
                         <div className="flex items-center gap-2">
                           <Label className="text-xs text-muted-foreground shrink-0">日期</Label>
                           <input
@@ -501,7 +509,7 @@ export default function MyTasksPage() {
                           placeholder="描述您今天做了什麼..."
                           value={logContent}
                           onChange={e => setLogContent(e.target.value)}
-                          rows={4}
+                          rows={3}
                           className="text-sm"
                         />
                         <Button
@@ -518,95 +526,67 @@ export default function MyTasksPage() {
                   </TabsContent>
 
                   {/* Tab: 任務資訊 */}
-                  <TabsContent value="info" className="flex-1 overflow-y-auto px-6 pb-2">
-                    <div className="space-y-4 py-2">
-                      {/* Basic info */}
+                  <TabsContent value="info" className="flex-1 overflow-y-auto px-6">
+                    <div className="space-y-3 py-3">
                       {task.description && (
                         <p className="text-sm text-muted-foreground">{task.description}</p>
-                      )}
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">起始日期</Label>
-                          <p className="mt-0.5">{new Date(task.startDate).toLocaleDateString('zh-TW')}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">截止日期</Label>
-                          <p className="mt-0.5">{new Date(task.endDate).toLocaleDateString('zh-TW')}</p>
-                        </div>
-                      </div>
-
-                      {isCompleted && task.completedAt && (
-                        <div className="flex items-center gap-2 text-xs text-green-600">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>{new Date(task.completedAt).toLocaleDateString('zh-TW')} 完成</span>
-                          {task.completedBy && <span>（{task.completedBy}）</span>}
-                        </div>
                       )}
 
                       {/* Upstream dependencies */}
                       {upstreamTasks.length > 0 && (
-                        <>
-                          <Separator />
-                          <div>
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                              <ArrowLeft className="h-3 w-3" />
-                              前置任務
-                            </Label>
-                            <div className="space-y-1">
-                              {upstreamTasks.map(({ task: dep, status: depStatus }) => (
-                                <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
-                                  {getStatusDot(depStatus)}
-                                  <span className="flex-1 truncate">{dep.title}</span>
-                                  {getStatusBadge(depStatus)}
-                                </div>
-                              ))}
-                            </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-1.5">
+                            <ArrowLeft className="h-3 w-3" />
+                            前置任務
+                          </Label>
+                          <div className="space-y-1">
+                            {upstreamTasks.map(({ task: dep, status: depStatus }) => (
+                              <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
+                                {getStatusDot(depStatus)}
+                                <span className="flex-1 truncate">{dep.title}</span>
+                                {getStatusBadge(depStatus)}
+                              </div>
+                            ))}
                           </div>
-                        </>
+                        </div>
                       )}
 
                       {/* Downstream dependencies */}
                       {downstreamTasks.length > 0 && (
-                        <>
-                          <Separator />
-                          <div>
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                              <ArrowRight className="h-3 w-3" />
-                              後續任務
-                            </Label>
-                            <div className="space-y-1">
-                              {downstreamTasks.map(({ task: dep, status: depStatus }) => (
-                                <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
-                                  {getStatusDot(depStatus)}
-                                  <span className="flex-1 truncate">{dep.title}</span>
-                                  {getStatusBadge(depStatus)}
-                                </div>
-                              ))}
-                            </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-1.5">
+                            <ArrowRight className="h-3 w-3" />
+                            後續任務
+                          </Label>
+                          <div className="space-y-1">
+                            {downstreamTasks.map(({ task: dep, status: depStatus }) => (
+                              <div key={dep.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded bg-muted/30">
+                                {getStatusDot(depStatus)}
+                                <span className="flex-1 truncate">{dep.title}</span>
+                                {getStatusBadge(depStatus)}
+                              </div>
+                            ))}
                           </div>
-                        </>
+                        </div>
                       )}
 
                       {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (
-                        <>
-                          <Separator />
-                          <p className="text-xs text-muted-foreground text-center py-2">
-                            此任務無上下游依賴關係
-                          </p>
-                        </>
+                        <p className="text-xs text-muted-foreground text-center py-3">
+                          此任務無上下游依賴關係
+                        </p>
                       )}
                     </div>
                   </TabsContent>
 
                   {/* Tab: 歷史紀錄 */}
-                  <TabsContent value="history" className="flex-1 overflow-y-auto px-6 pb-2">
+                  <TabsContent value="history" className="flex-1 overflow-y-auto px-6">
                     {taskLogs.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="flex flex-col items-center justify-center py-6 text-center">
                         <p className="text-sm text-muted-foreground">尚無工作紀錄</p>
                         <p className="text-xs text-muted-foreground mt-1">在「回報進度」分頁提交您的第一筆紀錄</p>
                       </div>
                     ) : (
-                      <div className="space-y-2 py-2">
+                      <div className="space-y-2 py-3">
                         {taskLogs.map(log => (
                           <div key={log.id} className="p-2.5 rounded-lg bg-muted/50 border text-sm">
                             <div className="flex justify-between mb-1">
@@ -645,16 +625,14 @@ export default function MyTasksPage() {
                         className="text-sm mt-1"
                       />
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1">
-                        <Label className="text-xs text-muted-foreground">建議新日期</Label>
-                        <input
-                          type="date"
-                          value={extensionDate}
-                          onChange={e => setExtensionDate(e.target.value)}
-                          className="w-full text-sm border rounded px-2 py-1.5 mt-1"
-                        />
-                      </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">建議新日期</Label>
+                      <input
+                        type="date"
+                        value={extensionDate}
+                        onChange={e => setExtensionDate(e.target.value)}
+                        className="w-full text-sm border rounded px-2 py-1.5 mt-1"
+                      />
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">是否需要協助</Label>
@@ -678,7 +656,7 @@ export default function MyTasksPage() {
                   </div>
                 )}
 
-                {/* Bottom fixed action bar */}
+                {/* Bottom action bar */}
                 <div className="px-6 py-3 border-t flex items-center justify-between">
                   <div>
                     {!isCompleted ? (
