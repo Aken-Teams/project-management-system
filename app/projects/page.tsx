@@ -96,10 +96,10 @@ export default function ProjectsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight">
               {user?.role === 'member' ? '我的專案' : '專案看板'}
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               {user?.role === 'member'
                 ? '您參與的專案列表'
                 : user?.role === 'executive'
@@ -108,10 +108,9 @@ export default function ProjectsPage() {
               }
             </p>
           </div>
-          {/* 只有 PM 可以建立新專案 */}
           {user?.role === 'pm' && (
             <Link href="/projects/new">
-              <Button size="lg">建立新專案</Button>
+              <Button>建立新專案</Button>
             </Link>
           )}
         </div>

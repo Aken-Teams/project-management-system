@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
@@ -15,6 +15,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
   LayoutDashboard,
   FolderKanban,
   FileText,
@@ -22,7 +28,11 @@ import {
   LogOut,
   User,
   ClipboardCheck,
-  ClipboardList
+  ClipboardList,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Menu,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProjectStore } from '@/lib/project-store'
@@ -47,11 +57,19 @@ const defaultRoute: Record<string, string> = {
   executive: '/dashboard',
 }
 
+const roleNames: Record<string, string> = {
+  pm: '專案經理',
+  member: '團隊成員',
+  executive: '主管',
+}
+
+const SIDEBAR_KEY = 'sidebar-collapsed'
+
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout, switchRole } = useAuth()
-  const { getPendingApprovals, getTasksForUser, projects } = useProjectStore()
+  const { getPendingApprovals, getTasksForUser } = useProjectStore()
   const pendingCount = getPendingApprovals().length
   const userTasks = user ? getTasksForUser(user.name) : []
   const atRiskCount = userTasks.filter(({ project, task }) => {
@@ -59,15 +77,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return status === 'at-risk' || status === 'overdue'
   }).length
 
+  const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Load sidebar state from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_KEY)
+    if (saved === 'true') setCollapsed(true)
+  }, [])
+
+  const toggleCollapsed = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem(SIDEBAR_KEY, String(next))
+  }
+
   const handleLogout = () => {
     logout()
     router.push('/login')
-  }
-
-  const roleNames = {
-    pm: '專案經理',
-    member: '團隊成員',
-    executive: '主管'
   }
 
   useEffect(() => {
@@ -76,7 +103,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [user, loading, router])
 
-  // Redirect to role-appropriate page if on a page the role shouldn't access
   useEffect(() => {
     if (!loading && user && pathname) {
       const isOnRestrictedPage = navigation.some(
@@ -89,6 +115,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }
   }, [user, loading, pathname, router])
 
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -97,105 +128,215 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-card shadow-sm">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-6">
-            <Link href={defaultRoute[user.role] || '/dashboard'} className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <FolderKanban className="h-5 w-5" />
-              </div>
-              <span className="text-lg font-semibold">專案管理系統</span>
-            </Link>
-            
-            <nav className="hidden md:flex items-center gap-1">
-              {navigation
-                .filter(item => !('roles' in item) || !item.roles || item.roles.includes(user.role))
-                .map((item) => {
-                const Icon = item.icon
-                const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-                const badgeValue = item.href === '/approvals' ? pendingCount : item.href === '/my-tasks' ? atRiskCount : 0
-                const showBadge = badgeValue > 0
-                return (
-                  <Link key={item.name} href={item.href}>
-                    <Button
-                      variant={isActive ? 'secondary' : 'ghost'}
-                      size="sm"
+  const visibleNav = navigation.filter(
+    item => !('roles' in item) || !item.roles || item.roles.includes(user.role)
+  )
+
+  const getBadgeValue = (href: string) => {
+    if (href === '/approvals') return pendingCount
+    if (href === '/my-tasks') return atRiskCount
+    return 0
+  }
+
+  const sidebarContent = (
+    <TooltipProvider delayDuration={0}>
+      <div className="flex flex-col h-full">
+        {/* Logo */}
+        <div className={cn('flex items-center h-16 px-4 border-b border-border/50', collapsed && 'justify-center px-2')}>
+          <Link href={defaultRoute[user.role] || '/dashboard'} className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <FolderKanban className="h-5 w-5" />
+            </div>
+            {!collapsed && (
+              <span className="text-base font-semibold truncate">專案管理系統</span>
+            )}
+          </Link>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {visibleNav.map((item) => {
+            const Icon = item.icon
+            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+            const badgeValue = getBadgeValue(item.href)
+            const showBadge = badgeValue > 0
+
+            const linkContent = (
+              <Link key={item.name} href={item.href} className="block">
+                <div
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors relative',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    collapsed && 'justify-center px-2'
+                  )}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {!collapsed && <span className="truncate">{item.name}</span>}
+                  {showBadge && (
+                    <Badge
+                      variant={item.href === '/my-tasks' ? 'secondary' : 'destructive'}
                       className={cn(
-                        'gap-2 relative',
-                        isActive && 'bg-secondary'
+                        'h-5 min-w-5 px-1 flex items-center justify-center text-xs',
+                        collapsed
+                          ? 'absolute -top-1 -right-1 p-0 w-5'
+                          : 'ml-auto'
                       )}
                     >
-                      <Icon className="h-4 w-4" />
-                      {item.name}
-                      {showBadge && (
-                        <Badge variant={item.href === '/my-tasks' ? 'secondary' : 'destructive'} className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                          {badgeValue}
-                        </Badge>
-                      )}
-                    </Button>
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
+                      {badgeValue}
+                    </Badge>
+                  )}
+                </div>
+              </Link>
+            )
 
-          <div className="flex items-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2 px-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                      {user.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="hidden md:flex flex-col items-start">
-                    <span className="text-sm font-medium">{user.name}</span>
+            if (collapsed) {
+              return (
+                <Tooltip key={item.name}>
+                  <TooltipTrigger asChild>
+                    {linkContent}
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    <p>{item.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
+
+            return linkContent
+          })}
+        </nav>
+
+        {/* Collapse toggle */}
+        <div className="px-3 py-2 border-t border-border/50 hidden md:block">
+          <button
+            onClick={toggleCollapsed}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors w-full',
+              collapsed && 'justify-center px-2'
+            )}
+          >
+            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            {!collapsed && <span>收合選單</span>}
+          </button>
+        </div>
+
+        {/* User */}
+        <div className={cn('px-3 py-3 border-t border-border/50', collapsed && 'px-2')}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 w-full hover:bg-accent transition-colors',
+                  collapsed && 'justify-center px-2'
+                )}
+              >
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                    {user.name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <div className="flex flex-col items-start min-w-0">
+                    <span className="text-sm font-medium truncate w-full text-left">{user.name}</span>
                     <span className="text-xs text-muted-foreground">{roleNames[user.role]}</span>
                   </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>我的帳號</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  個人資料
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  設定
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
-                  切換角色（示範）
-                </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => switchRole('pm')}>
-                  切換為專案經理
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => switchRole('member')}>
-                  切換為團隊成員
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => switchRole('executive')}>
-                  切換為主管
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  登出
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align={collapsed ? 'center' : 'end'}
+              side={collapsed ? 'right' : 'top'}
+              sideOffset={8}
+              className="w-56"
+            >
+              <DropdownMenuLabel>我的帳號</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <User className="mr-2 h-4 w-4" />
+                個人資料
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Settings className="mr-2 h-4 w-4" />
+                設定
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                切換角色（示範）
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => switchRole('pm')}>
+                切換為專案經理
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => switchRole('member')}>
+                切換為團隊成員
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => switchRole('executive')}>
+                切換為主管
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                登出
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </header>
+      </div>
+    </TooltipProvider>
+  )
 
-      {/* Main Content */}
-      <main className="p-6">
-        {children}
-      </main>
+  return (
+    <div className="min-h-screen bg-background flex">
+      {/* Desktop Sidebar */}
+      <aside
+        className={cn(
+          'hidden md:flex flex-col border-r bg-card fixed inset-y-0 left-0 z-40 transition-all duration-300',
+          collapsed ? 'w-[68px]' : 'w-60'
+        )}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-60 bg-card border-r transition-transform duration-300 md:hidden',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Main Area */}
+      <div className={cn(
+        'flex-1 flex flex-col min-h-screen transition-all duration-300',
+        collapsed ? 'md:ml-[68px]' : 'md:ml-60'
+      )}>
+        {/* Mobile Top Bar */}
+        <header className="sticky top-0 z-30 flex items-center h-14 px-4 border-b bg-card md:hidden">
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="p-2 rounded-lg hover:bg-accent"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="ml-3 font-semibold text-sm">專案管理系統</span>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 p-6">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

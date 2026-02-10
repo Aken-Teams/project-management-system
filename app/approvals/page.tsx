@@ -101,8 +101,8 @@ export default function ApprovalsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">審批中心</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">審核專案延遲申請</p>
+            <h1 className="text-2xl font-bold tracking-tight">審批中心</h1>
+            <p className="text-sm text-muted-foreground mt-1">審核專案延遲申請</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={pendingApprovals.length > 0 ? 'destructive' : 'secondary'} className="text-xs px-2.5 py-1">

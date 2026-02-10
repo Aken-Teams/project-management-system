@@ -81,12 +81,11 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        {/* Header + Approval Alert */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              歡迎回來，{user?.name}
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">儀表板</h1>
+            <p className="text-sm text-muted-foreground mt-1">歡迎回來，{user?.name}</p>
           </div>
           {(user?.role === 'pm' || user?.role === 'executive') && pendingApprovals.length > 0 && (
             <Link href="/approvals">

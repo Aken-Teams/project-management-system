@@ -33,8 +33,8 @@ export default function GanttPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">甘特圖</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl font-bold tracking-tight">甘特圖</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               視覺化專案時程與任務排程
             </p>
           </div>

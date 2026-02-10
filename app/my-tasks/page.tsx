@@ -22,7 +22,6 @@ import {
 } from '@/lib/task-utils'
 import { cn } from '@/lib/utils'
 import {
-  ClipboardList,
   AlertTriangle,
   Calendar,
   FileText,
@@ -191,11 +190,8 @@ export default function MyTasksPage() {
       <div className="space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ClipboardList className="h-6 w-6" />
-            我的任務
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             {user.name} — {totalTasks} 個任務，{completedCount} 已完成{atRiskCount > 0 ? `，${atRiskCount} 需注意` : ''}
           </p>
         </div>
