@@ -40,15 +40,17 @@ interface ProjectStoreContextType {
   addTaskLog: (projectId: string, log: Omit<TaskLog, 'id' | 'projectId' | 'createdAt'>) => void
   completeTask: (projectId: string, taskId: string, completedBy: string) => void
   uncompleteTask: (projectId: string, taskId: string) => void
+  resolveSupport: (projectId: string, requestId: string, resolvedBy: string, notes: string) => void
   getTasksForUser: (userName: string) => { project: Project; task: import('./mock-data').Task }[]
   getPendingApprovals: () => { project: Project; request: DelayRequest }[]
+  getUnresolvedSupportRequests: () => { project: Project; request: DelayRequest }[]
 }
 
 const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(undefined)
 
 const STORAGE_KEY = 'pm-system-projects'
 const STORAGE_VERSION_KEY = 'pm-system-version'
-const CURRENT_VERSION = '8'
+const CURRENT_VERSION = '9'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -338,6 +340,17 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     }))
   }, [])
 
+  const resolveSupport = useCallback((projectId: string, requestId: string, resolvedBy: string, notes: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p
+      const updatedRequests = p.delayRequests.map(r => {
+        if (r.id !== requestId) return r
+        return { ...r, supportResolved: true, supportResolvedAt: new Date().toISOString(), supportResolvedBy: resolvedBy, supportResolvedNotes: notes }
+      })
+      return { ...p, delayRequests: updatedRequests, updatedAt: new Date().toISOString() }
+    }))
+  }, [])
+
   const getTasksForUser = useCallback((userName: string) => {
     const results: { project: Project; task: import('./mock-data').Task }[] = []
     projects.forEach(p => {
@@ -351,6 +364,16 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     projects.forEach(p => {
       p.delayRequests
         .filter(r => r.status === 'pending')
+        .forEach(r => results.push({ project: p, request: r }))
+    })
+    return results
+  }, [projects])
+
+  const getUnresolvedSupportRequests = useCallback(() => {
+    const results: { project: Project; request: DelayRequest }[] = []
+    projects.forEach(p => {
+      p.delayRequests
+        .filter(r => r.status === 'approved' && r.supportNeeded && r.supportNeeded.trim() !== '' && !r.supportResolved)
         .forEach(r => results.push({ project: p, request: r }))
     })
     return results
@@ -378,7 +401,9 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       submitDelayRequest,
       approveDelayRequest,
       rejectDelayRequest,
+      resolveSupport,
       getPendingApprovals,
+      getUnresolvedSupportRequests,
     }}>
       {children}
     </ProjectStoreContext.Provider>

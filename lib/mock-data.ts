@@ -45,6 +45,10 @@ export interface DelayRequest {
   reviewedBy?: string
   reviewedAt?: string
   reviewNotes?: string
+  supportResolved?: boolean
+  supportResolvedAt?: string
+  supportResolvedBy?: string
+  supportResolvedNotes?: string
 }
 
 export interface Project {

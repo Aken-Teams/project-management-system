@@ -57,8 +57,225 @@ import {
   X,
   FileDown,
   CalendarRange,
+  ChevronDown,
 } from 'lucide-react'
 import Link from 'next/link'
+import { computeProjectRisks, getRiskTypeLabel, type AutoRisk, type AutoRiskType } from '@/lib/risk-utils'
+
+// --- Risk Tab component ---
+
+const RISK_GROUP_ORDER: AutoRiskType[] = [
+  'support-needed',
+  'overdue-task',
+  'milestone-delay',
+  'blocked-chain',
+  'pending-delay',
+  'no-update',
+]
+
+const RISK_TYPE_CONFIG: Record<AutoRiskType, {
+  icon: React.ReactNode
+  color: string
+  bgColor: string
+  borderColor: string
+}> = {
+  'support-needed': {
+    icon: <HelpCircle className="h-4 w-4" />,
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-50 dark:bg-red-950/20',
+    borderColor: 'border-red-200 dark:border-red-900',
+  },
+  'overdue-task': {
+    icon: <AlertTriangle className="h-4 w-4" />,
+    color: 'text-red-500',
+    bgColor: 'bg-red-50/50 dark:bg-red-950/10',
+    borderColor: 'border-red-200 dark:border-red-900',
+  },
+  'milestone-delay': {
+    icon: <Milestone className="h-4 w-4" />,
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50/50 dark:bg-amber-950/10',
+    borderColor: 'border-amber-200 dark:border-amber-900',
+  },
+  'blocked-chain': {
+    icon: <AlertCircle className="h-4 w-4" />,
+    color: 'text-orange-500',
+    bgColor: 'bg-orange-50/50 dark:bg-orange-950/10',
+    borderColor: 'border-orange-200 dark:border-orange-900',
+  },
+  'pending-delay': {
+    icon: <TimerReset className="h-4 w-4" />,
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-50/30 dark:bg-amber-950/10',
+    borderColor: 'border-amber-200 dark:border-amber-800',
+  },
+  'no-update': {
+    icon: <Clock className="h-4 w-4" />,
+    color: 'text-slate-500',
+    bgColor: 'bg-slate-50/50 dark:bg-slate-950/10',
+    borderColor: 'border-slate-200 dark:border-slate-800',
+  },
+}
+
+function ProjectRiskTab({ project }: { project: Project }) {
+  const autoRisks = useMemo(() => computeProjectRisks(project), [project])
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<AutoRiskType>>(new Set())
+
+  const riskGroups = useMemo(() => {
+    const grouped = new Map<AutoRiskType, AutoRisk[]>()
+    autoRisks.forEach(risk => {
+      const arr = grouped.get(risk.type) || []
+      arr.push(risk)
+      grouped.set(risk.type, arr)
+    })
+    return RISK_GROUP_ORDER
+      .filter(type => grouped.has(type))
+      .map(type => ({ type, risks: grouped.get(type)! }))
+  }, [autoRisks])
+
+  const toggleGroup = (type: AutoRiskType) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+  }
+
+  const highCount = autoRisks.filter(r => r.severity === 'high').length
+  const mediumCount = autoRisks.filter(r => r.severity === 'medium').length
+  const lowCount = autoRisks.filter(r => r.severity === 'low').length
+
+  if (autoRisks.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
+          <p className="text-sm font-medium">目前沒有偵測到風險</p>
+          <p className="text-xs text-muted-foreground mt-1">系統會自動監控任務逾期、進度停滯等狀況</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap rounded-lg bg-muted/50 border px-4 py-2.5">
+        <div className="flex items-center gap-1.5 text-sm">
+          <Shield className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">系統偵測到 {autoRisks.length} 項風險</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {highCount > 0 && (
+            <Badge variant="destructive" className="text-xs">{highCount} 高</Badge>
+          )}
+          {mediumCount > 0 && (
+            <Badge className="text-xs bg-warning text-warning-foreground">{mediumCount} 中</Badge>
+          )}
+          {lowCount > 0 && (
+            <Badge variant="secondary" className="text-xs">{lowCount} 低</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Risk groups */}
+      {riskGroups.map(({ type, risks }) => {
+        const config = RISK_TYPE_CONFIG[type]
+        const isCollapsed = collapsedGroups.has(type)
+        const isSupport = type === 'support-needed'
+
+        return (
+          <Card key={type} className={isSupport ? `${config.borderColor} ${config.bgColor}` : ''}>
+            {/* Group header — clickable */}
+            <button
+              onClick={() => toggleGroup(type)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+            >
+              <div className={`shrink-0 ${config.color}`}>{config.icon}</div>
+              <span className="text-sm font-medium flex-1">{getRiskTypeLabel(type)}</span>
+              <Badge variant="secondary" className="text-xs">{risks.length}</Badge>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+            </button>
+
+            {/* Group content */}
+            {!isCollapsed && (
+              <div className="px-4 pb-3">
+                {isSupport ? (
+                  /* Support needed — prominent cards */
+                  <div className="space-y-2">
+                    {risks.map(risk => (
+                      <div key={risk.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{risk.assignee} 需要協助</span>
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">高</Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{risk.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : type === 'milestone-delay' ? (
+                  /* Milestone delay — compact rows */
+                  <div className="rounded-lg border overflow-hidden">
+                    <div className="grid grid-cols-[1fr_80px_90px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+                      <span>里程碑</span>
+                      <span>進度</span>
+                      <span className="text-right">逾期</span>
+                    </div>
+                    {risks.map(risk => (
+                      <div key={risk.id} className="grid grid-cols-[1fr_80px_90px] gap-2 px-3 py-2 border-t items-center">
+                        <span className="text-sm truncate">{risk.title}</span>
+                        <span className="text-xs text-muted-foreground">{risk.description.match(/進度 (\d+%)/)?.[1] || '—'}</span>
+                        <span className="text-xs text-right text-red-600 font-medium">
+                          {risk.description.match(/(\d+) 天/)?.[1] || '—'} 天
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : type === 'pending-delay' ? (
+                  /* Pending delay — info cards */
+                  <div className="space-y-2">
+                    {risks.map(risk => (
+                      <div key={risk.id} className="p-3 rounded-lg border text-sm space-y-1">
+                        <p className="text-muted-foreground">{risk.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Default: overdue-task, blocked-chain, no-update — compact table */
+                  <div className="rounded-lg border overflow-hidden">
+                    <div className="grid grid-cols-[1fr_100px_1fr] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+                      <span>任務</span>
+                      <span>負責人</span>
+                      <span>狀況</span>
+                    </div>
+                    {risks.map(risk => (
+                      <div key={risk.id} className="grid grid-cols-[1fr_100px_1fr] gap-2 px-3 py-2 border-t items-center">
+                        <span className="text-sm truncate">{risk.title}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <User className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="text-xs text-muted-foreground truncate">{risk.assignee || '—'}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground truncate">{risk.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        )
+      })}
+
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+        <Info className="h-3.5 w-3.5 shrink-0" />
+        風險由系統自動偵測，當問題解決後會自動消除
+      </p>
+    </div>
+  )
+}
 
 // --- Auto-generated weekly activity summary ---
 
@@ -823,6 +1040,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+  const autoRisks = useMemo(() => computeProjectRisks(project), [project])
 
   return (
     <DashboardLayout>
@@ -939,6 +1157,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <TabsTrigger value="risks" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <Shield className="h-4 w-4" />
                 風險
+                {autoRisks.length > 0 && (
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                    {autoRisks.length}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="delays" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <TimerReset className="h-4 w-4" />
@@ -1046,7 +1269,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                           未解決風險
                         </span>
                         <span className="font-medium text-destructive">
-                          {project.risks.filter(r => r.status === 'open').length}
+                          {autoRisks.length}
                         </span>
                       </div>
                       <div className="flex items-center justify-between py-2.5 last:pb-0">
@@ -1096,57 +1319,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <WeeklyActivitySummary project={project} />
           </TabsContent>
 
-          {/* Risks Tab */}
+          {/* Risks Tab — Auto-computed, grouped */}
           <TabsContent value="risks" className="mt-0">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-muted-foreground" />
-                    風險管理
-                  </CardTitle>
-                  <span className="text-sm text-muted-foreground">
-                    {project.risks.filter(r => r.status === 'open').length} 個未解決
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {project.risks.map((risk) => (
-                  <div key={risk.id} className="p-3 rounded-lg border space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-sm">{risk.title}</h4>
-                        <Badge variant={risk.status === 'open' ? 'destructive' : risk.status === 'mitigated' ? 'secondary' : 'default'} className="text-xs">
-                          {risk.status === 'open' ? '未解決' : risk.status === 'mitigated' ? '已緩解' : '已關閉'}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground' : risk.impact === 'medium' ? 'bg-warning text-warning-foreground' : ''}`}
-                        >
-                          {risk.impact === 'high' ? '高' : risk.impact === 'medium' ? '中' : '低'}影響
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {risk.probability === 'high' ? '高' : risk.probability === 'medium' ? '中' : '低'}機率
-                        </Badge>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{risk.description}</p>
-                    <div className="bg-muted p-2.5 rounded text-sm">
-                      <span className="font-medium">緩解措施：</span> {risk.mitigation}
-                    </div>
-                  </div>
-                ))}
-
-                {project.risks.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
-                    <p className="text-sm">目前沒有識別到的風險</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <ProjectRiskTab project={project} />
           </TabsContent>
 
           {/* Delays Tab */}
