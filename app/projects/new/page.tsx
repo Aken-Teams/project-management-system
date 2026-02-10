@@ -45,10 +45,6 @@ import {
   Layers,
   TrendingUp,
   ClipboardList,
-  FolderKanban,
-  Hash,
-  Briefcase,
-  Banknote,
   GripVertical,
   Save,
   FolderOpen,
@@ -236,6 +232,8 @@ export default function NewProjectPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai')
   const [showDraftsDialog, setShowDraftsDialog] = useState(false)
+  const [showSaveDraftDialog, setShowSaveDraftDialog] = useState(false)
+  const [draftNameInput, setDraftNameInput] = useState('')
   const [savedDrafts, setSavedDrafts] = useState<ProjectDraft[]>([])
 
   // AI Mode
@@ -293,11 +291,19 @@ export default function NewProjectPage() {
     }
   }, [])
 
-  // Save current state as draft
-  const saveDraft = () => {
-    const draftTitle = activeTab === 'manual'
+  // Open save draft dialog
+  const openSaveDraftDialog = () => {
+    const defaultName = activeTab === 'manual'
       ? manualData.name || '未命名專案'
       : parsedData?.name || requirements.slice(0, 30) || '未命名專案'
+
+    setDraftNameInput(defaultName)
+    setShowSaveDraftDialog(true)
+  }
+
+  // Save current state as draft
+  const confirmSaveDraft = () => {
+    const draftTitle = draftNameInput.trim() || '未命名專案'
 
     const draft: ProjectDraft = {
       id: `draft-${Date.now()}`,
@@ -327,6 +333,9 @@ export default function NewProjectPage() {
     const updatedDrafts = [draft, ...savedDrafts]
     setSavedDrafts(updatedDrafts)
     localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(updatedDrafts))
+
+    setShowSaveDraftDialog(false)
+    setDraftNameInput('')
 
     toast({
       title: '草稿已儲存',
@@ -694,13 +703,22 @@ export default function NewProjectPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={saveDraft} className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openSaveDraftDialog}
+              className="gap-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+            >
               <Save className="h-4 w-4" />
               儲存草稿
             </Button>
             <Dialog open={showDraftsDialog} onOpenChange={setShowDraftsDialog}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                >
                   <FolderOpen className="h-4 w-4" />
                   載入草稿
                   {savedDrafts.length > 0 && (
@@ -764,6 +782,53 @@ export default function NewProjectPage() {
                     ))}
                   </div>
                 )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Save Draft Dialog */}
+            <Dialog open={showSaveDraftDialog} onOpenChange={setShowSaveDraftDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>儲存草稿</DialogTitle>
+                  <DialogDescription>
+                    為這個草稿命名，方便日後識別
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="draft-name">草稿名稱</Label>
+                    <Input
+                      id="draft-name"
+                      placeholder="輸入草稿名稱"
+                      value={draftNameInput}
+                      onChange={(e) => setDraftNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          confirmSaveDraft()
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowSaveDraftDialog(false)
+                      setDraftNameInput('')
+                    }}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    onClick={confirmSaveDraft}
+                    className="gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    確認儲存
+                  </Button>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
@@ -1161,8 +1226,7 @@ export default function NewProjectPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="manual-project-type" className="flex items-center gap-2">
-                        <FolderKanban className="h-4 w-4 text-indigo-500" />
+                      <Label htmlFor="manual-project-type">
                         專案類型 <span className="text-destructive">*</span>
                       </Label>
                       <Select
@@ -1184,8 +1248,7 @@ export default function NewProjectPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Hash className="h-4 w-4 text-gray-500" />
+                      <Label>
                         專案代碼預覽
                       </Label>
                       <div className="flex h-10 items-center rounded-md border bg-muted/50 px-3 text-sm font-mono text-muted-foreground">
@@ -1196,8 +1259,7 @@ export default function NewProjectPage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name" className="flex items-center gap-2">
-                        <Briefcase className="h-4 w-4 text-cyan-500" />
+                      <Label htmlFor="name">
                         專案名稱 <span className="text-destructive">*</span>
                       </Label>
                       <Input
@@ -1208,8 +1270,7 @@ export default function NewProjectPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="budget" className="flex items-center gap-2">
-                        <Banknote className="h-4 w-4 text-emerald-500" />
+                      <Label htmlFor="budget">
                         投資預算 (NT$)
                       </Label>
                       <Input
