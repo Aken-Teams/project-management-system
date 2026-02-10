@@ -25,6 +25,7 @@ import { parseProjectRequirements, type ParsedProjectData } from '@/lib/ai-servi
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, generateProjectCode, type ProjectType } from '@/lib/mock-data'
+import { VoiceInputButton } from '@/components/voice-input-button'
 import {
   Loader2,
   Sparkles,
@@ -71,6 +72,15 @@ import { CSS } from '@dnd-kit/utilities'
 interface ManualMilestone {
   id: string
   name: string
+  durationWeeks: number
+  startDate?: string
+  endDate?: string
+}
+
+interface AiMilestone {
+  id: string
+  name: string
+  description: string
   durationWeeks: number
   startDate?: string
   endDate?: string
@@ -130,7 +140,17 @@ const DRAFTS_STORAGE_KEY = 'project-drafts'
 
 const STEPS = [
   { label: '基本資訊', icon: FileText },
-  { label: '專案定義', icon: Target },
+  { label: 'SMART 目標', icon: Target },
+  { label: '專案定義', icon: Lightbulb },
+  { label: '時程里程碑', icon: Calendar },
+  { label: '團隊與風險', icon: Users },
+]
+
+const AI_STEPS = [
+  { label: 'AI 解析', icon: Sparkles },
+  { label: '基本資訊', icon: FileText },
+  { label: 'SMART 目標', icon: Target },
+  { label: '專案定義', icon: Lightbulb },
   { label: '時程里程碑', icon: Calendar },
   { label: '團隊與風險', icon: Users },
 ]
@@ -225,6 +245,107 @@ function SortableMilestoneItem({
   )
 }
 
+// Sortable AI Milestone Item Component
+function SortableAiMilestoneItem({
+  milestone,
+  index,
+  onUpdate,
+  onRemove,
+  canRemove,
+}: {
+  milestone: AiMilestone & { startDate?: string; endDate?: string }
+  index: number
+  onUpdate: (index: number, field: keyof AiMilestone, value: string | number) => void
+  onRemove: (index: number) => void
+  canRemove: boolean
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: milestone.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted cursor-grab active:cursor-grabbing mt-1"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="flex-1 space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">里程碑名稱</Label>
+            <Input
+              placeholder="例如：需求分析完成"
+              value={milestone.name}
+              onChange={(e) => onUpdate(index, 'name', e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">期程（週）</Label>
+            <Input
+              type="number"
+              min="0"
+              placeholder="例如：3"
+              value={milestone.durationWeeks || ''}
+              onChange={(e) => onUpdate(index, 'durationWeeks', Number(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">說明</Label>
+          <Textarea
+            placeholder="里程碑的詳細說明"
+            value={milestone.description}
+            onChange={(e) => onUpdate(index, 'description', e.target.value)}
+            rows={2}
+          />
+        </div>
+        {milestone.startDate && milestone.endDate && (
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">計算日期</Label>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span className="font-medium">{milestone.startDate}</span>
+              <span>至</span>
+              <span className="font-medium">{milestone.endDate}</span>
+              <span className="text-xs">
+                ({milestone.durationWeeks} 週)
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
+        onClick={() => onRemove(index)}
+        disabled={!canRemove}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+}
+
 export default function NewProjectPage() {
   const router = useRouter()
   const { addProject } = useProjectStore()
@@ -245,6 +366,28 @@ export default function NewProjectPage() {
   const [aiExpectedBenefits, setAiExpectedBenefits] = useState('')
   const [aiTeamMembers, setAiTeamMembers] = useState<string[]>([])
   const [aiTeamInput, setAiTeamInput] = useState('')
+
+  // AI Step Wizard
+  const [aiCurrentStep, setAiCurrentStep] = useState(0)
+  const [aiEditableData, setAiEditableData] = useState({
+    name: '',
+    budget: '',
+    startDate: '',
+    endDate: '',
+    purpose: '',
+    scope: '',
+    roi: '',
+    expectedBenefits: '',
+  })
+  const [aiSmartObjective, setAiSmartObjective] = useState({
+    specific: '',
+    measurable: '',
+    achievable: '',
+    relevant: '',
+    timeBound: '',
+  })
+  const [aiMilestones, setAiMilestones] = useState<AiMilestone[]>([])
+  const [aiRisks, setAiRisks] = useState<Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; probability: 'low' | 'medium' | 'high' }>>([])
 
   // Manual Mode — Step Wizard
   const [currentStep, setCurrentStep] = useState(0)
@@ -510,6 +653,80 @@ export default function NewProjectPage() {
     )
   }
 
+  // AI Milestone date calculation (same as manual mode)
+  const calculateAiMilestoneDates = (milestones: AiMilestone[], startDate: string): AiMilestone[] => {
+    if (!startDate) return milestones
+
+    let currentDate = new Date(startDate)
+
+    return milestones.map((milestone) => {
+      if (!milestone.durationWeeks || milestone.durationWeeks <= 0) {
+        return { ...milestone, startDate: undefined, endDate: undefined }
+      }
+
+      const startDate = new Date(currentDate)
+      const daysToAdd = milestone.durationWeeks * 7 - 1
+      const endDate = new Date(currentDate)
+      endDate.setDate(endDate.getDate() + daysToAdd)
+
+      currentDate = new Date(endDate)
+      currentDate.setDate(currentDate.getDate() + 1)
+
+      return {
+        ...milestone,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+      }
+    })
+  }
+
+  // Recalculate AI milestone dates
+  const recalculatedAiMilestones = calculateAiMilestoneDates(aiMilestones, aiEditableData.startDate)
+
+  // Track AI last milestone end date
+  const aiLastMilestoneEndDate = useMemo(() => {
+    const lastMilestone = [...recalculatedAiMilestones]
+      .reverse()
+      .find(m => m.endDate && m.durationWeeks > 0)
+    return lastMilestone?.endDate || ''
+  }, [recalculatedAiMilestones])
+
+  // Auto-update AI project end date
+  useEffect(() => {
+    if (!aiEditableData.startDate || !aiLastMilestoneEndDate) return
+    setAiEditableData(prev => ({ ...prev, endDate: aiLastMilestoneEndDate }))
+  }, [aiLastMilestoneEndDate, aiEditableData.startDate])
+
+  // AI Milestone helpers
+  const addAiMilestone = () => {
+    const newId = `ai-milestone-${Date.now()}`
+    setAiMilestones([...aiMilestones, { id: newId, name: '', description: '', durationWeeks: 0 }])
+  }
+
+  const removeAiMilestone = (index: number) => {
+    if (aiMilestones.length <= 1) return
+    setAiMilestones(aiMilestones.filter((_, i) => i !== index))
+  }
+
+  const updateAiMilestone = (index: number, field: keyof AiMilestone, value: string | number) => {
+    setAiMilestones(
+      aiMilestones.map((m, i) => (i === index ? { ...m, [field]: value } : m))
+    )
+  }
+
+  // AI Drag and drop handler
+  const handleAiDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      setAiMilestones((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id)
+        const newIndex = items.findIndex((item) => item.id === over.id)
+        return arrayMove(items, oldIndex, newIndex)
+      })
+    }
+  }
+
   // Team member helpers
   const addTeamMember = (members: string[], setMembers: (m: string[]) => void, input: string, setInput: (s: string) => void) => {
     const name = input.trim()
@@ -565,6 +782,34 @@ export default function NewProjectPage() {
     try {
       const result = await parseProjectRequirements({ description: requirements })
       setParsedData(result)
+
+      // Populate editable fields with AI results
+      setAiEditableData({
+        name: result.name,
+        budget: (result.estimatedBudget / 1000000).toFixed(1),
+        startDate: result.startDate,
+        endDate: result.endDate,
+        purpose: result.purpose,
+        scope: result.scope,
+        roi: result.roi,
+        expectedBenefits: aiExpectedBenefits,
+      })
+      setAiSmartObjective(result.smartObjective)
+      setAiMilestones(result.suggestedMilestones.map((m, index) => {
+        // Parse weeks from duration string (e.g., "3 週" -> 3)
+        const weeksMatch = m.estimatedDuration.match(/(\d+)\s*週/)
+        const weeks = weeksMatch ? parseInt(weeksMatch[1]) : 0
+        return {
+          id: `ai-milestone-${Date.now()}-${index}`,
+          name: m.name,
+          description: m.description,
+          durationWeeks: weeks,
+        }
+      }))
+      setAiRisks(result.identifiedRisks)
+
+      // Move to step 1 (Basic Info)
+      setAiCurrentStep(1)
     } catch (error) {
       console.error('Failed to parse requirements:', error)
     } finally {
@@ -577,33 +822,41 @@ export default function NewProjectPage() {
 
     const ownerName = user?.name || 'Unknown'
 
-    const milestones = parsedData.suggestedMilestones.map((m, index) => ({
-      id: `ms-new-${index}`,
-      name: m.name,
-      dueDate: parsedData.startDate,
-    }))
+    // Use editable data instead of original parsedData
+    const objective = `${aiSmartObjective.specific}${aiSmartObjective.measurable ? '，' + aiSmartObjective.measurable : ''}`
 
-    const risks = parsedData.identifiedRisks.map(r => ({
-      title: r.title,
-      description: r.description,
-      impact: r.impact,
-      probability: r.probability,
-      mitigation: '',
-      status: 'open' as const,
-    }))
+    const milestones = aiMilestones
+      .filter(m => m.name.trim())
+      .map((m, index) => ({
+        id: `ms-new-${index}`,
+        name: m.name,
+        dueDate: aiEditableData.endDate,
+      }))
+
+    const risks = aiRisks
+      .filter(r => r.title.trim())
+      .map(r => ({
+        title: r.title,
+        description: r.description,
+        impact: r.impact,
+        probability: r.probability,
+        mitigation: '',
+        status: 'open' as const,
+      }))
 
     const newProject = addProject({
       projectType: aiProjectType,
-      name: parsedData.name,
-      objective: parsedData.objective,
-      purpose: parsedData.purpose,
-      scope: parsedData.scope,
-      roi: parsedData.roi,
-      createdReason: aiCreatedReason || parsedData.purpose,
-      expectedBenefits: aiExpectedBenefits,
-      startDate: parsedData.startDate,
-      endDate: parsedData.endDate,
-      budget: parsedData.estimatedBudget,
+      name: aiEditableData.name,
+      objective,
+      purpose: aiEditableData.purpose,
+      scope: aiEditableData.scope,
+      roi: aiEditableData.roi,
+      createdReason: aiCreatedReason || aiEditableData.purpose,
+      expectedBenefits: aiEditableData.expectedBenefits,
+      smartObjective: aiSmartObjective,
+      startDate: aiEditableData.startDate,
+      endDate: aiEditableData.endDate,
+      budget: Number(aiEditableData.budget) * 1000000 || 0,
       owner: ownerName,
       team: [ownerName, ...aiTeamMembers.filter(m => m !== ownerName)],
       milestones,
@@ -870,320 +1123,546 @@ export default function NewProjectPage() {
 
           {/* AI Mode */}
           <TabsContent value="ai" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  AI 需求解析
-                </CardTitle>
-                <CardDescription>
-                  描述您的專案需求，AI 將自動產生專案規劃、時程、預算等資訊
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-project-type">專案類型 <span className="text-destructive">*</span></Label>
-                    <Select
-                      value={aiProjectType}
-                      onValueChange={(v) => handleAiTypeChange(v as ProjectType)}
+            {/* Step Indicator */}
+            <div className="flex items-center justify-between rounded-xl border bg-card p-4">
+              {AI_STEPS.map((step, index) => {
+                const Icon = step.icon
+                const isCompleted = index < aiCurrentStep
+                const isCurrent = index === aiCurrentStep
+
+                return (
+                  <div key={index} className="flex items-center flex-1 last:flex-initial">
+                    <button
+                      type="button"
+                      onClick={() => index <= aiCurrentStep && setAiCurrentStep(index)}
+                      disabled={index > aiCurrentStep}
+                      className={`flex flex-col items-center gap-1.5 transition-colors ${
+                        isCurrent
+                          ? 'text-primary'
+                          : isCompleted
+                            ? 'text-primary/70 hover:text-primary cursor-pointer'
+                            : 'text-muted-foreground/50 cursor-default'
+                      }`}
                     >
-                      <SelectTrigger id="ai-project-type">
-                        <SelectValue placeholder="選擇專案類型" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(
-                          ([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          )
-                        )}
-                      </SelectContent>
-                    </Select>
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-medium transition-colors ${
+                        isCurrent
+                          ? 'bg-primary text-primary-foreground shadow-md'
+                          : isCompleted
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-muted text-muted-foreground/50'
+                      }`}>
+                        {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                      </div>
+                      <span className={`text-xs hidden sm:inline ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
+                        {step.label}
+                      </span>
+                    </button>
+                    {index < AI_STEPS.length - 1 && (
+                      <div className={`flex-1 h-0.5 mx-2 rounded-full ${
+                        index < aiCurrentStep ? 'bg-primary/30' : 'bg-border'
+                      }`} />
+                    )}
                   </div>
+                )
+              })}
+            </div>
+
+            {/* Step 0: AI 解析 */}
+            {aiCurrentStep === 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    AI 需求解析
+                  </CardTitle>
+                  <CardDescription>
+                    描述您的專案需求，AI 將自動產生專案規劃、時程、預算等資訊
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-project-type">專案類型 <span className="text-destructive">*</span></Label>
+                      <Select
+                        value={aiProjectType}
+                        onValueChange={(v) => handleAiTypeChange(v as ProjectType)}
+                      >
+                        <SelectTrigger id="ai-project-type">
+                          <SelectValue placeholder="選擇專案類型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(
+                            ([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>專案代碼預覽</Label>
+                      <div className="flex h-10 items-center rounded-md border bg-muted/50 px-3 text-sm font-mono text-muted-foreground">
+                        {previewCode || '選擇類型後自動產生'}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label>專案代碼預覽</Label>
-                    <div className="flex h-10 items-center rounded-md border bg-muted/50 px-3 text-sm font-mono text-muted-foreground">
-                      {previewCode || '選擇類型後自動產生'}
+                    <Label htmlFor="ai-created-reason">開案原因</Label>
+                    <div className="flex gap-2">
+                      <Textarea
+                        id="ai-created-reason"
+                        placeholder="說明開立此專案的原因或背景"
+                        value={aiCreatedReason}
+                        onChange={(e) => setAiCreatedReason(e.target.value)}
+                        rows={2}
+                        className="flex-1"
+                      />
+                      <VoiceInputButton
+                        onTranscript={(text) => setAiCreatedReason(prev => prev + (prev ? ' ' : '') + text)}
+                        className="shrink-0"
+                      />
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="ai-created-reason">開案原因</Label>
-                  <Textarea
-                    id="ai-created-reason"
-                    placeholder="說明開立此專案的原因或背景"
-                    value={aiCreatedReason}
-                    onChange={(e) => setAiCreatedReason(e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ai-expected-benefits">預期效益</Label>
-                  <Textarea
-                    id="ai-expected-benefits"
-                    placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
-                    value={aiExpectedBenefits}
-                    onChange={(e) => setAiExpectedBenefits(e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="requirements">專案需求描述</Label>
-                  <Textarea
-                    id="requirements"
-                    placeholder="例如：我需要開發一個客戶管理系統，用來整合現有的客戶資料，追蹤銷售機會，並提供完整的客戶視圖。希望能提升銷售團隊的工作效率..."
-                    value={requirements}
-                    onChange={(e) => setRequirements(e.target.value)}
-                    rows={8}
-                    className="resize-none"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    提示：描述越詳細，AI 產生的規劃越準確。可以包含目標、功能需求、預期效益等。
-                  </p>
-                </div>
-
-                <Button
-                  onClick={handleAIParse}
-                  disabled={!requirements.trim() || isProcessing}
-                  className="w-full gap-2"
-                  size="lg"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      AI 解析中...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      使用 AI 解析並產生規劃
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* AI Parsed Results */}
-            {parsedData && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">AI 產生的專案規劃</h3>
-                  <Badge variant="secondary" className="gap-1">
-                    <Sparkles className="h-3 w-3" />
-                    AI 建議
-                  </Badge>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">基本資訊</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">專案名稱</Label>
-                        <p className="font-medium mt-1">{parsedData.name}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">專案類型</Label>
-                        <p className="font-medium mt-1">{PROJECT_TYPE_LABELS[aiProjectType]}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">專案目標</Label>
-                        <p className="mt-1">{parsedData.objective}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">專案目的</Label>
-                        <p className="mt-1">{parsedData.purpose}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base">範圍與效益</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">專案範圍</Label>
-                        <p className="mt-1">{parsedData.scope}</p>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">投資報酬 (ROI)</Label>
-                        <p className="mt-1">{parsedData.roi}</p>
-                      </div>
-                      {aiCreatedReason && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">開案原因</Label>
-                          <p className="mt-1">{aiCreatedReason}</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        時程規劃
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">開始日期</span>
-                        <span className="font-medium">{parsedData.startDate}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">結束日期</span>
-                        <span className="font-medium">{parsedData.endDate}</span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t">
-                        <span className="text-muted-foreground">專案期程</span>
-                        <span className="font-medium">
-                          {Math.ceil(
-                            (new Date(parsedData.endDate).getTime() -
-                              new Date(parsedData.startDate).getTime()) /
-                              (1000 * 60 * 60 * 24 * 7)
-                          )}{' '}
-                          週
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        預算與團隊
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">預估預算</span>
-                        <span className="font-medium">
-                          NT$ {(parsedData.estimatedBudget / 1000000).toFixed(1)}M
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">建議團隊規模</span>
-                        <span className="font-medium flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {parsedData.recommendedTeamSize} 人
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">負責人</span>
-                        <span className="font-medium">{user?.name || '—'}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* AI Team member input */}
-                <Card>
-                  <CardContent className="pt-6">
-                    {renderTeamInput(aiTeamMembers, setAiTeamMembers, aiTeamInput, setAiTeamInput)}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">建議里程碑</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {parsedData.suggestedMilestones.map((milestone, index) => (
-                        <div
-                          key={index}
-                          className="flex items-start gap-3 p-3 rounded-lg border bg-card"
-                        >
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <h4 className="font-medium text-sm">{milestone.name}</h4>
-                              <Badge variant="outline" className="text-xs">
-                                {milestone.estimatedDuration}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {milestone.description}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-expected-benefits">預期效益</Label>
+                    <div className="flex gap-2">
+                      <Textarea
+                        id="ai-expected-benefits"
+                        placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
+                        value={aiExpectedBenefits}
+                        onChange={(e) => setAiExpectedBenefits(e.target.value)}
+                        rows={2}
+                        className="flex-1"
+                      />
+                      <VoiceInputButton
+                        onTranscript={(text) => setAiExpectedBenefits(prev => prev + (prev ? ' ' : '') + text)}
+                        className="shrink-0"
+                      />
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-warning" />
-                      識別的風險
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {parsedData.identifiedRisks.map((risk, index) => (
-                        <div key={index} className="p-3 rounded-lg border bg-card space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="font-medium text-sm">{risk.title}</h4>
-                            <div className="flex gap-1">
-                              <Badge
-                                variant="secondary"
-                                className={
-                                  risk.impact === 'high'
-                                    ? 'bg-destructive text-destructive-foreground'
-                                    : risk.impact === 'medium'
-                                      ? 'bg-warning text-warning-foreground'
-                                      : ''
-                                }
-                              >
-                                {risk.impact === 'high'
-                                  ? '高'
+                  <div className="space-y-2">
+                    <Label htmlFor="requirements">專案需求描述</Label>
+                    <div className="flex gap-2">
+                      <Textarea
+                        id="requirements"
+                        placeholder="例如：我需要開發一個客戶管理系統，用來整合現有的客戶資料，追蹤銷售機會，並提供完整的客戶視圖。希望能提升銷售團隊的工作效率..."
+                        value={requirements}
+                        onChange={(e) => setRequirements(e.target.value)}
+                        rows={8}
+                        className="resize-none flex-1"
+                      />
+                      <VoiceInputButton
+                        onTranscript={(text) => setRequirements(prev => prev + (prev ? ' ' : '') + text)}
+                        className="shrink-0"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      提示：描述越詳細，AI 產生的規劃越準確。可以包含目標、功能需求、預期效益等。點擊麥克風圖示可使用語音輸入。
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={handleAIParse}
+                    disabled={!requirements.trim() || isProcessing}
+                    className="w-full gap-2"
+                    size="lg"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        AI 解析中...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        使用 AI 解析並產生規劃
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 1: 基本資訊 */}
+            {aiCurrentStep === 1 && parsedData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                    基本資訊
+                  </CardTitle>
+                  <CardDescription>檢視並編輯 AI 產生的專案基本資訊</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-name">專案名稱 <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="ai-name"
+                        value={aiEditableData.name}
+                        onChange={(e) => setAiEditableData({ ...aiEditableData, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-budget">投資預算 (百萬元)</Label>
+                      <Input
+                        id="ai-budget"
+                        type="number"
+                        value={aiEditableData.budget}
+                        onChange={(e) => setAiEditableData({ ...aiEditableData, budget: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-start-date">開始日期</Label>
+                      <Input
+                        id="ai-start-date"
+                        type="date"
+                        value={aiEditableData.startDate}
+                        onChange={(e) => setAiEditableData({ ...aiEditableData, startDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-end-date">結束日期</Label>
+                      <Input
+                        id="ai-end-date"
+                        type="date"
+                        value={aiEditableData.endDate}
+                        onChange={(e) => setAiEditableData({ ...aiEditableData, endDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 2: SMART 目標 */}
+            {aiCurrentStep === 2 && parsedData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5 text-primary" />
+                    SMART 目標
+                  </CardTitle>
+                  <CardDescription>檢視並編輯 AI 產生的 SMART 目標（具體、可衡量、可達成、相關性、時限性）</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="smart-specific" className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">S</Badge>
+                        具體目標 (Specific)
+                      </Label>
+                      <Textarea
+                        id="smart-specific"
+                        value={aiSmartObjective.specific}
+                        onChange={(e) => setAiSmartObjective({ ...aiSmartObjective, specific: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="smart-measurable" className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">M</Badge>
+                        可衡量指標 (Measurable)
+                      </Label>
+                      <Textarea
+                        id="smart-measurable"
+                        value={aiSmartObjective.measurable}
+                        onChange={(e) => setAiSmartObjective({ ...aiSmartObjective, measurable: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="smart-achievable" className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">A</Badge>
+                        可達成性 (Achievable)
+                      </Label>
+                      <Textarea
+                        id="smart-achievable"
+                        value={aiSmartObjective.achievable}
+                        onChange={(e) => setAiSmartObjective({ ...aiSmartObjective, achievable: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="smart-relevant" className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">R</Badge>
+                        相關性 (Relevant)
+                      </Label>
+                      <Textarea
+                        id="smart-relevant"
+                        value={aiSmartObjective.relevant}
+                        onChange={(e) => setAiSmartObjective({ ...aiSmartObjective, relevant: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="smart-timebound" className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">T</Badge>
+                        時限性 (Time-bound)
+                      </Label>
+                      <Textarea
+                        id="smart-timebound"
+                        value={aiSmartObjective.timeBound}
+                        onChange={(e) => setAiSmartObjective({ ...aiSmartObjective, timeBound: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 3: 專案定義 */}
+            {aiCurrentStep === 3 && parsedData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-amber-500" />
+                    專案定義
+                  </CardTitle>
+                  <CardDescription>檢視並編輯專案目的、範圍和投資報酬</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-purpose">專案目的</Label>
+                    <Textarea
+                      id="ai-purpose"
+                      value={aiEditableData.purpose}
+                      onChange={(e) => setAiEditableData({ ...aiEditableData, purpose: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-scope">專案範圍</Label>
+                    <Textarea
+                      id="ai-scope"
+                      value={aiEditableData.scope}
+                      onChange={(e) => setAiEditableData({ ...aiEditableData, scope: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-roi">投資報酬 (ROI)</Label>
+                    <Textarea
+                      id="ai-roi"
+                      value={aiEditableData.roi}
+                      onChange={(e) => setAiEditableData({ ...aiEditableData, roi: e.target.value })}
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ai-expected-benefits">預期效益</Label>
+                    <Textarea
+                      id="ai-expected-benefits"
+                      value={aiEditableData.expectedBenefits}
+                      onChange={(e) => setAiEditableData({ ...aiEditableData, expectedBenefits: e.target.value })}
+                      rows={2}
+                      placeholder="描述專案完成後的預期效益"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 4: 時程里程碑 */}
+            {aiCurrentStep === 4 && parsedData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-muted-foreground" />
+                    時程與里程碑
+                  </CardTitle>
+                  <CardDescription>檢視並編輯 AI 建議的里程碑</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Project Dates */}
+                  <div className="grid gap-4 md:grid-cols-2 p-4 rounded-lg border bg-muted/30">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-project-start-date" className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-green-600" />
+                        專案開始日期 <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="ai-project-start-date"
+                        type="date"
+                        value={aiEditableData.startDate}
+                        onChange={(e) => setAiEditableData({ ...aiEditableData, startDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-project-end-date" className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-red-600" />
+                        專案結束日期 <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="ai-project-end-date"
+                        type="date"
+                        value={aiEditableData.endDate}
+                        onChange={(e) => setAiEditableData({ ...aiEditableData, endDate: e.target.value })}
+                        min={aiLastMilestoneEndDate || aiEditableData.startDate || ''}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Milestones with Drag & Drop */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        里程碑清單
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addAiMilestone}
+                        className="gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        新增里程碑
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      拖動里程碑可調整順序，系統會自動計算每個里程碑的開始與結束日期
+                    </p>
+
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleAiDragEnd}
+                    >
+                      <SortableContext items={aiMilestones.map(m => m.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-3">
+                          {recalculatedAiMilestones.map((milestone, index) => (
+                            <SortableAiMilestoneItem
+                              key={milestone.id}
+                              milestone={milestone}
+                              index={index}
+                              onUpdate={updateAiMilestone}
+                              onRemove={removeAiMilestone}
+                              canRemove={aiMilestones.length > 1}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Step 5: 團隊與風險 */}
+            {aiCurrentStep === 5 && parsedData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                    團隊與風險
+                  </CardTitle>
+                  <CardDescription>設定團隊成員並檢視風險</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {renderTeamInput(aiTeamMembers, setAiTeamMembers, aiTeamInput, setAiTeamInput)}
+
+                  <Separator />
+
+                  <div className="space-y-3">
+                    <Label className="text-base font-medium">AI 識別的風險</Label>
+                    {aiRisks.map((risk, index) => (
+                      <div key={index} className="p-3 rounded-lg border bg-card space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <Input
+                            value={risk.title}
+                            onChange={(e) => {
+                              const updated = [...aiRisks]
+                              updated[index] = { ...risk, title: e.target.value }
+                              setAiRisks(updated)
+                            }}
+                            placeholder="風險名稱"
+                          />
+                          <div className="flex gap-1 shrink-0">
+                            <Badge
+                              variant="secondary"
+                              className={
+                                risk.impact === 'high'
+                                  ? 'bg-destructive text-destructive-foreground'
                                   : risk.impact === 'medium'
-                                    ? '中'
-                                    : '低'}
-                                影響
-                              </Badge>
-                              <Badge variant="outline">
-                                {risk.probability === 'high'
-                                  ? '高'
-                                  : risk.probability === 'medium'
-                                    ? '中'
-                                    : '低'}
-                                機率
-                              </Badge>
-                            </div>
+                                    ? 'bg-warning text-warning-foreground'
+                                    : ''
+                              }
+                            >
+                              {risk.impact === 'high' ? '高' : risk.impact === 'medium' ? '中' : '低'}影響
+                            </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">{risk.description}</p>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                        <Textarea
+                          value={risk.description}
+                          onChange={(e) => {
+                            const updated = [...aiRisks]
+                            updated[index] = { ...risk, description: e.target.value }
+                            setAiRisks(updated)
+                          }}
+                          placeholder="風險描述"
+                          rows={2}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                <div className="flex gap-3">
-                  <Button onClick={handleCreateFromAI} size="lg" className="flex-1">
-                    建立專案
-                  </Button>
-                  <Button onClick={() => setParsedData(null)} variant="outline" size="lg">
-                    重新解析
-                  </Button>
+            {/* Navigation Buttons */}
+            {aiCurrentStep > 0 && parsedData && (
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setAiCurrentStep(aiCurrentStep - 1)}
+                  className="gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  上一步
+                </Button>
+                <div>
+                  {aiCurrentStep < AI_STEPS.length - 1 ? (
+                    <Button
+                      size="lg"
+                      onClick={() => setAiCurrentStep(aiCurrentStep + 1)}
+                      className="gap-2"
+                    >
+                      下一步
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      onClick={handleCreateFromAI}
+                      className="gap-2"
+                    >
+                      <Check className="h-4 w-4" />
+                      建立專案
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
           </TabsContent>
-
-          {/* Manual Mode — Step Wizard */}
           <TabsContent value="manual" className="space-y-6 mt-6">
             {/* Step Indicator */}
             <div className="flex items-center justify-between rounded-xl border bg-card p-4">
