@@ -188,7 +188,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
   return (
     <div className="space-y-4">
       {/* View toggle + Filters */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border bg-muted/30 px-4 py-3">
         <div className="flex items-center gap-3 flex-wrap">
           {/* View toggle */}
           <div className="flex items-center gap-1 rounded-lg border p-1">
@@ -300,6 +300,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
           baseline={project.baseline}
           startDate={project.startDate}
           endDate={project.endDate}
+          onTaskClick={handleTaskClick}
         />
       ) : (
         <div className="space-y-3">
@@ -372,7 +373,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                         ) : (
                           <div className="divide-y">
                             {/* Table header */}
-                            <div className="grid grid-cols-[minmax(0,1fr)_60px_52px_100px_90px] gap-2 px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                            <div className="grid grid-cols-[minmax(0,1fr)_68px_52px_120px_90px] gap-3 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               <span>任務</span>
                               <span>狀態</span>
                               <span>優先</span>
@@ -386,15 +387,15 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                                   key={task.id}
                                   onClick={() => handleTaskClick(task)}
                                   className={cn(
-                                    'grid grid-cols-[minmax(0,1fr)_60px_52px_100px_90px] gap-2 items-center px-2 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                    'grid grid-cols-[minmax(0,1fr)_68px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
                                     overdue && 'bg-destructive/5',
                                   )}
                                 >
                                   {/* Title + overdue indicator */}
                                   <div className="flex items-center gap-1.5 min-w-0">
-                                    {overdue && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
+                                    {overdue && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
                                     <span className={cn(
-                                      'text-xs truncate',
+                                      'text-sm truncate',
                                       effectiveStatus(task) === 'done' && 'text-muted-foreground',
                                     )}>{task.title}</span>
                                   </div>
@@ -404,16 +405,16 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                                   <div>{getPriorityBadge(task.priority)}</div>
                                   {/* Assignee */}
                                   <div className="flex items-center gap-1.5 min-w-0">
-                                    <Avatar className="h-5 w-5 shrink-0">
-                                      <AvatarFallback className={cn('text-[8px] text-white', getAvatarColor(task.assignee))}>
+                                    <Avatar className="h-6 w-6 shrink-0">
+                                      <AvatarFallback className={cn('text-[9px] text-white', getAvatarColor(task.assignee))}>
                                         {task.assignee.split(' ').map(n => n[0]).join('')}
                                       </AvatarFallback>
                                     </Avatar>
-                                    <span className="text-xs truncate text-muted-foreground">{task.assignee}</span>
+                                    <span className="text-sm truncate text-muted-foreground">{task.assignee}</span>
                                   </div>
                                   {/* Due date */}
                                   <div className={cn(
-                                    'text-xs text-right',
+                                    'text-sm text-right',
                                     overdue ? 'text-destructive font-medium' : 'text-muted-foreground',
                                   )}>
                                     {new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}

@@ -4,8 +4,6 @@ import { useRef, useState, useCallback, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { type Task, type Milestone } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import {
@@ -14,10 +12,6 @@ import {
   AlertTriangle,
   ChevronsDownUp,
   ChevronsUpDown,
-  Calendar,
-  Flag,
-  User,
-  Link2,
 } from 'lucide-react'
 
 interface GanttChartProps {
@@ -26,6 +20,7 @@ interface GanttChartProps {
   baseline?: Milestone[]
   startDate: string
   endDate: string
+  onTaskClick?: (task: Task) => void
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
@@ -37,13 +32,11 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 
 const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
   const [expandedMs, setExpandedMs] = useState<Set<string>>(new Set())
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-  const [taskDetailOpen, setTaskDetailOpen] = useState(false)
 
   const toggleMs = useCallback((msId: string) => {
     setExpandedMs(prev => {
@@ -193,45 +186,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
 
   const handleTaskClick = (task: Task, e: React.MouseEvent) => {
     e.stopPropagation()
-    setSelectedTask(task)
-    setTaskDetailOpen(true)
-  }
-
-  // Status/Priority helpers for task detail
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'done': return '已完成'
-      case 'in-progress': return '進行中'
-      case 'blocked': return '受阻'
-      default: return '待辦'
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'done': return <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
-      case 'in-progress': return <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
-      case 'blocked': return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">受阻</Badge>
-      default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
-    }
-  }
-
-  const getStatusBadgeLarge = (status: string) => {
-    switch (status) {
-      case 'done': return <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
-      case 'in-progress': return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
-      case 'blocked': return <Badge variant="destructive" className="text-xs">受阻</Badge>
-      default: return <Badge className="text-xs bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
-    }
-  }
-
-  const getPriorityLabel = (p: string) => p === 'high' ? '高' : p === 'medium' ? '中' : '低'
-  const getPriorityColor = (p: string) => {
-    switch (p) {
-      case 'high': return 'bg-red-100 text-red-700 border-red-300'
-      case 'medium': return 'bg-amber-100 text-amber-700 border-amber-300'
-      default: return 'bg-slate-100 text-slate-500 border-slate-300'
-    }
+    onTaskClick?.(task)
   }
 
   // Week grid for timeline area
@@ -516,116 +471,6 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
         </div>
       </Card>
 
-      {/* Task Detail Sheet */}
-      <Sheet open={taskDetailOpen} onOpenChange={setTaskDetailOpen}>
-        <SheetContent className="sm:max-w-md overflow-y-auto">
-          {selectedTask && (() => {
-            const taskOverdue = isTaskOverdue(selectedTask)
-            const taskMs = milestones.find(m => m.id === selectedTask.milestoneId)
-            return (
-              <>
-                <SheetHeader>
-                  <SheetTitle className="text-left">{selectedTask.title}</SheetTitle>
-                  <SheetDescription className="text-left">
-                    {taskMs?.name}
-                  </SheetDescription>
-                </SheetHeader>
-                <div className="space-y-5 mt-6">
-                  {/* Status & Priority & Overdue */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusBadgeLarge(effectiveStatus(selectedTask))}
-                    <Badge className={cn('text-xs', getPriorityColor(selectedTask.priority))}>
-                      {getPriorityLabel(selectedTask.priority)}優先
-                    </Badge>
-                    {taskOverdue && (
-                      <Badge variant="destructive" className="text-xs gap-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        逾期
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Progress */}
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1.5">進度</div>
-                    <div className="flex items-center gap-3">
-                      <Progress value={selectedTask.progress} className="h-2 flex-1" />
-                      <span className="text-sm font-medium">{selectedTask.progress}%</span>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  {selectedTask.description && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1.5">描述</div>
-                      <p className="text-sm">{selectedTask.description}</p>
-                    </div>
-                  )}
-
-                  {/* Assignee */}
-                  <div className="flex items-center gap-3">
-                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                      <User className="h-3 w-3" />
-                      負責人
-                    </div>
-                    <span className="text-sm">{selectedTask.assignee}</span>
-                  </div>
-
-                  {/* Dates */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-                        <Calendar className="h-3 w-3" />
-                        開始日期
-                      </div>
-                      <span className="text-sm">{new Date(selectedTask.startDate).toLocaleDateString('zh-TW')}</span>
-                    </div>
-                    <div>
-                      <div className={cn(
-                        'text-xs font-medium mb-1 flex items-center gap-1.5',
-                        taskOverdue ? 'text-destructive' : 'text-muted-foreground',
-                      )}>
-                        <Flag className="h-3 w-3" />
-                        結束日期
-                      </div>
-                      <span className={cn('text-sm', taskOverdue && 'text-destructive font-medium')}>
-                        {new Date(selectedTask.endDate).toLocaleDateString('zh-TW')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Dependencies */}
-                  {selectedTask.dependencies.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                        <Link2 className="h-3 w-3" />
-                        依賴任務
-                      </div>
-                      <div className="space-y-1">
-                        {selectedTask.dependencies.map(depId => {
-                          const depTask = tasks.find(t => t.id === depId)
-                          return (
-                            <div key={depId} className="flex items-center gap-2 text-sm p-1.5 rounded bg-muted/50">
-                              {depTask ? (
-                                <>
-                                  {getStatusBadge(depTask.status)}
-                                  <span className="truncate">{depTask.title}</span>
-                                </>
-                              ) : (
-                                <span className="text-muted-foreground">{depId}</span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )
-          })()}
-        </SheetContent>
-      </Sheet>
     </div>
   )
 }
