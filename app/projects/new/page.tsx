@@ -436,7 +436,15 @@ export default function NewProjectPage() {
   // Recalculate dates when milestones or start date changes
   const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate)
 
-  // Auto-update project end date if milestones exceed it
+  // Get the minimum allowed end date (last milestone's end date)
+  const getMinEndDate = () => {
+    const lastMilestone = [...recalculatedMilestones]
+      .reverse()
+      .find(m => m.endDate && m.durationWeeks > 0)
+    return lastMilestone?.endDate || manualData.startDate || ''
+  }
+
+  // Auto-update project end date based on milestones
   useEffect(() => {
     if (!manualData.startDate || recalculatedMilestones.length === 0) return
 
@@ -447,11 +455,13 @@ export default function NewProjectPage() {
 
     if (!lastMilestone?.endDate) return
 
-    // If no project end date is set, or if last milestone exceeds it, update automatically
-    if (!manualData.endDate || new Date(lastMilestone.endDate) > new Date(manualData.endDate)) {
-      setManualData(prev => ({ ...prev, endDate: lastMilestone.endDate! }))
+    // Auto-update end date if:
+    // 1. No end date is set yet, OR
+    // 2. Last milestone's end date is greater than current end date (milestones extended)
+    if (!manualData.endDate || lastMilestone.endDate > manualData.endDate) {
+      setManualData(prev => ({ ...prev, endDate: lastMilestone.endDate }))
     }
-  }, [recalculatedMilestones, manualData.startDate]) // Removed manualData.endDate to avoid loop
+  }, [recalculatedMilestones, manualData.startDate, manualData.endDate])
 
   // Milestone helpers
   const addMilestone = () => {
@@ -1516,6 +1526,7 @@ export default function NewProjectPage() {
                       <Input
                         id="endDate"
                         type="date"
+                        min={getMinEndDate()}
                         value={manualData.endDate}
                         onChange={(e) => setManualData({ ...manualData, endDate: e.target.value })}
                       />
