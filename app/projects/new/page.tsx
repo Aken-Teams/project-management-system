@@ -87,6 +87,7 @@ interface TeamMemberDraft {
   name: string
   role: TeamRole
   responsibility: string
+  organization?: string
 }
 
 interface MilestoneTaskDraft {
@@ -141,8 +142,6 @@ interface ProjectDraft {
     parsedData?: ParsedProjectData | null
   }
 }
-
-const DRAFTS_STORAGE_KEY = 'project-drafts'
 
 const STEPS = [
   { label: '基本資訊', icon: FileText },
@@ -242,17 +241,14 @@ export default function NewProjectPage() {
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
 
-  // Load drafts from localStorage on mount
+  // Load drafts from API on mount
   useEffect(() => {
-    const stored = localStorage.getItem(DRAFTS_STORAGE_KEY)
-    if (stored) {
-      try {
-        setSavedDrafts(JSON.parse(stored))
-      } catch (e) {
-        console.error('Failed to load drafts:', e)
-      }
-    }
-  }, [])
+    if (!user?.email) return
+    fetch(`/api/drafts?email=${encodeURIComponent(user.email)}`)
+      .then((res) => res.ok ? res.json() : [])
+      .then((data) => setSavedDrafts(data))
+      .catch((e) => console.error('Failed to load drafts:', e))
+  }, [user?.email])
 
   // Open save draft dialog
   const openSaveDraftDialog = () => {
@@ -265,47 +261,61 @@ export default function NewProjectPage() {
   }
 
   // Save current state as draft
-  const confirmSaveDraft = () => {
+  const confirmSaveDraft = async () => {
     const draftTitle = draftNameInput.trim() || '未命名專案'
 
-    const draft: ProjectDraft = {
-      id: `draft-${Date.now()}`,
-      mode: activeTab,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      title: draftTitle,
-      data: {
-        // Manual mode data
-        manualData: activeTab === 'manual' ? manualData : undefined,
-        smartObjective: activeTab === 'manual' ? smartObjective : undefined,
-        manualProjectType: activeTab === 'manual' ? manualProjectType : undefined,
-        manualProjectTier: activeTab === 'manual' ? manualProjectTier : undefined,
-        manualDemandSource: activeTab === 'manual' ? manualDemandSource : undefined,
-        manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
-        manualRisks: activeTab === 'manual' ? manualRisks : undefined,
-        currentStep: activeTab === 'manual' ? currentStep : undefined,
-        // AI mode data
-        aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
-        aiProjectTier: activeTab === 'ai' ? aiProjectTier : undefined,
-        aiDemandSource: activeTab === 'ai' ? aiDemandSource : undefined,
-        aiCreatedReason: activeTab === 'ai' ? aiCreatedReason : undefined,
-        aiExpectedBenefits: activeTab === 'ai' ? aiExpectedBenefits : undefined,
-        requirements: activeTab === 'ai' ? requirements : undefined,
-        parsedData: activeTab === 'ai' ? parsedData : undefined,
-      }
+    const draftData = {
+      // Manual mode data
+      manualData: activeTab === 'manual' ? manualData : undefined,
+      smartObjective: activeTab === 'manual' ? smartObjective : undefined,
+      manualProjectType: activeTab === 'manual' ? manualProjectType : undefined,
+      manualProjectTier: activeTab === 'manual' ? manualProjectTier : undefined,
+      manualDemandSource: activeTab === 'manual' ? manualDemandSource : undefined,
+      manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
+      manualRisks: activeTab === 'manual' ? manualRisks : undefined,
+      currentStep: activeTab === 'manual' ? currentStep : undefined,
+      // AI mode data
+      aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
+      aiProjectTier: activeTab === 'ai' ? aiProjectTier : undefined,
+      aiDemandSource: activeTab === 'ai' ? aiDemandSource : undefined,
+      aiCreatedReason: activeTab === 'ai' ? aiCreatedReason : undefined,
+      aiExpectedBenefits: activeTab === 'ai' ? aiExpectedBenefits : undefined,
+      requirements: activeTab === 'ai' ? requirements : undefined,
+      parsedData: activeTab === 'ai' ? parsedData : undefined,
     }
 
-    const updatedDrafts = [draft, ...savedDrafts]
-    setSavedDrafts(updatedDrafts)
-    localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(updatedDrafts))
+    try {
+      const res = await fetch('/api/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          userName: user?.name,
+          title: draftTitle,
+          mode: activeTab,
+          data: draftData,
+        }),
+      })
 
-    setShowSaveDraftDialog(false)
-    setDraftNameInput('')
+      if (!res.ok) throw new Error('儲存失敗')
 
-    toast({
-      title: '草稿已儲存',
-      description: `「${draftTitle}」已成功儲存`,
-    })
+      const saved = await res.json()
+      setSavedDrafts([saved, ...savedDrafts])
+
+      setShowSaveDraftDialog(false)
+      setDraftNameInput('')
+
+      toast({
+        title: '草稿已儲存',
+        description: `「${draftTitle}」已成功儲存`,
+      })
+    } catch (error) {
+      toast({
+        title: '儲存草稿失敗',
+        description: '請稍後再試',
+        variant: 'destructive',
+      })
+    }
   }
 
   // Load draft
@@ -339,15 +349,23 @@ export default function NewProjectPage() {
   }
 
   // Delete draft
-  const deleteDraft = (draftId: string) => {
-    const updatedDrafts = savedDrafts.filter(d => d.id !== draftId)
-    setSavedDrafts(updatedDrafts)
-    localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(updatedDrafts))
+  const deleteDraft = async (draftId: string) => {
+    try {
+      const res = await fetch(`/api/drafts/${draftId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('刪除失敗')
 
-    toast({
-      title: '草稿已刪除',
-      description: '草稿已從清單中移除',
-    })
+      setSavedDrafts(savedDrafts.filter(d => d.id !== draftId))
+      toast({
+        title: '草稿已刪除',
+        description: '草稿已從清單中移除',
+      })
+    } catch (error) {
+      toast({
+        title: '刪除草稿失敗',
+        description: '請稍後再試',
+        variant: 'destructive',
+      })
+    }
   }
 
   const updateProjectCodePreview = (type: ProjectType) => {

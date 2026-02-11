@@ -111,8 +111,9 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
-  role      UserRole @default(member)
-  avatarUrl String?  @map("avatar_url")
+  role         UserRole @default(member)
+  organization String   @default("")
+  avatarUrl    String?  @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -125,6 +126,7 @@ model User {
   resolvedDelays      DelayRequest[]      @relation("DelaySupportResolver")
   taskLogs            TaskLog[]
   notifications       Notification[]
+  drafts              ProjectDraft[]
 
   @@map("users")
 }
@@ -407,6 +409,21 @@ model Notification {
   @@index([userId, read])
   @@index([projectId])
   @@map("notifications")
+}
+
+model ProjectDraft {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  mode      String   // 'manual' | 'ai'
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("project_drafts")
 }
 
 model ProjectCodeSequence {
