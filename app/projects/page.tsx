@@ -13,8 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PROJECT_TYPE_LABELS, type ProjectStatus, type ProjectType } from '@/lib/mock-data'
-import { useProjectStore } from '@/lib/project-store'
+import { PROJECT_TYPE_LABELS, type ProjectStatus, type ProjectType, type Project } from '@/lib/mock-data'
 import {
   Search,
   Users,
@@ -28,12 +27,10 @@ import Link from 'next/link'
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { Loader2 } from 'lucide-react'
-import type { Project } from '@/lib/mock-data'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
-  const { projects: storeProjects } = useProjectStore()
-  const [apiProjects, setApiProjects] = useState<Project[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
@@ -45,17 +42,12 @@ export default function ProjectsPage() {
     setLoading(true)
     fetch('/api/projects')
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setApiProjects(data))
-      .catch(() => setApiProjects([]))
+      .then((data) => setProjects(data))
+      .catch(() => setProjects([]))
       .finally(() => setLoading(false))
   }, [])
 
-  // Merge: API projects + store projects (deduplicated by id)
-  const allProjects = useMemo(() => {
-    const apiIds = new Set(apiProjects.map((p) => p.id))
-    const storeOnly = storeProjects.filter((p) => !apiIds.has(p.id))
-    return [...apiProjects, ...storeOnly]
-  }, [apiProjects, storeProjects])
+  const allProjects = projects
 
   // 根據角色過濾專案
   const projects = user?.role === 'member'
