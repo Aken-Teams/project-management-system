@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, ChevronDown, ChevronRight, Check } from 'lucide-react'
 import {
   type Project,
   type ProjectType,
@@ -30,6 +30,8 @@ import {
   type SmartObjective,
   type TeamRole,
   type Risk,
+  type Task,
+  type Milestone,
   PROJECT_TYPE_LABELS,
   PROJECT_TIER_LABELS,
   DEMAND_SOURCE_LABELS,
@@ -44,6 +46,7 @@ interface ProjectEditDialogProps {
   onSave: (data: ProjectEditData) => Promise<void>
   onTeamChange?: () => void
   onRiskChange?: () => void
+  onWorkItemsChange?: () => void
 }
 
 export interface ProjectEditData {
@@ -117,7 +120,22 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
   return 'low'
 }
 
-export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange }: ProjectEditDialogProps) {
+// ─── Task / Milestone labels & colors ────────────────────────
+const MS_STATUS_LABELS: Record<string, string> = { todo: '待辦', 'in-progress': '進行中', done: '完成', blocked: '阻塞' }
+const MS_STATUS_COLORS: Record<string, string> = {
+  todo: 'bg-slate-100 text-slate-600',
+  'in-progress': 'bg-blue-100 text-blue-700',
+  done: 'bg-green-100 text-green-700',
+  blocked: 'bg-red-100 text-red-700',
+}
+const PRIORITY_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
+const PRIORITY_COLORS: Record<string, { dot: string }> = {
+  low:    { dot: 'bg-slate-400' },
+  medium: { dot: 'bg-amber-500' },
+  high:   { dot: 'bg-red-500' },
+}
+
+export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange }: ProjectEditDialogProps) {
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
     projectType: project.projectType,
@@ -146,6 +164,21 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [riskLoading, setRiskLoading] = useState<string | null>(null)
   const [riskError, setRiskError] = useState('')
   const [editingRiskId, setEditingRiskId] = useState<string | null>(null)
+
+  // ─── Milestone & Task state ─────────────────────────────────
+  const [milestones, setMilestones] = useState<Milestone[]>(project.milestones ?? [])
+  const [msTasks, setMsTasks] = useState<Task[]>(project.tasks ?? [])
+  const [workItemLoading, setWorkItemLoading] = useState<string | null>(null)
+  const [workItemError, setWorkItemError] = useState('')
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [expandedMs, setExpandedMs] = useState<Set<string>>(() => new Set(project.milestones?.map(m => m.id) ?? []))
+
+  const toggleMs = (id: string) => setExpandedMs(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
 
   const handleSave = async () => {
     // Validation matching the creation form
@@ -377,6 +410,151 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
   }, [project.id, onRiskChange])
 
+  // ─── Milestone API calls ───────────────────────────────────
+
+  const handleAddMilestone = useCallback(async (data: { name: string; dueDate: string }) => {
+    setWorkItemError('')
+    setWorkItemLoading('adding-ms')
+    try {
+      const res = await fetch(`/api/projects/${project.id}/milestones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setWorkItemError(err.error || '新增里程碑失敗')
+        return
+      }
+      const ms = await res.json()
+      setMilestones(prev => [...prev, ms])
+      setExpandedMs(prev => new Set([...prev, ms.id]))
+      onWorkItemsChange?.()
+    } catch {
+      setWorkItemError('新增里程碑失敗')
+    } finally {
+      setWorkItemLoading(null)
+    }
+  }, [project.id, onWorkItemsChange])
+
+  const handleUpdateMilestone = useCallback(async (msId: string, data: { name?: string; dueDate?: string; status?: string }) => {
+    setWorkItemError('')
+    setWorkItemLoading(msId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/milestones/${msId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setWorkItemError(err.error || '更新里程碑失敗')
+        return
+      }
+      const updated = await res.json()
+      setMilestones(prev => prev.map(m => m.id === msId ? { ...m, ...updated } : m))
+      setEditingMilestoneId(null)
+      onWorkItemsChange?.()
+    } catch {
+      setWorkItemError('更新里程碑失敗')
+    } finally {
+      setWorkItemLoading(null)
+    }
+  }, [project.id, onWorkItemsChange])
+
+  const handleRemoveMilestone = useCallback(async (msId: string) => {
+    setWorkItemError('')
+    setWorkItemLoading(msId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/milestones/${msId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setWorkItemError(err.error || '刪除里程碑失敗')
+        return
+      }
+      setMilestones(prev => prev.filter(m => m.id !== msId))
+      onWorkItemsChange?.()
+    } catch {
+      setWorkItemError('刪除里程碑失敗')
+    } finally {
+      setWorkItemLoading(null)
+    }
+  }, [project.id, onWorkItemsChange])
+
+  // ─── Task API calls ────────────────────────────────────────
+
+  const handleAddTask = useCallback(async (data: { milestoneId: string; title: string; priority?: string; assignee?: string; startDate: string; endDate: string }) => {
+    setWorkItemError('')
+    setWorkItemLoading('adding-task')
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setWorkItemError(err.error || '新增任務失敗')
+        return
+      }
+      const task = await res.json()
+      setMsTasks(prev => [...prev, task])
+      onWorkItemsChange?.()
+    } catch {
+      setWorkItemError('新增任務失敗')
+    } finally {
+      setWorkItemLoading(null)
+    }
+  }, [project.id, onWorkItemsChange])
+
+  const handleUpdateTask = useCallback(async (taskId: string, data: Record<string, unknown>) => {
+    setWorkItemError('')
+    setWorkItemLoading(taskId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setWorkItemError(err.error || '更新任務失敗')
+        return
+      }
+      const updated = await res.json()
+      setMsTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t))
+      setEditingTaskId(null)
+      onWorkItemsChange?.()
+    } catch {
+      setWorkItemError('更新任務失敗')
+    } finally {
+      setWorkItemLoading(null)
+    }
+  }, [project.id, onWorkItemsChange])
+
+  const handleRemoveTask = useCallback(async (taskId: string) => {
+    setWorkItemError('')
+    setWorkItemLoading(taskId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setWorkItemError(err.error || '刪除任務失敗')
+        return
+      }
+      setMsTasks(prev => prev.filter(t => t.id !== taskId))
+      onWorkItemsChange?.()
+    } catch {
+      setWorkItemError('刪除任務失敗')
+    } finally {
+      setWorkItemLoading(null)
+    }
+  }, [project.id, onWorkItemsChange])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
@@ -388,7 +566,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
-          <TabsList className="shrink-0 w-full grid grid-cols-5">
+          <TabsList className="shrink-0 w-full grid grid-cols-6">
             <TabsTrigger value="basic" className="gap-1 text-sm">
               <Settings2 className="h-3.5 w-3.5" />
               基本資訊
@@ -408,6 +586,10 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             <TabsTrigger value="risks" className="gap-1 text-sm">
               <AlertTriangle className="h-3.5 w-3.5" />
               風險管理
+            </TabsTrigger>
+            <TabsTrigger value="workitems" className="gap-1 text-sm">
+              <ListChecks className="h-3.5 w-3.5" />
+              里程碑
             </TabsTrigger>
           </TabsList>
 
@@ -764,6 +946,73 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
             {riskError && (
               <p className="text-sm text-destructive">{riskError}</p>
+            )}
+          </TabsContent>
+
+          {/* Tab 6: Milestones & Tasks */}
+          <TabsContent value="workitems" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
+            <div className="rounded-lg border overflow-hidden">
+              {/* Header */}
+              <div className="px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide flex items-center justify-between">
+                <span>里程碑與任務</span>
+                <span className="text-xs font-normal">{milestones.length} 個里程碑、{msTasks.length} 個任務</span>
+              </div>
+
+              {/* Milestone groups */}
+              {milestones.map(ms => {
+                const tasksInMs = msTasks.filter(t => t.milestoneId === ms.id)
+                return (
+                  <div key={ms.id}>
+                    <MilestoneCard
+                      ms={ms}
+                      isExpanded={expandedMs.has(ms.id)}
+                      isEditing={editingMilestoneId === ms.id}
+                      loading={workItemLoading === ms.id}
+                      taskCount={tasksInMs.length}
+                      onToggle={() => toggleMs(ms.id)}
+                      onEdit={() => setEditingMilestoneId(editingMilestoneId === ms.id ? null : ms.id)}
+                      onUpdate={(data) => handleUpdateMilestone(ms.id, data)}
+                      onRemove={() => handleRemoveMilestone(ms.id)}
+                    />
+                    {expandedMs.has(ms.id) && (
+                      <>
+                        {tasksInMs.map(task => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            isEditing={editingTaskId === task.id}
+                            loading={workItemLoading === task.id}
+                            onEdit={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}
+                            onUpdate={(data) => handleUpdateTask(task.id, data)}
+                            onRemove={() => handleRemoveTask(task.id)}
+                          />
+                        ))}
+                        <TaskAddForm
+                          milestoneId={ms.id}
+                          onAdd={handleAddTask}
+                          loading={workItemLoading === 'adding-task'}
+                        />
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+
+              {milestones.length === 0 && (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  目前沒有里程碑
+                </div>
+              )}
+
+              {/* Add milestone */}
+              <MilestoneAddForm
+                onAdd={handleAddMilestone}
+                loading={workItemLoading === 'adding-ms'}
+              />
+            </div>
+
+            {workItemError && (
+              <p className="text-sm text-destructive">{workItemError}</p>
             )}
           </TabsContent>
         </Tabs>
@@ -1130,6 +1379,358 @@ function RiskAddForm({
             onChange={e => setMitigation(e.target.value)}
             placeholder="緩解對策（選填）"
             className="h-7 text-sm flex-1 min-w-0 border-dashed"
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Milestone Card ──────────────────────────────────────────
+
+function MilestoneCard({
+  ms,
+  isExpanded,
+  isEditing,
+  loading,
+  taskCount,
+  onToggle,
+  onEdit,
+  onUpdate,
+  onRemove,
+}: {
+  ms: Milestone
+  isExpanded: boolean
+  isEditing: boolean
+  loading: boolean
+  taskCount: number
+  onToggle: () => void
+  onEdit: () => void
+  onUpdate: (data: { name?: string; dueDate?: string; status?: string }) => void
+  onRemove: () => void
+}) {
+  const [editForm, setEditForm] = useState({ name: ms.name, dueDate: ms.dueDate, status: ms.status })
+
+  const handleSave = () => {
+    if (!editForm.name.trim()) return
+    onUpdate(editForm)
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 border-t bg-primary/5">
+        <Input
+          value={editForm.name}
+          onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+          placeholder="里程碑名稱"
+          className="h-7 text-sm flex-1 min-w-0"
+          autoFocus
+        />
+        <Input
+          type="date"
+          value={editForm.dueDate}
+          onChange={e => setEditForm(prev => ({ ...prev, dueDate: e.target.value }))}
+          className="h-7 text-sm w-[130px] shrink-0"
+        />
+        <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Milestone['status'] }))}>
+          <SelectTrigger className="h-7 text-xs w-[80px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(MS_STATUS_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary" onClick={handleSave} disabled={loading || !editForm.name.trim()}>
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={onEdit}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    )
+  }
+
+  const statusC = MS_STATUS_COLORS[ms.status] || MS_STATUS_COLORS.todo
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 border-t hover:bg-muted/30 transition-colors cursor-pointer" onClick={onToggle}>
+      {isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+      <span className="font-medium text-sm truncate flex-1">{ms.name}</span>
+      <span className="text-xs text-muted-foreground shrink-0">{ms.dueDate}</span>
+      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusC}`}>
+        {MS_STATUS_LABELS[ms.status] || ms.status}
+      </span>
+      <span className="text-xs text-muted-foreground shrink-0">{taskCount} 任務</span>
+      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); onEdit() }} disabled={loading}>
+        <Pencil className="h-3 w-3" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); onRemove() }} disabled={loading}>
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+      </Button>
+    </div>
+  )
+}
+
+// ─── Task Card ───────────────────────────────────────────────
+
+function TaskCard({
+  task,
+  isEditing,
+  loading,
+  onEdit,
+  onUpdate,
+  onRemove,
+}: {
+  task: Task
+  isEditing: boolean
+  loading: boolean
+  onEdit: () => void
+  onUpdate: (data: Record<string, unknown>) => void
+  onRemove: () => void
+}) {
+  const [editForm, setEditForm] = useState({
+    title: task.title,
+    priority: task.priority,
+    assignee: task.assignee,
+    status: task.status,
+    startDate: task.startDate,
+    endDate: task.endDate,
+  })
+
+  const handleSave = () => {
+    if (!editForm.title.trim()) return
+    onUpdate(editForm)
+  }
+
+  if (isEditing) {
+    return (
+      <div className="pl-8 pr-3 py-2 border-t bg-primary/5 space-y-2">
+        <div className="flex items-center gap-2">
+          <Input
+            value={editForm.title}
+            onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+            placeholder="任務標題"
+            className="h-7 text-sm flex-1 min-w-0"
+            autoFocus
+          />
+          <Select value={editForm.priority} onValueChange={v => setEditForm(prev => ({ ...prev, priority: v as Task['priority'] }))}>
+            <SelectTrigger className="h-7 text-xs w-[72px] shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}優先</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Task['status'] }))}>
+            <SelectTrigger className="h-7 text-xs w-[80px] shrink-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(MS_STATUS_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary" onClick={handleSave} disabled={loading || !editForm.title.trim()}>
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={onEdit}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            value={editForm.assignee}
+            onChange={e => setEditForm(prev => ({ ...prev, assignee: e.target.value }))}
+            placeholder="負責人"
+            className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          />
+          <Input
+            type="date"
+            value={editForm.startDate}
+            onChange={e => setEditForm(prev => ({ ...prev, startDate: e.target.value }))}
+            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
+          />
+          <span className="text-xs text-muted-foreground">~</span>
+          <Input
+            type="date"
+            value={editForm.endDate}
+            onChange={e => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
+            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
+            onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const pC = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium
+  const sC = MS_STATUS_COLORS[task.status] || MS_STATUS_COLORS.todo
+  return (
+    <div className="flex items-center gap-2 pl-8 pr-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm">
+      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pC.dot}`} />
+      <span className="truncate flex-1">{task.title}</span>
+      {task.assignee && <span className="text-xs text-muted-foreground truncate max-w-[60px] shrink-0">{task.assignee}</span>}
+      <span className="text-xs text-muted-foreground shrink-0">{task.startDate}~{task.endDate}</span>
+      <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${sC}`}>
+        {MS_STATUS_LABELS[task.status] || task.status}
+      </span>
+      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={onEdit} disabled={loading}>
+        <Pencil className="h-3 w-3" />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove} disabled={loading}>
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+      </Button>
+    </div>
+  )
+}
+
+// ─── Milestone Add Form ──────────────────────────────────────
+
+function MilestoneAddForm({
+  onAdd,
+  loading,
+}: {
+  onAdd: (data: { name: string; dueDate: string }) => void
+  loading: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [name, setName] = useState('')
+  const [dueDate, setDueDate] = useState('')
+
+  const handleAdd = () => {
+    if (!name.trim() || !dueDate) return
+    onAdd({ name: name.trim(), dueDate })
+    setName('')
+    setDueDate('')
+    setExpanded(false)
+  }
+
+  if (!expanded) {
+    return (
+      <div
+        className="border-t px-3 py-2 flex items-center gap-2 text-sm text-muted-foreground/60 cursor-pointer hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded(true)}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        <span>新增里程碑...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t bg-muted/20 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="+ 里程碑名稱..."
+          className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          autoFocus
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+        />
+        <Input
+          type="date"
+          value={dueDate}
+          onChange={e => setDueDate(e.target.value)}
+          className="h-7 text-sm w-[130px] shrink-0 border-dashed"
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+        />
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary hover:text-primary" onClick={handleAdd} disabled={loading || !name.trim() || !dueDate}>
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={() => setExpanded(false)}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Task Add Form ───────────────────────────────────────────
+
+function TaskAddForm({
+  milestoneId,
+  onAdd,
+  loading,
+}: {
+  milestoneId: string
+  onAdd: (data: { milestoneId: string; title: string; priority?: string; assignee?: string; startDate: string; endDate: string }) => void
+  loading: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [title, setTitle] = useState('')
+  const [priority, setPriority] = useState('medium')
+  const [assignee, setAssignee] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+
+  const handleAdd = () => {
+    if (!title.trim() || !startDate || !endDate) return
+    onAdd({ milestoneId, title: title.trim(), priority, assignee: assignee.trim() || undefined, startDate, endDate })
+    setTitle('')
+    setPriority('medium')
+    setAssignee('')
+    setStartDate('')
+    setEndDate('')
+    setExpanded(false)
+  }
+
+  if (!expanded) {
+    return (
+      <div
+        className="border-t pl-8 pr-3 py-1.5 flex items-center gap-2 text-xs text-muted-foreground/50 cursor-pointer hover:bg-muted/20 transition-colors"
+        onClick={() => setExpanded(true)}
+      >
+        <Plus className="h-3 w-3" />
+        <span>新增任務...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t bg-muted/10 pl-8 pr-3 py-2 space-y-2">
+      <div className="flex items-center gap-2">
+        <Input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="+ 任務標題..."
+          className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          autoFocus
+        />
+        <Select value={priority} onValueChange={setPriority}>
+          <SelectTrigger className="h-7 text-xs w-[72px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}優先</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary" onClick={handleAdd} disabled={loading || !title.trim() || !startDate || !endDate}>
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={() => setExpanded(false)}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {title.trim() && (
+        <div className="flex items-center gap-2">
+          <Input
+            value={assignee}
+            onChange={e => setAssignee(e.target.value)}
+            placeholder="負責人（選填）"
+            className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          />
+          <Input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
+          />
+          <span className="text-xs text-muted-foreground">~</span>
+          <Input
+            type="date"
+            value={endDate}
+            onChange={e => setEndDate(e.target.value)}
+            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
             onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
           />
         </div>

@@ -1405,6 +1405,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             const res = await fetch(`/api/projects/${id}`)
             if (res.ok) setProject(await res.json())
           }}
+          onWorkItemsChange={async () => {
+            const res = await fetch(`/api/projects/${id}`)
+            if (res.ok) setProject(await res.json())
+          }}
         />
       )}
       <ProjectDeleteDialog
