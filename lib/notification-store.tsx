@@ -37,7 +37,7 @@ const NotificationStoreContext = createContext<NotificationStoreContextType | un
 
 const STORAGE_KEY = 'pm-system-notifications'
 const VERSION_KEY = 'pm-system-notifications-version'
-const CURRENT_VERSION = '2'
+const CURRENT_VERSION = '3'
 
 export function NotificationStoreProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -54,6 +54,7 @@ export function NotificationStoreProvider({ children }: { children: React.ReactN
       }
     } else {
       setNotifications([])
+      localStorage.removeItem(STORAGE_KEY)
       localStorage.setItem(VERSION_KEY, CURRENT_VERSION)
     }
     setLoaded(true)
