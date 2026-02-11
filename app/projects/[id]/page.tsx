@@ -1284,6 +1284,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           <TabsContent value="work-items" className="mt-0">
             <MilestoneTaskView
               project={project}
+              onBaselineReset={async () => {
+                const res = await fetch(`/api/projects/${id}`)
+                if (res.ok) setProject(await res.json())
+              }}
             />
           </TabsContent>
 

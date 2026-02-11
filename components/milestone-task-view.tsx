@@ -8,6 +8,14 @@ import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
 import { TaskDetailSheet } from '@/components/task-detail-sheet'
@@ -27,13 +35,16 @@ import {
   X,
   ChevronsDownUp,
   ChevronsUpDown,
+  TimerReset,
+  Loader2,
 } from 'lucide-react'
 
 interface MilestoneTaskViewProps {
   project: Project
+  onBaselineReset?: () => void
 }
 
-export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
+export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskViewProps) {
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
   const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(new Set())
@@ -42,6 +53,17 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
   const [showDependencies, setShowDependencies] = useState(false)
+  const [resettingBaseline, setResettingBaseline] = useState(false)
+  const [baselineDialogOpen, setBaselineDialogOpen] = useState(false)
+
+  // Check if any milestone has baseline delay
+  const hasBaselineDelay = useMemo(() => {
+    if (!project.baseline?.length) return false
+    return project.milestones.some(ms => {
+      const bl = project.baseline.find(b => b.id === ms.id)
+      return bl && ms.dueDate > bl.dueDate
+    })
+  }, [project.milestones, project.baseline])
 
   // Compute dependency graph (only when toggle is on)
   const nodeMap = useMemo(() => {
@@ -294,6 +316,18 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
               相依關係
             </Button>
           )}
+          {hasBaselineDelay && onBaselineReset && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-sm gap-1.5"
+              disabled={resettingBaseline}
+              onClick={() => setBaselineDialogOpen(true)}
+            >
+              {resettingBaseline ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TimerReset className="h-3.5 w-3.5" />}
+              重設基線
+            </Button>
+          )}
           {(() => {
             const currentExpanded = viewMode === 'list' ? expandedMilestones : ganttExpandedMs
             const allExpanded = currentExpanded.size === project.milestones.length
@@ -485,6 +519,41 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
           setSelectedTask(t)
         }}
       />
+
+      {/* Reset Baseline Dialog */}
+      <Dialog open={baselineDialogOpen} onOpenChange={setBaselineDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>重設里程碑基線</DialogTitle>
+            <DialogDescription>
+              將目前的里程碑日期設為新的基線。原本的基線紀錄會被覆蓋，延遲標示將會清除。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBaselineDialogOpen(false)} disabled={resettingBaseline}>
+              取消
+            </Button>
+            <Button
+              disabled={resettingBaseline}
+              onClick={async () => {
+                setResettingBaseline(true)
+                try {
+                  const res = await fetch(`/api/projects/${project.id}/reset-baseline`, { method: 'POST' })
+                  if (res.ok) {
+                    setBaselineDialogOpen(false)
+                    onBaselineReset?.()
+                  }
+                } finally {
+                  setResettingBaseline(false)
+                }
+              }}
+            >
+              {resettingBaseline && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              確認重設
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
