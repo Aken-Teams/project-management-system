@@ -1059,11 +1059,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+              <Button variant="outline" size="sm" className="gap-1.5 text-primary border-primary/30 hover:bg-primary/10 hover:text-primary" onClick={() => setEditOpen(true)}>
                 <Pencil className="h-3.5 w-3.5" />
                 編輯
               </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
+              <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
                 <Trash2 className="h-3.5 w-3.5" />
                 刪除
               </Button>

@@ -195,7 +195,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
           </TabsList>
 
           {/* Tab 1: Basic Info */}
-          <TabsContent value="basic" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 pr-1">
+          <TabsContent value="basic" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 px-1">
             <div className="space-y-1.5">
               <Label htmlFor="edit-name">
                 專案名稱 <span className="text-destructive">*</span>
@@ -277,7 +277,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
           </TabsContent>
 
           {/* Tab 3: Description */}
-          <TabsContent value="description" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 pr-1">
+          <TabsContent value="description" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 px-1">
             <div className="space-y-1.5">
               <Label htmlFor="edit-purpose">
                 專案目的 <span className="text-destructive">*</span>
@@ -322,7 +322,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
           </TabsContent>
 
           {/* Tab 3: SMART Objective */}
-          <TabsContent value="smart" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 pr-1">
+          <TabsContent value="smart" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 px-1">
             <div className="space-y-1.5">
               <Label htmlFor="edit-smart-s">
                 Specific — 具體目標 <span className="text-destructive">*</span>
