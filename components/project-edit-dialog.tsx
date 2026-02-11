@@ -726,7 +726,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
           {/* Tab 5: Risks */}
           <TabsContent value="risks" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
-            <div className="space-y-3">
+            <div className="rounded-lg border overflow-hidden">
+              {/* Header */}
+              <div className="px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide flex items-center justify-between">
+                <span>風險項目</span>
+                <span className="text-xs font-normal">共 {risks.length} 項</span>
+              </div>
+
+              {/* Risk rows */}
               {risks.map((risk) => {
                 const isEditing = editingRiskId === risk.id
                 return (
@@ -747,13 +754,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                   目前沒有風險紀錄
                 </div>
               )}
-            </div>
 
-            {/* Add risk */}
-            <RiskAddForm
-              onAdd={handleAddRisk}
-              loading={riskLoading === 'adding'}
-            />
+              {/* Inline add row */}
+              <RiskAddForm
+                onAdd={handleAddRisk}
+                loading={riskLoading === 'adding'}
+              />
+            </div>
 
             {riskError && (
               <p className="text-sm text-destructive">{riskError}</p>
@@ -928,16 +935,15 @@ function RiskCard({
   }
 
   const severity = getRiskSeverity(risk.impact, risk.probability)
+  const impactC = RISK_LEVEL_COLORS[risk.impact] || RISK_LEVEL_COLORS.medium
+  const probC = RISK_LEVEL_COLORS[risk.probability] || RISK_LEVEL_COLORS.medium
 
   if (!isEditing) {
-    const impactC = RISK_LEVEL_COLORS[risk.impact] || RISK_LEVEL_COLORS.medium
-    const probC = RISK_LEVEL_COLORS[risk.probability] || RISK_LEVEL_COLORS.medium
-
     return (
-      <div className={`rounded-lg border border-l-[3px] ${RISK_SEVERITY_BORDER[severity]} px-3 py-2.5 hover:bg-muted/30 transition-colors space-y-1.5`}>
+      <div className={`border-t border-l-[3px] ${RISK_SEVERITY_BORDER[severity]} px-3 py-2 hover:bg-muted/30 transition-colors space-y-1`}>
         {/* Row 1: icon + title + tags + actions */}
         <div className="flex items-center gap-2">
-          <ShieldAlert className={`h-4 w-4 shrink-0 ${
+          <ShieldAlert className={`h-3.5 w-3.5 shrink-0 ${
             severity === 'high' ? 'text-red-500' : severity === 'medium' ? 'text-amber-500' : 'text-emerald-500'
           }`} />
           <span className="font-medium text-sm truncate">{risk.title}</span>
@@ -962,7 +968,7 @@ function RiskCard({
 
         {/* Row 2 (optional): description + mitigation */}
         {(risk.description || risk.mitigation) && (
-          <div className="pl-6 text-sm text-muted-foreground leading-relaxed">
+          <div className="pl-[1.375rem] text-sm text-muted-foreground leading-relaxed line-clamp-1">
             {risk.description && <span>{risk.description}</span>}
             {risk.description && risk.mitigation && <span className="mx-1.5 text-border">|</span>}
             {risk.mitigation && <span><span className="font-medium text-foreground/70">對策：</span>{risk.mitigation}</span>}
@@ -972,92 +978,71 @@ function RiskCard({
     )
   }
 
+  // ─── Inline edit mode ────────────────────────────────────
   return (
-    <div className="rounded-lg border border-primary/30 p-3 space-y-3 bg-primary/5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">編輯風險</span>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit}>
+    <div className={`border-t border-l-[3px] ${RISK_SEVERITY_BORDER[severity]} bg-primary/5 px-3 py-2 space-y-2`}>
+      {/* Row 1: title input + selects + save/cancel */}
+      <div className="flex items-center gap-2">
+        <Input
+          value={editForm.title}
+          onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+          placeholder="風險標題"
+          className="h-7 text-sm flex-1 min-w-0"
+          autoFocus
+        />
+        <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Risk['status'] }))}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_STATUS_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={editForm.impact} onValueChange={v => setEditForm(prev => ({ ...prev, impact: v as Risk['impact'] }))}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue placeholder="影響" /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>影響{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={editForm.probability} onValueChange={v => setEditForm(prev => ({ ...prev, probability: v as Risk['probability'] }))}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue placeholder="機率" /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>機率{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary hover:text-primary" onClick={handleSave} disabled={loading || !editForm.title.trim()}>
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5 rotate-45" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={onEdit}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-sm">風險標題 <span className="text-destructive">*</span></Label>
+      {/* Row 2: description + mitigation */}
+      <div className="flex items-center gap-2">
         <Input
-          value={editForm.title}
-          onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value }))}
-          className="h-8 text-sm"
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm">風險描述</Label>
-        <Textarea
           value={editForm.description}
           onChange={e => setEditForm(prev => ({ ...prev, description: e.target.value }))}
-          rows={2}
-          className="text-sm"
+          placeholder="風險描述"
+          className="h-7 text-sm flex-1 min-w-0 border-dashed"
         />
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <div className="space-y-1">
-          <Label className="text-sm">影響程度</Label>
-          <Select value={editForm.impact} onValueChange={v => setEditForm(prev => ({ ...prev, impact: v as Risk['impact'] }))}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-sm">發生機率</Label>
-          <Select value={editForm.probability} onValueChange={v => setEditForm(prev => ({ ...prev, probability: v as Risk['probability'] }))}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-sm">狀態</Label>
-          <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Risk['status'] }))}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(RISK_STATUS_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm">緩解對策</Label>
-        <Textarea
+        <Input
           value={editForm.mitigation}
           onChange={e => setEditForm(prev => ({ ...prev, mitigation: e.target.value }))}
-          rows={2}
-          className="text-sm"
+          placeholder="緩解對策"
+          className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
         />
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={onEdit} className="h-7 text-sm">取消</Button>
-        <Button size="sm" onClick={handleSave} disabled={loading || !editForm.title.trim()} className="h-7 text-sm">
-          {loading && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-          儲存
-        </Button>
       </div>
     </div>
   )
 }
 
-// ─── Risk Add Form ───────────────────────────────────────────
+// ─── Risk Add Form (inline) ──────────────────────────────────
 
 function RiskAddForm({
   onAdd,
@@ -1086,84 +1071,69 @@ function RiskAddForm({
 
   if (!expanded) {
     return (
-      <Button
-        variant="outline"
-        className="w-full border-dashed text-muted-foreground gap-1.5"
+      <div
+        className="border-t px-3 py-2 flex items-center gap-2 text-sm text-muted-foreground/60 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(true)}
       >
         <Plus className="h-3.5 w-3.5" />
-        新增風險
-      </Button>
+        <span>新增風險...</span>
+      </div>
     )
   }
 
   return (
-    <div className="rounded-lg border border-dashed p-3 space-y-3">
-      <div className="space-y-1.5">
-        <Label className="text-sm">風險標題 <span className="text-destructive">*</span></Label>
+    <div className="border-t bg-muted/20 px-3 py-2 space-y-2">
+      {/* Row 1: title + selects + add button */}
+      <div className="flex items-center gap-2">
         <Input
           value={title}
           onChange={e => setTitle(e.target.value)}
-          placeholder="簡述風險項目"
-          className="h-8 text-sm"
+          placeholder="+ 風險標題..."
+          className="h-7 text-sm flex-1 min-w-0 border-dashed"
           autoFocus
         />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm">風險描述</Label>
-        <Textarea
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          placeholder="詳細說明風險內容"
-          rows={2}
-          className="text-sm"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-sm">影響程度</Label>
-          <Select value={impact} onValueChange={setImpact}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-sm">發生機率</Label>
-          <Select value={probability} onValueChange={setProbability}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label className="text-sm">緩解對策</Label>
-        <Textarea
-          value={mitigation}
-          onChange={e => setMitigation(e.target.value)}
-          placeholder="預計如何緩解或處理此風險"
-          rows={2}
-          className="text-sm"
-        />
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={() => setExpanded(false)} className="h-7 text-sm">取消</Button>
-        <Button size="sm" onClick={handleAdd} disabled={loading || !title.trim()} className="h-7 text-sm">
-          {loading && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-          新增
+        <Select value={impact} onValueChange={setImpact}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>影響{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={probability} onValueChange={setProbability}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>機率{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary hover:text-primary" onClick={handleAdd} disabled={loading || !title.trim()}>
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={() => setExpanded(false)}>
+          <X className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      {/* Row 2: description + mitigation */}
+      {title.trim() && (
+        <div className="flex items-center gap-2">
+          <Input
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="風險描述（選填）"
+            className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          />
+          <Input
+            value={mitigation}
+            onChange={e => setMitigation(e.target.value)}
+            placeholder="緩解對策（選填）"
+            className="h-7 text-sm flex-1 min-w-0 border-dashed"
+            onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          />
+        </div>
+      )}
     </div>
   )
 }
