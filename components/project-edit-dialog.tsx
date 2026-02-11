@@ -89,14 +89,54 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
       setActiveTab('basic')
       return
     }
-    if (!form.purpose.trim()) {
-      setError('專案目的不可為空')
-      setActiveTab('description')
+    if (!form.projectTier) {
+      setError('專案層級為必填')
+      setActiveTab('basic')
+      return
+    }
+    if (!form.projectType) {
+      setError('專案類型為必填')
+      setActiveTab('basic')
+      return
+    }
+    if (!form.demandSource) {
+      setError('需求來源為必填')
+      setActiveTab('basic')
+      return
+    }
+    if (!form.createdReason.trim()) {
+      setError('開案原因不可為空')
+      setActiveTab('basic')
       return
     }
     if (!form.smartObjective?.specific?.trim()) {
       setError('SMART 目標中「具體目標」不可為空')
       setActiveTab('smart')
+      return
+    }
+    if (!form.smartObjective?.measurable?.trim()) {
+      setError('SMART 目標中「可衡量指標」不可為空')
+      setActiveTab('smart')
+      return
+    }
+    if (!form.smartObjective?.achievable?.trim()) {
+      setError('SMART 目標中「可達成性」不可為空')
+      setActiveTab('smart')
+      return
+    }
+    if (!form.smartObjective?.relevant?.trim()) {
+      setError('SMART 目標中「相關性」不可為空')
+      setActiveTab('smart')
+      return
+    }
+    if (!form.smartObjective?.timeBound?.trim()) {
+      setError('SMART 目標中「時限性」不可為空')
+      setActiveTab('smart')
+      return
+    }
+    if (!form.purpose.trim()) {
+      setError('專案目的不可為空')
+      setActiveTab('description')
       return
     }
 
@@ -170,6 +210,19 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>
+                  專案層級 <span className="text-destructive">*</span>
+                </Label>
+                <Select value={form.projectTier ?? ''} onValueChange={v => update('projectTier', v as ProjectTier)}>
+                  <SelectTrigger><SelectValue placeholder="選擇層級" /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(PROJECT_TIER_LABELS) as [ProjectTier, string][]).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>
                   專案類型 <span className="text-destructive">*</span>
                 </Label>
                 <Select value={form.projectType} onValueChange={v => update('projectType', v as ProjectType)}>
@@ -182,23 +235,12 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>專案層級</Label>
-                <Select value={form.projectTier ?? '__none__'} onValueChange={v => update('projectTier', v === '__none__' ? null : v as ProjectTier)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>
+                  需求來源 <span className="text-destructive">*</span>
+                </Label>
+                <Select value={form.demandSource ?? ''} onValueChange={v => update('demandSource', v as DemandSource)}>
+                  <SelectTrigger><SelectValue placeholder="選擇來源" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">未設定</SelectItem>
-                    {(Object.entries(PROJECT_TIER_LABELS) as [ProjectTier, string][]).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>需求來源</Label>
-                <Select value={form.demandSource ?? '__none__'} onValueChange={v => update('demandSource', v === '__none__' ? null : v as DemandSource)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">未設定</SelectItem>
                     {(Object.entries(DEMAND_SOURCE_LABELS) as [DemandSource, string][]).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>
                     ))}
@@ -218,7 +260,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-reason">開案原因</Label>
+              <Label htmlFor="edit-reason">
+                開案原因 <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="edit-reason"
                 value={form.createdReason}
@@ -293,7 +337,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-smart-m">Measurable — 可衡量指標</Label>
+              <Label htmlFor="edit-smart-m">
+                Measurable — 可衡量指標 <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="edit-smart-m"
                 placeholder="如何量化衡量目標是否達成"
@@ -304,7 +350,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-smart-a">Achievable — 可達成性</Label>
+              <Label htmlFor="edit-smart-a">
+                Achievable — 可達成性 <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="edit-smart-a"
                 placeholder="目標是否在資源與時間限制下可行"
@@ -315,7 +363,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-smart-r">Relevant — 相關性</Label>
+              <Label htmlFor="edit-smart-r">
+                Relevant — 相關性 <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="edit-smart-r"
                 placeholder="目標與組織策略或業務需求的關聯"
@@ -326,7 +376,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-smart-t">Time-bound — 時限性</Label>
+              <Label htmlFor="edit-smart-t">
+                Time-bound — 時限性 <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="edit-smart-t"
                 placeholder="預計在何時完成目標"

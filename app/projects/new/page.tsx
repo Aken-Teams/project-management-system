@@ -659,8 +659,8 @@ export default function NewProjectPage() {
   // Step navigation
   const canProceed = (step: number) => {
     switch (step) {
-      case 0: return !!manualProjectType && !!manualData.name.trim()
-      case 1: return !!smartObjective.specific.trim() // SMART 至少要有具體目標
+      case 0: return !!manualProjectType && !!manualProjectTier && !!manualDemandSource && !!manualData.name.trim() && !!manualData.createdReason.trim()
+      case 1: return !!smartObjective.specific.trim() && !!smartObjective.measurable.trim() && !!smartObjective.achievable.trim() && !!smartObjective.relevant.trim() && !!smartObjective.timeBound.trim()
       case 2: return !!manualData.purpose.trim() // 專案定義至少要有目的
       case 3: return true // 團隊與風險（選填）
       case 4: return !!manualData.startDate && !!manualData.endDate
@@ -1703,7 +1703,9 @@ export default function NewProjectPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="manual-project-tier">專案層別</Label>
+                      <Label htmlFor="manual-project-tier">
+                        專案層別 <span className="text-destructive">*</span>
+                      </Label>
                       <Select
                         value={manualProjectTier}
                         onValueChange={(v) => setManualProjectTier(v as ProjectTier)}
@@ -1723,7 +1725,9 @@ export default function NewProjectPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="manual-demand-source">需求來源</Label>
+                      <Label htmlFor="manual-demand-source">
+                        需求來源 <span className="text-destructive">*</span>
+                      </Label>
                       <Select
                         value={manualDemandSource}
                         onValueChange={(v) => setManualDemandSource(v as DemandSource)}
@@ -1806,7 +1810,7 @@ export default function NewProjectPage() {
                   <div className="space-y-2">
                     <Label htmlFor="created-reason" className="flex items-center gap-2">
                       <ClipboardList className="h-4 w-4 text-slate-500" />
-                      開案原因
+                      開案原因 <span className="text-destructive">*</span>
                     </Label>
                     <Textarea
                       id="created-reason"
@@ -1837,7 +1841,7 @@ export default function NewProjectPage() {
                       <div className="space-y-2">
                         <Label htmlFor="smart-specific" className="flex items-center gap-2">
                           <Badge variant="outline" className="text-sm">S</Badge>
-                          具體目標 (Specific)
+                          具體目標 (Specific) <span className="text-destructive">*</span>
                         </Label>
                         <Textarea
                           id="smart-specific"
@@ -1856,7 +1860,7 @@ export default function NewProjectPage() {
                       <div className="space-y-2">
                         <Label htmlFor="smart-measurable" className="flex items-center gap-2">
                           <Badge variant="outline" className="text-sm">M</Badge>
-                          可衡量指標 (Measurable)
+                          可衡量指標 (Measurable) <span className="text-destructive">*</span>
                         </Label>
                         <Textarea
                           id="smart-measurable"
@@ -1874,7 +1878,7 @@ export default function NewProjectPage() {
                       <div className="space-y-2">
                         <Label htmlFor="smart-achievable" className="flex items-center gap-2">
                           <Badge variant="outline" className="text-sm">A</Badge>
-                          可達成性 (Achievable)
+                          可達成性 (Achievable) <span className="text-destructive">*</span>
                         </Label>
                         <Textarea
                           id="smart-achievable"
@@ -1888,7 +1892,7 @@ export default function NewProjectPage() {
                       <div className="space-y-2">
                         <Label htmlFor="smart-relevant" className="flex items-center gap-2">
                           <Badge variant="outline" className="text-sm">R</Badge>
-                          相關性 (Relevant)
+                          相關性 (Relevant) <span className="text-destructive">*</span>
                         </Label>
                         <Textarea
                           id="smart-relevant"
@@ -1902,7 +1906,7 @@ export default function NewProjectPage() {
                       <div className="space-y-2">
                         <Label htmlFor="smart-timebound" className="flex items-center gap-2">
                           <Badge variant="outline" className="text-sm">T</Badge>
-                          時限性 (Time-bound)
+                          時限性 (Time-bound) <span className="text-destructive">*</span>
                         </Label>
                         <Textarea
                           id="smart-timebound"
@@ -1929,7 +1933,9 @@ export default function NewProjectPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="purpose">專案目的</Label>
+                    <Label htmlFor="purpose">
+                      專案目的 <span className="text-destructive">*</span>
+                    </Label>
                     <Textarea
                       id="purpose"
                       placeholder="說明為何要執行此專案"
@@ -2213,8 +2219,16 @@ export default function NewProjectPage() {
                     disabled={
                       isCreating ||
                       !manualProjectType ||
+                      !manualProjectTier ||
+                      !manualDemandSource ||
                       !manualData.name ||
+                      !manualData.createdReason.trim() ||
                       !smartObjective.specific.trim() ||
+                      !smartObjective.measurable.trim() ||
+                      !smartObjective.achievable.trim() ||
+                      !smartObjective.relevant.trim() ||
+                      !smartObjective.timeBound.trim() ||
+                      !manualData.purpose.trim() ||
                       !manualData.startDate ||
                       !manualData.endDate
                     }
