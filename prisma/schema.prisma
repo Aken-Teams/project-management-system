@@ -22,11 +22,27 @@ enum TaskStatus {
 }
 
 enum ProjectType {
-  sourcing
   npi
-  cost_saving
-  cip
-  other
+  cost_optimization
+  quality_improvement
+  automation
+  product_strategy
+  process_optimization
+  external_requirement
+}
+
+enum ProjectTier {
+  T1
+  T2
+  T3
+  CIP
+}
+
+enum DemandSource {
+  company_policy
+  external_requirement
+  internal_demand
+  self_proposal
 }
 
 enum TeamRole {
@@ -117,6 +133,8 @@ model Project {
   id              String        @id @default(cuid())
   projectCode     String        @unique @map("project_code")
   projectType     ProjectType   @map("project_type")
+  projectTier     ProjectTier?  @map("project_tier")
+  demandSource    DemandSource? @map("demand_source")
   name            String
   objective       String        @default("")
   purpose         String        @default("")

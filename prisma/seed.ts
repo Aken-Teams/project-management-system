@@ -46,7 +46,7 @@ async function main() {
 
   // Initialize project code sequences for current year
   const currentYear = new Date().getFullYear()
-  const projectTypes = ['sourcing', 'npi', 'cost_saving', 'cip', 'other'] as const
+  const projectTypes = ['npi', 'cost_optimization', 'quality_improvement', 'automation', 'product_strategy', 'process_optimization', 'external_requirement'] as const
 
   for (const type of projectTypes) {
     await prisma.projectCodeSequence.upsert({

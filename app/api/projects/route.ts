@@ -1,0 +1,411 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/db'
+import {
+  projectTypeToDb,
+  projectTypeToFe,
+  projectTierToDb,
+  projectTierToFe,
+  demandSourceToDb,
+  demandSourceToFe,
+} from '@/lib/enum-mappers'
+import type { ProjectType as FeProjectType, ProjectTier as FeProjectTier, DemandSource as FeDemandSource } from '@/lib/mock-data'
+import type { ProjectType as DbProjectType } from '@prisma/client'
+
+// ─── Project code prefix map ─────────────────────────────
+const CODE_PREFIX: Record<string, string> = {
+  npi: 'NPI',
+  cost_optimization: 'CST',
+  quality_improvement: 'QAL',
+  automation: 'AUT',
+  product_strategy: 'PST',
+  process_optimization: 'PRC',
+  external_requirement: 'EXT',
+}
+
+// ─── Request body types ──────────────────────────────────
+interface CreateProjectBody {
+  projectType: string
+  projectTier?: string
+  demandSource?: string
+  name: string
+  objective: string
+  purpose: string
+  scope: string
+  roi: string
+  createdReason: string
+  expectedBenefits?: string
+  smartObjective?: {
+    specific: string
+    measurable: string
+    achievable: string
+    relevant: string
+    timeBound: string
+  }
+  startDate: string
+  endDate: string
+  budget: number
+  ownerName: string
+  team: string[]
+  teamMembers?: { name: string; role: string; responsibility: string }[]
+  milestones: { id: string; name: string; dueDate: string }[]
+  tasks?: {
+    milestoneId: string
+    title: string
+    description: string
+    assignee: string
+    priority: string
+    startDate: string
+    endDate: string
+  }[]
+  risks?: {
+    title: string
+    description: string
+    impact: string
+    probability: string
+    mitigation: string
+    status: string
+  }[]
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: CreateProjectBody = await request.json()
+
+    // ─── Validation ────────────────────────────────────
+    if (!body.name?.trim()) {
+      return NextResponse.json({ error: '專案名稱為必填' }, { status: 400 })
+    }
+    if (!body.projectType) {
+      return NextResponse.json({ error: '專案類型為必填' }, { status: 400 })
+    }
+    if (!body.startDate || !body.endDate) {
+      return NextResponse.json({ error: '開始日期和結束日期為必填' }, { status: 400 })
+    }
+    if (!body.milestones?.length) {
+      return NextResponse.json({ error: '至少需要一個里程碑' }, { status: 400 })
+    }
+
+    // ─── Convert enums to DB format ────────────────────
+    const dbProjectType = projectTypeToDb(body.projectType as FeProjectType)
+    const dbProjectTier = body.projectTier
+      ? projectTierToDb(body.projectTier as FeProjectTier)
+      : null
+    const dbDemandSource = body.demandSource
+      ? demandSourceToDb(body.demandSource as FeDemandSource)
+      : null
+
+    // ─── Find or fallback owner ────────────────────────
+    let owner = await prisma.user.findFirst({
+      where: { name: body.ownerName },
+    })
+    if (!owner) {
+      // Fallback: use first PM user
+      owner = await prisma.user.findFirst({ where: { role: 'pm' } })
+    }
+    if (!owner) {
+      return NextResponse.json({ error: '找不到專案負責人' }, { status: 400 })
+    }
+
+    // ─── Generate project code (atomic) ────────────────
+    const currentYear = new Date().getFullYear()
+    const sequence = await prisma.projectCodeSequence.update({
+      where: {
+        projectType_year: {
+          projectType: dbProjectType,
+          year: currentYear,
+        },
+      },
+      data: { lastSeq: { increment: 1 } },
+    })
+
+    const prefix = CODE_PREFIX[dbProjectType as string] || 'PRJ'
+    const projectCode = `${prefix}-${currentYear}-${String(sequence.lastSeq).padStart(3, '0')}`
+
+    // ─── Create project with all relations in a transaction ─
+    const project = await prisma.$transaction(async (tx) => {
+      // 1. Create project
+      const proj = await tx.project.create({
+        data: {
+          projectCode,
+          projectType: dbProjectType,
+          projectTier: dbProjectTier,
+          demandSource: dbDemandSource,
+          name: body.name.trim(),
+          objective: body.objective || '',
+          purpose: body.purpose || '',
+          scope: body.scope || '',
+          roi: body.roi || '',
+          createdReason: body.createdReason || '',
+          expectedBenefits: body.expectedBenefits || null,
+          smartSpecific: body.smartObjective?.specific || null,
+          smartMeasurable: body.smartObjective?.measurable || null,
+          smartAchievable: body.smartObjective?.achievable || null,
+          smartRelevant: body.smartObjective?.relevant || null,
+          smartTimeBound: body.smartObjective?.timeBound || null,
+          startDate: new Date(body.startDate),
+          endDate: new Date(body.endDate),
+          budget: body.budget || 0,
+          ownerId: owner.id,
+        },
+      })
+
+      // 2. Create milestones — build ID mapping (frontend temp ID → DB cuid)
+      const milestoneIdMap = new Map<string, string>()
+      const milestones = []
+
+      for (let i = 0; i < body.milestones.length; i++) {
+        const m = body.milestones[i]
+        const milestone = await tx.milestone.create({
+          data: {
+            projectId: proj.id,
+            name: m.name,
+            dueDate: new Date(m.dueDate),
+            sortOrder: i,
+          },
+        })
+        milestoneIdMap.set(m.id, milestone.id)
+        milestones.push(milestone)
+      }
+
+      // 3. Create milestone baselines (snapshot of initial plan)
+      for (const milestone of milestones) {
+        await tx.milestoneBaseline.create({
+          data: {
+            projectId: proj.id,
+            milestoneId: milestone.id,
+            name: milestone.name,
+            dueDate: milestone.dueDate,
+          },
+        })
+      }
+
+      // 4. Create tasks
+      const tasks = []
+      if (body.tasks?.length) {
+        for (let i = 0; i < body.tasks.length; i++) {
+          const t = body.tasks[i]
+          const dbMilestoneId = milestoneIdMap.get(t.milestoneId)
+          if (!dbMilestoneId) continue
+
+          const task = await tx.task.create({
+            data: {
+              projectId: proj.id,
+              milestoneId: dbMilestoneId,
+              title: t.title,
+              description: t.description || '',
+              assignee: t.assignee || '未指派',
+              priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
+              startDate: new Date(t.startDate),
+              endDate: new Date(t.endDate),
+              sortOrder: i,
+            },
+          })
+          tasks.push(task)
+        }
+      }
+
+      // 5. Create risks
+      const risks = []
+      if (body.risks?.length) {
+        for (const r of body.risks) {
+          const risk = await tx.risk.create({
+            data: {
+              projectId: proj.id,
+              title: r.title,
+              description: r.description || '',
+              impact: (r.impact as 'low' | 'medium' | 'high') || 'medium',
+              probability: (r.probability as 'low' | 'medium' | 'high') || 'medium',
+              mitigation: r.mitigation || '',
+              status: (r.status as 'open' | 'mitigated' | 'closed') || 'open',
+            },
+          })
+          risks.push(risk)
+        }
+      }
+
+      // 6. Create team members
+      if (body.teamMembers?.length) {
+        for (const tm of body.teamMembers) {
+          // Find user by name, or skip
+          let memberUser = await tx.user.findFirst({
+            where: { name: tm.name },
+          })
+          if (!memberUser) {
+            // Auto-create user as member role
+            memberUser = await tx.user.create({
+              data: {
+                name: tm.name,
+                email: `${tm.name.toLowerCase().replace(/\s+/g, '.')}@auto.local`,
+                role: 'member',
+              },
+            })
+          }
+
+          await tx.projectTeamMember.upsert({
+            where: {
+              projectId_userId: {
+                projectId: proj.id,
+                userId: memberUser.id,
+              },
+            },
+            update: {
+              role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+              responsibility: tm.responsibility || '',
+            },
+            create: {
+              projectId: proj.id,
+              userId: memberUser.id,
+              role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+              responsibility: tm.responsibility || '',
+            },
+          })
+        }
+      }
+
+      return { proj, milestones, tasks, risks }
+    })
+
+    // ─── Build response in frontend format ─────────────
+    const feProject = buildFrontendProject(
+      project.proj,
+      project.milestones,
+      project.tasks,
+      project.risks,
+      owner,
+      body.team,
+      body.teamMembers,
+    )
+
+    return NextResponse.json(feProject, { status: 201 })
+  } catch (error) {
+    console.error('Failed to create project:', error)
+    return NextResponse.json(
+      { error: '建立專案失敗，請稍後再試' },
+      { status: 500 },
+    )
+  }
+}
+
+// ─── Transform DB objects to frontend Project shape ──────
+function buildFrontendProject(
+  proj: {
+    id: string
+    projectCode: string
+    projectType: DbProjectType
+    projectTier: string | null
+    demandSource: string | null
+    name: string
+    objective: string
+    purpose: string
+    scope: string
+    roi: string
+    createdReason: string
+    expectedBenefits: string | null
+    smartSpecific: string | null
+    smartMeasurable: string | null
+    smartAchievable: string | null
+    smartRelevant: string | null
+    smartTimeBound: string | null
+    startDate: Date
+    endDate: Date
+    status: string
+    progress: number
+    budget: number
+    budgetUsed: number
+    createdAt: Date
+    updatedAt: Date
+  },
+  milestones: { id: string; name: string; dueDate: Date; status: string; progress: number; sortOrder: number }[],
+  tasks: { id: string; milestoneId: string; title: string; description: string; assignee: string; status: string; priority: string; startDate: Date; endDate: Date; progress: number; completedAt: Date | null; completedBy: string | null }[],
+  risks: { id: string; title: string; description: string; impact: string; probability: string; mitigation: string; status: string }[],
+  owner: { name: string },
+  team: string[],
+  teamMembers?: { name: string; role: string; responsibility: string }[],
+) {
+  const feMilestones = milestones
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      dueDate: m.dueDate.toISOString().split('T')[0],
+      status: m.status === 'in_progress' ? 'in-progress' as const : m.status as 'todo' | 'done' | 'blocked',
+      progress: m.progress,
+    }))
+
+  const feTasks = tasks.map((t) => ({
+    id: t.id,
+    projectId: proj.id,
+    milestoneId: t.milestoneId,
+    title: t.title,
+    description: t.description,
+    assignee: t.assignee,
+    status: t.status === 'in_progress' ? 'in-progress' as const : t.status as 'todo' | 'done' | 'blocked',
+    priority: t.priority as 'low' | 'medium' | 'high',
+    startDate: t.startDate.toISOString().split('T')[0],
+    endDate: t.endDate.toISOString().split('T')[0],
+    dependencies: [] as string[],
+    progress: t.progress,
+    ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
+    ...(t.completedBy ? { completedBy: t.completedBy } : {}),
+  }))
+
+  const feRisks = risks.map((r) => ({
+    id: r.id,
+    projectId: proj.id,
+    title: r.title,
+    description: r.description,
+    impact: r.impact as 'low' | 'medium' | 'high',
+    probability: r.probability as 'low' | 'medium' | 'high',
+    mitigation: r.mitigation,
+    status: r.status as 'open' | 'mitigated' | 'closed',
+  }))
+
+  const smartObjective =
+    proj.smartSpecific || proj.smartMeasurable || proj.smartAchievable || proj.smartRelevant || proj.smartTimeBound
+      ? {
+          specific: proj.smartSpecific || '',
+          measurable: proj.smartMeasurable || '',
+          achievable: proj.smartAchievable || '',
+          relevant: proj.smartRelevant || '',
+          timeBound: proj.smartTimeBound || '',
+        }
+      : undefined
+
+  return {
+    id: proj.id,
+    projectCode: proj.projectCode,
+    projectType: projectTypeToFe(proj.projectType),
+    ...(proj.projectTier ? { projectTier: projectTierToFe(proj.projectTier as never) } : {}),
+    ...(proj.demandSource ? { demandSource: demandSourceToFe(proj.demandSource as never) } : {}),
+    name: proj.name,
+    objective: proj.objective,
+    purpose: proj.purpose,
+    scope: proj.scope,
+    roi: proj.roi,
+    createdReason: proj.createdReason,
+    expectedBenefits: proj.expectedBenefits || undefined,
+    smartObjective,
+    startDate: proj.startDate.toISOString().split('T')[0],
+    endDate: proj.endDate.toISOString().split('T')[0],
+    status: proj.status as 'green' | 'yellow' | 'red',
+    progress: proj.progress,
+    budget: proj.budget,
+    budgetUsed: proj.budgetUsed,
+    owner: owner.name,
+    team,
+    teamMembers: teamMembers?.map((tm) => ({
+      name: tm.name,
+      role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+      responsibility: tm.responsibility,
+    })),
+    milestones: feMilestones,
+    baseline: feMilestones.map((m) => ({ ...m })),
+    tasks: feTasks,
+    risks: feRisks,
+    weeklyUpdates: [],
+    delayRequests: [],
+    taskLogs: [],
+    createdAt: proj.createdAt.toISOString(),
+    updatedAt: proj.updatedAt.toISOString(),
+  }
+}

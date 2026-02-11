@@ -7,6 +7,8 @@ import {
   generateProjectCode,
   type Project,
   type ProjectType,
+  type ProjectTier,
+  type DemandSource,
   type WeeklyUpdate,
   type DelayRequest,
   type Milestone,
@@ -23,6 +25,8 @@ interface ProjectStoreContextType {
   getProject: (id: string) => Project | undefined
   addProject: (data: {
     projectType: ProjectType
+    projectTier?: ProjectTier
+    demandSource?: DemandSource
     name: string
     objective: string
     purpose: string
@@ -59,7 +63,7 @@ const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(u
 
 const STORAGE_KEY = 'pm-system-projects'
 const STORAGE_VERSION_KEY = 'pm-system-version'
-const CURRENT_VERSION = '11'
+const CURRENT_VERSION = '12'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
@@ -93,6 +97,8 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
 
   const addProject = useCallback((data: {
     projectType: ProjectType
+    projectTier?: ProjectTier
+    demandSource?: DemandSource
     name: string
     objective: string
     purpose: string
@@ -137,6 +143,8 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       id,
       projectCode,
       projectType: data.projectType,
+      projectTier: data.projectTier,
+      demandSource: data.demandSource,
       name: data.name,
       objective: data.objective,
       purpose: data.purpose,

@@ -1,6 +1,10 @@
 export type ProjectStatus = 'green' | 'yellow' | 'red'
 export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked'
-export type ProjectType = 'sourcing' | 'npi' | 'cost-saving' | 'cip' | 'other'
+export type ProjectType = 'npi' | 'cost-optimization' | 'quality-improvement' | 'automation' | 'product-strategy' | 'process-optimization' | 'external-requirement'
+
+export type ProjectTier = 'T1' | 'T2' | 'T3' | 'CIP'
+
+export type DemandSource = 'company-policy' | 'external-requirement' | 'internal-demand' | 'self-proposal'
 
 export interface Milestone {
   id: string
@@ -63,6 +67,8 @@ export interface Project {
   id: string
   projectCode: string
   projectType: ProjectType
+  projectTier?: ProjectTier
+  demandSource?: DemandSource
   name: string
   objective: string
   purpose: string
@@ -148,11 +154,27 @@ export interface TeamMember {
 }
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
-  'sourcing': '採購案 (Sourcing)',
-  'npi': '新產品開發 (NPI)',
-  'cost-saving': '成本節省 (Cost Saving)',
-  'cip': '持續改善 (CIP)',
-  'other': '其他',
+  'npi': 'NPI-新產品開發',
+  'cost-optimization': '成本優化',
+  'quality-improvement': '品質提升',
+  'automation': '自動化',
+  'product-strategy': '產品策略',
+  'process-optimization': '製程優化',
+  'external-requirement': '外部需求',
+}
+
+export const PROJECT_TIER_LABELS: Record<ProjectTier, string> = {
+  'T1': 'T1',
+  'T2': 'T2',
+  'T3': 'T3',
+  'CIP': 'CIP',
+}
+
+export const DEMAND_SOURCE_LABELS: Record<DemandSource, string> = {
+  'company-policy': '公司政策/年度目標',
+  'external-requirement': '外部要求',
+  'internal-demand': '內部需求',
+  'self-proposal': '自主提案',
 }
 
 // Project code generation helper
@@ -160,11 +182,13 @@ let codeCounter = 0
 export function generateProjectCode(type: ProjectType): string {
   codeCounter++
   const prefix: Record<ProjectType, string> = {
-    'sourcing': 'SRC',
     'npi': 'NPI',
-    'cost-saving': 'CST',
-    'cip': 'CIP',
-    'other': 'PRJ',
+    'cost-optimization': 'CST',
+    'quality-improvement': 'QAL',
+    'automation': 'AUT',
+    'product-strategy': 'PST',
+    'process-optimization': 'PRC',
+    'external-requirement': 'EXT',
   }
   const year = new Date().getFullYear()
   return `${prefix[type]}-${year}-${String(codeCounter).padStart(3, '0')}`

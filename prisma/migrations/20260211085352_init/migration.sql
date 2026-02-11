@@ -5,7 +5,13 @@ CREATE TYPE "ProjectStatus" AS ENUM ('green', 'yellow', 'red');
 CREATE TYPE "TaskStatus" AS ENUM ('todo', 'in_progress', 'done', 'blocked');
 
 -- CreateEnum
-CREATE TYPE "ProjectType" AS ENUM ('sourcing', 'npi', 'cost_saving', 'cip', 'other');
+CREATE TYPE "ProjectType" AS ENUM ('npi', 'cost_optimization', 'quality_improvement', 'automation', 'product_strategy', 'process_optimization', 'external_requirement');
+
+-- CreateEnum
+CREATE TYPE "ProjectTier" AS ENUM ('T1', 'T2', 'T3', 'CIP');
+
+-- CreateEnum
+CREATE TYPE "DemandSource" AS ENUM ('company_policy', 'external_requirement', 'internal_demand', 'self_proposal');
 
 -- CreateEnum
 CREATE TYPE "TeamRole" AS ENUM ('pm', 'engineer', 'procurement', 'qa', 'manufacturing', 'designer', 'other');
@@ -52,6 +58,8 @@ CREATE TABLE "projects" (
     "id" TEXT NOT NULL,
     "project_code" TEXT NOT NULL,
     "project_type" "ProjectType" NOT NULL,
+    "project_tier" "ProjectTier",
+    "demand_source" "DemandSource",
     "name" TEXT NOT NULL,
     "objective" TEXT NOT NULL DEFAULT '',
     "purpose" TEXT NOT NULL DEFAULT '',

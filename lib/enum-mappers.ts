@@ -31,7 +31,7 @@ export function taskStatusToFe(status: DbTaskStatus): FeTaskStatus {
   return toFrontendEnum<FeTaskStatus>(status)
 }
 
-// ProjectType: 'cost-saving' ↔ 'cost_saving'
+// ProjectType: 'cost-optimization' ↔ 'cost_optimization'
 import type { ProjectType as DbProjectType } from '@prisma/client'
 import type { ProjectType as FeProjectType } from './mock-data'
 
@@ -79,4 +79,28 @@ export function delayStatusToDb(status: FeDelayStatus): DbDelayStatus {
 
 export function delayStatusToFe(status: DbDelayStatus): FeDelayStatus {
   return status as FeDelayStatus
+}
+
+// ProjectTier: T1/T2/T3/CIP — same in both, no conversion needed
+import type { ProjectTier as DbProjectTier } from '@prisma/client'
+import type { ProjectTier as FeProjectTier } from './mock-data'
+
+export function projectTierToDb(tier: FeProjectTier): DbProjectTier {
+  return tier as DbProjectTier
+}
+
+export function projectTierToFe(tier: DbProjectTier): FeProjectTier {
+  return tier as FeProjectTier
+}
+
+// DemandSource: 'company-policy' ↔ 'company_policy'
+import type { DemandSource as DbDemandSource } from '@prisma/client'
+import type { DemandSource as FeDemandSource } from './mock-data'
+
+export function demandSourceToDb(source: FeDemandSource): DbDemandSource {
+  return toDbEnum<DbDemandSource>(source)
+}
+
+export function demandSourceToFe(source: DbDemandSource): FeDemandSource {
+  return toFrontendEnum<FeDemandSource>(source)
 }

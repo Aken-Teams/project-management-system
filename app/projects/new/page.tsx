@@ -24,7 +24,8 @@ import { useToast } from '@/hooks/use-toast'
 import { parseProjectRequirements, type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type TeamRole } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
+import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import {
   Loader2,
@@ -141,12 +142,16 @@ interface ProjectDraft {
       timeBound: string
     }
     manualProjectType?: ProjectType
+    manualProjectTier?: ProjectTier
+    manualDemandSource?: DemandSource
     manualMilestones?: ManualMilestone[]
     manualRisks?: ManualRisk[]
     manualTeamMembers?: string[]
     currentStep?: number
     // AI mode
     aiProjectType?: ProjectType
+    aiProjectTier?: ProjectTier
+    aiDemandSource?: DemandSource
     aiCreatedReason?: string
     aiExpectedBenefits?: string
     requirements?: string
@@ -507,6 +512,7 @@ export default function NewProjectPage() {
   const { addProject } = useProjectStore()
   const { user } = useAuth()
   const { toast } = useToast()
+  const [isCreating, setIsCreating] = useState(false)
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai')
   const [showDraftsDialog, setShowDraftsDialog] = useState(false)
   const [showSaveDraftDialog, setShowSaveDraftDialog] = useState(false)
@@ -517,7 +523,9 @@ export default function NewProjectPage() {
   const [requirements, setRequirements] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [parsedData, setParsedData] = useState<ParsedProjectData | null>(null)
-  const [aiProjectType, setAiProjectType] = useState<ProjectType>('other')
+  const [aiProjectType, setAiProjectType] = useState<ProjectType>('npi')
+  const [aiProjectTier, setAiProjectTier] = useState<ProjectTier | ''>('')
+  const [aiDemandSource, setAiDemandSource] = useState<DemandSource | ''>('')
   const [aiCreatedReason, setAiCreatedReason] = useState('')
   const [aiExpectedBenefits, setAiExpectedBenefits] = useState('')
   const [aiTeamMembers, setAiTeamMembers] = useState<string[]>([])
@@ -571,7 +579,9 @@ export default function NewProjectPage() {
     relevant: '',      // 相關性
     timeBound: '',     // 時限性
   })
-  const [manualProjectType, setManualProjectType] = useState<ProjectType>('other')
+  const [manualProjectType, setManualProjectType] = useState<ProjectType>('npi')
+  const [manualProjectTier, setManualProjectTier] = useState<ProjectTier | ''>('')
+  const [manualDemandSource, setManualDemandSource] = useState<DemandSource | ''>('')
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([
     { id: 'milestone-1', name: '', durationWeeks: 0 },
   ])
@@ -625,12 +635,16 @@ export default function NewProjectPage() {
         manualData: activeTab === 'manual' ? manualData : undefined,
         smartObjective: activeTab === 'manual' ? smartObjective : undefined,
         manualProjectType: activeTab === 'manual' ? manualProjectType : undefined,
+        manualProjectTier: activeTab === 'manual' ? manualProjectTier : undefined,
+        manualDemandSource: activeTab === 'manual' ? manualDemandSource : undefined,
         manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
         manualRisks: activeTab === 'manual' ? manualRisks : undefined,
         manualTeamMembers: activeTab === 'manual' ? manualTeamMembers : undefined,
         currentStep: activeTab === 'manual' ? currentStep : undefined,
         // AI mode data
         aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
+        aiProjectTier: activeTab === 'ai' ? aiProjectTier : undefined,
+        aiDemandSource: activeTab === 'ai' ? aiDemandSource : undefined,
         aiCreatedReason: activeTab === 'ai' ? aiCreatedReason : undefined,
         aiExpectedBenefits: activeTab === 'ai' ? aiExpectedBenefits : undefined,
         requirements: activeTab === 'ai' ? requirements : undefined,
@@ -660,12 +674,16 @@ export default function NewProjectPage() {
       setManualData(draft.data.manualData)
       if (draft.data.smartObjective) setSmartObjective(draft.data.smartObjective)
       if (draft.data.manualProjectType) setManualProjectType(draft.data.manualProjectType)
+      if (draft.data.manualProjectTier) setManualProjectTier(draft.data.manualProjectTier)
+      if (draft.data.manualDemandSource) setManualDemandSource(draft.data.manualDemandSource)
       if (draft.data.manualMilestones) setManualMilestones(draft.data.manualMilestones)
       if (draft.data.manualRisks) setManualRisks(draft.data.manualRisks)
       if (draft.data.manualTeamMembers) setManualTeamMembers(draft.data.manualTeamMembers)
       if (draft.data.currentStep !== undefined) setCurrentStep(draft.data.currentStep)
     } else if (draft.mode === 'ai') {
       if (draft.data.aiProjectType) setAiProjectType(draft.data.aiProjectType)
+      if (draft.data.aiProjectTier) setAiProjectTier(draft.data.aiProjectTier)
+      if (draft.data.aiDemandSource) setAiDemandSource(draft.data.aiDemandSource)
       if (draft.data.aiCreatedReason) setAiCreatedReason(draft.data.aiCreatedReason)
       if (draft.data.aiExpectedBenefits) setAiExpectedBenefits(draft.data.aiExpectedBenefits)
       if (draft.data.requirements) setRequirements(draft.data.requirements)
@@ -694,24 +712,49 @@ export default function NewProjectPage() {
 
   const updateProjectCodePreview = (type: ProjectType) => {
     const prefix: Record<ProjectType, string> = {
-      sourcing: 'SRC',
       npi: 'NPI',
-      'cost-saving': 'CST',
-      cip: 'CIP',
-      other: 'PRJ',
+      'cost-optimization': 'CST',
+      'quality-improvement': 'QAL',
+      automation: 'AUT',
+      'product-strategy': 'PST',
+      'process-optimization': 'PRC',
+      'external-requirement': 'EXT',
     }
     const year = new Date().getFullYear()
     setPreviewCode(`${prefix[type]}-${year}-XXX`)
   }
 
+  const applyMilestoneTemplate = (type: ProjectType, mode: 'manual' | 'ai') => {
+    const template = MILESTONE_TEMPLATES[type]
+    if (!template) return
+    if (mode === 'manual') {
+      setManualMilestones(template.map((t, i) => ({
+        id: `milestone-${Date.now()}-${i}`,
+        name: t.name,
+        durationWeeks: t.durationWeeks,
+      })))
+      setManualTasks([])
+    } else {
+      setAiMilestones(template.map((t, i) => ({
+        id: `ai-ms-${Date.now()}-${i}`,
+        name: t.name,
+        description: '',
+        durationWeeks: t.durationWeeks,
+      })))
+      setAiTasks([])
+    }
+  }
+
   const handleManualTypeChange = (type: ProjectType) => {
     setManualProjectType(type)
     updateProjectCodePreview(type)
+    applyMilestoneTemplate(type, 'manual')
   }
 
   const handleAiTypeChange = (type: ProjectType) => {
     setAiProjectType(type)
     updateProjectCodePreview(type)
+    applyMilestoneTemplate(type, 'ai')
   }
 
   // Calculate milestone dates based on duration weeks
@@ -1047,6 +1090,8 @@ export default function NewProjectPage() {
 
     const newProject = addProject({
       projectType: aiProjectType,
+      projectTier: aiProjectTier || undefined,
+      demandSource: aiDemandSource || undefined,
       name: aiEditableData.name,
       objective,
       purpose: aiEditableData.purpose,
@@ -1069,7 +1114,7 @@ export default function NewProjectPage() {
     router.push(`/projects/${newProject.id}`)
   }
 
-  const handleManualCreate = () => {
+  const handleManualCreate = async () => {
     const ownerName = user?.name || 'Unknown'
 
     // Build milestone ID mapping: old draft ID -> new stable ID
@@ -1113,11 +1158,10 @@ export default function NewProjectPage() {
           priority: t.priority,
           startDate,
           endDate: ms?.dueDate || manualData.endDate,
-          dependencies: [] as string[],
         }
       })
 
-    // Build team names array (backward compat) + teamMembers detail from teamDetails
+    // Build team names array + teamMembers detail from teamDetails
     const uniqueNames = new Set<string>()
     const teamNames: string[] = []
     manualTeamDetails.forEach(m => {
@@ -1128,28 +1172,57 @@ export default function NewProjectPage() {
     })
     const teamMembersData = manualTeamDetails.map(m => ({ name: m.name, role: m.role, responsibility: m.responsibility }))
 
-    const newProject = addProject({
-      projectType: manualProjectType,
-      name: manualData.name,
-      objective: manualData.objective,
-      purpose: manualData.purpose,
-      scope: manualData.scope,
-      roi: manualData.roi,
-      createdReason: manualData.createdReason,
-      expectedBenefits: manualData.expectedBenefits,
-      smartObjective: smartObjective,
-      startDate: manualData.startDate,
-      endDate: manualData.endDate,
-      budget: Number(manualData.budget) || 0,
-      owner: ownerName,
-      team: teamNames,
-      milestones: validMilestones,
-      risks: validRisks,
-      tasks: validTasks,
-      teamMembers: teamMembersData,
-    })
+    setIsCreating(true)
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectType: manualProjectType,
+          projectTier: manualProjectTier || undefined,
+          demandSource: manualDemandSource || undefined,
+          name: manualData.name,
+          objective: manualData.objective,
+          purpose: manualData.purpose,
+          scope: manualData.scope,
+          roi: manualData.roi,
+          createdReason: manualData.createdReason,
+          expectedBenefits: manualData.expectedBenefits,
+          smartObjective: smartObjective,
+          startDate: manualData.startDate,
+          endDate: manualData.endDate,
+          budget: Number(manualData.budget) || 0,
+          ownerName,
+          team: teamNames,
+          milestones: validMilestones,
+          risks: validRisks,
+          tasks: validTasks,
+          teamMembers: teamMembersData,
+        }),
+      })
 
-    router.push(`/projects/${newProject.id}`)
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || '建立專案失敗')
+      }
+
+      const newProject = await res.json()
+
+      toast({
+        title: '專案建立成功',
+        description: `專案代碼：${newProject.projectCode}`,
+      })
+
+      router.push(`/projects/${newProject.id}`)
+    } catch (error) {
+      toast({
+        title: '建立專案失敗',
+        description: error instanceof Error ? error.message : '請稍後再試',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   // Enhanced team member input component with roles and responsibilities
@@ -1524,6 +1597,49 @@ export default function NewProjectPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-project-tier">專案層別</Label>
+                      <Select
+                        value={aiProjectTier}
+                        onValueChange={(v) => setAiProjectTier(v as ProjectTier)}
+                      >
+                        <SelectTrigger id="ai-project-tier">
+                          <SelectValue placeholder="選擇專案層別" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(PROJECT_TIER_LABELS) as [ProjectTier, string][]).map(
+                            ([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-demand-source">需求來源</Label>
+                      <Select
+                        value={aiDemandSource}
+                        onValueChange={(v) => setAiDemandSource(v as DemandSource)}
+                      >
+                        <SelectTrigger id="ai-demand-source">
+                          <SelectValue placeholder="選擇需求來源" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(DEMAND_SOURCE_LABELS) as [DemandSource, string][]).map(
+                            ([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="ai-project-type">專案類型 <span className="text-destructive">*</span></Label>
@@ -2132,6 +2248,49 @@ export default function NewProjectPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
+                      <Label htmlFor="manual-project-tier">專案層別</Label>
+                      <Select
+                        value={manualProjectTier}
+                        onValueChange={(v) => setManualProjectTier(v as ProjectTier)}
+                      >
+                        <SelectTrigger id="manual-project-tier">
+                          <SelectValue placeholder="選擇專案層別" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(PROJECT_TIER_LABELS) as [ProjectTier, string][]).map(
+                            ([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-demand-source">需求來源</Label>
+                      <Select
+                        value={manualDemandSource}
+                        onValueChange={(v) => setManualDemandSource(v as DemandSource)}
+                      >
+                        <SelectTrigger id="manual-demand-source">
+                          <SelectValue placeholder="選擇需求來源" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(DEMAND_SOURCE_LABELS) as [DemandSource, string][]).map(
+                            ([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
                       <Label htmlFor="manual-project-type">
                         專案類型 <span className="text-destructive">*</span>
                       </Label>
@@ -2650,6 +2809,7 @@ export default function NewProjectPage() {
                     size="lg"
                     onClick={handleManualCreate}
                     disabled={
+                      isCreating ||
                       !manualData.name ||
                       !smartObjective.specific.trim() ||
                       !manualData.startDate ||
@@ -2657,8 +2817,12 @@ export default function NewProjectPage() {
                     }
                     className="gap-2"
                   >
-                    <Check className="h-4 w-4" />
-                    建立專案
+                    {isCreating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    {isCreating ? '建立中...' : '建立專案'}
                   </Button>
                 )}
               </div>
