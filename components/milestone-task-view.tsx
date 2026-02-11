@@ -307,9 +307,14 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
           </span>
           {viewMode === 'gantt' && (
             <Button
-              variant={showDependencies ? 'default' : 'outline'}
+              variant="outline"
               size="sm"
-              className="h-7 text-sm gap-1.5"
+              className={cn(
+                'h-7 text-sm gap-1.5',
+                showDependencies
+                  ? 'border-violet-400 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-950 dark:text-violet-400 dark:hover:bg-violet-900'
+                  : '',
+              )}
               onClick={() => setShowDependencies(prev => !prev)}
             >
               <Network className="h-3.5 w-3.5" />
@@ -320,7 +325,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-sm gap-1.5"
+              className="h-7 text-sm gap-1.5 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-900"
               disabled={resettingBaseline}
               onClick={() => setBaselineDialogOpen(true)}
             >
