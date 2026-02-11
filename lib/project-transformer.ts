@@ -5,6 +5,51 @@ import {
 } from '@/lib/enum-mappers'
 import type { ProjectType as DbProjectType } from '@prisma/client'
 
+// ─── Auto-compute project status & progress from tasks ─────
+
+interface FeTask {
+  status: string
+  progress: number
+  endDate: string
+}
+
+function computeProjectProgress(tasks: FeTask[]): number {
+  if (tasks.length === 0) return 0
+  const total = tasks.reduce((sum, t) => sum + t.progress, 0)
+  return Math.round(total / tasks.length)
+}
+
+function computeProjectStatus(
+  tasks: FeTask[],
+  projectEndDate: Date,
+): 'green' | 'yellow' | 'red' {
+  if (tasks.length === 0) return 'green'
+
+  const today = new Date().toISOString().split('T')[0]
+  const overdueTasks = tasks.filter(t => t.status !== 'done' && t.endDate < today)
+  const blockedTasks = tasks.filter(t => t.status === 'blocked')
+  const doneTasks = tasks.filter(t => t.status === 'done')
+
+  // All done → green
+  if (doneTasks.length === tasks.length) return 'green'
+
+  const overdueRatio = overdueTasks.length / tasks.length
+  const blockedRatio = blockedTasks.length / tasks.length
+
+  // Red: >30% overdue or >20% blocked, or project end date passed
+  const projectEnd = projectEndDate.toISOString().split('T')[0]
+  if (overdueRatio > 0.3 || blockedRatio > 0.2 || (projectEnd < today && doneTasks.length < tasks.length)) {
+    return 'red'
+  }
+
+  // Yellow: any overdue or blocked tasks
+  if (overdueTasks.length > 0 || blockedTasks.length > 0) {
+    return 'yellow'
+  }
+
+  return 'green'
+}
+
 /**
  * Transform a Prisma project (with relations) into the frontend Project shape.
  * Used by both POST /api/projects and GET /api/projects/[id].
@@ -262,8 +307,8 @@ export function dbProjectToFrontend(
     smartObjective,
     startDate: proj.startDate.toISOString().split('T')[0],
     endDate: proj.endDate.toISOString().split('T')[0],
-    status: proj.status as 'green' | 'yellow' | 'red',
-    progress: proj.progress,
+    status: computeProjectStatus(feTasks, proj.endDate),
+    progress: computeProjectProgress(feTasks),
     budget: proj.budget,
     budgetUsed: proj.budgetUsed,
     owner: proj.owner.name,
