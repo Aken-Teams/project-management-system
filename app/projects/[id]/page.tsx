@@ -12,7 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MilestoneTaskView } from '@/components/milestone-task-view'
-import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
 import { Input } from '@/components/ui/input'
@@ -904,29 +903,20 @@ interface ProjectPageProps {
 export default function ProjectPage({ params }: ProjectPageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { getProject, updateProject: storeUpdateProject, deleteProject: storeDeleteProject } = useProjectStore()
   const { user } = useAuth()
-  const [apiProject, setApiProject] = useState<Project | null>(null)
+  const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  // Try localStorage first (legacy), then fetch from API
-  const storeProject = getProject(id)
-
   useEffect(() => {
-    if (storeProject) {
-      setApiProject(null)
-      setLoading(false)
-      return
-    }
     let cancelled = false
     setLoading(true)
     fetch(`/api/projects/${id}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled) {
-          setApiProject(data)
+          setProject(data)
           setLoading(false)
         }
       })
@@ -934,44 +924,27 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [id, storeProject])
-
-  const project: Project | undefined = storeProject || apiProject || undefined
-  const isFromStore = !!storeProject
+  }, [id])
 
   const handleSaveProject = async (data: ProjectEditData) => {
-    if (isFromStore) {
-      // Convert null → undefined for store compatibility
-      const { projectTier, demandSource, ...rest } = data
-      storeUpdateProject(id, {
-        ...rest,
-        projectTier: projectTier ?? undefined,
-        demandSource: demandSource ?? undefined,
-      })
-    } else {
-      const res = await fetch(`/api/projects/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || '更新失敗')
-      }
-      const updated = await res.json()
-      setApiProject(updated)
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || '更新失敗')
     }
+    const updated = await res.json()
+    setProject(updated)
   }
 
   const handleDeleteProject = async () => {
-    if (isFromStore) {
-      storeDeleteProject(id)
-    } else {
-      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || '刪除失敗')
-      }
+    const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || '刪除失敗')
     }
     router.push('/projects')
   }

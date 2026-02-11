@@ -30,7 +30,7 @@ import { Loader2 } from 'lucide-react'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
-  const [projects, setProjects] = useState<Project[]>([])
+  const [allProjects, setAllProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
@@ -42,12 +42,10 @@ export default function ProjectsPage() {
     setLoading(true)
     fetch('/api/projects')
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setProjects(data))
-      .catch(() => setProjects([]))
+      .then((data) => setAllProjects(data))
+      .catch(() => setAllProjects([]))
       .finally(() => setLoading(false))
   }, [])
-
-  const allProjects = projects
 
   // 根據角色過濾專案
   const projects = user?.role === 'member'
