@@ -106,6 +106,7 @@ export interface Task {
   assignee: string
   status: TaskStatus
   priority: 'low' | 'medium' | 'high'
+  durationWeeks: number
   startDate: string
   endDate: string
   dependencies: string[]

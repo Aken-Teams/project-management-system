@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useToast } from '@/hooks/use-toast'
 import { parseProjectRequirements, type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
@@ -112,6 +113,7 @@ interface MilestoneTaskDraft {
   title: string
   assignee: string
   priority: 'low' | 'medium' | 'high'
+  durationWeeks: number
 }
 
 interface ProjectDraft {
@@ -373,12 +375,16 @@ function SortableAiMilestoneItem({
 // Sortable task item for drag-and-drop within milestone
 function SortableTaskItem({
   task,
+  startDate,
+  endDate,
   onRemove,
   onUpdate,
 }: {
   task: MilestoneTaskDraft
+  startDate?: string
+  endDate?: string
   onRemove: (id: string) => void
-  onUpdate: (id: string, field: keyof MilestoneTaskDraft, value: string) => void
+  onUpdate: (id: string, field: keyof MilestoneTaskDraft, value: string | number) => void
 }) {
   const {
     attributes,
@@ -405,10 +411,29 @@ function SortableTaskItem({
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        <span className="text-sm font-medium">{task.title}</span>
-        {task.assignee && task.assignee.trim() && (
-          <span className="ml-2 text-sm text-muted-foreground">— {task.assignee}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{task.title}</span>
+          {task.assignee && task.assignee.trim() && (
+            <span className="text-sm text-muted-foreground">— {task.assignee}</span>
+          )}
+        </div>
+        {startDate && endDate && (
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {startDate} ~ {endDate}
+            <span className="ml-1 text-muted-foreground/70">({task.durationWeeks} 週)</span>
+          </div>
         )}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <Input
+          type="number"
+          min={0}
+          value={task.durationWeeks || ''}
+          onChange={(e) => onUpdate(task.id, 'durationWeeks', Number(e.target.value) || 0)}
+          className="h-7 w-16 text-xs text-center"
+          placeholder="週"
+        />
+        <span className="text-xs text-muted-foreground">週</span>
       </div>
       <Badge
         variant={task.priority === 'high' ? 'destructive' : task.priority === 'medium' ? 'default' : 'secondary'}
@@ -440,6 +465,7 @@ function MilestoneTaskAdder({
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
+  const [durationWeeks, setDurationWeeks] = useState<number>(1)
 
   const handleAdd = () => {
     if (!title.trim()) return
@@ -449,10 +475,12 @@ function MilestoneTaskAdder({
       title: title.trim(),
       assignee,
       priority,
+      durationWeeks,
     })
     setTitle('')
     setAssignee('')
     setPriority('medium')
+    setDurationWeeks(1)
   }
 
   return (
@@ -465,6 +493,17 @@ function MilestoneTaskAdder({
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }}
           className="h-9 text-sm"
+        />
+      </div>
+      <div className="w-[80px] space-y-1">
+        <Label className="text-xs text-muted-foreground">週數</Label>
+        <Input
+          type="number"
+          min={1}
+          value={durationWeeks || ''}
+          onChange={(e) => setDurationWeeks(Number(e.target.value) || 0)}
+          className="h-9 text-sm text-center"
+          placeholder="週"
         />
       </div>
       <div className="w-[130px] space-y-1">
@@ -726,12 +765,17 @@ export default function NewProjectPage() {
     const template = MILESTONE_TEMPLATES[type]
     if (!template) return
     if (mode === 'manual') {
-      setManualMilestones(template.map((t, i) => ({
+      const newMilestones = template.map((t, i) => ({
         id: `milestone-${Date.now()}-${i}`,
         name: t.name,
         durationWeeks: t.durationWeeks,
-      })))
+      }))
+      setManualMilestones(newMilestones)
       setManualTasks([])
+      // Auto-expand first milestone's task section
+      if (newMilestones.length > 0) {
+        setExpandedMilestones(new Set([newMilestones[0].id]))
+      }
     } else {
       setAiMilestones(template.map((t, i) => ({
         id: `ai-ms-${Date.now()}-${i}`,
@@ -785,6 +829,38 @@ export default function NewProjectPage() {
 
   // Recalculate dates when milestones or start date changes
   const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate)
+
+  // Calculate task dates within each milestone's date range
+  const calculateTaskDates = (
+    tasks: MilestoneTaskDraft[],
+    milestones: (ManualMilestone & { startDate?: string; endDate?: string })[],
+  ) => {
+    const result: Map<string, { startDate: string; endDate: string }> = new Map()
+
+    for (const ms of milestones) {
+      if (!ms.startDate) continue
+      const msTasks = tasks.filter(t => t.milestoneId === ms.id && t.durationWeeks > 0)
+      let currentDate = new Date(ms.startDate)
+
+      for (const task of msTasks) {
+        const taskStart = new Date(currentDate)
+        const daysToAdd = task.durationWeeks * 7 - 1
+        const taskEnd = new Date(currentDate)
+        taskEnd.setDate(taskEnd.getDate() + daysToAdd)
+
+        result.set(task.id, {
+          startDate: taskStart.toISOString().split('T')[0],
+          endDate: taskEnd.toISOString().split('T')[0],
+        })
+
+        currentDate = new Date(taskEnd)
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
+    }
+    return result
+  }
+
+  const manualTaskDates = calculateTaskDates(manualTasks, recalculatedMilestones)
 
   // Track the last milestone's end date (only changes when milestones actually change)
   const lastMilestoneEndDate = useMemo(() => {
@@ -889,6 +965,8 @@ export default function NewProjectPage() {
 
   // Recalculate AI milestone dates
   const recalculatedAiMilestones = calculateAiMilestoneDates(aiMilestones, aiEditableData.startDate)
+
+  const aiTaskDates = calculateTaskDates(aiTasks, recalculatedAiMilestones)
 
   // Track AI last milestone end date
   const aiLastMilestoneEndDate = useMemo(() => {
@@ -1058,20 +1136,22 @@ export default function NewProjectPage() {
         status: 'open' as const,
       }))
 
-    // Map AI draft tasks
+    // Map AI draft tasks with calculated dates
     const validTasks = aiTasks
       .filter(t => t.title.trim() && milestoneIdMap.has(t.milestoneId))
       .map(t => {
         const msId = milestoneIdMap.get(t.milestoneId)!
         const ms = milestones.find(m => m.id === msId)
+        const dates = aiTaskDates.get(t.id)
         return {
           milestoneId: msId,
           title: t.title,
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
-          startDate: aiEditableData.startDate,
-          endDate: ms?.dueDate || aiEditableData.endDate,
+          durationWeeks: t.durationWeeks || 1,
+          startDate: dates?.startDate || aiEditableData.startDate,
+          endDate: dates?.endDate || ms?.dueDate || aiEditableData.endDate,
           dependencies: [] as string[],
         }
       })
@@ -1136,16 +1216,17 @@ export default function NewProjectPage() {
         status: 'open' as const,
       }))
 
-    // Map draft tasks to real tasks with correct milestone IDs
+    // Map draft tasks to real tasks with correct milestone IDs and calculated dates
     const validTasks = manualTasks
       .filter(t => t.title.trim() && milestoneIdMap.has(t.milestoneId))
       .map(t => {
         const msId = milestoneIdMap.get(t.milestoneId)!
-        // Find milestone dates for task
+        const dates = manualTaskDates.get(t.id)
+        // Fallback to milestone range if no calculated dates
         const ms = validMilestones.find(m => m.id === msId)
         const msIndex = validMilestones.indexOf(ms!)
         const prevMs = msIndex > 0 ? validMilestones[msIndex - 1] : null
-        const startDate = prevMs
+        const fallbackStart = prevMs
           ? new Date(new Date(prevMs.dueDate).getTime() + 86400000).toISOString().split('T')[0]
           : manualData.startDate
         return {
@@ -1154,8 +1235,9 @@ export default function NewProjectPage() {
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
-          startDate,
-          endDate: ms?.dueDate || manualData.endDate,
+          durationWeeks: t.durationWeeks || 1,
+          startDate: dates?.startDate || fallbackStart,
+          endDate: dates?.endDate || ms?.dueDate || manualData.endDate,
         }
       })
 
@@ -2059,6 +2141,8 @@ export default function NewProjectPage() {
                                               <SortableTaskItem
                                                 key={task.id}
                                                 task={task}
+                                                startDate={aiTaskDates.get(task.id)?.startDate}
+                                                endDate={aiTaskDates.get(task.id)?.endDate}
                                                 onRemove={(id) => setAiTasks(aiTasks.filter(t => t.id !== id))}
                                                 onUpdate={(id, field, value) => setAiTasks(aiTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
                                               />
@@ -2564,6 +2648,15 @@ export default function NewProjectPage() {
                         新增里程碑
                       </Button>
                     </div>
+                    {manualProjectType && manualMilestones.length > 0 && (
+                      <Alert className="border-blue-200 bg-blue-50/50">
+                        <Lightbulb className="h-4 w-4 text-blue-500" />
+                        <AlertDescription className="text-sm text-blue-700">
+                          已根據「{PROJECT_TYPE_LABELS[manualProjectType]}」自動帶入 {manualMilestones.length} 個里程碑範本。
+                          您可以自由修改名稱、期程，或新增/刪除里程碑。<strong className="font-semibold">請展開各里程碑下方的任務區塊來新增任務。</strong>
+                        </AlertDescription>
+                      </Alert>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       拖動左側圖標可改變里程碑順序。輸入週數後系統將自動計算日期。專案結束日期會根據里程碑自動調整。
                     </p>
@@ -2589,11 +2682,13 @@ export default function NewProjectPage() {
                               {/* Task section under milestone */}
                               {milestone.name.trim() && (() => {
                                 const milestoneTasks = manualTasks.filter(t => t.milestoneId === milestone.id)
+                                const hasTasks = milestoneTasks.length > 0
+                                const isExpanded = expandedMilestones.has(milestone.id)
                                 return (
-                                  <div className="ml-9 border-l-2 border-primary/30 pl-4 pt-2 pb-2 bg-primary/5 rounded-r-lg pr-3">
+                                  <div className={`ml-9 border-l-2 pl-4 pt-2 pb-2 rounded-r-lg pr-3 ${hasTasks ? 'border-primary/30 bg-primary/5' : 'border-amber-300 bg-amber-50/60'}`}>
                                     <button
                                       type="button"
-                                      className="flex items-center gap-2 w-full text-sm font-medium hover:text-primary transition-colors"
+                                      className={`flex items-center gap-2 w-full text-sm font-medium transition-colors ${hasTasks ? 'hover:text-primary' : 'hover:text-amber-700 text-amber-700'}`}
                                       onClick={() => {
                                         const next = new Set(expandedMilestones)
                                         if (next.has(milestone.id)) next.delete(milestone.id)
@@ -2601,10 +2696,13 @@ export default function NewProjectPage() {
                                         setExpandedMilestones(next)
                                       }}
                                     >
-                                      {expandedMilestones.has(milestone.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                      <ListTodo className="h-4 w-4 text-primary" />
+                                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                      <ListTodo className={`h-4 w-4 ${hasTasks ? 'text-primary' : 'text-amber-500'}`} />
                                       <span>任務</span>
-                                      <Badge variant="secondary" className="text-xs px-2 py-0.5 ml-1">{milestoneTasks.length}</Badge>
+                                      <Badge variant={hasTasks ? 'secondary' : 'outline'} className={`text-xs px-2 py-0.5 ml-1 ${!hasTasks ? 'border-amber-300 text-amber-600 bg-amber-100' : ''}`}>{milestoneTasks.length}</Badge>
+                                      {!hasTasks && !isExpanded && (
+                                        <span className="text-xs text-amber-500 ml-2">點擊展開新增任務</span>
+                                      )}
                                     </button>
                                     {expandedMilestones.has(milestone.id) && (
                                       <div className="mt-2 space-y-2">
@@ -2630,6 +2728,8 @@ export default function NewProjectPage() {
                                               <SortableTaskItem
                                                 key={task.id}
                                                 task={task}
+                                                startDate={manualTaskDates.get(task.id)?.startDate}
+                                                endDate={manualTaskDates.get(task.id)?.endDate}
                                                 onRemove={(id) => setManualTasks(manualTasks.filter(t => t.id !== id))}
                                                 onUpdate={(id, field, value) => setManualTasks(manualTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
                                               />

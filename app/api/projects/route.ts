@@ -8,8 +8,31 @@ import {
   demandSourceToDb,
   demandSourceToFe,
 } from '@/lib/enum-mappers'
+import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import type { ProjectType as FeProjectType, ProjectTier as FeProjectTier, DemandSource as FeDemandSource } from '@/lib/mock-data'
 import type { ProjectType as DbProjectType } from '@prisma/client'
+
+// ─── GET /api/projects — List all projects ───────────────
+export async function GET() {
+  try {
+    const projects = await prisma.project.findMany({
+      include: projectFullInclude,
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const feProjects = projects.map((p) =>
+      dbProjectToFrontend(p as Parameters<typeof dbProjectToFrontend>[0])
+    )
+
+    return NextResponse.json(feProjects)
+  } catch (error) {
+    console.error('Failed to fetch projects:', error)
+    return NextResponse.json(
+      { error: '讀取專案列表失敗' },
+      { status: 500 },
+    )
+  }
+}
 
 // ─── Project code prefix map ─────────────────────────────
 const CODE_PREFIX: Record<string, string> = {
@@ -54,6 +77,7 @@ interface CreateProjectBody {
     description: string
     assignee: string
     priority: string
+    durationWeeks: number
     startDate: string
     endDate: string
   }[]
@@ -195,6 +219,7 @@ export async function POST(request: NextRequest) {
               description: t.description || '',
               assignee: t.assignee || '未指派',
               priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
+              durationWeeks: t.durationWeeks || 0,
               startDate: new Date(t.startDate),
               endDate: new Date(t.endDate),
               sortOrder: i,
@@ -316,7 +341,7 @@ function buildFrontendProject(
     updatedAt: Date
   },
   milestones: { id: string; name: string; dueDate: Date; status: string; progress: number; sortOrder: number }[],
-  tasks: { id: string; milestoneId: string; title: string; description: string; assignee: string; status: string; priority: string; startDate: Date; endDate: Date; progress: number; completedAt: Date | null; completedBy: string | null }[],
+  tasks: { id: string; milestoneId: string; title: string; description: string; assignee: string; status: string; priority: string; startDate: Date; endDate: Date; durationWeeks: number; progress: number; completedAt: Date | null; completedBy: string | null }[],
   risks: { id: string; title: string; description: string; impact: string; probability: string; mitigation: string; status: string }[],
   owner: { name: string },
   team: string[],
@@ -341,6 +366,7 @@ function buildFrontendProject(
     assignee: t.assignee,
     status: t.status === 'in_progress' ? 'in-progress' as const : t.status as 'todo' | 'done' | 'blocked',
     priority: t.priority as 'low' | 'medium' | 'high',
+    durationWeeks: t.durationWeeks,
     startDate: t.startDate.toISOString().split('T')[0],
     endDate: t.endDate.toISOString().split('T')[0],
     dependencies: [] as string[],

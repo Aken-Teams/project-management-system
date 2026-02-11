@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
@@ -902,7 +902,46 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const router = useRouter()
   const { getProject } = useProjectStore()
   const { user } = useAuth()
-  const project = getProject(id)
+  const [apiProject, setApiProject] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Try localStorage first (legacy), then fetch from API
+  const storeProject = getProject(id)
+
+  useEffect(() => {
+    if (storeProject) {
+      setApiProject(null)
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    fetch(`/api/projects/${id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) {
+          setApiProject(data)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [id, storeProject])
+
+  const project: Project | undefined = storeProject || apiProject || undefined
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">載入專案資料中...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   if (!project) {
     return (

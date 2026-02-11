@@ -1,0 +1,317 @@
+import {
+  projectTypeToFe,
+  projectTierToFe,
+  demandSourceToFe,
+} from '@/lib/enum-mappers'
+import type { ProjectType as DbProjectType } from '@prisma/client'
+
+/**
+ * Transform a Prisma project (with relations) into the frontend Project shape.
+ * Used by both POST /api/projects and GET /api/projects/[id].
+ */
+export function dbProjectToFrontend(
+  proj: {
+    id: string
+    projectCode: string
+    projectType: DbProjectType
+    projectTier: string | null
+    demandSource: string | null
+    name: string
+    objective: string
+    purpose: string
+    scope: string
+    roi: string
+    createdReason: string
+    expectedBenefits: string | null
+    smartSpecific: string | null
+    smartMeasurable: string | null
+    smartAchievable: string | null
+    smartRelevant: string | null
+    smartTimeBound: string | null
+    startDate: Date
+    endDate: Date
+    status: string
+    progress: number
+    budget: number
+    budgetUsed: number
+    ownerId: string
+    createdAt: Date
+    updatedAt: Date
+    owner: { name: string }
+    milestones: {
+      id: string
+      name: string
+      dueDate: Date
+      status: string
+      progress: number
+      sortOrder: number
+    }[]
+    baselines: {
+      id: string
+      milestoneId: string
+      name: string
+      dueDate: Date
+    }[]
+    tasks: {
+      id: string
+      milestoneId: string
+      title: string
+      description: string
+      assignee: string
+      status: string
+      priority: string
+      startDate: Date
+      endDate: Date
+      durationWeeks: number
+      progress: number
+      completedAt: Date | null
+      completedBy: string | null
+    }[]
+    risks: {
+      id: string
+      title: string
+      description: string
+      impact: string
+      probability: string
+      mitigation: string
+      status: string
+    }[]
+    teamMembers: {
+      user: { name: string }
+      role: string
+      responsibility: string
+    }[]
+    weeklyUpdates: {
+      id: string
+      weekOf: Date
+      updatedBy: { name: string }
+      updatedAt: Date
+      overallStatus: string
+      overallNotes: string
+      blockers: string
+      nextWeekPlan: string
+      keyAchievements: string
+      milestoneUpdates: {
+        milestoneId: string
+        progress: number
+        notes: string
+      }[]
+    }[]
+    delayRequests: {
+      id: string
+      requester: { name: string }
+      createdAt: Date
+      reason: string
+      canCatchUp: boolean
+      supportNeeded: string
+      status: string
+      reviewer: { name: string } | null
+      reviewedAt: Date | null
+      reviewNotes: string | null
+      supportResolved: boolean | null
+      supportResolvedAt: Date | null
+      supportResolvedBy: { name: string } | null
+      supportResolvedNotes: string | null
+      affectedMilestones: {
+        milestoneId: string
+        originalDate: Date
+        proposedDate: Date
+      }[]
+    }[]
+    taskLogs: {
+      id: string
+      taskId: string
+      author: { name: string }
+      logDate: Date
+      content: string
+      createdAt: Date
+    }[]
+  },
+) {
+  const feMilestones = proj.milestones
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      dueDate: m.dueDate.toISOString().split('T')[0],
+      status: m.status === 'in_progress' ? ('in-progress' as const) : (m.status as 'todo' | 'done' | 'blocked'),
+      progress: m.progress,
+    }))
+
+  // Build baseline from baselines table, fallback to current milestones
+  const feBaseline = proj.baselines.length > 0
+    ? proj.baselines.map((b) => {
+        const ms = feMilestones.find((m) => m.id === b.milestoneId)
+        return {
+          id: b.milestoneId,
+          name: b.name,
+          dueDate: b.dueDate.toISOString().split('T')[0],
+          status: ms?.status || ('todo' as const),
+          progress: ms?.progress || 0,
+        }
+      })
+    : feMilestones.map((m) => ({ ...m }))
+
+  const feTasks = proj.tasks.map((t) => ({
+    id: t.id,
+    projectId: proj.id,
+    milestoneId: t.milestoneId,
+    title: t.title,
+    description: t.description,
+    assignee: t.assignee,
+    status: t.status === 'in_progress' ? ('in-progress' as const) : (t.status as 'todo' | 'done' | 'blocked'),
+    priority: t.priority as 'low' | 'medium' | 'high',
+    durationWeeks: t.durationWeeks,
+    startDate: t.startDate.toISOString().split('T')[0],
+    endDate: t.endDate.toISOString().split('T')[0],
+    dependencies: [] as string[],
+    progress: t.progress,
+    ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
+    ...(t.completedBy ? { completedBy: t.completedBy } : {}),
+  }))
+
+  const feRisks = proj.risks.map((r) => ({
+    id: r.id,
+    projectId: proj.id,
+    title: r.title,
+    description: r.description,
+    impact: r.impact as 'low' | 'medium' | 'high',
+    probability: r.probability as 'low' | 'medium' | 'high',
+    mitigation: r.mitigation,
+    status: r.status as 'open' | 'mitigated' | 'closed',
+  }))
+
+  const smartObjective =
+    proj.smartSpecific || proj.smartMeasurable || proj.smartAchievable || proj.smartRelevant || proj.smartTimeBound
+      ? {
+          specific: proj.smartSpecific || '',
+          measurable: proj.smartMeasurable || '',
+          achievable: proj.smartAchievable || '',
+          relevant: proj.smartRelevant || '',
+          timeBound: proj.smartTimeBound || '',
+        }
+      : undefined
+
+  const teamNames = proj.teamMembers.map((tm) => tm.user.name)
+
+  const feWeeklyUpdates = proj.weeklyUpdates.map((wu) => ({
+    id: wu.id,
+    projectId: proj.id,
+    weekOf: wu.weekOf.toISOString().split('T')[0],
+    updatedBy: wu.updatedBy.name,
+    updatedAt: wu.updatedAt.toISOString(),
+    milestoneUpdates: wu.milestoneUpdates.map((mu) => ({
+      milestoneId: mu.milestoneId,
+      progress: mu.progress,
+      notes: mu.notes,
+    })),
+    overallStatus: wu.overallStatus === 'on_time' ? ('on-time' as const) : ('delay' as const),
+    overallNotes: wu.overallNotes,
+    blockers: wu.blockers,
+    nextWeekPlan: wu.nextWeekPlan,
+    keyAchievements: wu.keyAchievements,
+  }))
+
+  const feDelayRequests = proj.delayRequests.map((dr) => ({
+    id: dr.id,
+    projectId: proj.id,
+    requestedBy: dr.requester.name,
+    requestedAt: dr.createdAt.toISOString(),
+    reason: dr.reason,
+    affectedMilestones: dr.affectedMilestones.map((am) => ({
+      milestoneId: am.milestoneId,
+      originalDate: am.originalDate.toISOString().split('T')[0],
+      proposedDate: am.proposedDate.toISOString().split('T')[0],
+    })),
+    canCatchUp: dr.canCatchUp,
+    supportNeeded: dr.supportNeeded,
+    status: dr.status as 'pending' | 'approved' | 'rejected',
+    ...(dr.reviewer ? { reviewedBy: dr.reviewer.name } : {}),
+    ...(dr.reviewedAt ? { reviewedAt: dr.reviewedAt.toISOString() } : {}),
+    ...(dr.reviewNotes ? { reviewNotes: dr.reviewNotes } : {}),
+    ...(dr.supportResolved !== null ? { supportResolved: dr.supportResolved } : {}),
+    ...(dr.supportResolvedAt ? { supportResolvedAt: dr.supportResolvedAt.toISOString() } : {}),
+    ...(dr.supportResolvedBy ? { supportResolvedBy: dr.supportResolvedBy.name } : {}),
+    ...(dr.supportResolvedNotes ? { supportResolvedNotes: dr.supportResolvedNotes } : {}),
+  }))
+
+  const feTaskLogs = proj.taskLogs.map((tl) => ({
+    id: tl.id,
+    taskId: tl.taskId,
+    projectId: proj.id,
+    author: tl.author.name,
+    logDate: tl.logDate.toISOString().split('T')[0],
+    content: tl.content,
+    createdAt: tl.createdAt.toISOString(),
+  }))
+
+  return {
+    id: proj.id,
+    projectCode: proj.projectCode,
+    projectType: projectTypeToFe(proj.projectType),
+    ...(proj.projectTier ? { projectTier: projectTierToFe(proj.projectTier as never) } : {}),
+    ...(proj.demandSource ? { demandSource: demandSourceToFe(proj.demandSource as never) } : {}),
+    name: proj.name,
+    objective: proj.objective,
+    purpose: proj.purpose,
+    scope: proj.scope,
+    roi: proj.roi,
+    createdReason: proj.createdReason,
+    expectedBenefits: proj.expectedBenefits || undefined,
+    smartObjective,
+    startDate: proj.startDate.toISOString().split('T')[0],
+    endDate: proj.endDate.toISOString().split('T')[0],
+    status: proj.status as 'green' | 'yellow' | 'red',
+    progress: proj.progress,
+    budget: proj.budget,
+    budgetUsed: proj.budgetUsed,
+    owner: proj.owner.name,
+    team: teamNames,
+    teamMembers: proj.teamMembers.map((tm) => ({
+      name: tm.user.name,
+      role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+      responsibility: tm.responsibility,
+    })),
+    milestones: feMilestones,
+    baseline: feBaseline,
+    tasks: feTasks,
+    risks: feRisks,
+    weeklyUpdates: feWeeklyUpdates,
+    delayRequests: feDelayRequests,
+    taskLogs: feTaskLogs,
+    createdAt: proj.createdAt.toISOString(),
+    updatedAt: proj.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * Prisma include object for fetching a full project with all relations.
+ */
+export const projectFullInclude = {
+  owner: true,
+  milestones: { orderBy: { sortOrder: 'asc' as const } },
+  baselines: true,
+  tasks: { orderBy: { sortOrder: 'asc' as const } },
+  risks: true,
+  teamMembers: { include: { user: true } },
+  weeklyUpdates: {
+    include: {
+      updatedBy: true,
+      milestoneUpdates: true,
+    },
+    orderBy: { weekOf: 'desc' as const },
+  },
+  delayRequests: {
+    include: {
+      requester: true,
+      reviewer: true,
+      supportResolvedBy: true,
+      affectedMilestones: true,
+    },
+    orderBy: { createdAt: 'desc' as const },
+  },
+  taskLogs: {
+    include: { author: true },
+    orderBy: { createdAt: 'desc' as const },
+  },
+} as const

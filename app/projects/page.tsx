@@ -25,16 +25,37 @@ import {
   AlertCircle
 } from 'lucide-react'
 import Link from 'next/link'
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/lib/auth-context'
+import { Loader2 } from 'lucide-react'
+import type { Project } from '@/lib/mock-data'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
-  const { projects: allProjects } = useProjectStore()
+  const { projects: storeProjects } = useProjectStore()
+  const [apiProjects, setApiProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
   const [typeFilter, setTypeFilter] = useState<ProjectType | 'all'>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
+
+  // Fetch projects from API
+  useEffect(() => {
+    setLoading(true)
+    fetch('/api/projects')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setApiProjects(data))
+      .catch(() => setApiProjects([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Merge: API projects + store projects (deduplicated by id)
+  const allProjects = useMemo(() => {
+    const apiIds = new Set(apiProjects.map((p) => p.id))
+    const storeOnly = storeProjects.filter((p) => !apiIds.has(p.id))
+    return [...apiProjects, ...storeOnly]
+  }, [apiProjects, storeProjects])
 
   // 根據角色過濾專案
   const projects = user?.role === 'member'
@@ -193,6 +214,13 @@ export default function ProjectsPage() {
         </div>
 
         {/* Projects Grid */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">載入專案列表中...</p>
+          </div>
+        ) : (
+        <>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filteredProjects.map((project) => (
             <Link key={project.id} href={`/projects/${project.id}`}>
@@ -245,6 +273,8 @@ export default function ProjectsPage() {
           <div className="text-center py-12 text-muted-foreground">
             找不到符合條件的專案
           </div>
+        )}
+        </>
         )}
       </div>
     </DashboardLayout>
