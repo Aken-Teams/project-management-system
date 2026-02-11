@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert } from 'lucide-react'
 import {
   type Project,
   type ProjectType,
@@ -90,7 +90,7 @@ function RoleBadge({ role, label }: { role: string; label: string }) {
   )
 }
 
-// ─── Risk labels ────────────────────────────────────────────
+// ─── Risk labels & colors ────────────────────────────────────
 const RISK_IMPACT_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
 const RISK_PROBABILITY_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
 const RISK_STATUS_LABELS: Record<string, string> = { open: '未處理', mitigated: '已緩解', closed: '已關閉' }
@@ -98,6 +98,23 @@ const RISK_STATUS_COLORS: Record<string, string> = {
   open: 'bg-red-50 text-red-700 border-red-200',
   mitigated: 'bg-amber-50 text-amber-700 border-amber-200',
   closed: 'bg-green-50 text-green-700 border-green-200',
+}
+const RISK_LEVEL_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  low:    { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  medium: { bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-500' },
+  high:   { bg: 'bg-red-50',     text: 'text-red-700',     dot: 'bg-red-500' },
+}
+const RISK_SEVERITY_BORDER: Record<string, string> = {
+  low: 'border-l-emerald-400',
+  medium: 'border-l-amber-400',
+  high: 'border-l-red-400',
+}
+function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' | 'high' {
+  const scores: Record<string, number> = { low: 1, medium: 2, high: 3 }
+  const score = (scores[impact] ?? 2) * (scores[probability] ?? 2)
+  if (score >= 6) return 'high'
+  if (score >= 3) return 'medium'
+  return 'low'
 }
 
 export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange }: ProjectEditDialogProps) {
@@ -910,19 +927,29 @@ function RiskCard({
     onUpdate(editForm)
   }
 
+  const severity = getRiskSeverity(risk.impact, risk.probability)
+
   if (!isEditing) {
+    const impactC = RISK_LEVEL_COLORS[risk.impact] || RISK_LEVEL_COLORS.medium
+    const probC = RISK_LEVEL_COLORS[risk.probability] || RISK_LEVEL_COLORS.medium
+
     return (
-      <div className="rounded-lg border p-3 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-sm">{risk.title}</div>
-            {risk.description && (
-              <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{risk.description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
+      <div className={`rounded-lg border border-l-[3px] ${RISK_SEVERITY_BORDER[severity]} px-3 py-2.5 hover:bg-muted/30 transition-colors space-y-1.5`}>
+        {/* Row 1: icon + title + tags + actions */}
+        <div className="flex items-center gap-2">
+          <ShieldAlert className={`h-4 w-4 shrink-0 ${
+            severity === 'high' ? 'text-red-500' : severity === 'medium' ? 'text-amber-500' : 'text-emerald-500'
+          }`} />
+          <span className="font-medium text-sm truncate">{risk.title}</span>
+          <div className="flex items-center gap-1 ml-auto shrink-0">
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${RISK_STATUS_COLORS[risk.status] || ''}`}>
               {RISK_STATUS_LABELS[risk.status] || risk.status}
+            </span>
+            <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${impactC.bg} ${impactC.text}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${impactC.dot}`} />影響{RISK_IMPACT_LABELS[risk.impact]}
+            </span>
+            <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${probC.bg} ${probC.text}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${probC.dot}`} />機率{RISK_PROBABILITY_LABELS[risk.probability]}
             </span>
             <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={onEdit} disabled={loading}>
               <Pencil className="h-3 w-3" />
@@ -932,11 +959,15 @@ function RiskCard({
             </Button>
           </div>
         </div>
-        <div className="flex gap-3 text-xs text-muted-foreground">
-          <span>影響：<strong className="text-foreground">{RISK_IMPACT_LABELS[risk.impact]}</strong></span>
-          <span>機率：<strong className="text-foreground">{RISK_PROBABILITY_LABELS[risk.probability]}</strong></span>
-          {risk.mitigation && <span className="truncate">對策：{risk.mitigation}</span>}
-        </div>
+
+        {/* Row 2 (optional): description + mitigation */}
+        {(risk.description || risk.mitigation) && (
+          <div className="pl-6 text-sm text-muted-foreground leading-relaxed">
+            {risk.description && <span>{risk.description}</span>}
+            {risk.description && risk.mitigation && <span className="mx-1.5 text-border">|</span>}
+            {risk.mitigation && <span><span className="font-medium text-foreground/70">對策：</span>{risk.mitigation}</span>}
+          </div>
+        )}
       </div>
     )
   }
