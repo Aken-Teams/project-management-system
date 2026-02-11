@@ -27,6 +27,7 @@ import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
 import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
+import { TimelineTable } from '@/components/timeline-table'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import {
   Loader2,
@@ -48,32 +49,12 @@ import {
   Layers,
   TrendingUp,
   ClipboardList,
-  GripVertical,
   Save,
   FolderOpen,
   Clock,
-  ChevronDown,
-  ChevronUp,
-  ListTodo,
   Briefcase,
 } from 'lucide-react'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { arrayMove } from '@dnd-kit/sortable'
 
 interface ManualMilestone {
   id: string
@@ -181,370 +162,6 @@ const AI_STEPS = [
   { label: '時程里程碑', icon: Calendar },
 ]
 
-// Sortable Milestone Item Component
-function SortableMilestoneItem({
-  milestone,
-  index,
-  onUpdate,
-  onRemove,
-  canRemove,
-}: {
-  milestone: ManualMilestone & { startDate?: string; endDate?: string }
-  index: number
-  onUpdate: (index: number, field: keyof ManualMilestone, value: string | number) => void
-  onRemove: (index: number) => void
-  canRemove: boolean
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: milestone.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-start gap-3 p-3 rounded-lg border bg-card"
-    >
-      <div
-        {...attributes}
-        {...listeners}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted cursor-grab active:cursor-grabbing mt-1"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="flex-1 grid gap-3 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">里程碑名稱</Label>
-          <Input
-            placeholder="例如：需求分析完成"
-            value={milestone.name}
-            onChange={(e) => onUpdate(index, 'name', e.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">期程（週）</Label>
-          <Input
-            type="number"
-            min="0"
-            placeholder="例如：3"
-            value={milestone.durationWeeks || ''}
-            onChange={(e) => onUpdate(index, 'durationWeeks', Number(e.target.value) || 0)}
-          />
-        </div>
-        {milestone.startDate && milestone.endDate && (
-          <div className="md:col-span-2 space-y-1">
-            <Label className="text-xs text-muted-foreground">計算日期</Label>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-3 w-3" />
-              <span className="font-medium">{milestone.startDate}</span>
-              <span>至</span>
-              <span className="font-medium">{milestone.endDate}</span>
-              <span className="text-xs">
-                ({milestone.durationWeeks} 週)
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
-        onClick={() => onRemove(index)}
-        disabled={!canRemove}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
-  )
-}
-
-// Sortable AI Milestone Item Component
-function SortableAiMilestoneItem({
-  milestone,
-  index,
-  onUpdate,
-  onRemove,
-  canRemove,
-}: {
-  milestone: AiMilestone & { startDate?: string; endDate?: string }
-  index: number
-  onUpdate: (index: number, field: keyof AiMilestone, value: string | number) => void
-  onRemove: (index: number) => void
-  canRemove: boolean
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: milestone.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-start gap-3 p-3 rounded-lg border bg-card"
-    >
-      <div
-        {...attributes}
-        {...listeners}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted cursor-grab active:cursor-grabbing mt-1"
-      >
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="flex-1 space-y-3">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">里程碑名稱</Label>
-            <Input
-              placeholder="例如：需求分析完成"
-              value={milestone.name}
-              onChange={(e) => onUpdate(index, 'name', e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">期程（週）</Label>
-            <Input
-              type="number"
-              min="0"
-              placeholder="例如：3"
-              value={milestone.durationWeeks || ''}
-              onChange={(e) => onUpdate(index, 'durationWeeks', Number(e.target.value) || 0)}
-            />
-          </div>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">說明</Label>
-          <Textarea
-            placeholder="里程碑的詳細說明"
-            value={milestone.description}
-            onChange={(e) => onUpdate(index, 'description', e.target.value)}
-            rows={2}
-          />
-        </div>
-        {milestone.startDate && milestone.endDate && (
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">計算日期</Label>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-3 w-3" />
-              <span className="font-medium">{milestone.startDate}</span>
-              <span>至</span>
-              <span className="font-medium">{milestone.endDate}</span>
-              <span className="text-xs">
-                ({milestone.durationWeeks} 週)
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
-        onClick={() => onRemove(index)}
-        disabled={!canRemove}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
-  )
-}
-
-// Sortable task item for drag-and-drop within milestone
-function SortableTaskItem({
-  task,
-  startDate,
-  endDate,
-  onRemove,
-  onUpdate,
-}: {
-  task: MilestoneTaskDraft
-  startDate?: string
-  endDate?: string
-  onRemove: (id: string) => void
-  onUpdate: (id: string, field: keyof MilestoneTaskDraft, value: string | number) => void
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 p-2.5 rounded-lg border bg-card">
-      <div
-        {...attributes}
-        {...listeners}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted cursor-grab active:cursor-grabbing"
-      >
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{task.title}</span>
-          {task.assignee && task.assignee.trim() && (
-            <span className="text-sm text-muted-foreground">— {task.assignee}</span>
-          )}
-        </div>
-        {startDate && endDate && (
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {startDate} ~ {endDate}
-            <span className="ml-1 text-muted-foreground/70">({task.durationWeeks} 週)</span>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <Input
-          type="number"
-          min={0}
-          value={task.durationWeeks || ''}
-          onChange={(e) => onUpdate(task.id, 'durationWeeks', Number(e.target.value) || 0)}
-          className="h-7 w-16 text-xs text-center"
-          placeholder="週"
-        />
-        <span className="text-xs text-muted-foreground">週</span>
-      </div>
-      <Badge
-        variant={task.priority === 'high' ? 'destructive' : task.priority === 'medium' ? 'default' : 'secondary'}
-        className="text-xs px-2 py-0.5 shrink-0"
-      >
-        {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
-      </Badge>
-      <Button
-        type="button" variant="ghost" size="icon"
-        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
-        onClick={() => onRemove(task.id)}
-      >
-        <X className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  )
-}
-
-// Inline task adder for milestones
-function MilestoneTaskAdder({
-  milestoneId,
-  onAdd,
-  teamMembers,
-}: {
-  milestoneId: string
-  onAdd: (task: MilestoneTaskDraft) => void
-  teamMembers: TeamMemberDraft[]
-}) {
-  const [title, setTitle] = useState('')
-  const [assignee, setAssignee] = useState('')
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
-  const [durationWeeks, setDurationWeeks] = useState<number>(1)
-
-  const handleAdd = () => {
-    if (!title.trim()) return
-    onAdd({
-      id: `draft-task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      milestoneId,
-      title: title.trim(),
-      assignee,
-      priority,
-      durationWeeks,
-    })
-    setTitle('')
-    setAssignee('')
-    setPriority('medium')
-    setDurationWeeks(1)
-  }
-
-  return (
-    <div className="flex flex-wrap items-end gap-2 p-2.5 rounded-lg border border-dashed bg-muted/30">
-      <div className="flex-1 min-w-[160px] space-y-1">
-        <Label className="text-xs text-muted-foreground">任務名稱</Label>
-        <Input
-          placeholder="輸入任務名稱"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }}
-          className="h-9 text-sm"
-        />
-      </div>
-      <div className="w-[80px] space-y-1">
-        <Label className="text-xs text-muted-foreground">週數</Label>
-        <Input
-          type="number"
-          min={1}
-          value={durationWeeks || ''}
-          onChange={(e) => setDurationWeeks(Number(e.target.value) || 0)}
-          className="h-9 text-sm text-center"
-          placeholder="週"
-        />
-      </div>
-      <div className="w-[130px] space-y-1">
-        <Label className="text-xs text-muted-foreground">指派人</Label>
-        <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue placeholder="選擇" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value=" ">未指派</SelectItem>
-            {teamMembers.map(m => (
-              <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="w-[90px] space-y-1">
-        <Label className="text-xs text-muted-foreground">優先度</Label>
-        <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')}>
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="high">高</SelectItem>
-            <SelectItem value="medium">中</SelectItem>
-            <SelectItem value="low">低</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <Button
-        type="button" variant="outline" size="sm"
-        onClick={handleAdd}
-        disabled={!title.trim()}
-        className="h-9 text-sm gap-1 shrink-0"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        新增
-      </Button>
-    </div>
-  )
-}
 
 export default function NewProjectPage() {
   const router = useRouter()
@@ -594,7 +211,6 @@ export default function NewProjectPage() {
   const [aiTeamDetails, setAiTeamDetails] = useState<TeamMemberDraft[]>([])
   const [aiNewMember, setAiNewMember] = useState({ name: '', role: 'engineer' as TeamRole, responsibility: '' })
   const [aiTasks, setAiTasks] = useState<MilestoneTaskDraft[]>([])
-  const [aiExpandedMilestones, setAiExpandedMilestones] = useState<Set<string>>(new Set())
 
   // Manual Mode — Step Wizard
   const [currentStep, setCurrentStep] = useState(0)
@@ -630,7 +246,6 @@ export default function NewProjectPage() {
   const [manualNewMember, setManualNewMember] = useState({ name: '', role: 'engineer' as TeamRole, responsibility: '' })
   // Milestone tasks
   const [manualTasks, setManualTasks] = useState<MilestoneTaskDraft[]>([])
-  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
 
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
@@ -772,10 +387,6 @@ export default function NewProjectPage() {
       }))
       setManualMilestones(newMilestones)
       setManualTasks([])
-      // Auto-expand first milestone's task section
-      if (newMilestones.length > 0) {
-        setExpandedMilestones(new Set([newMilestones[0].id]))
-      }
     } else {
       setAiMilestones(template.map((t, i) => ({
         id: `ai-ms-${Date.now()}-${i}`,
@@ -901,26 +512,6 @@ export default function NewProjectPage() {
     )
   }
 
-  // Drag and drop sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (over && active.id !== over.id) {
-      setManualMilestones((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id)
-        const newIndex = items.findIndex((item) => item.id === over.id)
-        return arrayMove(items, oldIndex, newIndex)
-      })
-    }
-  }
-
   // Risk helpers
   const addRisk = () => {
     setManualRisks([...manualRisks, { title: '', description: '', impact: 'medium', probability: 'medium', mitigation: '' }])
@@ -997,19 +588,6 @@ export default function NewProjectPage() {
     setAiMilestones(
       aiMilestones.map((m, i) => (i === index ? { ...m, [field]: value } : m))
     )
-  }
-
-  // AI Drag and drop handler
-  const handleAiDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (over && active.id !== over.id) {
-      setAiMilestones((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id)
-        const newIndex = items.findIndex((item) => item.id === over.id)
-        return arrayMove(items, oldIndex, newIndex)
-      })
-    }
   }
 
   // Team member helpers
@@ -2059,112 +1637,24 @@ export default function NewProjectPage() {
                     </div>
                   </div>
 
-                  {/* Milestones with Drag & Drop */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base font-medium flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        里程碑清單
-                      </Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addAiMilestone}
-                        className="gap-2"
-                      >
-                        <Plus className="h-4 w-4" />
-                        新增里程碑
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      拖動里程碑可調整順序，系統會自動計算每個里程碑的開始與結束日期
-                    </p>
-
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={handleAiDragEnd}
-                    >
-                      <SortableContext items={aiMilestones.map(m => m.id)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-3">
-                          {recalculatedAiMilestones.map((milestone, index) => {
-                            const milestoneTasks = aiTasks.filter(t => t.milestoneId === milestone.id)
-                            return (
-                              <div key={milestone.id}>
-                                <SortableAiMilestoneItem
-                                  milestone={milestone}
-                                  index={index}
-                                  onUpdate={updateAiMilestone}
-                                  onRemove={removeAiMilestone}
-                                  canRemove={aiMilestones.length > 1}
-                                />
-                                {/* Task section under AI milestone */}
-                                {milestone.name.trim() && (
-                                  <div className="ml-9 border-l-2 border-primary/30 pl-4 pt-2 pb-2 bg-primary/5 rounded-r-lg pr-3">
-                                    <button
-                                      type="button"
-                                      className="flex items-center gap-2 w-full text-sm font-medium hover:text-primary transition-colors"
-                                      onClick={() => {
-                                        const next = new Set(aiExpandedMilestones)
-                                        if (next.has(milestone.id)) next.delete(milestone.id)
-                                        else next.add(milestone.id)
-                                        setAiExpandedMilestones(next)
-                                      }}
-                                    >
-                                      {aiExpandedMilestones.has(milestone.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                      <ListTodo className="h-4 w-4 text-primary" />
-                                      <span>任務</span>
-                                      <Badge variant="secondary" className="text-xs px-2 py-0.5 ml-1">{milestoneTasks.length}</Badge>
-                                    </button>
-                                    {aiExpandedMilestones.has(milestone.id) && (
-                                      <div className="mt-2 space-y-2">
-                                        <DndContext
-                                          sensors={sensors}
-                                          collisionDetection={closestCenter}
-                                          onDragEnd={(event) => {
-                                            const { active, over } = event
-                                            if (over && active.id !== over.id) {
-                                              setAiTasks((prev) => {
-                                                const oldIndex = prev.findIndex(t => t.id === active.id)
-                                                const newIndex = prev.findIndex(t => t.id === over.id)
-                                                return arrayMove(prev, oldIndex, newIndex)
-                                              })
-                                            }
-                                          }}
-                                        >
-                                          <SortableContext
-                                            items={milestoneTasks.map(t => t.id)}
-                                            strategy={verticalListSortingStrategy}
-                                          >
-                                            {milestoneTasks.map((task) => (
-                                              <SortableTaskItem
-                                                key={task.id}
-                                                task={task}
-                                                startDate={aiTaskDates.get(task.id)?.startDate}
-                                                endDate={aiTaskDates.get(task.id)?.endDate}
-                                                onRemove={(id) => setAiTasks(aiTasks.filter(t => t.id !== id))}
-                                                onUpdate={(id, field, value) => setAiTasks(aiTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
-                                              />
-                                            ))}
-                                          </SortableContext>
-                                        </DndContext>
-                                        <MilestoneTaskAdder
-                                          milestoneId={milestone.id}
-                                          onAdd={(task) => setAiTasks([...aiTasks, task])}
-                                          teamMembers={aiTeamDetails}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  </div>
+                  {/* Timeline table */}
+                  <p className="text-xs text-muted-foreground">
+                    拖動左側圖標可調整順序，系統會自動計算每個里程碑的開始與結束日期
+                  </p>
+                  <TimelineTable
+                    milestones={recalculatedAiMilestones}
+                    tasks={aiTasks}
+                    taskDates={aiTaskDates}
+                    teamMembers={aiTeamDetails}
+                    onMilestoneUpdate={updateAiMilestone}
+                    onMilestoneRemove={removeAiMilestone}
+                    onMilestoneAdd={addAiMilestone}
+                    onMilestoneReorder={(oldIdx, newIdx) => setAiMilestones(arrayMove(aiMilestones, oldIdx, newIdx))}
+                    onTaskAdd={(task) => setAiTasks([...aiTasks, task])}
+                    onTaskRemove={(id) => setAiTasks(aiTasks.filter(t => t.id !== id))}
+                    onTaskUpdate={(id, field, value) => setAiTasks(aiTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
+                    onTaskReorder={(oldIdx, newIdx) => setAiTasks(arrayMove(aiTasks, oldIdx, newIdx))}
+                  />
                 </CardContent>
               </Card>
             )}
@@ -2639,120 +2129,36 @@ export default function NewProjectPage() {
 
                   <Separator />
 
-                  {/* Milestones Section */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base font-medium">里程碑</Label>
-                      <Button type="button" variant="outline" size="sm" onClick={addMilestone} className="gap-1">
-                        <Plus className="h-3.5 w-3.5" />
-                        新增里程碑
-                      </Button>
-                    </div>
-                    {manualProjectType && manualMilestones.length > 0 && (
-                      <Alert className="border-blue-200 bg-blue-50/50">
-                        <Lightbulb className="h-4 w-4 text-blue-500" />
-                        <AlertDescription className="text-sm text-blue-700">
-                          已根據「{PROJECT_TYPE_LABELS[manualProjectType]}」自動帶入 {manualMilestones.length} 個里程碑範本。
-                          您可以自由修改名稱、期程，或新增/刪除里程碑。<strong className="font-semibold">請展開各里程碑下方的任務區塊來新增任務。</strong>
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      拖動左側圖標可改變里程碑順序。輸入週數後系統將自動計算日期。專案結束日期會根據里程碑自動調整。
-                    </p>
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <SortableContext
-                        items={manualMilestones.map(m => m.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="space-y-3">
-                          {recalculatedMilestones.map((milestone, index) => (
-                            <div key={milestone.id} className="space-y-0">
-                              <SortableMilestoneItem
-                                milestone={milestone}
-                                index={index}
-                                onUpdate={updateMilestone}
-                                onRemove={removeMilestone}
-                                canRemove={manualMilestones.length > 1}
-                              />
-                              {/* Task section under milestone */}
-                              {milestone.name.trim() && (() => {
-                                const milestoneTasks = manualTasks.filter(t => t.milestoneId === milestone.id)
-                                const hasTasks = milestoneTasks.length > 0
-                                const isExpanded = expandedMilestones.has(milestone.id)
-                                return (
-                                  <div className={`ml-9 border-l-2 pl-4 pt-2 pb-2 rounded-r-lg pr-3 ${hasTasks ? 'border-primary/30 bg-primary/5' : 'border-amber-300 bg-amber-50/60'}`}>
-                                    <button
-                                      type="button"
-                                      className={`flex items-center gap-2 w-full text-sm font-medium transition-colors ${hasTasks ? 'hover:text-primary' : 'hover:text-amber-700 text-amber-700'}`}
-                                      onClick={() => {
-                                        const next = new Set(expandedMilestones)
-                                        if (next.has(milestone.id)) next.delete(milestone.id)
-                                        else next.add(milestone.id)
-                                        setExpandedMilestones(next)
-                                      }}
-                                    >
-                                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                      <ListTodo className={`h-4 w-4 ${hasTasks ? 'text-primary' : 'text-amber-500'}`} />
-                                      <span>任務</span>
-                                      <Badge variant={hasTasks ? 'secondary' : 'outline'} className={`text-xs px-2 py-0.5 ml-1 ${!hasTasks ? 'border-amber-300 text-amber-600 bg-amber-100' : ''}`}>{milestoneTasks.length}</Badge>
-                                      {!hasTasks && !isExpanded && (
-                                        <span className="text-xs text-amber-500 ml-2">點擊展開新增任務</span>
-                                      )}
-                                    </button>
-                                    {expandedMilestones.has(milestone.id) && (
-                                      <div className="mt-2 space-y-2">
-                                        <DndContext
-                                          sensors={sensors}
-                                          collisionDetection={closestCenter}
-                                          onDragEnd={(event) => {
-                                            const { active, over } = event
-                                            if (over && active.id !== over.id) {
-                                              setManualTasks((prev) => {
-                                                const oldIndex = prev.findIndex(t => t.id === active.id)
-                                                const newIndex = prev.findIndex(t => t.id === over.id)
-                                                return arrayMove(prev, oldIndex, newIndex)
-                                              })
-                                            }
-                                          }}
-                                        >
-                                          <SortableContext
-                                            items={milestoneTasks.map(t => t.id)}
-                                            strategy={verticalListSortingStrategy}
-                                          >
-                                            {milestoneTasks.map((task) => (
-                                              <SortableTaskItem
-                                                key={task.id}
-                                                task={task}
-                                                startDate={manualTaskDates.get(task.id)?.startDate}
-                                                endDate={manualTaskDates.get(task.id)?.endDate}
-                                                onRemove={(id) => setManualTasks(manualTasks.filter(t => t.id !== id))}
-                                                onUpdate={(id, field, value) => setManualTasks(manualTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
-                                              />
-                                            ))}
-                                          </SortableContext>
-                                        </DndContext>
-                                        {/* Inline add task */}
-                                        <MilestoneTaskAdder
-                                          milestoneId={milestone.id}
-                                          onAdd={(task) => setManualTasks([...manualTasks, task])}
-                                          teamMembers={manualTeamDetails}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  </div>
+                  {/* Template alert */}
+                  {manualProjectType && manualMilestones.length > 0 && (
+                    <Alert className="border-blue-200 bg-blue-50/50">
+                      <Lightbulb className="h-4 w-4 text-blue-500" />
+                      <AlertDescription className="text-sm text-blue-700">
+                        已根據「{PROJECT_TYPE_LABELS[manualProjectType]}」自動帶入 {manualMilestones.length} 個里程碑範本。
+                        可直接在表格中編輯名稱、期程，或在每個里程碑下方快速新增任務。
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    拖動左側圖標可改變順序。輸入週數後系統自動計算日期。專案結束日期會根據里程碑自動調整。
+                  </p>
+
+                  {/* Timeline table */}
+                  <TimelineTable
+                    milestones={recalculatedMilestones}
+                    tasks={manualTasks}
+                    taskDates={manualTaskDates}
+                    teamMembers={manualTeamDetails}
+                    onMilestoneUpdate={updateMilestone}
+                    onMilestoneRemove={removeMilestone}
+                    onMilestoneAdd={addMilestone}
+                    onMilestoneReorder={(oldIdx, newIdx) => setManualMilestones(arrayMove(manualMilestones, oldIdx, newIdx))}
+                    onTaskAdd={(task) => setManualTasks([...manualTasks, task])}
+                    onTaskRemove={(id) => setManualTasks(manualTasks.filter(t => t.id !== id))}
+                    onTaskUpdate={(id, field, value) => setManualTasks(manualTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
+                    onTaskReorder={(oldIdx, newIdx) => setManualTasks(arrayMove(manualTasks, oldIdx, newIdx))}
+                  />
                 </CardContent>
               </Card>
             )}
