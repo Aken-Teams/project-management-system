@@ -523,7 +523,7 @@ export default function NewProjectPage() {
   const [requirements, setRequirements] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [parsedData, setParsedData] = useState<ParsedProjectData | null>(null)
-  const [aiProjectType, setAiProjectType] = useState<ProjectType>('npi')
+  const [aiProjectType, setAiProjectType] = useState<ProjectType | ''>('')
   const [aiProjectTier, setAiProjectTier] = useState<ProjectTier | ''>('')
   const [aiDemandSource, setAiDemandSource] = useState<DemandSource | ''>('')
   const [aiCreatedReason, setAiCreatedReason] = useState('')
@@ -579,12 +579,10 @@ export default function NewProjectPage() {
     relevant: '',      // 相關性
     timeBound: '',     // 時限性
   })
-  const [manualProjectType, setManualProjectType] = useState<ProjectType>('npi')
+  const [manualProjectType, setManualProjectType] = useState<ProjectType | ''>('')
   const [manualProjectTier, setManualProjectTier] = useState<ProjectTier | ''>('')
   const [manualDemandSource, setManualDemandSource] = useState<DemandSource | ''>('')
-  const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([
-    { id: 'milestone-1', name: '', durationWeeks: 0 },
-  ])
+  const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([])
   const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
   const [manualTeamMembers, setManualTeamMembers] = useState<string[]>([])
   const [manualTeamInput, setManualTeamInput] = useState('')
@@ -953,7 +951,7 @@ export default function NewProjectPage() {
   // Step navigation
   const canProceed = (step: number) => {
     switch (step) {
-      case 0: return !!manualData.name.trim()
+      case 0: return !!manualProjectType && !!manualData.name.trim()
       case 1: return !!smartObjective.specific.trim() // SMART 至少要有具體目標
       case 2: return !!manualData.purpose.trim() // 專案定義至少要有目的
       case 3: return true // 團隊與風險（選填）
@@ -2810,6 +2808,7 @@ export default function NewProjectPage() {
                     onClick={handleManualCreate}
                     disabled={
                       isCreating ||
+                      !manualProjectType ||
                       !manualData.name ||
                       !smartObjective.specific.trim() ||
                       !manualData.startDate ||
