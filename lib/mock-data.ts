@@ -79,6 +79,7 @@ export interface Project {
   budgetUsed: number
   owner: string
   team: string[]
+  teamMembers?: TeamMember[]
   milestones: Milestone[]
   baseline: Milestone[]
   tasks: Task[]
@@ -126,6 +127,24 @@ export interface Risk {
   probability: 'low' | 'medium' | 'high'
   mitigation: string
   status: 'open' | 'mitigated' | 'closed'
+}
+
+export type TeamRole = 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other'
+
+export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
+  'pm': '專案經理 (PM)',
+  'engineer': '工程師',
+  'procurement': '採購',
+  'qa': '品保',
+  'manufacturing': '製造',
+  'designer': '設計',
+  'other': '其他',
+}
+
+export interface TeamMember {
+  name: string
+  role: TeamRole
+  responsibility: string
 }
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {

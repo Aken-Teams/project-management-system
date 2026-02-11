@@ -10,10 +10,12 @@ import {
   type WeeklyUpdate,
   type DelayRequest,
   type Milestone,
+  type Task,
   type TaskStatus,
   type TaskLog,
   type Risk,
   type SmartObjective,
+  type TeamMember,
 } from './mock-data'
 
 interface ProjectStoreContextType {
@@ -36,6 +38,8 @@ interface ProjectStoreContextType {
     team: string[]
     milestones: Omit<Milestone, 'status' | 'progress'>[]
     risks?: Omit<Risk, 'id' | 'projectId'>[]
+    tasks?: Omit<Task, 'id' | 'projectId' | 'status' | 'progress' | 'completedAt' | 'completedBy'>[]
+    teamMembers?: TeamMember[]
   }) => Project
   addWeeklyUpdate: (projectId: string, update: Omit<WeeklyUpdate, 'id' | 'projectId'>) => void
   submitDelayRequest: (projectId: string, request: Omit<DelayRequest, 'id' | 'projectId' | 'status'>) => void
@@ -104,6 +108,8 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     team: string[]
     milestones: Omit<Milestone, 'status' | 'progress'>[]
     risks?: Omit<Risk, 'id' | 'projectId'>[]
+    tasks?: Omit<Task, 'id' | 'projectId' | 'status' | 'progress' | 'completedAt' | 'completedBy'>[]
+    teamMembers?: TeamMember[]
   }) => {
     const id = `proj-${Date.now()}`
     const projectCode = generateProjectCode(data.projectType)
@@ -117,6 +123,14 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       ...r,
       id: `risk-${Date.now()}-${i}`,
       projectId: id,
+    }))
+
+    const tasks: Task[] = (data.tasks || []).map((t, i) => ({
+      ...t,
+      id: `task-${Date.now()}-${i}`,
+      projectId: id,
+      status: 'todo' as const,
+      progress: 0,
     }))
 
     const newProject: Project = {
@@ -139,9 +153,10 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       budgetUsed: 0,
       owner: data.owner,
       team: data.team,
+      teamMembers: data.teamMembers,
       milestones,
       baseline: milestones.map(m => ({ ...m })),
-      tasks: [],
+      tasks,
       risks,
       weeklyUpdates: [],
       delayRequests: [],

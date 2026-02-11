@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast'
 import { parseProjectRequirements, type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, generateProjectCode, type ProjectType } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type TeamRole } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import {
   Loader2,
@@ -50,6 +50,10 @@ import {
   Save,
   FolderOpen,
   Clock,
+  ChevronDown,
+  ChevronUp,
+  ListTodo,
+  Briefcase,
 } from 'lucide-react'
 import {
   DndContext,
@@ -92,6 +96,21 @@ interface ManualRisk {
   impact: 'low' | 'medium' | 'high'
   probability: 'low' | 'medium' | 'high'
   mitigation: string
+}
+
+interface TeamMemberDraft {
+  id: string
+  name: string
+  role: TeamRole
+  responsibility: string
+}
+
+interface MilestoneTaskDraft {
+  id: string
+  milestoneId: string
+  title: string
+  assignee: string
+  priority: 'low' | 'medium' | 'high'
 }
 
 interface ProjectDraft {
@@ -142,8 +161,8 @@ const STEPS = [
   { label: '基本資訊', icon: FileText },
   { label: 'SMART 目標', icon: Target },
   { label: '專案定義', icon: Lightbulb },
-  { label: '時程里程碑', icon: Calendar },
   { label: '團隊與風險', icon: Users },
+  { label: '時程里程碑', icon: Calendar },
 ]
 
 const AI_STEPS = [
@@ -151,8 +170,8 @@ const AI_STEPS = [
   { label: '基本資訊', icon: FileText },
   { label: 'SMART 目標', icon: Target },
   { label: '專案定義', icon: Lightbulb },
-  { label: '時程里程碑', icon: Calendar },
   { label: '團隊與風險', icon: Users },
+  { label: '時程里程碑', icon: Calendar },
 ]
 
 // Sortable Milestone Item Component
@@ -346,6 +365,143 @@ function SortableAiMilestoneItem({
   )
 }
 
+// Sortable task item for drag-and-drop within milestone
+function SortableTaskItem({
+  task,
+  onRemove,
+  onUpdate,
+}: {
+  task: MilestoneTaskDraft
+  onRemove: (id: string) => void
+  onUpdate: (id: string, field: keyof MilestoneTaskDraft, value: string) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2 p-2.5 rounded-lg border bg-card">
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm font-medium">{task.title}</span>
+        {task.assignee && task.assignee.trim() && (
+          <span className="ml-2 text-sm text-muted-foreground">— {task.assignee}</span>
+        )}
+      </div>
+      <Badge
+        variant={task.priority === 'high' ? 'destructive' : task.priority === 'medium' ? 'default' : 'secondary'}
+        className="text-xs px-2 py-0.5 shrink-0"
+      >
+        {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
+      </Badge>
+      <Button
+        type="button" variant="ghost" size="icon"
+        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+        onClick={() => onRemove(task.id)}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
+}
+
+// Inline task adder for milestones
+function MilestoneTaskAdder({
+  milestoneId,
+  onAdd,
+  teamMembers,
+}: {
+  milestoneId: string
+  onAdd: (task: MilestoneTaskDraft) => void
+  teamMembers: TeamMemberDraft[]
+}) {
+  const [title, setTitle] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
+
+  const handleAdd = () => {
+    if (!title.trim()) return
+    onAdd({
+      id: `draft-task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      milestoneId,
+      title: title.trim(),
+      assignee,
+      priority,
+    })
+    setTitle('')
+    setAssignee('')
+    setPriority('medium')
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-2 p-2.5 rounded-lg border border-dashed bg-muted/30">
+      <div className="flex-1 min-w-[160px] space-y-1">
+        <Label className="text-xs text-muted-foreground">任務名稱</Label>
+        <Input
+          placeholder="輸入任務名稱"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }}
+          className="h-9 text-sm"
+        />
+      </div>
+      <div className="w-[130px] space-y-1">
+        <Label className="text-xs text-muted-foreground">指派人</Label>
+        <Select value={assignee} onValueChange={setAssignee}>
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue placeholder="選擇" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value=" ">未指派</SelectItem>
+            {teamMembers.map(m => (
+              <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="w-[90px] space-y-1">
+        <Label className="text-xs text-muted-foreground">優先度</Label>
+        <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')}>
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="high">高</SelectItem>
+            <SelectItem value="medium">中</SelectItem>
+            <SelectItem value="low">低</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Button
+        type="button" variant="outline" size="sm"
+        onClick={handleAdd}
+        disabled={!title.trim()}
+        className="h-9 text-sm gap-1 shrink-0"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        新增
+      </Button>
+    </div>
+  )
+}
+
 export default function NewProjectPage() {
   const router = useRouter()
   const { addProject } = useProjectStore()
@@ -388,6 +544,10 @@ export default function NewProjectPage() {
   })
   const [aiMilestones, setAiMilestones] = useState<AiMilestone[]>([])
   const [aiRisks, setAiRisks] = useState<Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; probability: 'low' | 'medium' | 'high' }>>([])
+  const [aiTeamDetails, setAiTeamDetails] = useState<TeamMemberDraft[]>([])
+  const [aiNewMember, setAiNewMember] = useState({ name: '', role: 'engineer' as TeamRole, responsibility: '' })
+  const [aiTasks, setAiTasks] = useState<MilestoneTaskDraft[]>([])
+  const [aiExpandedMilestones, setAiExpandedMilestones] = useState<Set<string>>(new Set())
 
   // Manual Mode — Step Wizard
   const [currentStep, setCurrentStep] = useState(0)
@@ -418,6 +578,12 @@ export default function NewProjectPage() {
   const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
   const [manualTeamMembers, setManualTeamMembers] = useState<string[]>([])
   const [manualTeamInput, setManualTeamInput] = useState('')
+  // Enhanced team members with roles
+  const [manualTeamDetails, setManualTeamDetails] = useState<TeamMemberDraft[]>([])
+  const [manualNewMember, setManualNewMember] = useState({ name: '', role: 'engineer' as TeamRole, responsibility: '' })
+  // Milestone tasks
+  const [manualTasks, setManualTasks] = useState<MilestoneTaskDraft[]>([])
+  const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
 
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
@@ -747,7 +913,8 @@ export default function NewProjectPage() {
       case 0: return !!manualData.name.trim()
       case 1: return !!smartObjective.specific.trim() // SMART 至少要有具體目標
       case 2: return !!manualData.purpose.trim() // 專案定義至少要有目的
-      case 3: return !!manualData.startDate && !!manualData.endDate
+      case 3: return true // 團隊與風險（選填）
+      case 4: return !!manualData.startDate && !!manualData.endDate
       default: return true
     }
   }
@@ -826,13 +993,18 @@ export default function NewProjectPage() {
     // Use editable data instead of original parsedData
     const objective = `${aiSmartObjective.specific}${aiSmartObjective.measurable ? '，' + aiSmartObjective.measurable : ''}`
 
-    const milestones = aiMilestones
+    const milestoneIdMap = new Map<string, string>()
+    const milestones = recalculatedAiMilestones
       .filter(m => m.name.trim())
-      .map((m, index) => ({
-        id: `ms-new-${index}`,
-        name: m.name,
-        dueDate: aiEditableData.endDate,
-      }))
+      .map((m, index) => {
+        const newId = `ms-new-${index}`
+        milestoneIdMap.set(m.id, newId)
+        return {
+          id: newId,
+          name: m.name,
+          dueDate: m.endDate || aiEditableData.endDate,
+        }
+      })
 
     const risks = aiRisks
       .filter(r => r.title.trim())
@@ -844,6 +1016,34 @@ export default function NewProjectPage() {
         mitigation: '',
         status: 'open' as const,
       }))
+
+    // Map AI draft tasks
+    const validTasks = aiTasks
+      .filter(t => t.title.trim() && milestoneIdMap.has(t.milestoneId))
+      .map(t => {
+        const msId = milestoneIdMap.get(t.milestoneId)!
+        const ms = milestones.find(m => m.id === msId)
+        return {
+          milestoneId: msId,
+          title: t.title,
+          description: '',
+          assignee: t.assignee.trim() || '未指派',
+          priority: t.priority,
+          startDate: aiEditableData.startDate,
+          endDate: ms?.dueDate || aiEditableData.endDate,
+          dependencies: [] as string[],
+        }
+      })
+
+    const uniqueNames = new Set<string>()
+    const teamNames: string[] = []
+    aiTeamDetails.forEach(m => {
+      if (!uniqueNames.has(m.name)) {
+        uniqueNames.add(m.name)
+        teamNames.push(m.name)
+      }
+    })
+    const teamMembersData = aiTeamDetails.map(m => ({ name: m.name, role: m.role, responsibility: m.responsibility }))
 
     const newProject = addProject({
       projectType: aiProjectType,
@@ -859,9 +1059,11 @@ export default function NewProjectPage() {
       endDate: aiEditableData.endDate,
       budget: Number(aiEditableData.budget) * 1000000 || 0,
       owner: ownerName,
-      team: [ownerName, ...aiTeamMembers.filter(m => m !== ownerName)],
+      team: teamNames,
       milestones,
       risks,
+      tasks: validTasks,
+      teamMembers: teamMembersData,
     })
 
     router.push(`/projects/${newProject.id}`)
@@ -870,13 +1072,19 @@ export default function NewProjectPage() {
   const handleManualCreate = () => {
     const ownerName = user?.name || 'Unknown'
 
+    // Build milestone ID mapping: old draft ID -> new stable ID
+    const milestoneIdMap = new Map<string, string>()
     const validMilestones = recalculatedMilestones
       .filter((m) => m.name.trim() && m.durationWeeks > 0 && m.endDate)
-      .map((m, index) => ({
-        id: `ms-new-${index}`,
-        name: m.name,
-        dueDate: m.endDate!,
-      }))
+      .map((m, index) => {
+        const newId = `ms-new-${index}`
+        milestoneIdMap.set(m.id, newId)
+        return {
+          id: newId,
+          name: m.name,
+          dueDate: m.endDate!,
+        }
+      })
 
     const validRisks = manualRisks
       .filter(r => r.title.trim())
@@ -884,6 +1092,41 @@ export default function NewProjectPage() {
         ...r,
         status: 'open' as const,
       }))
+
+    // Map draft tasks to real tasks with correct milestone IDs
+    const validTasks = manualTasks
+      .filter(t => t.title.trim() && milestoneIdMap.has(t.milestoneId))
+      .map(t => {
+        const msId = milestoneIdMap.get(t.milestoneId)!
+        // Find milestone dates for task
+        const ms = validMilestones.find(m => m.id === msId)
+        const msIndex = validMilestones.indexOf(ms!)
+        const prevMs = msIndex > 0 ? validMilestones[msIndex - 1] : null
+        const startDate = prevMs
+          ? new Date(new Date(prevMs.dueDate).getTime() + 86400000).toISOString().split('T')[0]
+          : manualData.startDate
+        return {
+          milestoneId: msId,
+          title: t.title,
+          description: '',
+          assignee: t.assignee.trim() || '未指派',
+          priority: t.priority,
+          startDate,
+          endDate: ms?.dueDate || manualData.endDate,
+          dependencies: [] as string[],
+        }
+      })
+
+    // Build team names array (backward compat) + teamMembers detail from teamDetails
+    const uniqueNames = new Set<string>()
+    const teamNames: string[] = []
+    manualTeamDetails.forEach(m => {
+      if (!uniqueNames.has(m.name)) {
+        uniqueNames.add(m.name)
+        teamNames.push(m.name)
+      }
+    })
+    const teamMembersData = manualTeamDetails.map(m => ({ name: m.name, role: m.role, responsibility: m.responsibility }))
 
     const newProject = addProject({
       projectType: manualProjectType,
@@ -899,74 +1142,174 @@ export default function NewProjectPage() {
       endDate: manualData.endDate,
       budget: Number(manualData.budget) || 0,
       owner: ownerName,
-      team: [ownerName, ...manualTeamMembers.filter(m => m !== ownerName)],
+      team: teamNames,
       milestones: validMilestones,
       risks: validRisks,
+      tasks: validTasks,
+      teamMembers: teamMembersData,
     })
 
     router.push(`/projects/${newProject.id}`)
   }
 
-  // Reusable team member input component
+  // Enhanced team member input component with roles and responsibilities
   const renderTeamInput = (
-    members: string[],
-    setMembers: (m: string[]) => void,
-    input: string,
-    setInput: (s: string) => void,
-  ) => (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label className="text-base font-medium flex items-center gap-2">
-          <Users className="h-4 w-4 text-muted-foreground" />
-          團隊成員
-        </Label>
+    _members: string[],
+    _setMembers: (m: string[]) => void,
+    _input: string,
+    _setInput: (s: string) => void,
+    teamDetails: TeamMemberDraft[],
+    setTeamDetails: (d: TeamMemberDraft[]) => void,
+    newMember: { name: string; role: TeamRole; responsibility: string },
+    setNewMember: (m: { name: string; role: TeamRole; responsibility: string }) => void,
+  ) => {
+    const handleAddMember = () => {
+      const name = newMember.name.trim()
+      if (!name) return
+      if (teamDetails.some(m => m.name === name)) return
+      setTeamDetails([...teamDetails, { id: `tm-${Date.now()}`, name, role: newMember.role, responsibility: newMember.responsibility }])
+      setNewMember({ name: '', role: 'engineer', responsibility: '' })
+    }
+
+    const handleRemoveMember = (id: string) => {
+      setTeamDetails(teamDetails.filter(m => m.id !== id))
+    }
+
+    const handleUpdateMember = (id: string, field: keyof TeamMemberDraft, value: string) => {
+      setTeamDetails(teamDetails.map(m => m.id === id ? { ...m, [field]: value } : m))
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-base font-medium flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            團隊成員
+          </Label>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          請手動加入專案團隊成員，並指定每位成員在此專案中的角色
+        </p>
+
+        {/* All team members */}
+        {teamDetails.map((member) => (
+            <div key={member.id} className="p-3 rounded-lg border space-y-3 bg-card">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold mt-0.5 bg-muted text-muted-foreground">
+                  {member.name.charAt(0)}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{member.name}</span>
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                      {TEAM_ROLE_LABELS[member.role]}
+                    </Badge>
+                    {member.role === 'pm' && (
+                      <Badge variant="default" className="text-xs px-2 py-0.5">負責人</Badge>
+                    )}
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">角色</Label>
+                      <Select value={member.role} onValueChange={(v) => handleUpdateMember(member.id, 'role', v)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(TEAM_ROLE_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">負責工作項目</Label>
+                      <Input
+                        placeholder="例如：後端 API 開發"
+                        value={member.responsibility}
+                        onChange={(e) => handleUpdateMember(member.id, 'responsibility', e.target.value)}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-destructive h-7 w-7"
+                  onClick={() => handleRemoveMember(member.id)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )
+        )}
+
+        {/* Add new member form */}
+        <div className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 space-y-3">
+          <Label className="text-sm font-medium">新增成員</Label>
+          <div className="grid gap-2 md:grid-cols-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">姓名</Label>
+              <Input
+                placeholder="輸入成員名稱"
+                value={newMember.name}
+                onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddMember()
+                  }
+                }}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">角色</Label>
+              <Select value={newMember.role} onValueChange={(v) => setNewMember({ ...newMember, role: v as TeamRole })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TEAM_ROLE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">負責工作項目</Label>
+              <Input
+                placeholder="例如：UI/UX 設計"
+                value={newMember.responsibility}
+                onChange={(e) => setNewMember({ ...newMember, responsibility: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddMember()
+                  }
+                }}
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddMember}
+            disabled={!newMember.name.trim()}
+            className="gap-1 w-full"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新增成員
+          </Button>
+        </div>
       </div>
-      <p className="text-xs text-muted-foreground -mt-1">
-        負責人 ({user?.name}) 已自動加入團隊
-      </p>
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="輸入成員名稱"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              addTeamMember(members, setMembers, input, setInput)
-            }
-          }}
-          className="flex-1"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => addTeamMember(members, setMembers, input, setInput)}
-          className="gap-1 shrink-0"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          新增
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        <Badge variant="default" className="text-xs">
-          {user?.name} (負責人)
-        </Badge>
-        {members.map(name => (
-          <Badge key={name} variant="secondary" className="text-xs gap-1 pr-1">
-            {name}
-            <button
-              type="button"
-              onClick={() => removeTeamMember(members, setMembers, name)}
-              className="ml-0.5 hover:text-destructive transition-colors"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </Badge>
-        ))}
-      </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <DashboardLayout>
@@ -1480,8 +1823,8 @@ export default function NewProjectPage() {
               </Card>
             )}
 
-            {/* Step 4: 時程里程碑 */}
-            {aiCurrentStep === 4 && parsedData && (
+            {/* Step 5: 時程里程碑 */}
+            {aiCurrentStep === 5 && parsedData && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1567,8 +1910,8 @@ export default function NewProjectPage() {
               </Card>
             )}
 
-            {/* Step 5: 團隊與風險 */}
-            {aiCurrentStep === 5 && parsedData && (
+            {/* Step 4: 團隊與風險 */}
+            {aiCurrentStep === 4 && parsedData && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1578,7 +1921,7 @@ export default function NewProjectPage() {
                   <CardDescription>設定團隊成員並檢視風險</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {renderTeamInput(aiTeamMembers, setAiTeamMembers, aiTeamInput, setAiTeamInput)}
+                  {renderTeamInput(aiTeamMembers, setAiTeamMembers, aiTeamInput, setAiTeamInput, aiTeamDetails, setAiTeamDetails, aiNewMember, setAiNewMember)}
 
                   <Separator />
 
@@ -1957,8 +2300,8 @@ export default function NewProjectPage() {
               </Card>
             )}
 
-            {/* Step 3: 時程與里程碑 */}
-            {currentStep === 3 && (
+            {/* Step 4: 時程與里程碑 */}
+            {currentStep === 4 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -2017,14 +2360,75 @@ export default function NewProjectPage() {
                       >
                         <div className="space-y-3">
                           {recalculatedMilestones.map((milestone, index) => (
-                            <SortableMilestoneItem
-                              key={milestone.id}
-                              milestone={milestone}
-                              index={index}
-                              onUpdate={updateMilestone}
-                              onRemove={removeMilestone}
-                              canRemove={manualMilestones.length > 1}
-                            />
+                            <div key={milestone.id} className="space-y-0">
+                              <SortableMilestoneItem
+                                milestone={milestone}
+                                index={index}
+                                onUpdate={updateMilestone}
+                                onRemove={removeMilestone}
+                                canRemove={manualMilestones.length > 1}
+                              />
+                              {/* Task section under milestone */}
+                              {milestone.name.trim() && (() => {
+                                const milestoneTasks = manualTasks.filter(t => t.milestoneId === milestone.id)
+                                return (
+                                  <div className="ml-9 border-l-2 border-muted pl-4 pt-2 pb-1">
+                                    <button
+                                      type="button"
+                                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                      onClick={() => {
+                                        const next = new Set(expandedMilestones)
+                                        if (next.has(milestone.id)) next.delete(milestone.id)
+                                        else next.add(milestone.id)
+                                        setExpandedMilestones(next)
+                                      }}
+                                    >
+                                      {expandedMilestones.has(milestone.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                      <ListTodo className="h-3.5 w-3.5" />
+                                      任務 ({milestoneTasks.length})
+                                    </button>
+                                    {expandedMilestones.has(milestone.id) && (
+                                      <div className="mt-2 space-y-2">
+                                        <DndContext
+                                          sensors={sensors}
+                                          collisionDetection={closestCenter}
+                                          onDragEnd={(event) => {
+                                            const { active, over } = event
+                                            if (over && active.id !== over.id) {
+                                              setManualTasks((prev) => {
+                                                const oldIndex = prev.findIndex(t => t.id === active.id)
+                                                const newIndex = prev.findIndex(t => t.id === over.id)
+                                                return arrayMove(prev, oldIndex, newIndex)
+                                              })
+                                            }
+                                          }}
+                                        >
+                                          <SortableContext
+                                            items={milestoneTasks.map(t => t.id)}
+                                            strategy={verticalListSortingStrategy}
+                                          >
+                                            {milestoneTasks.map((task) => (
+                                              <SortableTaskItem
+                                                key={task.id}
+                                                task={task}
+                                                onRemove={(id) => setManualTasks(manualTasks.filter(t => t.id !== id))}
+                                                onUpdate={(id, field, value) => setManualTasks(manualTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
+                                              />
+                                            ))}
+                                          </SortableContext>
+                                        </DndContext>
+                                        {/* Inline add task */}
+                                        <MilestoneTaskAdder
+                                          milestoneId={milestone.id}
+                                          onAdd={(task) => setManualTasks([...manualTasks, task])}
+                                          teamMembers={manualTeamDetails}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+                            </div>
                           ))}
                         </div>
                       </SortableContext>
@@ -2034,8 +2438,8 @@ export default function NewProjectPage() {
               </Card>
             )}
 
-            {/* Step 4: 團隊與風險 */}
-            {currentStep === 4 && (
+            {/* Step 3: 團隊與風險 */}
+            {currentStep === 3 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -2046,7 +2450,7 @@ export default function NewProjectPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Team Members */}
-                  {renderTeamInput(manualTeamMembers, setManualTeamMembers, manualTeamInput, setManualTeamInput)}
+                  {renderTeamInput(manualTeamMembers, setManualTeamMembers, manualTeamInput, setManualTeamInput, manualTeamDetails, setManualTeamDetails, manualNewMember, setManualNewMember)}
 
                   <Separator />
 
