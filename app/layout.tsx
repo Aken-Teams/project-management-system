@@ -41,6 +41,7 @@ export default function RootLayout({
             </ProjectStoreProvider>
           </AuthProvider>
           <Toaster />
+
         </ThemeProvider>
       </body>
     </html>

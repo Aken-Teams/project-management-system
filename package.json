@@ -78,6 +78,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "agentation": "^2.2.0",
     "dotenv": "^17.2.4",
     "postcss": "^8.5",
     "prisma": "^7.3.0",

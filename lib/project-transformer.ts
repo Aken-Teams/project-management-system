@@ -66,6 +66,7 @@ export function dbProjectToFrontend(
       progress: number
       completedAt: Date | null
       completedBy: string | null
+      dependsOn: { prerequisiteId: string }[]
     }[]
     risks: {
       id: string
@@ -164,7 +165,7 @@ export function dbProjectToFrontend(
     durationWeeks: t.durationWeeks,
     startDate: t.startDate.toISOString().split('T')[0],
     endDate: t.endDate.toISOString().split('T')[0],
-    dependencies: [] as string[],
+    dependencies: (t.dependsOn || []).map((d) => d.prerequisiteId),
     progress: t.progress,
     ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
     ...(t.completedBy ? { completedBy: t.completedBy } : {}),
@@ -291,7 +292,10 @@ export const projectFullInclude = {
   owner: true,
   milestones: { orderBy: { sortOrder: 'asc' as const } },
   baselines: true,
-  tasks: { orderBy: { sortOrder: 'asc' as const } },
+  tasks: {
+    include: { dependsOn: true },
+    orderBy: { sortOrder: 'asc' as const },
+  },
   risks: true,
   teamMembers: { include: { user: true } },
   weeklyUpdates: {

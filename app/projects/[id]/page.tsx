@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MilestoneTaskView } from '@/components/milestone-task-view'
+import { TaskDependencyAnalysis } from '@/components/task-dependency-analysis'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
@@ -57,6 +58,7 @@ import {
   X,
   FileDown,
   CalendarRange,
+  Network,
 } from 'lucide-react'
 import Link from 'next/link'
 import { type Risk } from '@/lib/mock-data'
@@ -1115,6 +1117,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="dependencies" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
+                <Network className="h-4 w-4" />
+                任務相依分析
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -1354,6 +1360,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 ))
               )}
             </div>
+          </TabsContent>
+
+          {/* Dependencies Tab */}
+          <TabsContent value="dependencies" className="mt-0">
+            <TaskDependencyAnalysis project={project} />
           </TabsContent>
         </Tabs>
       </div>

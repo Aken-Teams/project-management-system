@@ -2,15 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import {
   projectTypeToDb,
-  projectTypeToFe,
   projectTierToDb,
-  projectTierToFe,
   demandSourceToDb,
-  demandSourceToFe,
 } from '@/lib/enum-mappers'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import type { ProjectType as FeProjectType, ProjectTier as FeProjectTier, DemandSource as FeDemandSource } from '@/lib/mock-data'
-import type { ProjectType as DbProjectType } from '@prisma/client'
 
 // ─── GET /api/projects — List all projects ───────────────
 export async function GET() {
@@ -229,7 +225,49 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 5. Create risks
+      // 5. Auto-create task dependencies based on sequential order
+      //    Within same milestone: task[i] → task[i+1]
+      //    Between milestones: last task of milestone[n] → first task of milestone[n+1]
+      if (tasks.length > 1) {
+        const tasksByMilestone = new Map<string, typeof tasks>()
+        for (const task of tasks) {
+          const list = tasksByMilestone.get(task.milestoneId) || []
+          list.push(task)
+          tasksByMilestone.set(task.milestoneId, list)
+        }
+
+        const orderedMilestoneIds = milestones.map((m) => m.id)
+        let prevMilestoneLastTask: (typeof tasks)[number] | null = null
+
+        for (const msId of orderedMilestoneIds) {
+          const msTasks = tasksByMilestone.get(msId)
+          if (!msTasks || msTasks.length === 0) continue
+
+          // Cross-milestone: last task of prev milestone → first task of this milestone
+          if (prevMilestoneLastTask) {
+            await tx.taskDependency.create({
+              data: {
+                dependentId: msTasks[0].id,
+                prerequisiteId: prevMilestoneLastTask.id,
+              },
+            })
+          }
+
+          // Within milestone: sequential chain
+          for (let i = 1; i < msTasks.length; i++) {
+            await tx.taskDependency.create({
+              data: {
+                dependentId: msTasks[i].id,
+                prerequisiteId: msTasks[i - 1].id,
+              },
+            })
+          }
+
+          prevMilestoneLastTask = msTasks[msTasks.length - 1]
+        }
+      }
+
+      // 6. Create risks
       const risks = []
       if (body.risks?.length) {
         for (const r of body.risks) {
@@ -248,7 +286,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 6. Create team members
+      // 7. Create team members
       if (body.teamMembers?.length) {
         for (const tm of body.teamMembers) {
           // Find user by name, or skip
@@ -290,15 +328,14 @@ export async function POST(request: NextRequest) {
       return { proj, milestones, tasks, risks }
     })
 
-    // ─── Build response in frontend format ─────────────
-    const feProject = buildFrontendProject(
-      project.proj,
-      project.milestones,
-      project.tasks,
-      project.risks,
-      owner,
-      body.team,
-      body.teamMembers,
+    // ─── Re-fetch with full relations (includes dependencies) ─
+    const fullProject = await prisma.project.findUniqueOrThrow({
+      where: { id: project.proj.id },
+      include: projectFullInclude,
+    })
+
+    const feProject = dbProjectToFrontend(
+      fullProject as Parameters<typeof dbProjectToFrontend>[0],
     )
 
     return NextResponse.json(feProject, { status: 201 })
@@ -311,127 +348,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ─── Transform DB objects to frontend Project shape ──────
-function buildFrontendProject(
-  proj: {
-    id: string
-    projectCode: string
-    projectType: DbProjectType
-    projectTier: string | null
-    demandSource: string | null
-    name: string
-    objective: string
-    purpose: string
-    scope: string
-    roi: string
-    createdReason: string
-    expectedBenefits: string | null
-    smartSpecific: string | null
-    smartMeasurable: string | null
-    smartAchievable: string | null
-    smartRelevant: string | null
-    smartTimeBound: string | null
-    startDate: Date
-    endDate: Date
-    status: string
-    progress: number
-    budget: number
-    budgetUsed: number
-    createdAt: Date
-    updatedAt: Date
-  },
-  milestones: { id: string; name: string; dueDate: Date; status: string; progress: number; sortOrder: number }[],
-  tasks: { id: string; milestoneId: string; title: string; description: string; assignee: string; status: string; priority: string; startDate: Date; endDate: Date; durationWeeks: number; progress: number; completedAt: Date | null; completedBy: string | null }[],
-  risks: { id: string; title: string; description: string; impact: string; probability: string; mitigation: string; status: string }[],
-  owner: { name: string },
-  team: string[],
-  teamMembers?: { name: string; role: string; responsibility: string }[],
-) {
-  const feMilestones = milestones
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      dueDate: m.dueDate.toISOString().split('T')[0],
-      status: m.status === 'in_progress' ? 'in-progress' as const : m.status as 'todo' | 'done' | 'blocked',
-      progress: m.progress,
-    }))
-
-  const feTasks = tasks.map((t) => ({
-    id: t.id,
-    projectId: proj.id,
-    milestoneId: t.milestoneId,
-    title: t.title,
-    description: t.description,
-    assignee: t.assignee,
-    status: t.status === 'in_progress' ? 'in-progress' as const : t.status as 'todo' | 'done' | 'blocked',
-    priority: t.priority as 'low' | 'medium' | 'high',
-    durationWeeks: t.durationWeeks,
-    startDate: t.startDate.toISOString().split('T')[0],
-    endDate: t.endDate.toISOString().split('T')[0],
-    dependencies: [] as string[],
-    progress: t.progress,
-    ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
-    ...(t.completedBy ? { completedBy: t.completedBy } : {}),
-  }))
-
-  const feRisks = risks.map((r) => ({
-    id: r.id,
-    projectId: proj.id,
-    title: r.title,
-    description: r.description,
-    impact: r.impact as 'low' | 'medium' | 'high',
-    probability: r.probability as 'low' | 'medium' | 'high',
-    mitigation: r.mitigation,
-    status: r.status as 'open' | 'mitigated' | 'closed',
-  }))
-
-  const smartObjective =
-    proj.smartSpecific || proj.smartMeasurable || proj.smartAchievable || proj.smartRelevant || proj.smartTimeBound
-      ? {
-          specific: proj.smartSpecific || '',
-          measurable: proj.smartMeasurable || '',
-          achievable: proj.smartAchievable || '',
-          relevant: proj.smartRelevant || '',
-          timeBound: proj.smartTimeBound || '',
-        }
-      : undefined
-
-  return {
-    id: proj.id,
-    projectCode: proj.projectCode,
-    projectType: projectTypeToFe(proj.projectType),
-    ...(proj.projectTier ? { projectTier: projectTierToFe(proj.projectTier as never) } : {}),
-    ...(proj.demandSource ? { demandSource: demandSourceToFe(proj.demandSource as never) } : {}),
-    name: proj.name,
-    objective: proj.objective,
-    purpose: proj.purpose,
-    scope: proj.scope,
-    roi: proj.roi,
-    createdReason: proj.createdReason,
-    expectedBenefits: proj.expectedBenefits || undefined,
-    smartObjective,
-    startDate: proj.startDate.toISOString().split('T')[0],
-    endDate: proj.endDate.toISOString().split('T')[0],
-    status: proj.status as 'green' | 'yellow' | 'red',
-    progress: proj.progress,
-    budget: proj.budget,
-    budgetUsed: proj.budgetUsed,
-    owner: owner.name,
-    team,
-    teamMembers: teamMembers?.map((tm) => ({
-      name: tm.name,
-      role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
-      responsibility: tm.responsibility,
-    })),
-    milestones: feMilestones,
-    baseline: feMilestones.map((m) => ({ ...m })),
-    tasks: feTasks,
-    risks: feRisks,
-    weeklyUpdates: [],
-    delayRequests: [],
-    taskLogs: [],
-    createdAt: proj.createdAt.toISOString(),
-    updatedAt: proj.updatedAt.toISOString(),
-  }
-}
