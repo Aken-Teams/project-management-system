@@ -54,6 +54,8 @@ interface ProjectStoreContextType {
   completeTask: (projectId: string, taskId: string, completedBy: string) => void
   uncompleteTask: (projectId: string, taskId: string) => void
   resolveSupport: (projectId: string, requestId: string, resolvedBy: string, notes: string) => void
+  updateProject: (projectId: string, data: Partial<Pick<Project, 'name' | 'projectType' | 'projectTier' | 'demandSource' | 'objective' | 'purpose' | 'scope' | 'roi' | 'createdReason' | 'expectedBenefits' | 'smartObjective' | 'startDate' | 'endDate' | 'budget'>>) => void
+  deleteProject: (projectId: string) => void
   getTasksForUser: (userName: string) => { project: Project; task: import('./mock-data').Task }[]
   getPendingApprovals: () => { project: Project; request: DelayRequest }[]
   getUnresolvedSupportRequests: () => { project: Project; request: DelayRequest }[]
@@ -379,6 +381,17 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
     }))
   }, [])
 
+  const updateProject = useCallback((projectId: string, data: Partial<Pick<Project, 'name' | 'projectType' | 'projectTier' | 'demandSource' | 'objective' | 'purpose' | 'scope' | 'roi' | 'createdReason' | 'expectedBenefits' | 'smartObjective' | 'startDate' | 'endDate' | 'budget'>>) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p
+      return { ...p, ...data, updatedAt: new Date().toISOString() }
+    }))
+  }, [])
+
+  const deleteProject = useCallback((projectId: string) => {
+    setProjects(prev => prev.filter(p => p.id !== projectId))
+  }, [])
+
   const resolveSupport = useCallback((projectId: string, requestId: string, resolvedBy: string, notes: string) => {
     setProjects(prev => prev.map(p => {
       if (p.id !== projectId) return p
@@ -441,6 +454,8 @@ export function ProjectStoreProvider({ children }: { children: React.ReactNode }
       approveDelayRequest,
       rejectDelayRequest,
       resolveSupport,
+      updateProject,
+      deleteProject,
       getPendingApprovals,
       getUnresolvedSupportRequests,
     }}>
