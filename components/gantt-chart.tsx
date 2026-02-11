@@ -4,11 +4,14 @@ import { useRef, useState, useCallback, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { type Task, type Milestone } from '@/lib/mock-data'
+import { type DepNode } from '@/lib/dependency-graph'
+import { GanttDependencyOverlay } from '@/components/gantt-dependency-overlay'
 import { cn } from '@/lib/utils'
 import {
   ChevronRight,
   ChevronDown,
   AlertTriangle,
+  Route,
 } from 'lucide-react'
 
 interface GanttChartProps {
@@ -20,6 +23,10 @@ interface GanttChartProps {
   onTaskClick?: (task: Task) => void
   expandedMilestoneIds?: Set<string>
   onExpandedMilestoneIdsChange?: (ids: Set<string>) => void
+  showDependencies?: boolean
+  nodeMap?: Map<string, DepNode>
+  selectedTaskId?: string | null
+  onTaskHover?: (task: Task | null) => void
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
@@ -31,10 +38,12 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 
 const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, nodeMap, selectedTaskId, onTaskHover }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
+  const [depTooltip, setDepTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
 
   // Use controlled state if provided, otherwise internal
   const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(new Set())
@@ -238,6 +247,20 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
             </div>
           </div>
 
+          {/* Dependency overlay */}
+          {showDependencies && nodeMap && (
+            <GanttDependencyOverlay
+              tasks={tasks}
+              milestones={milestones}
+              nodeMap={nodeMap}
+              expandedMilestoneIds={expandedMs}
+              containerRef={timelineRef}
+              toPercent={toPercent}
+              hoveredTaskId={hoveredTaskId}
+              selectedTaskId={selectedTaskId ?? null}
+            />
+          )}
+
           {/* Milestones (collapsible) */}
           {tasksByMilestone.map(({ milestone, tasks: msTasks }, msIndex) => {
             const expanded = expandedMs.has(milestone.id)
@@ -336,16 +359,35 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                 {expanded && msTasks.map((task, ti) => {
                   const taskColors = STATUS_COLORS[effectiveStatus(task)] || STATUS_COLORS.todo
                   const taskOverdue = isTaskOverdue(task)
+                  const isCritical = showDependencies && nodeMap?.get(task.id)?.isOnCriticalPath
+                  const node = showDependencies ? nodeMap?.get(task.id) : undefined
                   return (
                     <div
                       key={task.id}
+                      data-task-id={task.id}
                       className={cn(
                         'flex items-center border-b transition-colors cursor-pointer',
-                        ti % 2 === 0
-                          ? 'bg-card hover:bg-accent/50'
-                          : 'bg-muted/5 hover:bg-accent/50',
+                        selectedTaskId === task.id
+                          ? 'bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/20'
+                          : ti % 2 === 0
+                            ? 'bg-card hover:bg-accent/50'
+                            : 'bg-muted/5 hover:bg-accent/50',
                       )}
                       onClick={(e) => handleTaskClick(task, e)}
+                      onMouseEnter={() => {
+                        setHoveredTaskId(task.id)
+                        onTaskHover?.(task)
+                      }}
+                      onMouseMove={(e) => {
+                        if (showDependencies && node) {
+                          setDepTooltip({ x: e.clientX, y: e.clientY - 12, task })
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredTaskId(null)
+                        onTaskHover?.(null)
+                        setDepTooltip(null)
+                      }}
                     >
                       <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
                         <div className="flex items-center gap-1.5">
@@ -361,19 +403,23 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                           {taskOverdue && (
                             <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                           )}
+                          {isCritical && (
+                            <Route className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
                         </div>
                         {task.assignee && (
                           <span className="text-sm text-muted-foreground ml-4">{task.assignee}</span>
                         )}
                       </div>
-                      <div className="flex-1 relative h-10">
+                      <div className="flex-1 relative h-10" data-timeline-area>
                         <WeekGrid />
                         <div
                           className="absolute h-4 rounded-sm top-3 border"
                           style={{
                             ...barStyle(task.startDate, task.endDate),
                             backgroundColor: taskColors.bg,
-                            borderColor: taskColors.border,
+                            borderColor: isCritical ? '#f59e0b' : taskColors.border,
+                            ...(isCritical ? { boxShadow: '0 0 0 1.5px #f59e0b' } : {}),
                           }}
                         >
                           {task.progress > 0 && task.progress < 100 && (
@@ -401,6 +447,37 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
             )
           })}
         </div>
+
+        {/* Dependency hover tooltip */}
+        {showDependencies && depTooltip && nodeMap && (() => {
+          const node = nodeMap.get(depTooltip.task.id)
+          if (!node) return null
+          const prereqCount = node.prerequisites.length
+          const depCount = node.dependents.length
+          if (prereqCount === 0 && depCount === 0) return null
+          return (
+            <div
+              className="fixed pointer-events-none z-50 bg-popover border rounded-lg shadow-lg px-3 py-2 text-sm"
+              style={{
+                left: depTooltip.x,
+                top: depTooltip.y,
+                transform: 'translate(-50%, -100%)',
+              }}
+            >
+              <div className="flex items-center gap-3 whitespace-nowrap">
+                <span className="text-muted-foreground">前置任務 <strong className="text-foreground">{prereqCount}</strong> 個</span>
+                <span className="text-muted-foreground/40">/</span>
+                <span className="text-muted-foreground">後續任務 <strong className="text-foreground">{depCount}</strong> 個</span>
+              </div>
+              {node.isOnCriticalPath && (
+                <div className="text-amber-600 dark:text-amber-400 text-sm mt-0.5 flex items-center gap-1">
+                  <Route className="h-3 w-3" />
+                  關鍵路徑
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </Card>
 
       {/* Legend */}
@@ -434,6 +511,19 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
               <div className="flex items-center gap-1.5">
                 <div className="w-3.5 h-0.5 bg-red-500 rounded" />
                 <span>今天</span>
+              </div>
+            </>
+          )}
+          {showDependencies && (
+            <>
+              <span className="text-muted-foreground">|</span>
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="10"><path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#f59e0b" strokeWidth="2" fill="none" /></svg>
+                <span>關鍵路徑</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="10"><path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#94a3b8" strokeWidth="1.5" fill="none" strokeDasharray="4 2" /></svg>
+                <span>相依關係</span>
               </div>
             </>
           )}

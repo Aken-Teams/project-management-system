@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
+import { TaskDetailSheet } from '@/components/task-detail-sheet'
+import { buildDepGraph } from '@/lib/dependency-graph'
 import { type Project, type Task, type TaskStatus } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import {
@@ -19,12 +20,10 @@ import {
   LayoutList,
   GanttChart as GanttIcon,
   AlertTriangle,
-  User,
   Users,
-  Link2,
-  Flag,
   Clock,
   Filter,
+  Network,
   X,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -42,6 +41,13 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
+  const [showDependencies, setShowDependencies] = useState(false)
+
+  // Compute dependency graph (only when toggle is on)
+  const nodeMap = useMemo(() => {
+    if (!showDependencies) return undefined
+    return buildDepGraph(project)
+  }, [showDependencies, project])
 
   // Unique assignees for filter
   const uniqueAssignees = useMemo(() => {
@@ -128,22 +134,6 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
       case 'high': return <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">高</Badge>
       case 'medium': return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">中</Badge>
       case 'low': return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">低</Badge>
-    }
-  }
-
-  const getPriorityColor = (priority: 'low' | 'medium' | 'high') => {
-    switch (priority) {
-      case 'high': return 'bg-red-100 text-red-700 border-red-300'
-      case 'medium': return 'bg-amber-100 text-amber-700 border-amber-300'
-      case 'low': return 'bg-slate-100 text-slate-500 border-slate-300'
-    }
-  }
-
-  const getPriorityText = (priority: 'low' | 'medium' | 'high') => {
-    switch (priority) {
-      case 'high': return '高'
-      case 'medium': return '中'
-      case 'low': return '低'
     }
   }
 
@@ -293,6 +283,17 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
           <span className="text-sm">
             {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
           </span>
+          {viewMode === 'gantt' && (
+            <Button
+              variant={showDependencies ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-sm gap-1.5"
+              onClick={() => setShowDependencies(prev => !prev)}
+            >
+              <Network className="h-3.5 w-3.5" />
+              相依關係
+            </Button>
+          )}
           {(() => {
             const currentExpanded = viewMode === 'list' ? expandedMilestones : ganttExpandedMs
             const allExpanded = currentExpanded.size === project.milestones.length
@@ -337,6 +338,9 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
           onTaskClick={handleTaskClick}
           expandedMilestoneIds={ganttExpandedMs}
           onExpandedMilestoneIdsChange={setGanttExpandedMs}
+          showDependencies={showDependencies}
+          nodeMap={nodeMap}
+          selectedTaskId={selectedTask?.id ?? null}
         />
       ) : (
         <div className="space-y-3">
@@ -470,176 +474,17 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
         </div>
       )}
 
-      {/* Task Detail Dialog */}
-      <Dialog open={taskDetailOpen} onOpenChange={setTaskDetailOpen}>
-        <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
-          {selectedTask && (() => {
-            const taskOverdue = isTaskOverdue(selectedTask)
-            const milestone = project.milestones.find(m => m.id === selectedTask.milestoneId)
-            const downstreamTasks = project.tasks.filter(t => t.dependencies.includes(selectedTask.id))
-            return (
-              <>
-                {/* Header */}
-                <div className="px-6 pt-5 pb-3">
-                  <DialogHeader>
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-                        effectiveStatus(selectedTask) === 'done' ? 'bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400' :
-                        taskOverdue ? 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400' :
-                        effectiveStatus(selectedTask) === 'blocked' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
-                        'bg-primary/10 text-primary'
-                      )}>
-                        {effectiveStatus(selectedTask) === 'done' ? <Clock className="h-5 w-5" /> :
-                         taskOverdue ? <AlertTriangle className="h-5 w-5" /> :
-                         <Flag className="h-5 w-5" />}
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <DialogTitle className="text-base text-left leading-tight">{selectedTask.title}</DialogTitle>
-                        </div>
-                        <DialogDescription className="text-left text-sm">
-                          <span className="text-muted-foreground">{project.name}</span>
-                          {milestone && <span className="text-muted-foreground"> · {milestone.name}</span>}
-                          <span className="text-muted-foreground"> · </span>
-                          <span className="font-mono text-muted-foreground/80">
-                            {new Date(selectedTask.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                            {' ~ '}
-                            {new Date(selectedTask.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                          </span>
-                        </DialogDescription>
-                      </div>
-                    </div>
-                  </DialogHeader>
-                </div>
-
-                {/* Content */}
-                <div className="max-h-[60vh] overflow-y-auto">
-                  {/* Status badges + Progress */}
-                  <div className="px-6 py-4 border-t space-y-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {getStatusBadgeLarge(effectiveStatus(selectedTask))}
-                      <Badge className={cn('text-sm', getPriorityColor(selectedTask.priority))}>
-                        {getPriorityText(selectedTask.priority)}優先
-                      </Badge>
-                      {taskOverdue && (
-                        <Badge variant="destructive" className="text-sm gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          逾期
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Progress value={selectedTask.progress} className="h-2 flex-1" />
-                      <span className="text-sm font-medium tabular-nums">{selectedTask.progress}%</span>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  {selectedTask.description && (
-                    <div className="px-6 py-3 border-t bg-muted/20">
-                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedTask.description}</p>
-                    </div>
-                  )}
-
-                  {/* Info grid: Assignee + Dates */}
-                  <div className="px-6 py-4 border-t">
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                          <User className="h-3 w-3" />
-                          負責人
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className={cn('text-sm text-white', getAvatarColor(selectedTask.assignee))}>
-                              {selectedTask.assignee.split(' ').map(n => n[0]).join('')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm font-medium">{selectedTask.assignee}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                          <Calendar className="h-3 w-3" />
-                          開始日期
-                        </div>
-                        <span className="text-sm font-medium">{new Date(selectedTask.startDate).toLocaleDateString('zh-TW')}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        <div className={cn(
-                          'text-[11px] font-medium uppercase tracking-wider flex items-center gap-1.5',
-                          taskOverdue ? 'text-destructive/70' : 'text-muted-foreground/70',
-                        )}>
-                          <Flag className="h-3 w-3" />
-                          結束日期
-                        </div>
-                        <span className={cn('text-sm font-medium', taskOverdue && 'text-destructive')}>
-                          {new Date(selectedTask.endDate).toLocaleDateString('zh-TW')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dependencies section */}
-                  {(selectedTask.dependencies.length > 0 || downstreamTasks.length > 0) && (
-                    <div className="px-6 py-4 border-t space-y-4">
-                      {/* Upstream */}
-                      {selectedTask.dependencies.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
-                              <Link2 className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <span className="text-sm font-medium text-muted-foreground">前置任務</span>
-                          </div>
-                          <div className="space-y-1.5 ml-7">
-                            {selectedTask.dependencies.map(depId => {
-                              const depTask = project.tasks.find(t => t.id === depId)
-                              return (
-                                <div key={depId} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
-                                  {depTask ? (
-                                    <>
-                                      {getStatusBadge(effectiveStatus(depTask))}
-                                      <span className="flex-1 truncate">{depTask.title}</span>
-                                    </>
-                                  ) : (
-                                    <span className="text-muted-foreground">{depId}</span>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Downstream */}
-                      {downstreamTasks.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
-                              <Link2 className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                            </div>
-                            <span className="text-sm font-medium text-muted-foreground">後續任務</span>
-                          </div>
-                          <div className="space-y-1.5 ml-7">
-                            {downstreamTasks.map(dep => (
-                              <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
-                                {getStatusBadge(effectiveStatus(dep))}
-                                <span className="flex-1 truncate">{dep.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
-            )
-          })()}
-        </DialogContent>
-      </Dialog>
+      {/* Task Detail Sheet */}
+      <TaskDetailSheet
+        open={taskDetailOpen}
+        onOpenChange={setTaskDetailOpen}
+        task={selectedTask}
+        project={project}
+        nodeMap={nodeMap ?? new Map()}
+        onSelectTask={(t) => {
+          setSelectedTask(t)
+        }}
+      />
     </div>
   )
 }
