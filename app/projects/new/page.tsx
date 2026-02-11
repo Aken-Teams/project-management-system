@@ -28,6 +28,7 @@ import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
 import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
 import { TimelineTable } from '@/components/timeline-table'
+import { TeamMemberTable } from '@/components/team-member-table'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import {
   Loader2,
@@ -129,7 +130,6 @@ interface ProjectDraft {
     manualDemandSource?: DemandSource
     manualMilestones?: ManualMilestone[]
     manualRisks?: ManualRisk[]
-    manualTeamMembers?: string[]
     currentStep?: number
     // AI mode
     aiProjectType?: ProjectType
@@ -139,7 +139,6 @@ interface ProjectDraft {
     aiExpectedBenefits?: string
     requirements?: string
     parsedData?: ParsedProjectData | null
-    aiTeamMembers?: string[]
   }
 }
 
@@ -184,8 +183,6 @@ export default function NewProjectPage() {
   const [aiDemandSource, setAiDemandSource] = useState<DemandSource | ''>('')
   const [aiCreatedReason, setAiCreatedReason] = useState('')
   const [aiExpectedBenefits, setAiExpectedBenefits] = useState('')
-  const [aiTeamMembers, setAiTeamMembers] = useState<string[]>([])
-  const [aiTeamInput, setAiTeamInput] = useState('')
 
   // AI Step Wizard
   const [aiCurrentStep, setAiCurrentStep] = useState(0)
@@ -209,7 +206,6 @@ export default function NewProjectPage() {
   const [aiMilestones, setAiMilestones] = useState<AiMilestone[]>([])
   const [aiRisks, setAiRisks] = useState<Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; probability: 'low' | 'medium' | 'high' }>>([])
   const [aiTeamDetails, setAiTeamDetails] = useState<TeamMemberDraft[]>([])
-  const [aiNewMember, setAiNewMember] = useState({ name: '', role: 'engineer' as TeamRole, responsibility: '' })
   const [aiTasks, setAiTasks] = useState<MilestoneTaskDraft[]>([])
 
   // Manual Mode — Step Wizard
@@ -239,11 +235,7 @@ export default function NewProjectPage() {
   const [manualDemandSource, setManualDemandSource] = useState<DemandSource | ''>('')
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([])
   const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
-  const [manualTeamMembers, setManualTeamMembers] = useState<string[]>([])
-  const [manualTeamInput, setManualTeamInput] = useState('')
-  // Enhanced team members with roles
   const [manualTeamDetails, setManualTeamDetails] = useState<TeamMemberDraft[]>([])
-  const [manualNewMember, setManualNewMember] = useState({ name: '', role: 'engineer' as TeamRole, responsibility: '' })
   // Milestone tasks
   const [manualTasks, setManualTasks] = useState<MilestoneTaskDraft[]>([])
 
@@ -291,7 +283,6 @@ export default function NewProjectPage() {
         manualDemandSource: activeTab === 'manual' ? manualDemandSource : undefined,
         manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
         manualRisks: activeTab === 'manual' ? manualRisks : undefined,
-        manualTeamMembers: activeTab === 'manual' ? manualTeamMembers : undefined,
         currentStep: activeTab === 'manual' ? currentStep : undefined,
         // AI mode data
         aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
@@ -301,7 +292,6 @@ export default function NewProjectPage() {
         aiExpectedBenefits: activeTab === 'ai' ? aiExpectedBenefits : undefined,
         requirements: activeTab === 'ai' ? requirements : undefined,
         parsedData: activeTab === 'ai' ? parsedData : undefined,
-        aiTeamMembers: activeTab === 'ai' ? aiTeamMembers : undefined,
       }
     }
 
@@ -330,7 +320,6 @@ export default function NewProjectPage() {
       if (draft.data.manualDemandSource) setManualDemandSource(draft.data.manualDemandSource)
       if (draft.data.manualMilestones) setManualMilestones(draft.data.manualMilestones)
       if (draft.data.manualRisks) setManualRisks(draft.data.manualRisks)
-      if (draft.data.manualTeamMembers) setManualTeamMembers(draft.data.manualTeamMembers)
       if (draft.data.currentStep !== undefined) setCurrentStep(draft.data.currentStep)
     } else if (draft.mode === 'ai') {
       if (draft.data.aiProjectType) setAiProjectType(draft.data.aiProjectType)
@@ -340,7 +329,6 @@ export default function NewProjectPage() {
       if (draft.data.aiExpectedBenefits) setAiExpectedBenefits(draft.data.aiExpectedBenefits)
       if (draft.data.requirements) setRequirements(draft.data.requirements)
       if (draft.data.parsedData) setParsedData(draft.data.parsedData)
-      if (draft.data.aiTeamMembers) setAiTeamMembers(draft.data.aiTeamMembers)
     }
 
     setShowDraftsDialog(false)
@@ -929,164 +917,6 @@ export default function NewProjectPage() {
     }
   }
 
-  // Enhanced team member input component with roles and responsibilities
-  const renderTeamInput = (
-    _members: string[],
-    _setMembers: (m: string[]) => void,
-    _input: string,
-    _setInput: (s: string) => void,
-    teamDetails: TeamMemberDraft[],
-    setTeamDetails: (d: TeamMemberDraft[]) => void,
-    newMember: { name: string; role: TeamRole; responsibility: string },
-    setNewMember: (m: { name: string; role: TeamRole; responsibility: string }) => void,
-  ) => {
-    const handleAddMember = () => {
-      const name = newMember.name.trim()
-      if (!name) return
-      if (teamDetails.some(m => m.name === name)) return
-      setTeamDetails([...teamDetails, { id: `tm-${Date.now()}`, name, role: newMember.role, responsibility: newMember.responsibility }])
-      setNewMember({ name: '', role: 'engineer', responsibility: '' })
-    }
-
-    const handleRemoveMember = (id: string) => {
-      setTeamDetails(teamDetails.filter(m => m.id !== id))
-    }
-
-    const handleUpdateMember = (id: string, field: keyof TeamMemberDraft, value: string) => {
-      setTeamDetails(teamDetails.map(m => m.id === id ? { ...m, [field]: value } : m))
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label className="text-base font-medium flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            團隊成員
-          </Label>
-        </div>
-        <p className="text-xs text-muted-foreground -mt-2">
-          請手動加入專案團隊成員，並指定每位成員在此專案中的角色
-        </p>
-
-        {/* All team members */}
-        {teamDetails.map((member) => (
-            <div key={member.id} className="p-3 rounded-lg border space-y-3 bg-card">
-              <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold mt-0.5 bg-muted text-muted-foreground">
-                  {member.name.charAt(0)}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{member.name}</span>
-                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                      {TEAM_ROLE_LABELS[member.role]}
-                    </Badge>
-                    {member.role === 'pm' && (
-                      <Badge variant="default" className="text-xs px-2 py-0.5">負責人</Badge>
-                    )}
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">角色</Label>
-                      <Select value={member.role} onValueChange={(v) => handleUpdateMember(member.id, 'role', v)}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(TEAM_ROLE_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">負責工作項目</Label>
-                      <Input
-                        placeholder="例如：後端 API 開發"
-                        value={member.responsibility}
-                        onChange={(e) => handleUpdateMember(member.id, 'responsibility', e.target.value)}
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground hover:text-destructive h-7 w-7"
-                  onClick={() => handleRemoveMember(member.id)}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          )
-        )}
-
-        {/* Add new member form */}
-        <div className="p-4 rounded-lg border border-dashed space-y-3">
-          <Label className="text-sm font-medium">新增成員</Label>
-          <div className="grid gap-2 md:grid-cols-3">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">姓名</Label>
-              <Input
-                placeholder="輸入成員名稱"
-                value={newMember.name}
-                onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleAddMember()
-                  }
-                }}
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">角色</Label>
-              <Select value={newMember.role} onValueChange={(v) => setNewMember({ ...newMember, role: v as TeamRole })}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TEAM_ROLE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">負責工作項目</Label>
-              <Input
-                placeholder="例如：UI/UX 設計"
-                value={newMember.responsibility}
-                onChange={(e) => setNewMember({ ...newMember, responsibility: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleAddMember()
-                  }
-                }}
-                className="h-8 text-xs"
-              />
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleAddMember}
-            disabled={!newMember.name.trim()}
-            className="gap-1 w-full"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新增成員
-          </Button>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <DashboardLayout>
@@ -1716,7 +1546,22 @@ export default function NewProjectPage() {
                   <CardDescription>設定團隊成員並檢視風險</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {renderTeamInput(aiTeamMembers, setAiTeamMembers, aiTeamInput, setAiTeamInput, aiTeamDetails, setAiTeamDetails, aiNewMember, setAiNewMember)}
+                  <div className="space-y-2">
+                    <Label className="text-base font-medium flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      團隊成員
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      請手動加入專案團隊成員，並指定每位成員在此專案中的角色
+                    </p>
+                    <TeamMemberTable
+                      members={aiTeamDetails}
+                      roleLabels={TEAM_ROLE_LABELS}
+                      onAdd={(m) => setAiTeamDetails([...aiTeamDetails, { ...m, role: m.role as TeamRole }])}
+                      onRemove={(id) => setAiTeamDetails(aiTeamDetails.filter(m => m.id !== id))}
+                      onUpdate={(id, field, value) => setAiTeamDetails(aiTeamDetails.map(m => m.id === id ? { ...m, [field]: value } : m))}
+                    />
+                  </div>
 
                   <Separator />
 
@@ -2221,7 +2066,22 @@ export default function NewProjectPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Team Members */}
-                  {renderTeamInput(manualTeamMembers, setManualTeamMembers, manualTeamInput, setManualTeamInput, manualTeamDetails, setManualTeamDetails, manualNewMember, setManualNewMember)}
+                  <div className="space-y-2">
+                    <Label className="text-base font-medium flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      團隊成員
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      組建專案團隊，輸入姓名按 Enter 即可新增
+                    </p>
+                    <TeamMemberTable
+                      members={manualTeamDetails}
+                      roleLabels={TEAM_ROLE_LABELS}
+                      onAdd={(m) => setManualTeamDetails([...manualTeamDetails, { ...m, role: m.role as TeamRole }])}
+                      onRemove={(id) => setManualTeamDetails(manualTeamDetails.filter(m => m.id !== id))}
+                      onUpdate={(id, field, value) => setManualTeamDetails(manualTeamDetails.map(m => m.id === id ? { ...m, [field]: value } : m))}
+                    />
+                  </div>
 
                   <Separator />
 
