@@ -37,12 +37,12 @@ interface ImpactResult {
 
 // ─── Constants ───────────────────────────────────────────────
 
-const ROW_HEIGHT = 40
-const BAR_HEIGHT = 24
+const ROW_HEIGHT = 48
+const BAR_HEIGHT = 20
 const BAR_Y_OFFSET = (ROW_HEIGHT - BAR_HEIGHT) / 2
 const HEADER_HEIGHT = 32
-const MILESTONE_ROW_HEIGHT = 36
-const LEFT_LABEL_WIDTH = 220
+const MILESTONE_ROW_HEIGHT = 48
+const LEFT_LABEL_WIDTH = 260
 const DAY_WIDTH = 18
 const MIN_BAR_WIDTH = 24
 
@@ -405,6 +405,13 @@ function GanttChart({
     return result
   }, [nodeMap, taskRects, selectedTaskId, hoveredTaskId])
 
+  // Today line
+  const todayDate = useMemo(() => new Date(), [])
+  const todayX = useMemo(() => {
+    return diffDays(timeRange.start, todayDate) * DAY_WIDTH
+  }, [timeRange.start, todayDate])
+  const showToday = todayX >= 0 && todayX <= timeRange.totalDays * DAY_WIDTH
+
   const chartWidth = timeRange.totalDays * DAY_WIDTH
   const chartHeight = rowLayout.totalHeight + HEADER_HEIGHT
 
@@ -438,7 +445,7 @@ function GanttChart({
   return (
     <div ref={wrapperRef} className="border rounded-lg bg-card overflow-hidden">
       {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b bg-muted/30 text-xs text-muted-foreground flex-wrap">
+      <div className="flex items-center gap-4 px-4 py-2 border-b bg-muted/30 text-sm text-muted-foreground flex-wrap">
         <span className="font-medium">圖例：</span>
         {Object.entries(STATUS_BAR_COLORS).map(([status, { fill }]) => (
           <span key={status} className="flex items-center gap-1.5">
@@ -447,20 +454,17 @@ function GanttChart({
           </span>
         ))}
         <span className="flex items-center gap-1.5 ml-2">
-          <span className="w-4 h-2.5 rounded-sm inline-block border-[1.5px] border-indigo-500/50" style={{ backgroundColor: 'rgba(99, 102, 241, 0.25)' }} />
-          里程碑
-        </span>
-        <span className="flex items-center gap-1.5">
-          <svg width="10" height="10" className="inline-block"><polygon points="5,0 10,5 5,10 0,5" fill="#6366f1" opacity="0.65" stroke="#4f46e5" strokeWidth="1" /></svg>
-          到期日
-        </span>
-        <span className="flex items-center gap-1.5 ml-2">
           <svg width="24" height="10" className="inline-block"><path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#f59e0b" strokeWidth="2" fill="none" /></svg>
           關鍵路徑
         </span>
         <span className="flex items-center gap-1.5">
           <svg width="24" height="10" className="inline-block"><path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#94a3b8" strokeWidth="1.5" fill="none" strokeDasharray="4 2" /></svg>
           相依關係
+        </span>
+        <span className="text-muted-foreground">|</span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-0.5 bg-red-500 rounded inline-block" style={{ borderTop: '1.5px dashed #ef4444' }} />
+          今天
         </span>
       </div>
 
@@ -469,7 +473,7 @@ function GanttChart({
         <div className="shrink-0 border-r bg-muted/20" style={{ width: LEFT_LABEL_WIDTH }}>
           {/* Header */}
           <div className="flex items-center justify-between px-3 border-b bg-muted/40" style={{ height: HEADER_HEIGHT }}>
-            <span className="text-xs font-medium text-muted-foreground">任務名稱</span>
+            <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
             <button
               onClick={toggleAll}
               className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
@@ -484,36 +488,58 @@ function GanttChart({
               if (row.type === 'milestone-header') {
                 const msId = row.milestone?.id || ''
                 const isCollapsed = collapsedMs.has(msId)
+                const msIdx = project.milestones.findIndex(m => m.id === msId)
+                const msProgress = row.milestone?.progress ?? 0
+                const msStatusColor = STATUS_BAR_COLORS[row.milestone?.status === 'in-progress' ? 'in-progress' : row.milestone?.status === 'done' ? 'done' : 'todo']
                 return (
                   <div
                     key={`ms-${msId || i}`}
-                    className="flex items-center gap-1 px-2 border-t border-border cursor-pointer bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-100/60 dark:hover:bg-indigo-950/30 transition-colors"
+                    className="flex items-center gap-1.5 px-2 border-b border-border cursor-pointer bg-muted/40 hover:bg-muted/60 transition-colors"
                     style={{ height: MILESTONE_ROW_HEIGHT }}
                     onClick={() => toggleMs(msId)}
                   >
                     {isCollapsed
-                      ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      ? <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                     }
-                    <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 truncate">
-                      {row.milestone?.name}
-                    </span>
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
+                      {msIdx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold truncate">
+                          {row.milestone?.name}
+                        </span>
+                        <Badge
+                          className="text-[9px] px-1 py-0 shrink-0 text-white border-0"
+                          style={{ backgroundColor: msStatusColor.fill }}
+                        >
+                          {msProgress}%
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-0.5">
+                        到期：{row.milestone ? (() => { const d = parseDate(row.milestone.dueDate); return `${d.getMonth() + 1}月${d.getDate()}日` })() : ''}
+                      </div>
+                    </div>
                   </div>
                 )
               }
 
               const isSelected = selectedTaskId === row.task?.id
               const isHovered = hoveredTaskId === row.task?.id
+              const taskIdx = rowLayout.rows.filter(r => r.type === 'task').indexOf(row)
 
               return (
                 <div
                   key={row.task?.id ?? i}
-                  className={`flex items-center gap-2 px-3 border-b border-border cursor-pointer transition-colors ${
+                  className={`flex items-center gap-2 px-3 pl-10 border-b border-border cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-amber-50 dark:bg-amber-950/20'
                       : isHovered
                         ? 'bg-amber-50/50 dark:bg-amber-950/10'
-                        : 'hover:bg-muted/20'
+                        : taskIdx % 2 === 0
+                          ? 'bg-card hover:bg-accent/50'
+                          : 'bg-muted/5 hover:bg-accent/50'
                   }`}
                   style={{ height: ROW_HEIGHT }}
                   onClick={() => onSelectTask(isSelected ? null : row.task!.id)}
@@ -521,10 +547,17 @@ function GanttChart({
                   onMouseLeave={() => { setHoveredTaskId(null); setTooltip(null) }}
                 >
                   <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT_COLORS[row.task?.status || 'todo']}`} />
-                  <span className="text-xs truncate flex-1">{row.task?.title}</span>
-                  {row.node?.isOnCriticalPath && (
-                    <Route className="h-3 w-3 text-amber-500 shrink-0" />
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm truncate">{row.task?.title}</span>
+                      {row.node?.isOnCriticalPath && (
+                        <Route className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                      )}
+                    </div>
+                    {row.task?.assignee && (
+                      <span className="text-sm text-muted-foreground">{row.task.assignee}</span>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -573,8 +606,9 @@ function GanttChart({
                 const msRange = row.milestone ? milestoneRanges.get(row.milestone.id) : null
                 const msX = msRange ? diffDays(timeRange.start, msRange.startDate) * DAY_WIDTH : 0
                 const msW = msRange ? Math.max(MIN_BAR_WIDTH, diffDays(msRange.startDate, msRange.endDate) * DAY_WIDTH) : 0
-                const barH = 22
+                const barH = 16
                 const barY = row.y + HEADER_HEIGHT + (MILESTONE_ROW_HEIGHT - barH) / 2
+                const msStatusColor = STATUS_BAR_COLORS[row.milestone?.status === 'in-progress' ? 'in-progress' : row.milestone?.status === 'done' ? 'done' : 'todo']
 
                 return (
                   <g key={`ms-bg-${i}`}>
@@ -582,13 +616,7 @@ function GanttChart({
                     <rect
                       x={0} y={row.y + HEADER_HEIGHT}
                       width={chartWidth} height={MILESTONE_ROW_HEIGHT}
-                      fill="rgba(99, 102, 241, 0.06)"
-                    />
-                    {/* Top separator line */}
-                    <line
-                      x1={0} y1={row.y + HEADER_HEIGHT}
-                      x2={chartWidth} y2={row.y + HEADER_HEIGHT}
-                      stroke="var(--border)" strokeWidth={1} opacity={0.7}
+                      fill="rgba(0, 0, 0, 0.02)"
                     />
                     {/* Bottom separator line */}
                     <line
@@ -604,41 +632,23 @@ function GanttChart({
                           y={barY}
                           width={msW}
                           height={barH}
-                          rx={4}
-                          fill="#6366f1"
-                          opacity={0.25}
-                          stroke="#6366f1"
-                          strokeWidth={1.5}
-                          strokeOpacity={0.5}
+                          rx={3}
+                          fill={msStatusColor.fill}
+                          stroke={msStatusColor.stroke}
+                          strokeWidth={1}
+                          opacity={0.7}
                         />
-                        {/* Milestone label inside bar */}
-                        {msW > 80 && (
-                          <text
-                            x={msX + 8}
-                            y={barY + barH / 2 + 4}
-                            fontSize="11"
-                            fill="#6366f1"
-                            fontWeight="600"
-                            opacity={0.8}
-                            className="pointer-events-none select-none"
-                          >
-                            {formatDate(msRange.startDate)} ~ {formatDate(msRange.endDate)}
-                          </text>
+                        {/* Progress overlay */}
+                        {(row.milestone?.progress ?? 0) > 0 && (row.milestone?.progress ?? 0) < 100 && (
+                          <rect
+                            x={msX}
+                            y={barY}
+                            width={msW * ((row.milestone?.progress ?? 0) / 100)}
+                            height={barH}
+                            rx={3}
+                            fill="rgba(255, 255, 255, 0.3)"
+                          />
                         )}
-                        {/* DueDate diamond */}
-                        {row.milestone && (() => {
-                          const dueX = diffDays(timeRange.start, parseDate(row.milestone!.dueDate)) * DAY_WIDTH
-                          const centerY = row.y + HEADER_HEIGHT + MILESTONE_ROW_HEIGHT / 2
-                          return (
-                            <polygon
-                              points={`${dueX},${centerY - 7} ${dueX + 7},${centerY} ${dueX},${centerY + 7} ${dueX - 7},${centerY}`}
-                              fill="#6366f1"
-                              opacity={0.65}
-                              stroke="#4f46e5"
-                              strokeWidth={1}
-                            />
-                          )
-                        })()}
                       </g>
                     )}
                   </g>
@@ -646,6 +656,7 @@ function GanttChart({
               }
 
               const isSelected = selectedTaskId === row.task?.id
+              const taskIdx = rowLayout.rows.filter(r => r.type === 'task').indexOf(row)
               return (
                 <g key={`row-bg-${i}`}>
                   <rect
@@ -653,7 +664,13 @@ function GanttChart({
                     y={row.y + HEADER_HEIGHT}
                     width={chartWidth}
                     height={ROW_HEIGHT}
-                    fill={isSelected ? 'rgba(245, 158, 11, 0.1)' : 'transparent'}
+                    fill={
+                      isSelected
+                        ? 'rgba(245, 158, 11, 0.1)'
+                        : taskIdx % 2 !== 0
+                          ? 'rgba(0, 0, 0, 0.015)'
+                          : 'transparent'
+                    }
                     className="cursor-pointer"
                     onClick={() => onSelectTask(isSelected ? null : row.task!.id)}
                     onMouseEnter={() => setHoveredTaskId(row.task!.id)}
@@ -663,7 +680,7 @@ function GanttChart({
                   <line
                     x1={0} y1={row.y + HEADER_HEIGHT + ROW_HEIGHT}
                     x2={chartWidth} y2={row.y + HEADER_HEIGHT + ROW_HEIGHT}
-                    stroke="var(--border)" strokeWidth={1} opacity={0.6}
+                    stroke="var(--border)" strokeWidth={1} opacity={0.4}
                   />
                 </g>
               )
@@ -723,34 +740,33 @@ function GanttChart({
                     y={rect.y + HEADER_HEIGHT}
                     width={rect.width}
                     height={BAR_HEIGHT}
-                    rx={4}
+                    rx={3}
                     fill={colors.fill}
                     stroke={isSelected ? '#d97706' : isCritical ? '#f59e0b' : colors.stroke}
-                    strokeWidth={isSelected ? 2 : isCritical ? 1.5 : 0.5}
+                    strokeWidth={isSelected ? 2 : isCritical ? 1.5 : 1}
                     opacity={isHovered ? 1 : 0.85}
                   />
 
-                  {/* Progress fill */}
-                  {row.task.progress > 0 && row.task.status !== 'done' && (
+                  {/* Progress overlay (white/lighter, matching gantt-chart.tsx style) */}
+                  {row.task.progress > 0 && row.task.progress < 100 && (
                     <rect
                       x={rect.x}
                       y={rect.y + HEADER_HEIGHT}
                       width={rect.width * (row.task.progress / 100)}
                       height={BAR_HEIGHT}
-                      rx={4}
-                      fill={colors.fill}
-                      opacity={0.3}
+                      rx={3}
+                      fill="rgba(255, 255, 255, 0.3)"
                     />
                   )}
 
                   {/* Bar label */}
-                  {rect.width > 50 && (
+                  {rect.width > 60 && (
                     <text
-                      x={rect.x + 8}
+                      x={rect.x + 6}
                       y={rect.y + HEADER_HEIGHT + BAR_HEIGHT / 2 + 4}
-                      fontSize="11"
+                      fontSize="10"
                       fill="#334155"
-                      fontWeight="600"
+                      fontWeight="500"
                       className="pointer-events-none select-none"
                     >
                       <tspan>{row.task.title.length > rect.width / 7 ? row.task.title.slice(0, Math.floor(rect.width / 7)) + '...' : row.task.title}</tspan>
@@ -781,6 +797,20 @@ function GanttChart({
                 </g>
               )
             })}
+
+            {/* Today line */}
+            {showToday && (
+              <line
+                x1={todayX}
+                y1={0}
+                x2={todayX}
+                y2={chartHeight}
+                stroke="#ef4444"
+                strokeWidth={1.5}
+                strokeDasharray="6 3"
+                opacity={0.7}
+              />
+            )}
           </svg>
 
           {/* Tooltip */}
@@ -794,7 +824,7 @@ function GanttChart({
               }}
             >
               <div className="font-medium text-sm mb-1">{tooltip.task.title}</div>
-              <div className="text-xs text-muted-foreground space-y-0.5">
+              <div className="text-sm text-muted-foreground space-y-0.5">
                 <div>{tooltip.task.startDate} ~ {tooltip.task.endDate}</div>
                 <div>負責人：{tooltip.task.assignee}</div>
                 <div>進度：{tooltip.task.progress}%</div>
@@ -877,7 +907,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
         <CardContent className="py-12 text-center">
           <Network className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
           <p className="text-sm font-medium">此專案尚未設定任務相依關係</p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             任務的 dependencies 欄位可定義前置任務，系統會自動分析影響鏈
           </p>
         </CardContent>
@@ -890,28 +920,28 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
       {/* Summary stats bar */}
       <div className="flex items-center gap-0 rounded-lg border bg-card divide-x overflow-hidden">
         <div className="flex-1 px-4 py-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-0.5">
             <Network className="h-3.5 w-3.5" />
             相依關係
           </div>
           <span className="text-xl font-bold">{hasDeps.length}</span>
-          <span className="text-xs text-muted-foreground ml-1">個任務有相依</span>
+          <span className="text-sm text-muted-foreground ml-1">個任務有相依</span>
         </div>
         <div className="flex-1 px-4 py-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-0.5">
             <Route className="h-3.5 w-3.5" />
             關鍵路徑
           </div>
           <span className="text-xl font-bold">{criticalPath.length}</span>
-          <span className="text-xs text-muted-foreground ml-1">個任務</span>
+          <span className="text-sm text-muted-foreground ml-1">個任務</span>
         </div>
         <div className="flex-1 px-4 py-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-0.5">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-0.5">
             <CheckCircle2 className="h-3.5 w-3.5" />
             獨立任務
           </div>
           <span className="text-xl font-bold">{standalone.length}</span>
-          <span className="text-xs text-muted-foreground ml-1">個</span>
+          <span className="text-sm text-muted-foreground ml-1">個</span>
         </div>
       </div>
 
@@ -937,7 +967,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
             {selectedNode && impact ? (
               <Card>
                 <div className="px-4 py-3 border-b bg-muted/30 relative">
-                  <Badge className={`absolute top-3 right-4 text-xs px-2 py-0.5 ${PRIORITY_COLORS[selectedNode.task.priority]}`}>
+                  <Badge className={`absolute top-3 right-4 text-sm px-2 py-0.5 ${PRIORITY_COLORS[selectedNode.task.priority]}`}>
                     {selectedNode.task.priority === 'high' ? '高' : selectedNode.task.priority === 'medium' ? '中' : '低'}優先
                   </Badge>
                   <div className="flex items-center gap-2 mb-1 pr-16">
@@ -1013,7 +1043,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
                             若此任務延遲，將影響 {impact.totalDelayChain} 個後續任務
                           </div>
                           {impact.affectedMilestones.length > 0 && (
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-sm text-muted-foreground mt-1">
                               涉及里程碑：{impact.affectedMilestones.map(m => m.name).join('、')}
                             </p>
                           )}
@@ -1021,7 +1051,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
 
                         {impact.directlyBlocked.length > 0 && (
                           <div>
-                            <div className="text-xs font-medium text-muted-foreground mb-1.5">
+                            <div className="text-sm font-medium text-muted-foreground mb-1.5">
                               直接影響（{impact.directlyBlocked.length}）
                             </div>
                             <div className="space-y-1">
@@ -1033,7 +1063,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
                                 >
                                   <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[t.status]}`} />
                                   <span className="flex-1 truncate">{t.title}</span>
-                                  <span className="text-xs text-muted-foreground">{t.assignee}</span>
+                                  <span className="text-sm text-muted-foreground">{t.assignee}</span>
                                 </div>
                               ))}
                             </div>
@@ -1042,7 +1072,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
 
                         {impact.indirectlyAffected.length > 0 && (
                           <div>
-                            <div className="text-xs font-medium text-muted-foreground mb-1.5">
+                            <div className="text-sm font-medium text-muted-foreground mb-1.5">
                               間接影響（{impact.indirectlyAffected.length}）
                             </div>
                             <div className="space-y-1">
@@ -1054,7 +1084,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
                                 >
                                   <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[t.status]} opacity-50`} />
                                   <span className="flex-1 truncate text-muted-foreground">{t.title}</span>
-                                  <span className="text-xs text-muted-foreground">{t.assignee}</span>
+                                  <span className="text-sm text-muted-foreground">{t.assignee}</span>
                                 </div>
                               ))}
                             </div>
@@ -1066,7 +1096,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
 
                   {selectedNode.isOnCriticalPath && (
                     <div className="border-t pt-3">
-                      <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded-md p-2.5 border border-amber-200 dark:border-amber-900">
+                      <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded-md p-2.5 border border-amber-200 dark:border-amber-900">
                         <Route className="h-3.5 w-3.5 shrink-0" />
                         <span>此任務在<strong>關鍵路徑</strong>上，延遲會直接影響專案完成日期</span>
                       </div>
@@ -1079,7 +1109,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
                 <CardContent className="py-12 text-center">
                   <Info className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">點擊任務查看延遲影響分析</p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">
+                  <p className="text-sm text-muted-foreground/60 mt-1">
                     在甘特圖上點擊任一任務，系統會計算該任務延遲後的影響範圍
                   </p>
                 </CardContent>
@@ -1090,7 +1120,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
       </div>
 
       {/* Footer info */}
-      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+      <p className="text-sm text-muted-foreground flex items-center gap-1.5">
         <Info className="h-3.5 w-3.5 shrink-0" />
         任務相依關係於開案時自動建立（依里程碑與任務順序）。關鍵路徑為最長的任務串接，決定了專案最短可完成時間。
       </p>

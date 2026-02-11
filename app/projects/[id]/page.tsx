@@ -98,7 +98,7 @@ function ProjectRiskTab({ project }: { project: Project }) {
         <CardContent className="py-12 text-center">
           <Shield className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
           <p className="text-sm font-medium">尚未登記風險項目</p>
-          <p className="text-xs text-muted-foreground mt-1">開案時可預先識別已知風險，評估影響程度和發生機率</p>
+          <p className="text-sm text-muted-foreground mt-1">開案時可預先識別已知風險，評估影響程度和發生機率</p>
         </CardContent>
       </Card>
     )
@@ -114,13 +114,13 @@ function ProjectRiskTab({ project }: { project: Project }) {
         </div>
         <div className="flex items-center gap-2">
           {openRisks.length > 0 && (
-            <Badge variant="destructive" className="text-xs">{openRisks.length} 未處理</Badge>
+            <Badge variant="destructive" className="text-sm">{openRisks.length} 未處理</Badge>
           )}
           {mitigatedRisks.length > 0 && (
-            <Badge className="text-xs bg-warning text-warning-foreground">{mitigatedRisks.length} 已緩解</Badge>
+            <Badge className="text-sm bg-warning text-warning-foreground">{mitigatedRisks.length} 已緩解</Badge>
           )}
           {closedRisks.length > 0 && (
-            <Badge variant="secondary" className="text-xs">{closedRisks.length} 已關閉</Badge>
+            <Badge variant="secondary" className="text-sm">{closedRisks.length} 已關閉</Badge>
           )}
         </div>
       </div>
@@ -139,7 +139,7 @@ function ProjectRiskTab({ project }: { project: Project }) {
                     <p className="text-sm text-muted-foreground mt-1">{risk.description}</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-xs shrink-0">
+                <Badge variant="outline" className="text-sm shrink-0">
                   {STATUS_LABELS[risk.status]}
                 </Badge>
               </div>
@@ -147,13 +147,13 @@ function ProjectRiskTab({ project }: { project: Project }) {
               {/* Impact + Probability badges */}
               <div className="flex items-center gap-2 pl-6.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">影響程度</span>
+                  <span className="text-sm text-muted-foreground">影響程度</span>
                   <Badge className={`text-[10px] px-1.5 ${getRiskLevelColor(risk.impact)}`}>
                     {IMPACT_LABELS[risk.impact]}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">發生機率</span>
+                  <span className="text-sm text-muted-foreground">發生機率</span>
                   <Badge className={`text-[10px] px-1.5 ${getRiskLevelColor(risk.probability)}`}>
                     {PROBABILITY_LABELS[risk.probability]}
                   </Badge>
@@ -163,7 +163,7 @@ function ProjectRiskTab({ project }: { project: Project }) {
               {/* Mitigation */}
               {risk.mitigation && (
                 <div className="pl-6.5 pt-1 border-t">
-                  <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                  <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1">
                     <Shield className="h-3 w-3" />
                     緩解措施
                   </div>
@@ -175,7 +175,7 @@ function ProjectRiskTab({ project }: { project: Project }) {
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+      <p className="text-sm text-muted-foreground flex items-center gap-1.5 pt-1">
         <Info className="h-3.5 w-3.5 shrink-0" />
         風險於開案時識別登記，用於評估專案潛在問題與準備緩解措施
       </p>
@@ -460,14 +460,14 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
             type="date"
             value={dateFrom}
             onChange={e => { setDateFrom(e.target.value); setPage(0) }}
-            className="h-8 text-xs w-[140px]"
+            className="h-8 text-sm w-[140px]"
           />
-          <span className="text-xs text-muted-foreground">至</span>
+          <span className="text-sm text-muted-foreground">至</span>
           <Input
             type="date"
             value={dateTo}
             onChange={e => { setDateTo(e.target.value); setPage(0) }}
-            className="h-8 text-xs w-[140px]"
+            className="h-8 text-sm w-[140px]"
           />
           {(dateFrom || dateTo) && (
             <Button
@@ -486,7 +486,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs gap-1.5 ml-auto"
+              className="h-8 text-sm gap-1.5 ml-auto"
               onClick={handleOpenReportDialog}
             >
               <Sparkles className="h-3.5 w-3.5" />
@@ -499,7 +499,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                 <Sparkles className="h-4 w-4" />
                 AI 報告產生
               </DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogDescription className="text-sm">
                 選擇報告類型、期間和格式，AI 將自動彙整專案資料產生報告文件。
               </DialogDescription>
             </DialogHeader>
@@ -508,7 +508,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
               {/* Report Type + Format — side by side */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">報告類型</Label>
+                  <Label className="text-sm font-medium">報告類型</Label>
                   <div className="flex gap-1.5">
                     {([['weekly', '週報'], ['monthly', '月報']] as const).map(([value, label]) => (
                       <button
@@ -520,7 +520,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                           setReportDateFrom(new Date(Date.now() - offset * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
                           setReportDateTo(today)
                         }}
-                        className={`flex-1 py-1.5 px-2 rounded-md border text-xs font-medium transition-all ${
+                        className={`flex-1 py-1.5 px-2 rounded-md border text-sm font-medium transition-all ${
                           reportType === value
                             ? 'bg-primary text-primary-foreground border-primary'
                             : 'bg-background text-muted-foreground border-border hover:bg-muted'
@@ -533,13 +533,13 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">輸出格式</Label>
+                  <Label className="text-sm font-medium">輸出格式</Label>
                   <div className="flex gap-1.5">
                     {([['pptx', 'PPT'], ['docx', 'Word'], ['pdf', 'PDF']] as const).map(([value, label]) => (
                       <button
                         key={value}
                         onClick={() => setReportFormat(value)}
-                        className={`flex-1 py-1.5 px-2 rounded-md border text-xs font-medium transition-all ${
+                        className={`flex-1 py-1.5 px-2 rounded-md border text-sm font-medium transition-all ${
                           reportFormat === value
                             ? 'bg-primary text-primary-foreground border-primary'
                             : 'bg-background text-muted-foreground border-border hover:bg-muted'
@@ -554,27 +554,27 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
 
               {/* Date Range */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">報告期間</Label>
+                <Label className="text-sm font-medium">報告期間</Label>
                 <div className="flex items-center gap-2">
                   <Input
                     type="date"
                     value={reportDateFrom}
                     onChange={e => setReportDateFrom(e.target.value)}
-                    className="h-8 text-xs"
+                    className="h-8 text-sm"
                   />
-                  <span className="text-xs text-muted-foreground shrink-0">至</span>
+                  <span className="text-sm text-muted-foreground shrink-0">至</span>
                   <Input
                     type="date"
                     value={reportDateTo}
                     onChange={e => setReportDateTo(e.target.value)}
-                    className="h-8 text-xs"
+                    className="h-8 text-sm"
                   />
                 </div>
               </div>
 
               {/* Report Sections */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">報告內容</Label>
+                <Label className="text-sm font-medium">報告內容</Label>
                 <div className="space-y-1 rounded-md border p-2">
                   {([
                     ['summary', '整體進度摘要'],
@@ -591,7 +591,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                           setReportSections(prev => ({ ...prev, [key]: !!checked }))
                         }
                       />
-                      <span className="text-xs">{label}</span>
+                      <span className="text-sm">{label}</span>
                     </label>
                   ))}
                 </div>
@@ -624,7 +624,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
       <div className="flex items-center gap-1.5 flex-wrap">
         <button
           onClick={() => { setSelectedMember(null); setPage(0) }}
-          className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+          className={`text-sm px-2.5 py-1 rounded-full border transition-all ${
             !selectedMember
               ? 'bg-primary text-primary-foreground border-primary'
               : 'bg-background text-muted-foreground border-border hover:bg-muted'
@@ -636,7 +636,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
           <button
             key={name}
             onClick={() => { setSelectedMember(selectedMember === name ? null : name); setPage(0) }}
-            className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+            className={`text-sm px-2.5 py-1 rounded-full border transition-all ${
               selectedMember === name
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-background text-muted-foreground border-border hover:bg-muted'
@@ -661,7 +661,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
 
       {/* Summary line + missing updates */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           系統自動彙整自任務紀錄與完成狀態
           {matrixWeeks.length !== allWeeks.length
             ? `，篩選結果：${matrixWeeks.length} 週`
@@ -669,7 +669,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
           }
         </p>
         {missingUpdateMembers.length > 0 && (
-          <p className="text-xs text-warning flex items-center gap-1">
+          <p className="text-sm text-warning flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" />
             {missingUpdateMembers.join('、')} 7 天內未更新
           </p>
@@ -718,7 +718,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                       <tr key={member} className={`border-b last:border-0 transition-colors ${isHighlighted ? 'bg-primary/5' : ''}`}>
                         <td className="py-3 px-4 whitespace-nowrap">
                           <div className="flex items-center gap-2.5">
-                            <div className="h-7 w-7 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center font-medium shrink-0">
+                            <div className="h-7 w-7 rounded-full bg-primary/10 text-primary text-sm flex items-center justify-center font-medium shrink-0">
                               {member.charAt(0)}
                             </div>
                             <span className="text-sm font-medium truncate">{member}</span>
@@ -748,7 +748,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center gap-1.5 px-4 py-2 text-xs text-muted-foreground/60 border-t">
+            <div className="flex items-center gap-1.5 px-4 py-2 text-sm text-muted-foreground/60 border-t">
               <Info className="h-3.5 w-3.5 shrink-0" />
               點擊上方日期欄位可展開該週詳細紀錄
             </div>
@@ -790,19 +790,19 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                       <DialogDescription asChild>
                         <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                           {detailCompleted.length > 0 && (
-                            <Badge variant="default" className="text-xs gap-1">
+                            <Badge variant="default" className="text-sm gap-1">
                               <CheckCircle2 className="h-3 w-3" />
                               {detailCompleted.length} 完成
                             </Badge>
                           )}
                           {detailLogs.length > 0 && (
-                            <Badge variant="secondary" className="text-xs gap-1">
+                            <Badge variant="secondary" className="text-sm gap-1">
                               <FileText className="h-3 w-3" />
                               {detailLogs.length} 筆紀錄
                             </Badge>
                           )}
                           {detailLogs.length === 0 && detailCompleted.length === 0 && (
-                            <span className="text-xs">此週無紀錄</span>
+                            <span className="text-sm">此週無紀錄</span>
                           )}
                         </div>
                       </DialogDescription>
@@ -811,7 +811,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                     <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-4">
                       {detailCompleted.length > 0 && (
                         <div>
-                          <div className="text-xs font-medium text-success mb-2 flex items-center gap-1">
+                          <div className="text-sm font-medium text-success mb-2 flex items-center gap-1">
                             <CheckCircle2 className="h-3 w-3" />
                             完成的任務
                           </div>
@@ -820,8 +820,8 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                               <div key={ct.taskId} className="flex items-center gap-2 p-2.5 rounded-lg bg-success/5 border border-success/10 text-sm">
                                 <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
                                 <span className="font-medium">{ct.taskName}</span>
-                                <span className="text-xs text-muted-foreground">({ct.milestoneName})</span>
-                                <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
+                                <span className="text-sm text-muted-foreground">({ct.milestoneName})</span>
+                                <span className="ml-auto text-sm text-muted-foreground flex items-center gap-1">
                                   <User className="h-3 w-3" />
                                   {ct.completedBy}
                                 </span>
@@ -833,7 +833,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
 
                       {detailLogs.length > 0 && (
                         <div>
-                          <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                          <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
                             <FileText className="h-3 w-3" />
                             工作紀錄
                           </div>
@@ -841,7 +841,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                             {detailLogs.map(log => (
                               <div key={log.logId} className="p-3 rounded-lg border text-sm">
                                 <div className="flex items-start justify-between gap-2 mb-1">
-                                  <span className="font-medium text-xs">{log.taskName}</span>
+                                  <span className="font-medium text-sm">{log.taskName}</span>
                                   <span className="text-[11px] text-muted-foreground shrink-0">
                                     {log.author} · {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                   </span>
@@ -864,7 +864,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-1">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             第 {safePage + 1} / {totalPages} 頁
           </p>
           <div className="flex items-center gap-1">
@@ -1003,7 +1003,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-sm">
                   <Tag className="h-3 w-3 mr-1" />
                   {PROJECT_TYPE_LABELS[project.projectType]}
                 </Badge>
@@ -1030,7 +1030,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         {/* Stats Bar - Horizontal compact */}
         <div className="flex items-center gap-0 rounded-lg border bg-card divide-x overflow-hidden">
           <div className="flex-1 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
               <Target className="h-3.5 w-3.5" />
               進度
             </div>
@@ -1041,45 +1041,45 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           </div>
 
           <div className="flex-1 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
               <Calendar className="h-3.5 w-3.5" />
               時程
             </div>
             <div className="text-sm font-medium">
               {new Date(project.startDate).toLocaleDateString('zh-TW')} — {new Date(project.endDate).toLocaleDateString('zh-TW')}
             </div>
-            <div className="text-xs text-muted-foreground">剩餘 {daysLeft} 天</div>
+            <div className="text-sm text-muted-foreground">剩餘 {daysLeft} 天</div>
           </div>
 
           {user?.role !== 'member' && (
             <div className="flex-1 px-4 py-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                 <DollarSign className="h-3.5 w-3.5" />
                 預算
               </div>
               <span className="text-xl font-bold">{budgetUtilization}%</span>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-sm text-muted-foreground">
                 ${(project.budgetUsed / 1000000).toFixed(1)}M / ${(project.budget / 1000000).toFixed(1)}M
               </div>
             </div>
           )}
 
           <div className="flex-1 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
               <Users className="h-3.5 w-3.5" />
               團隊
             </div>
             <span className="text-xl font-bold">{project.team.length}</span>
-            <div className="text-xs text-muted-foreground">負責人：{project.owner}</div>
+            <div className="text-sm text-muted-foreground">負責人：{project.owner}</div>
           </div>
 
           <div className="flex-1 px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
               <Milestone className="h-3.5 w-3.5" />
               里程碑
             </div>
             <span className="text-xl font-bold">{completedMilestones}<span className="text-sm font-normal text-muted-foreground">/{project.milestones.length}</span></span>
-            <div className="text-xs text-muted-foreground">已完成</div>
+            <div className="text-sm text-muted-foreground">已完成</div>
           </div>
         </div>
 
@@ -1103,7 +1103,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <Shield className="h-4 w-4" />
                 風險
                 {openRisks.length > 0 && (
-                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-sm">
                     {openRisks.length}
                   </Badge>
                 )}
@@ -1112,7 +1112,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <TimerReset className="h-4 w-4" />
                 延遲紀錄
                 {pendingDelays.length > 0 && (
-                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">
+                  <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-sm">
                     {pendingDelays.length}
                   </Badge>
                 )}
@@ -1138,28 +1138,28 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <CardContent className="space-y-0">
                   <div className="grid gap-0 divide-y">
                     <div className="py-3 first:pt-0">
-                      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <AlertCircle className="h-3 w-3" />
                         開案原因
                       </div>
                       <p className="text-sm">{project.createdReason}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <Target className="h-3 w-3" />
                         專案目的
                       </div>
                       <p className="text-sm">{project.purpose}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <LayoutList className="h-3 w-3" />
                         專案範圍
                       </div>
                       <p className="text-sm">{project.scope}</p>
                     </div>
                     <div className="py-3 last:pb-0">
-                      <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <TrendingUp className="h-3 w-3" />
                         投資報酬 (ROI)
                       </div>
@@ -1189,7 +1189,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[200px]">
-                              <p className="text-xs">里程碑是專案的階段性交付目標，整體進度 = 所有里程碑進度的平均值</p>
+                              <p className="text-sm">里程碑是專案的階段性交付目標，整體進度 = 所有里程碑進度的平均值</p>
                             </TooltipContent>
                           </Tooltip>
                         </span>
@@ -1204,7 +1204,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[200px]">
-                              <p className="text-xs">任務是里程碑下的具體工作項目，可在「工作項目」頁籤中查看與管理</p>
+                              <p className="text-sm">任務是里程碑下的具體工作項目，可在「工作項目」頁籤中查看與管理</p>
                             </TooltipContent>
                           </Tooltip>
                         </span>
@@ -1239,13 +1239,13 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   {/* Team members */}
                   <Separator className="my-3" />
                   <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                       <Users className="h-3 w-3" />
                       團隊成員
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {project.team.map(member => (
-                        <Badge key={member} variant={member === project.owner ? 'default' : 'secondary'} className="text-xs">
+                        <Badge key={member} variant={member === project.owner ? 'default' : 'secondary'} className="text-sm">
                           {member}{member === project.owner && ' (負責人)'}
                         </Badge>
                       ))}
@@ -1291,7 +1291,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                         <div className="flex items-center gap-2">
                           <TimerReset className="h-4 w-4 text-muted-foreground" />
                           <span className="font-medium text-sm">延遲申請</span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {request.requestedBy} · {new Date(request.requestedAt).toLocaleDateString('zh-TW')}
                           </span>
                         </div>
@@ -1299,7 +1299,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                           request.status === 'pending' ? 'secondary'
                           : request.status === 'approved' ? 'default'
                           : 'destructive'
-                        } className={`text-xs ${request.status === 'pending' ? 'bg-warning text-warning-foreground' : ''}`}>
+                        } className={`text-sm ${request.status === 'pending' ? 'bg-warning text-warning-foreground' : ''}`}>
                           {request.status === 'pending' ? '待審核' : request.status === 'approved' ? '已核准' : '已駁回'}
                         </Badge>
                       </div>
@@ -1307,12 +1307,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       <Separator />
 
                       <div>
-                        <div className="text-xs font-medium text-muted-foreground mb-1">延遲原因</div>
+                        <div className="text-sm font-medium text-muted-foreground mb-1">延遲原因</div>
                         <p className="text-sm">{request.reason}</p>
                       </div>
 
                       <div>
-                        <div className="text-xs font-medium text-muted-foreground mb-2">受影響里程碑</div>
+                        <div className="text-sm font-medium text-muted-foreground mb-2">受影響里程碑</div>
                         <div className="space-y-1.5">
                           {request.affectedMilestones.map((am) => {
                             const ms = project.milestones.find(m => m.id === am.milestoneId)
@@ -1322,7 +1322,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                             return (
                               <div key={am.milestoneId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
                                 <span className="font-medium">{ms?.name || am.milestoneId}</span>
-                                <div className="flex items-center gap-2 text-xs">
+                                <div className="flex items-center gap-2 text-sm">
                                   <span className="text-muted-foreground line-through">
                                     {new Date(am.originalDate).toLocaleDateString('zh-TW')}
                                   </span>
@@ -1330,7 +1330,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                                   <span className="text-warning font-medium">
                                     {new Date(am.proposedDate).toLocaleDateString('zh-TW')}
                                   </span>
-                                  <Badge variant="outline" className="text-xs">+{days}天</Badge>
+                                  <Badge variant="outline" className="text-sm">+{days}天</Badge>
                                 </div>
                               </div>
                             )
@@ -1340,14 +1340,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
                       {request.supportNeeded && (
                         <div>
-                          <div className="text-xs font-medium text-muted-foreground mb-1">需要的支援</div>
+                          <div className="text-sm font-medium text-muted-foreground mb-1">需要的支援</div>
                           <p className="text-sm">{request.supportNeeded}</p>
                         </div>
                       )}
 
                       {request.reviewedBy && (
                         <div className="p-2.5 rounded-lg border bg-muted/50">
-                          <div className="text-xs text-muted-foreground mb-1">
+                          <div className="text-sm text-muted-foreground mb-1">
                             審核人：{request.reviewedBy} · {request.reviewedAt && new Date(request.reviewedAt).toLocaleDateString('zh-TW')}
                           </div>
                           {request.reviewNotes && (

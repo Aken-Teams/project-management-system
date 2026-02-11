@@ -958,11 +958,11 @@ export default function NewProjectPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-medium truncate">{draft.title}</h4>
-                            <Badge variant={draft.mode === 'ai' ? 'default' : 'secondary'} className="text-xs">
+                            <Badge variant={draft.mode === 'ai' ? 'default' : 'secondary'} className="text-sm">
                               {draft.mode === 'ai' ? 'AI 模式' : '手動模式'}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               {new Date(draft.updatedAt).toLocaleString('zh-TW')}
@@ -1086,7 +1086,7 @@ export default function NewProjectPage() {
                       }`}>
                         {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                       </div>
-                      <span className={`text-xs hidden sm:inline ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
+                      <span className={`text-sm hidden sm:inline ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
                         {step.label}
                       </span>
                     </button>
@@ -1237,7 +1237,7 @@ export default function NewProjectPage() {
                         className="shrink-0"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       提示：描述越詳細，AI 產生的規劃越準確。可以包含目標、功能需求、預期效益等。點擊麥克風圖示可使用語音輸入。
                     </p>
                   </div>
@@ -1343,7 +1343,7 @@ export default function NewProjectPage() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="smart-specific" className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">S</Badge>
+                        <Badge variant="outline" className="text-sm">S</Badge>
                         具體目標 (Specific)
                       </Label>
                       <Textarea
@@ -1356,7 +1356,7 @@ export default function NewProjectPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="smart-measurable" className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">M</Badge>
+                        <Badge variant="outline" className="text-sm">M</Badge>
                         可衡量指標 (Measurable)
                       </Label>
                       <Textarea
@@ -1369,7 +1369,7 @@ export default function NewProjectPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="smart-achievable" className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">A</Badge>
+                        <Badge variant="outline" className="text-sm">A</Badge>
                         可達成性 (Achievable)
                       </Label>
                       <Textarea
@@ -1382,7 +1382,7 @@ export default function NewProjectPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="smart-relevant" className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">R</Badge>
+                        <Badge variant="outline" className="text-sm">R</Badge>
                         相關性 (Relevant)
                       </Label>
                       <Textarea
@@ -1395,7 +1395,7 @@ export default function NewProjectPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="smart-timebound" className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">T</Badge>
+                        <Badge variant="outline" className="text-sm">T</Badge>
                         時限性 (Time-bound)
                       </Label>
                       <Textarea
@@ -1506,7 +1506,7 @@ export default function NewProjectPage() {
                   </div>
 
                   {/* Timeline table */}
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     拖動左側圖標可調整順序，系統會自動計算每個里程碑的開始與結束日期
                   </p>
                   <TimelineTable
@@ -1543,7 +1543,7 @@ export default function NewProjectPage() {
                       <Users className="h-4 w-4 text-muted-foreground" />
                       團隊成員
                     </Label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       請手動加入專案團隊成員，並指定每位成員在此專案中的角色
                     </p>
                     <TeamMemberTable
@@ -1676,7 +1676,7 @@ export default function NewProjectPage() {
                       }`}>
                         {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                       </div>
-                      <span className={`text-xs hidden sm:inline ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
+                      <span className={`text-sm hidden sm:inline ${isCurrent ? 'font-semibold' : 'font-medium'}`}>
                         {step.label}
                       </span>
                     </button>
@@ -1836,7 +1836,7 @@ export default function NewProjectPage() {
                   <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="smart-specific" className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">S</Badge>
+                          <Badge variant="outline" className="text-sm">S</Badge>
                           具體目標 (Specific)
                         </Label>
                         <Textarea
@@ -1855,7 +1855,7 @@ export default function NewProjectPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="smart-measurable" className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">M</Badge>
+                          <Badge variant="outline" className="text-sm">M</Badge>
                           可衡量指標 (Measurable)
                         </Label>
                         <Textarea
@@ -1873,7 +1873,7 @@ export default function NewProjectPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="smart-achievable" className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">A</Badge>
+                          <Badge variant="outline" className="text-sm">A</Badge>
                           可達成性 (Achievable)
                         </Label>
                         <Textarea
@@ -1887,7 +1887,7 @@ export default function NewProjectPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="smart-relevant" className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">R</Badge>
+                          <Badge variant="outline" className="text-sm">R</Badge>
                           相關性 (Relevant)
                         </Label>
                         <Textarea
@@ -1901,7 +1901,7 @@ export default function NewProjectPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor="smart-timebound" className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">T</Badge>
+                          <Badge variant="outline" className="text-sm">T</Badge>
                           時限性 (Time-bound)
                         </Label>
                         <Textarea
@@ -2023,7 +2023,7 @@ export default function NewProjectPage() {
                     </Alert>
                   )}
 
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     拖動左側圖標可改變順序。輸入週數後系統自動計算日期。專案結束日期會根據里程碑自動調整。
                   </p>
 
@@ -2063,7 +2063,7 @@ export default function NewProjectPage() {
                       <Users className="h-4 w-4 text-muted-foreground" />
                       團隊成員
                     </Label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       組建專案團隊，輸入姓名按 Enter 即可新增
                     </p>
                     <TeamMemberTable
@@ -2089,7 +2089,7 @@ export default function NewProjectPage() {
                         新增風險
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground -mt-1">
+                    <p className="text-sm text-muted-foreground -mt-1">
                       預先識別專案可能面臨的風險，評估影響程度和發生機率
                     </p>
                     <div className="space-y-3">
@@ -2099,12 +2099,12 @@ export default function NewProjectPage() {
                           className="p-3 rounded-lg border bg-card space-y-3"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-xs font-medium mt-1">
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-sm font-medium mt-1">
                               <AlertTriangle className="h-3.5 w-3.5" />
                             </div>
                             <div className="flex-1 space-y-3">
                               <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">風險名稱</Label>
+                                <Label className="text-sm text-muted-foreground">風險名稱</Label>
                                 <Input
                                   placeholder="例如：供應商交期不穩定"
                                   value={risk.title}
@@ -2112,7 +2112,7 @@ export default function NewProjectPage() {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">風險描述</Label>
+                                <Label className="text-sm text-muted-foreground">風險描述</Label>
                                 <Textarea
                                   placeholder="描述此風險的具體內容"
                                   value={risk.description}
@@ -2122,7 +2122,7 @@ export default function NewProjectPage() {
                               </div>
                               <div className="grid gap-3 md:grid-cols-2">
                                 <div className="space-y-1">
-                                  <Label className="text-xs text-muted-foreground">影響程度</Label>
+                                  <Label className="text-sm text-muted-foreground">影響程度</Label>
                                   <Select value={risk.impact} onValueChange={(v) => updateRisk(index, 'impact', v)}>
                                     <SelectTrigger>
                                       <SelectValue />
@@ -2135,7 +2135,7 @@ export default function NewProjectPage() {
                                   </Select>
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs text-muted-foreground">發生機率</Label>
+                                  <Label className="text-sm text-muted-foreground">發生機率</Label>
                                   <Select value={risk.probability} onValueChange={(v) => updateRisk(index, 'probability', v)}>
                                     <SelectTrigger>
                                       <SelectValue />
@@ -2149,7 +2149,7 @@ export default function NewProjectPage() {
                                 </div>
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs text-muted-foreground">緩解措施</Label>
+                                <Label className="text-sm text-muted-foreground">緩解措施</Label>
                                 <Textarea
                                   placeholder="描述如何降低或避免此風險"
                                   value={risk.mitigation}

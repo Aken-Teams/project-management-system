@@ -111,7 +111,7 @@ export function KanbanBoard({ tasks, projectId }: KanbanBoardProps) {
                           {task.title}
                         </CardTitle>
                         {task.description && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                             {task.description}
                           </p>
                         )}
@@ -122,18 +122,18 @@ export function KanbanBoard({ tasks, projectId }: KanbanBoardProps) {
                     <div className="flex items-center gap-2">
                       <Badge 
                         variant="secondary" 
-                        className={cn('text-xs', getPriorityColor(task.priority))}
+                        className={cn('text-sm', getPriorityColor(task.priority))}
                       >
                         {getPriorityText(task.priority)}優先
                       </Badge>
                       {task.progress > 0 && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-sm text-muted-foreground">
                           {task.progress}%
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         <span>{new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
@@ -141,7 +141,7 @@ export function KanbanBoard({ tasks, projectId }: KanbanBoardProps) {
                       
                       {task.assignee && (
                         <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                          <AvatarFallback className="text-sm bg-primary text-primary-foreground">
                             {task.assignee.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
@@ -149,7 +149,7 @@ export function KanbanBoard({ tasks, projectId }: KanbanBoardProps) {
                     </div>
 
                     {task.dependencies && task.dependencies.length > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <AlertCircle className="h-3 w-3" />
                         <span>{task.dependencies.length} 個依賴項目</span>
                       </div>

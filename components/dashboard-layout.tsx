@@ -182,7 +182,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <Badge
                       variant={item.href === '/my-tasks' ? 'secondary' : 'destructive'}
                       className={cn(
-                        'h-5 min-w-5 px-1 flex items-center justify-center text-xs',
+                        'h-5 min-w-5 px-1 flex items-center justify-center text-sm',
                         collapsed
                           ? 'absolute -top-1 -right-1 p-0 w-5'
                           : 'ml-auto'
@@ -244,7 +244,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {!collapsed && (
                   <div className="flex flex-col items-start min-w-0">
                     <span className="text-sm font-medium truncate w-full text-left">{user.name}</span>
-                    <span className="text-xs text-muted-foreground">{roleNames[user.role]}</span>
+                    <span className="text-sm text-muted-foreground">{roleNames[user.role]}</span>
                   </div>
                 )}
               </button>

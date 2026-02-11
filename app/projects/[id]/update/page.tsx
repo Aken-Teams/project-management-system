@@ -191,7 +191,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
       type="button"
       variant="ghost"
       size="sm"
-      className="gap-1.5 h-8 text-xs"
+      className="gap-1.5 h-8 text-sm"
       onClick={() => startVoiceInput(fieldSetter, currentVal, fieldName)}
       disabled={isListening && activeField !== fieldName}
     >
@@ -336,13 +336,13 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                   {/* Tasks under this milestone (read-only) */}
                   {milestoneTasks.length > 0 && (
                     <div className="p-3 rounded-lg bg-muted/50 border">
-                      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                         <CheckCircle2 className="h-3 w-3" />
                         任務列表
                       </div>
                       <div className="space-y-1">
                         {milestoneTasks.map(task => (
-                          <div key={task.id} className="flex items-center gap-2 text-xs">
+                          <div key={task.id} className="flex items-center gap-2 text-sm">
                             <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
                               {task.status === 'done' ? '完成' : task.status === 'in-progress' ? '進行中' : task.status === 'blocked' ? '受阻' : '待辦'}
                             </Badge>
@@ -494,7 +494,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                               <p className="text-sm font-medium truncate">
                                 {milestone.name}
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-sm text-muted-foreground">
                                 原定：
                                 {new Date(milestone.dueDate).toLocaleDateString(
                                   'zh-TW'

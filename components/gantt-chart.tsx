@@ -221,7 +221,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
           {/* Timeline Header */}
           <div className="flex sticky top-0 bg-card z-20 border-b">
             <div className="w-[260px] shrink-0 px-3 py-2 border-r bg-muted/30">
-              <span className="text-xs font-medium text-muted-foreground">里程碑 / 任務</span>
+              <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
             </div>
             <div className="flex-1">
               <div className="flex">
@@ -229,7 +229,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                   <div
                     key={i}
                     style={{ width: `${(month.days / totalDays) * 100}%` }}
-                    className="text-center py-1.5 text-xs font-medium border-r last:border-r-0 bg-muted/30"
+                    className="text-center py-1.5 text-sm font-medium border-r last:border-r-0 bg-muted/30"
                   >
                     {month.name}
                   </div>
@@ -263,29 +263,29 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                     <div className="flex items-center gap-1.5">
                       {msTasks.length > 0 ? (
                         expanded
-                          ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                       ) : (
-                        <div className="w-3.5 shrink-0" />
+                        <div className="w-4 shrink-0" />
                       )}
                       <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
                         {msIndex + 1}
                       </div>
-                      <span className="text-xs font-semibold truncate">{milestone.name}</span>
+                      <span className="text-sm font-semibold truncate">{milestone.name}</span>
                       <Badge
-                        className="text-[9px] px-1 py-0 shrink-0 text-white border-0"
+                        className="text-[10px] px-1.5 py-0 shrink-0 text-white border-0"
                         style={{ backgroundColor: colors.bg }}
                       >
                         {milestone.progress}%
                       </Badge>
                       {delayed && (
-                        <span className="flex items-center gap-0.5 text-[9px] text-red-600 dark:text-red-400 shrink-0">
+                        <span className="flex items-center gap-0.5 text-sm text-red-600 dark:text-red-400 shrink-0">
                           <AlertTriangle className="h-3 w-3" />
                           +{delayDays}天
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-muted-foreground ml-[38px] mt-0.5">
+                    <div className="text-sm text-muted-foreground ml-[38px] mt-0.5">
                       到期：{formatDate(milestone.dueDate)}
                       {blMs && delayed && (
                         <span className="text-red-500 ml-1">
@@ -350,26 +350,26 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                       <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
                         <div className="flex items-center gap-1.5">
                           <div
-                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            className="w-2 h-2 rounded-full shrink-0"
                             style={{ backgroundColor: taskColors.bg }}
                           />
                           <span className={cn(
-                            'text-[11px] truncate',
+                            'text-sm truncate',
                             effectiveStatus(task) === 'done' && 'text-muted-foreground',
                             taskOverdue && 'text-red-600 dark:text-red-400',
                           )}>{task.title}</span>
                           {taskOverdue && (
-                            <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+                            <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                           )}
                         </div>
                         {task.assignee && (
-                          <span className="text-[10px] text-muted-foreground ml-3">{task.assignee}</span>
+                          <span className="text-sm text-muted-foreground ml-4">{task.assignee}</span>
                         )}
                       </div>
-                      <div className="flex-1 relative h-8">
+                      <div className="flex-1 relative h-10">
                         <WeekGrid />
                         <div
-                          className="absolute h-4 rounded-sm top-2 border"
+                          className="absolute h-4 rounded-sm top-3 border"
                           style={{
                             ...barStyle(task.startDate, task.endDate),
                             backgroundColor: taskColors.bg,
@@ -392,9 +392,9 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                 {expanded && msTasks.length === 0 && (
                   <div className="flex items-center border-b bg-card">
                     <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
-                      <span className="text-[11px] text-muted-foreground italic">無任務</span>
+                      <span className="text-sm text-muted-foreground italic">無任務</span>
                     </div>
-                    <div className="flex-1 h-7" />
+                    <div className="flex-1 h-10" />
                   </div>
                 )}
               </div>
@@ -405,7 +405,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
 
       {/* Legend */}
       <Card className="px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
           <span className="font-medium text-muted-foreground">圖例：</span>
           <div className="flex items-center gap-1.5">
             <div className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#10b981' }} />

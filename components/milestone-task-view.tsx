@@ -116,10 +116,10 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
 
   const getStatusBadgeLarge = (status: TaskStatus) => {
     switch (status) {
-      case 'done': return <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
-      case 'in-progress': return <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
-      case 'blocked': return <Badge variant="destructive" className="text-xs">受阻</Badge>
-      default: return <Badge className="text-xs bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
+      case 'done': return <Badge className="text-sm bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
+      case 'in-progress': return <Badge className="text-sm bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
+      case 'blocked': return <Badge variant="destructive" className="text-sm">受阻</Badge>
+      default: return <Badge className="text-sm bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
     }
   }
 
@@ -239,7 +239,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                 variant="outline"
                 size="sm"
                 className={cn(
-                  'h-7 text-xs gap-1.5',
+                  'h-7 text-sm gap-1.5',
                   assigneeFilter.size > 0 && 'border-primary text-primary',
                 )}
               >
@@ -275,7 +275,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs gap-1 text-muted-foreground"
+              className="h-7 text-sm gap-1 text-muted-foreground"
               onClick={clearFilters}
             >
               <X className="h-3 w-3" />
@@ -286,11 +286,11 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
 
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {hasFilters && (
-            <span className="text-xs">
+            <span className="text-sm">
               {filteredTasks.length}/{project.tasks.length} 任務
             </span>
           )}
-          <span className="text-xs">
+          <span className="text-sm">
             {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
           </span>
           {(() => {
@@ -300,7 +300,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs gap-1.5"
+                className="h-7 text-sm gap-1.5"
                 onClick={() => {
                   const next = allExpanded ? new Set<string>() : new Set(project.milestones.map(m => m.id))
                   if (viewMode === 'list') {
@@ -364,7 +364,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                         'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
                         !isExpanded && '-rotate-90'
                       )} />
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -372,7 +372,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                           <h4 className="font-medium text-sm">{milestone.name}</h4>
                           {getStatusBadgeLarge(milestone.status)}
                           {isDelayed && (
-                            <Badge variant="secondary" className="bg-warning text-warning-foreground text-xs">
+                            <Badge variant="secondary" className="bg-warning text-warning-foreground text-sm">
                               <AlertTriangle className="h-3 w-3 mr-1" />
                               +{delayDays}天
                             </Badge>
@@ -380,16 +380,16 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                         </div>
                         <div className="flex items-center gap-3 mt-1">
                           <Progress value={milestone.progress} className="h-1.5 flex-1 max-w-[200px]" />
-                          <span className="text-xs text-muted-foreground">{milestone.progress}%</span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="text-sm text-muted-foreground">{milestone.progress}%</span>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {new Date(milestone.dueDate).toLocaleDateString('zh-TW')}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-sm text-muted-foreground">
                             {doneTasks}/{tasks.length} 完成
                           </span>
                           {overdueTasks > 0 && (
-                            <span className="text-xs text-destructive flex items-center gap-1">
+                            <span className="text-sm text-destructive flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               {overdueTasks} 逾期
                             </span>
@@ -409,7 +409,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                         ) : (
                           <div className="divide-y">
                             {/* Table header */}
-                            <div className="grid grid-cols-[minmax(0,1fr)_68px_52px_120px_90px] gap-3 px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            <div className="grid grid-cols-[minmax(0,1fr)_68px_52px_120px_90px] gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                               <span>任務</span>
                               <span>狀態</span>
                               <span>優先</span>
@@ -498,7 +498,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                         <div className="flex items-center gap-2">
                           <DialogTitle className="text-base text-left leading-tight">{selectedTask.title}</DialogTitle>
                         </div>
-                        <DialogDescription className="text-left text-xs">
+                        <DialogDescription className="text-left text-sm">
                           <span className="text-muted-foreground">{project.name}</span>
                           {milestone && <span className="text-muted-foreground"> · {milestone.name}</span>}
                           <span className="text-muted-foreground"> · </span>
@@ -519,11 +519,11 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                   <div className="px-6 py-4 border-t space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {getStatusBadgeLarge(effectiveStatus(selectedTask))}
-                      <Badge className={cn('text-xs', getPriorityColor(selectedTask.priority))}>
+                      <Badge className={cn('text-sm', getPriorityColor(selectedTask.priority))}>
                         {getPriorityText(selectedTask.priority)}優先
                       </Badge>
                       {taskOverdue && (
-                        <Badge variant="destructive" className="text-xs gap-1">
+                        <Badge variant="destructive" className="text-sm gap-1">
                           <AlertTriangle className="h-3 w-3" />
                           逾期
                         </Badge>
@@ -552,7 +552,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                         </div>
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
-                            <AvatarFallback className={cn('text-xs text-white', getAvatarColor(selectedTask.assignee))}>
+                            <AvatarFallback className={cn('text-sm text-white', getAvatarColor(selectedTask.assignee))}>
                               {selectedTask.assignee.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>
                           </Avatar>
@@ -591,7 +591,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                             <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
                               <Link2 className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <span className="text-xs font-medium text-muted-foreground">前置任務</span>
+                            <span className="text-sm font-medium text-muted-foreground">前置任務</span>
                           </div>
                           <div className="space-y-1.5 ml-7">
                             {selectedTask.dependencies.map(depId => {
@@ -620,7 +620,7 @@ export function MilestoneTaskView({ project }: MilestoneTaskViewProps) {
                             <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
                               <Link2 className="h-3 w-3 text-purple-600 dark:text-purple-400" />
                             </div>
-                            <span className="text-xs font-medium text-muted-foreground">後續任務</span>
+                            <span className="text-sm font-medium text-muted-foreground">後續任務</span>
                           </div>
                           <div className="space-y-1.5 ml-7">
                             {downstreamTasks.map(dep => (

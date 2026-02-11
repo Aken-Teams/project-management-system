@@ -117,11 +117,11 @@ export default function SettingsPage() {
               <Palette className="h-4 w-4 text-muted-foreground" />
               外觀設定
             </CardTitle>
-            <CardDescription className="text-xs">選擇您偏好的主題模式</CardDescription>
+            <CardDescription className="text-sm">選擇您偏好的主題模式</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <Label className="text-xs text-muted-foreground">主題</Label>
+              <Label className="text-sm text-muted-foreground">主題</Label>
               <div className="flex items-center gap-2">
                 {themes.map(t => {
                   const Icon = t.icon
@@ -159,9 +159,9 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">顯示語言</p>
-                <p className="text-xs text-muted-foreground mt-0.5">目前僅支援繁體中文</p>
+                <p className="text-sm text-muted-foreground mt-0.5">目前僅支援繁體中文</p>
               </div>
-              <Badge variant="secondary" className="text-xs">繁體中文</Badge>
+              <Badge variant="secondary" className="text-sm">繁體中文</Badge>
             </div>
           </CardContent>
         </Card>
@@ -173,7 +173,7 @@ export default function SettingsPage() {
               <Bell className="h-4 w-4 text-muted-foreground" />
               通知偏好
             </CardTitle>
-            <CardDescription className="text-xs">選擇要接收的通知類型</CardDescription>
+            <CardDescription className="text-sm">選擇要接收的通知類型</CardDescription>
           </CardHeader>
           <CardContent className="space-y-0 divide-y">
             {([
@@ -186,7 +186,7 @@ export default function SettingsPage() {
               <div key={item.key} className="flex items-center justify-between py-3.5 first:pt-0 last:pb-0">
                 <div>
                   <p className="text-sm font-medium">{item.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{item.desc}</p>
                 </div>
                 <Switch
                   checked={prefs[item.key]}
@@ -204,13 +204,13 @@ export default function SettingsPage() {
               <AlertTriangle className="h-4 w-4 text-destructive" />
               資料管理
             </CardTitle>
-            <CardDescription className="text-xs">管理示範資料和通知</CardDescription>
+            <CardDescription className="text-sm">管理示範資料和通知</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between p-3 rounded-lg border">
               <div>
                 <p className="text-sm font-medium">清除通知</p>
-                <p className="text-xs text-muted-foreground mt-0.5">移除所有通知紀錄</p>
+                <p className="text-sm text-muted-foreground mt-0.5">移除所有通知紀錄</p>
               </div>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleClearNotifications}>
                 <Trash2 className="h-3.5 w-3.5" />
@@ -221,7 +221,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20 bg-destructive/[0.02]">
               <div>
                 <p className="text-sm font-medium">重設示範資料</p>
-                <p className="text-xs text-muted-foreground mt-0.5">清除所有資料並回到初始狀態</p>
+                <p className="text-sm text-muted-foreground mt-0.5">清除所有資料並回到初始狀態</p>
               </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>

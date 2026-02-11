@@ -27,7 +27,7 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
 function RoleBadge({ role, label }: { role: string; label: string }) {
   const c = ROLE_COLORS[role] || ROLE_COLORS.other
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${c.bg} ${c.text}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${c.bg} ${c.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
       {label}
     </span>
@@ -197,7 +197,7 @@ function NameAutocompleteInput({
           style={{ top: dropdownPos.top, left: dropdownPos.left, width: Math.max(dropdownPos.width, 260) }}
         >
           {isSearching ? (
-            <div className="px-3 py-3 text-xs text-muted-foreground text-center">搜尋中...</div>
+            <div className="px-3 py-3 text-sm text-muted-foreground text-center">搜尋中...</div>
           ) : results.length > 0 ? (
             results.map((user, idx) => (
               <button
@@ -212,12 +212,12 @@ function NameAutocompleteInput({
                   selectUser(user)
                 }}
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
                   {user.name.charAt(0)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{user.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
+                  <div className="truncate text-sm text-muted-foreground">
                     {user.email}
                     {user.organization && ` · ${user.organization}`}
                   </div>
@@ -225,7 +225,7 @@ function NameAutocompleteInput({
               </button>
             ))
           ) : (
-            <div className="px-3 py-3 text-xs text-muted-foreground text-center">
+            <div className="px-3 py-3 text-sm text-muted-foreground text-center">
               找不到匹配的使用者，按 Enter 手動新增
             </div>
           )}
@@ -254,7 +254,7 @@ function MemberRow({
     <div className={`${GRID_COLS} px-3 py-1.5 hover:bg-muted/20 transition-colors text-sm border-t`}>
       {/* Name with avatar + autocomplete */}
       <div className="flex items-center gap-2 pr-2 min-w-0">
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).text}`}>
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).text}`}>
           {member.name.charAt(0)}
         </div>
         <NameAutocompleteInput
@@ -273,19 +273,19 @@ function MemberRow({
       {/* Organization (read-only) */}
       <div className="px-1 min-w-0">
         {member.organization ? (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+          <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
             <Building2 className="h-3 w-3 shrink-0" />
             <span className="truncate">{member.organization}</span>
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground/40">—</span>
+          <span className="text-sm text-muted-foreground/40">—</span>
         )}
       </div>
 
       {/* Role */}
       <div>
         <Select value={member.role} onValueChange={(v) => onUpdate(member.id, 'role', v)}>
-          <SelectTrigger className="h-8 border-0 bg-transparent text-xs focus:ring-1 px-0.5 [&>span]:overflow-visible">
+          <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">
             <RoleBadge role={member.role} label={roleLabels[member.role] || member.role} />
           </SelectTrigger>
           <SelectContent>
@@ -304,7 +304,7 @@ function MemberRow({
           value={member.responsibility}
           onChange={(e) => onUpdate(member.id, 'responsibility', e.target.value)}
           placeholder="負責工作項目"
-          className="h-8 border-0 bg-transparent text-xs focus-visible:ring-1 px-1.5"
+          className="h-8 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
         />
       </div>
 
@@ -386,7 +386,7 @@ function InlineMemberInput({
       {/* Organization (read-only, auto-filled) */}
       <div className="px-1 min-w-0">
         {organization && (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+          <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
             <Building2 className="h-3 w-3 shrink-0" />
             <span className="truncate">{organization}</span>
           </span>
@@ -397,7 +397,7 @@ function InlineMemberInput({
       <div>
         {name.trim() && (
           <Select value={role} onValueChange={setRole}>
-            <SelectTrigger className="h-8 border-0 bg-transparent text-xs focus:ring-1 px-0.5 [&>span]:overflow-visible">
+            <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">
               <RoleBadge role={role} label={roleLabels[role] || role} />
             </SelectTrigger>
             <SelectContent>
@@ -419,7 +419,7 @@ function InlineMemberInput({
             onChange={(e) => setResponsibility(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="負責工作項目"
-            className="h-8 border-0 bg-transparent text-xs text-muted-foreground focus-visible:ring-1 px-1.5"
+            className="h-8 border-0 bg-transparent text-sm text-muted-foreground focus-visible:ring-1 px-1.5"
           />
         )}
       </div>
@@ -456,7 +456,7 @@ export function TeamMemberTable({
     <div className="rounded-lg border overflow-hidden">
       {/* Header */}
       <div
-        className={`${GRID_COLS} px-3 py-2.5 bg-muted/60 border-b text-xs font-medium text-muted-foreground tracking-wide`}
+        className={`${GRID_COLS} px-3 py-2.5 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide`}
       >
         <span>姓名</span>
         <span>組織</span>
@@ -485,7 +485,7 @@ export function TeamMemberTable({
       <InlineMemberInput roleLabels={roleLabels} excludeEmails={allEmails} onAdd={onAdd} />
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground">
+      <div className="px-3 py-2 border-t bg-muted/20 text-sm text-muted-foreground">
         共 {members.length} 位成員
       </div>
     </div>

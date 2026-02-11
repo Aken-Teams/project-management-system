@@ -229,8 +229,8 @@ export default function ProjectsPage() {
                   {/* Row 1: Code + Type + Status */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-mono text-muted-foreground">{project.projectCode}</span>
-                      <Badge variant="outline" className="text-xs">
+                      <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
+                      <Badge variant="outline" className="text-sm">
                         {PROJECT_TYPE_LABELS[project.projectType]}
                       </Badge>
                     </div>
@@ -255,7 +255,7 @@ export default function ProjectsPage() {
                   </div>
 
                   {/* Row 4: Meta info inline */}
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1"><Users className="h-3 w-3" />{project.team.length} 人</span>
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(project.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
                     {user?.role !== 'member' && (

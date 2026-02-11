@@ -154,12 +154,12 @@ function MilestoneRow({
       </div>
 
       {/* Start date */}
-      <div className="text-center text-xs text-muted-foreground">
+      <div className="text-center text-sm text-muted-foreground">
         {milestone.startDate || '—'}
       </div>
 
       {/* End date */}
-      <div className="text-center text-xs text-muted-foreground">
+      <div className="text-center text-sm text-muted-foreground">
         {milestone.endDate || '—'}
       </div>
 
@@ -242,7 +242,7 @@ function TaskRow({
 
       {/* Name (indented) */}
       <div className="pl-4 flex items-center gap-1 min-w-0 pr-2">
-        <span className="text-muted-foreground/30 text-xs select-none">└</span>
+        <span className="text-muted-foreground/30 text-sm select-none">└</span>
         <span className="truncate">{task.title}</span>
       </div>
 
@@ -253,17 +253,17 @@ function TaskRow({
           min={1}
           value={task.durationWeeks || ''}
           onChange={(e) => onUpdate(task.id, 'durationWeeks', Number(e.target.value) || 0)}
-          className="h-7 w-12 text-center text-xs border-0 bg-transparent focus-visible:ring-1 px-0"
+          className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
         />
       </div>
 
       {/* Start date */}
-      <div className="text-center text-xs text-muted-foreground">
+      <div className="text-center text-sm text-muted-foreground">
         {startDate || '—'}
       </div>
 
       {/* End date */}
-      <div className="text-center text-xs text-muted-foreground">
+      <div className="text-center text-sm text-muted-foreground">
         {endDate || '—'}
       </div>
 
@@ -273,7 +273,7 @@ function TaskRow({
           value={task.assignee || ' '}
           onValueChange={(v) => onUpdate(task.id, 'assignee', v)}
         >
-          <SelectTrigger className="h-7 border-0 bg-transparent text-xs focus:ring-1 px-1.5">
+          <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
             <SelectValue placeholder="—" />
           </SelectTrigger>
           <SelectContent>
@@ -396,7 +396,7 @@ function InlineTaskInput({
             value={durationWeeks}
             onChange={(e) => setDurationWeeks(Number(e.target.value) || 1)}
             onKeyDown={handleKeyDown}
-            className="h-7 w-12 text-center text-xs border-0 bg-transparent focus-visible:ring-1 px-0 text-muted-foreground"
+            className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0 text-muted-foreground"
           />
         )}
       </div>
@@ -414,7 +414,7 @@ function InlineTaskInput({
             value={assignee || ' '}
             onValueChange={(v) => setAssignee(v === ' ' ? '' : v)}
           >
-            <SelectTrigger className="h-7 border-0 bg-transparent text-xs focus:ring-1 px-1.5 text-muted-foreground">
+            <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5 text-muted-foreground">
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
@@ -559,7 +559,7 @@ export function TimelineTable({
 
       {/* Header */}
       <div
-        className={`${GRID_COLS} px-2 py-2.5 bg-muted/60 border-b text-xs font-medium text-muted-foreground tracking-wide`}
+        className={`${GRID_COLS} px-2 py-2.5 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide`}
       >
         <span />
         <span className="pl-1.5">名稱</span>

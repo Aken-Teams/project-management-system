@@ -82,7 +82,7 @@ export function NotificationBell() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs gap-1 text-muted-foreground"
+              className="h-7 text-sm gap-1 text-muted-foreground"
               onClick={markAllAsRead}
             >
               <CheckCheck className="h-3.5 w-3.5" />
@@ -125,10 +125,10 @@ export function NotificationBell() {
                     </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0 space-y-0.5">
-                      <p className={cn('text-xs', !notification.read ? 'font-semibold' : 'font-medium text-muted-foreground')}>
+                      <p className={cn('text-sm', !notification.read ? 'font-semibold' : 'font-medium text-muted-foreground')}>
                         {notification.title}
                       </p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{notification.message}</p>
                       <p className="text-[10px] text-muted-foreground/60">{formatRelativeTime(notification.createdAt)}</p>
                     </div>
                   </button>

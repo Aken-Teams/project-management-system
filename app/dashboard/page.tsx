@@ -134,7 +134,7 @@ export default function DashboardPage() {
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+            <div className="flex gap-2 mt-1 text-sm text-muted-foreground">
               <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-success" />{stats.green}</span>
               <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-warning" />{stats.yellow}</span>
               <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 text-destructive" />{stats.red}</span>
@@ -157,7 +157,7 @@ export default function DashboardPage() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="text-2xl font-bold">{budgetUtilization}%</div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 ${(stats.totalBudgetUsed / 1000000).toFixed(1)}M / ${(stats.totalBudget / 1000000).toFixed(1)}M
               </p>
             </Card>
@@ -170,7 +170,7 @@ export default function DashboardPage() {
               <div className="text-2xl font-bold">
                 {userProjects.reduce((acc, p) => acc + p.tasks.filter(t => t.assignee === user?.name).length, 0)}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {userProjects.reduce((acc, p) => acc + p.tasks.filter(t => t.assignee === user?.name && t.status === 'done').length, 0)} 已完成
               </p>
             </Card>
@@ -186,7 +186,7 @@ export default function DashboardPage() {
               )}
             </div>
             <div className="text-2xl font-bold text-success">{stats.green}<span className="text-base font-normal text-muted-foreground">/{stats.total}</span></div>
-            <p className="text-xs text-muted-foreground mt-1">專案運行正常</p>
+            <p className="text-sm text-muted-foreground mt-1">專案運行正常</p>
           </Card>
         </div>
 
@@ -206,7 +206,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer">
                       <Badge
                         variant="secondary"
-                        className={`${getStatusColor(project.status)} shrink-0 h-6 text-xs`}
+                        className={`${getStatusColor(project.status)} shrink-0 h-6 text-sm`}
                       >
                         <span className="flex items-center gap-1">
                           {getStatusIcon(project.status)}
@@ -215,11 +215,11 @@ export default function DashboardPage() {
                       </Badge>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono text-muted-foreground">{project.projectCode}</span>
+                          <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
                           <span className="font-medium text-sm truncate">{project.name}</span>
                         </div>
                       </div>
-                      <Badge variant="outline" className="text-xs shrink-0 hidden sm:flex">
+                      <Badge variant="outline" className="text-sm shrink-0 hidden sm:flex">
                         {PROJECT_TYPE_LABELS[project.projectType]}
                       </Badge>
                       <div className="flex items-center gap-2 shrink-0">
@@ -243,7 +243,7 @@ export default function DashboardPage() {
                 風險摘要
               </CardTitle>
               {openRisks.length > 3 && (
-                <span className="text-xs text-muted-foreground">共 {openRisks.length} 項</span>
+                <span className="text-sm text-muted-foreground">共 {openRisks.length} 項</span>
               )}
             </CardHeader>
             <CardContent className="px-4 pb-3">
@@ -257,16 +257,16 @@ export default function DashboardPage() {
                   {openRisks.map((risk) => (
                     <div key={risk.id} className="p-2.5 rounded-md border text-sm space-y-1">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">{risk.projectName}</Badge>
+                        <Badge variant="outline" className="text-sm">{risk.projectName}</Badge>
                         <Badge
                           variant="secondary"
-                          className={`text-xs ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}`}
+                          className={`text-sm ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}`}
                         >
                           {risk.impact === 'high' ? '高' : '中'}
                         </Badge>
                       </div>
-                      <p className="text-xs font-medium">{risk.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{risk.mitigation}</p>
+                      <p className="text-sm font-medium">{risk.title}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-1">{risk.mitigation}</p>
                     </div>
                   ))}
                 </div>
@@ -285,7 +285,7 @@ export default function DashboardPage() {
                 即將到期的里程碑
               </CardTitle>
               {upcomingMilestones.length > 3 && (
-                <span className="text-xs text-muted-foreground">共 {upcomingMilestones.length} 項</span>
+                <span className="text-sm text-muted-foreground">共 {upcomingMilestones.length} 項</span>
               )}
             </CardHeader>
             <CardContent className="px-4 pb-3">
@@ -306,7 +306,7 @@ export default function DashboardPage() {
                           {new Date(m.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                         </Badge>
                         <span className="text-sm truncate flex-1 min-w-0">{m.name}</span>
-                        <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">{m.projectName}</span>
+                        <span className="text-sm text-muted-foreground shrink-0 hidden sm:block">{m.projectName}</span>
                         <Badge
                           variant="secondary"
                           className={`text-[11px] shrink-0 ${m.diffDays < 0 ? 'bg-destructive/10 text-destructive' : m.diffDays <= 7 ? 'bg-warning/10 text-warning' : 'bg-muted'}`}
@@ -329,7 +329,7 @@ export default function DashboardPage() {
                 本週未更新
               </CardTitle>
               {missingUpdates.length > 3 && (
-                <span className="text-xs text-muted-foreground">共 {missingUpdates.length} 項</span>
+                <span className="text-sm text-muted-foreground">共 {missingUpdates.length} 項</span>
               )}
             </CardHeader>
             <CardContent className="px-4 pb-3">
@@ -349,7 +349,7 @@ export default function DashboardPage() {
                           <span className="text-sm truncate flex-1 min-w-0">{p.name}</span>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">{p.owner}</span>
+                            <span className="text-sm text-muted-foreground">{p.owner}</span>
                           </div>
                         </div>
                       </Link>

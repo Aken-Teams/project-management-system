@@ -106,7 +106,7 @@ export default function ProfilePage() {
                     {user.name.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <Badge className={`text-xs ${roleBadgeColors[user.role]}`}>
+                <Badge className={`text-sm ${roleBadgeColors[user.role]}`}>
                   <Shield className="h-3 w-3 mr-1" />
                   {roleNames[user.role]}
                 </Badge>
@@ -116,7 +116,7 @@ export default function ProfilePage() {
               <div className="flex-1 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="profile-name" className="flex items-center gap-1.5 text-xs">
+                    <Label htmlFor="profile-name" className="flex items-center gap-1.5 text-sm">
                       <User className="h-3.5 w-3.5" />
                       姓名
                     </Label>
@@ -128,7 +128,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="profile-email" className="flex items-center gap-1.5 text-xs">
+                    <Label htmlFor="profile-email" className="flex items-center gap-1.5 text-sm">
                       <Mail className="h-3.5 w-3.5" />
                       電子郵件
                     </Label>
@@ -152,7 +152,7 @@ export default function ProfilePage() {
                     儲存變更
                   </Button>
                   {hasChanges && (
-                    <span className="text-xs text-muted-foreground">有未儲存的變更</span>
+                    <span className="text-sm text-muted-foreground">有未儲存的變更</span>
                   )}
                 </div>
               </div>
@@ -211,7 +211,7 @@ export default function ProfilePage() {
                         <span className="font-medium">{log.taskTitle}</span>
                         <span className="text-muted-foreground"> — {log.projectName}</span>
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{log.content}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{log.content}</p>
                     </div>
                     <span className="text-[10px] text-muted-foreground shrink-0">
                       {new Date(log.createdAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}

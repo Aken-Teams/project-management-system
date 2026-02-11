@@ -327,7 +327,7 @@ export default function MyTasksPage() {
               <ListChecks className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground mt-1">{userProjects.length} 個專案</p>
+            <p className="text-sm text-muted-foreground mt-1">{userProjects.length} 個專案</p>
           </Card>
           <Card className="p-4">
             <div className="flex items-center justify-between mb-1">
@@ -335,7 +335,7 @@ export default function MyTasksPage() {
               <CheckCircle2 className="h-4 w-4 text-green-500" />
             </div>
             <div className="text-2xl font-bold text-green-600">{completedCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               {totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0}% 完成率
             </p>
           </Card>
@@ -345,7 +345,7 @@ export default function MyTasksPage() {
               <Clock className="h-4 w-4 text-blue-500" />
             </div>
             <div className="text-2xl font-bold text-blue-600">{onTrackCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">正常進行</p>
+            <p className="text-sm text-muted-foreground mt-1">正常進行</p>
           </Card>
           <Card className="p-4">
             <div className="flex items-center justify-between mb-1">
@@ -353,7 +353,7 @@ export default function MyTasksPage() {
               <AlertCircle className="h-4 w-4 text-amber-500" />
             </div>
             <div className="text-2xl font-bold text-amber-600">{atRiskCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">即將到期或逾期</p>
+            <p className="text-sm text-muted-foreground mt-1">即將到期或逾期</p>
           </Card>
         </div>
 
@@ -364,7 +364,7 @@ export default function MyTasksPage() {
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <HelpCircle className="h-4 w-4 text-amber-500" />
                 待處理的支援需求
-                <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs ml-1">
+                <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-sm ml-1">
                   {unresolvedSupport.length}
                 </Badge>
               </CardTitle>
@@ -386,14 +386,14 @@ export default function MyTasksPage() {
                       </Link>
                     </div>
                     <p className="text-sm text-muted-foreground">{request.supportNeeded}</p>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-sm text-muted-foreground">
                       延期原因：{request.reason.length > 40 ? request.reason.substring(0, 40) + '...' : request.reason}
                     </div>
                     <div className="flex items-center gap-2 pt-1">
                       <Button
                         size="sm"
                         variant="default"
-                        className="h-7 text-xs gap-1"
+                        className="h-7 text-sm gap-1"
                         onClick={() => {
                           setSupportDialogItem({ project, request })
                           setSupportNotes('')
@@ -417,7 +417,7 @@ export default function MyTasksPage() {
             <button
               onClick={() => setSelectedProjectId('all')}
               className={cn(
-                'text-xs px-3 py-1 rounded-full border transition-all',
+                'text-sm px-3 py-1 rounded-full border transition-all',
                 selectedProjectId === 'all'
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-background text-muted-foreground border-border hover:bg-muted',
@@ -430,7 +430,7 @@ export default function MyTasksPage() {
                 key={project.id}
                 onClick={() => setSelectedProjectId(project.id)}
                 className={cn(
-                  'text-xs px-3 py-1 rounded-full border transition-all',
+                  'text-sm px-3 py-1 rounded-full border transition-all',
                   selectedProjectId === project.id
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-border hover:bg-muted',
@@ -466,7 +466,7 @@ export default function MyTasksPage() {
                       )} />
                       {project.name}
                     </CardTitle>
-                    <span className="text-xs text-muted-foreground">{pCompleted}/{pTotal}</span>
+                    <span className="text-sm text-muted-foreground">{pCompleted}/{pTotal}</span>
                   </CardHeader>
 
                   {!isCollapsed && (
@@ -476,7 +476,7 @@ export default function MyTasksPage() {
                         <div key={mg.milestoneId} className="py-2 first:pt-0 last:pb-0">
                           {/* Milestone label */}
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-medium text-muted-foreground">{mg.milestoneName}</span>
+                            <span className="text-sm font-medium text-muted-foreground">{mg.milestoneName}</span>
                             <Badge variant="outline" className="text-[10px] font-mono px-1">
                               {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                             </Badge>
@@ -503,12 +503,12 @@ export default function MyTasksPage() {
                                     {task.title}
                                   </span>
                                   {status === 'overdue' && (
-                                    <span className="text-xs text-destructive font-medium shrink-0">
+                                    <span className="text-sm text-destructive font-medium shrink-0">
                                       逾期{Math.abs(days)}天
                                     </span>
                                   )}
                                   {status === 'at-risk' && (
-                                    <span className="text-xs text-amber-600 font-medium shrink-0">
+                                    <span className="text-sm text-amber-600 font-medium shrink-0">
                                       剩{days}天
                                     </span>
                                   )}
@@ -598,7 +598,7 @@ export default function MyTasksPage() {
                             {badgeText}
                           </Badge>
                         </div>
-                        <DialogDescription className="text-left text-xs">
+                        <DialogDescription className="text-left text-sm">
                           <span className="text-muted-foreground">{project.name}</span>
                           {milestone && <span className="text-muted-foreground"> · {milestone.name}</span>}
                           <span className="text-muted-foreground"> · </span>
@@ -609,7 +609,7 @@ export default function MyTasksPage() {
                           </span>
                         </DialogDescription>
                         {hasBlockedUpstream && (
-                          <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+                          <div className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
                             <div className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
                             前置任務尚未完成
                           </div>
@@ -655,7 +655,7 @@ export default function MyTasksPage() {
                           <div>
                             <p className="text-sm font-medium text-green-700 dark:text-green-400">此任務已完成</p>
                             {task.completedAt && (
-                              <p className="text-xs text-green-600/70 dark:text-green-400/70 mt-0.5">
+                              <p className="text-sm text-green-600/70 dark:text-green-400/70 mt-0.5">
                                 完成於 {new Date(task.completedAt).toLocaleDateString('zh-TW')}
                               </p>
                             )}
@@ -697,7 +697,7 @@ export default function MyTasksPage() {
                                 {attachments.length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 px-3 pb-2">
                                     {attachments.map((name, i) => (
-                                      <Badge key={i} variant="secondary" className="text-xs gap-1 rounded-md py-0.5">
+                                      <Badge key={i} variant="secondary" className="text-sm gap-1 rounded-md py-0.5">
                                         {name}
                                         <button
                                           onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
@@ -745,7 +745,7 @@ export default function MyTasksPage() {
                                   </div>
                                   <Button
                                     size="sm"
-                                    className="gap-1.5 rounded-lg shadow-sm h-7 px-3 text-xs"
+                                    className="gap-1.5 rounded-lg shadow-sm h-7 px-3 text-sm"
                                     disabled={!logContent.trim()}
                                     onClick={handleSubmitLog}
                                   >
@@ -760,7 +760,7 @@ export default function MyTasksPage() {
                                 <Button
                                   size="sm"
                                   variant="secondary"
-                                  className="gap-1.5 text-xs"
+                                  className="gap-1.5 text-sm"
                                   onClick={() => setShowActions(true)}
                                 >
                                   跳過，直接操作
@@ -819,7 +819,7 @@ export default function MyTasksPage() {
                           </div>
 
                           <button
-                            className="text-xs text-muted-foreground hover:text-foreground w-full text-center py-1 transition-colors"
+                            className="text-sm text-muted-foreground hover:text-foreground w-full text-center py-1 transition-colors"
                             onClick={() => setShowActions(false)}
                           >
                             <ArrowLeft className="h-3 w-3 inline mr-1" />
@@ -838,7 +838,7 @@ export default function MyTasksPage() {
                           <Clock className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <p className="text-sm text-muted-foreground">尚無工作紀錄</p>
-                        <p className="text-xs text-muted-foreground/60 mt-1">提交第一筆紀錄後會顯示在這裡</p>
+                        <p className="text-sm text-muted-foreground/60 mt-1">提交第一筆紀錄後會顯示在這裡</p>
                       </div>
                     ) : (
                       <div className="py-4 max-h-[320px] overflow-y-auto">
@@ -856,7 +856,7 @@ export default function MyTasksPage() {
                                 )} />
                                 <div className="space-y-1">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium">{log.author}</span>
+                                    <span className="text-sm font-medium">{log.author}</span>
                                     <span className="text-[11px] text-muted-foreground tabular-nums">
                                       {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
                                     </span>
@@ -886,7 +886,7 @@ export default function MyTasksPage() {
                             <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
                               <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <span className="text-xs font-medium text-muted-foreground">前置任務</span>
+                            <span className="text-sm font-medium text-muted-foreground">前置任務</span>
                           </div>
                           <div className="space-y-1.5 ml-7">
                             {upstreamTasks.map(({ task: dep, status: depStatus }) => (
@@ -906,7 +906,7 @@ export default function MyTasksPage() {
                             <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
                               <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" />
                             </div>
-                            <span className="text-xs font-medium text-muted-foreground">後續任務</span>
+                            <span className="text-sm font-medium text-muted-foreground">後續任務</span>
                           </div>
                           <div className="space-y-1.5 ml-7">
                             {downstreamTasks.map(({ task: dep, status: depStatus }) => (
@@ -942,7 +942,7 @@ export default function MyTasksPage() {
                       <span className="text-sm font-medium">申請延期</span>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">延遲原因 <span className="text-red-500">*</span></Label>
+                      <Label className="text-sm text-muted-foreground">延遲原因 <span className="text-red-500">*</span></Label>
                       <Textarea
                         placeholder="說明延遲的原因..."
                         value={extensionReason}
@@ -952,7 +952,7 @@ export default function MyTasksPage() {
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">建議新日期</Label>
+                      <Label className="text-sm text-muted-foreground">建議新日期</Label>
                       <input
                         type="date"
                         value={extensionDate}
@@ -961,7 +961,7 @@ export default function MyTasksPage() {
                       />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">需要協助</Label>
+                      <Label className="text-sm text-muted-foreground">需要協助</Label>
                       <Textarea
                         placeholder="選填，說明是否需要額外資源或支援..."
                         value={extensionSupport}
@@ -1026,7 +1026,7 @@ export default function MyTasksPage() {
                   </div>
                   <div>
                     <DialogTitle className="text-base">處理支援需求</DialogTitle>
-                    <DialogDescription className="text-xs mt-0.5">
+                    <DialogDescription className="text-sm mt-0.5">
                       {supportDialogItem.project.name} — {supportDialogItem.request.requestedBy}
                     </DialogDescription>
                   </div>
@@ -1034,15 +1034,15 @@ export default function MyTasksPage() {
               </DialogHeader>
               <div className="space-y-3 py-2">
                 <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground">需要的支援</div>
+                  <div className="text-sm font-medium text-muted-foreground">需要的支援</div>
                   <p className="text-sm">{supportDialogItem.request.supportNeeded}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground">延遲原因</div>
+                  <div className="text-sm font-medium text-muted-foreground">延遲原因</div>
                   <p className="text-sm">{supportDialogItem.request.reason}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">處理說明</Label>
+                  <Label className="text-sm text-muted-foreground">處理說明</Label>
                   <Textarea
                     placeholder="描述您如何處理此支援需求..."
                     value={supportNotes}

@@ -105,12 +105,12 @@ export default function ApprovalsPage() {
             <p className="text-sm text-muted-foreground mt-1">審核專案延遲申請</p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant={pendingApprovals.length > 0 ? 'destructive' : 'secondary'} className="text-xs px-2.5 py-1">
+            <Badge variant={pendingApprovals.length > 0 ? 'destructive' : 'secondary'} className="text-sm px-2.5 py-1">
               <Clock className="h-3 w-3 mr-1" />
               {pendingApprovals.length} 件待審核
             </Badge>
             {recentlyReviewed.length > 0 && (
-              <Badge variant="outline" className="text-xs px-2.5 py-1">
+              <Badge variant="outline" className="text-sm px-2.5 py-1">
                 {recentlyReviewed.length} 件已審核
               </Badge>
             )}
@@ -135,7 +135,7 @@ export default function ApprovalsPage() {
               <div className="rounded-lg border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-muted/50 text-xs text-muted-foreground">
+                    <tr className="bg-muted/50 text-sm text-muted-foreground">
                       <th className="text-left px-4 py-2.5 font-medium">專案</th>
                       <th className="text-left px-4 py-2.5 font-medium">申請人</th>
                       <th className="text-left px-4 py-2.5 font-medium">申請時間</th>
@@ -196,7 +196,7 @@ export default function ApprovalsPage() {
               <div className="rounded-lg border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-muted/50 text-xs text-muted-foreground">
+                    <tr className="bg-muted/50 text-sm text-muted-foreground">
                       <th className="text-left px-4 py-2.5 font-medium">結果</th>
                       <th className="text-left px-4 py-2.5 font-medium">專案</th>
                       <th className="text-left px-4 py-2.5 font-medium">申請人</th>
@@ -290,7 +290,7 @@ export default function ApprovalsPage() {
 
                   {/* Delay reason */}
                   <div>
-                    <h4 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+                    <h4 className="text-sm font-medium mb-1.5 flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 text-warning" /> 延遲原因
                     </h4>
                     <div className="bg-muted/50 border p-3 rounded-lg text-sm leading-relaxed">
@@ -300,7 +300,7 @@ export default function ApprovalsPage() {
 
                   {/* Affected milestones */}
                   <div>
-                    <h4 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+                    <h4 className="text-sm font-medium mb-1.5 flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" /> 受影響里程碑
                     </h4>
                     <div className="space-y-2">
@@ -309,7 +309,7 @@ export default function ApprovalsPage() {
                         return (
                           <div key={am.milestoneId} className="flex items-center gap-2 p-2.5 rounded-lg border text-sm">
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-xs">{getMilestoneName(project.id, am.milestoneId)}</div>
+                              <div className="font-medium text-sm">{getMilestoneName(project.id, am.milestoneId)}</div>
                               <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
                                 {formatDate(am.originalDate)}
                                 <ArrowRight className="h-3 w-3 shrink-0" />
@@ -328,9 +328,9 @@ export default function ApprovalsPage() {
                   {/* Can catch up + support needed */}
                   <div className="grid grid-cols-2 gap-3 items-stretch">
                     <div className="flex flex-col">
-                      <h4 className="text-xs font-medium mb-1.5">能否追回</h4>
+                      <h4 className="text-sm font-medium mb-1.5">能否追回</h4>
                       <div className={cn(
-                        'flex items-center gap-1.5 p-2.5 rounded-lg border text-xs font-medium flex-1',
+                        'flex items-center gap-1.5 p-2.5 rounded-lg border text-sm font-medium flex-1',
                         request.canCatchUp
                           ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300'
                           : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300',
@@ -340,8 +340,8 @@ export default function ApprovalsPage() {
                       </div>
                     </div>
                     <div className="flex flex-col">
-                      <h4 className="text-xs font-medium mb-1.5">需要支援</h4>
-                      <div className="p-2.5 rounded-lg border bg-muted/50 text-xs leading-relaxed flex-1">
+                      <h4 className="text-sm font-medium mb-1.5">需要支援</h4>
+                      <div className="p-2.5 rounded-lg border bg-muted/50 text-sm leading-relaxed flex-1">
                         {request.supportNeeded || '無'}
                       </div>
                     </div>
@@ -350,7 +350,7 @@ export default function ApprovalsPage() {
                   {/* Review result (for already reviewed) */}
                   {!isPending && (
                     <div className="border-t pt-4 space-y-2">
-                      <h4 className="text-xs font-medium">審核結果</h4>
+                      <h4 className="text-sm font-medium">審核結果</h4>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-2.5 rounded-lg bg-muted/50">
                           <div className="text-[10px] text-muted-foreground mb-0.5">審核人</div>
@@ -375,7 +375,7 @@ export default function ApprovalsPage() {
                     <div className="border-t pt-4">
                       {showReviewForm ? (
                         <div className="space-y-3">
-                          <h4 className="text-xs font-medium flex items-center gap-1.5">
+                          <h4 className="text-sm font-medium flex items-center gap-1.5">
                             {reviewAction === 'approve' ? (
                               <span className="flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> 確認核准</span>
                             ) : (

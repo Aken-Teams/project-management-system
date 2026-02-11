@@ -361,7 +361,7 @@ export default function ReportsPage() {
                             </div>
                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
                               <span>{project.progress}%</span>
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="outline" className="text-sm">
                                 {PROJECT_TYPE_LABELS[project.projectType]}
                               </Badge>
                             </div>
@@ -474,7 +474,7 @@ export default function ReportsPage() {
                                 <StatusDot status={project.status} />
                                 <span className="font-medium">{project.name}</span>
                               </div>
-                              <Badge variant="outline" className="text-xs">
+                              <Badge variant="outline" className="text-sm">
                                 {PROJECT_TYPE_LABELS[project.projectType]}
                               </Badge>
                             </label>
@@ -582,7 +582,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card>
               <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <Target className="h-3.5 w-3.5" /> 整體進度
                 </div>
                 <div className="text-2xl font-bold">{stats.progress}%</div>
@@ -593,7 +593,7 @@ export default function ReportsPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <DollarSign className="h-3.5 w-3.5" /> 預算執行
                 </div>
                 <div className={cn('text-2xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
@@ -607,7 +607,7 @@ export default function ReportsPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <BarChart3 className="h-3.5 w-3.5" /> 里程碑
                 </div>
                 <div className="text-2xl font-bold">{stats.doneMilestones}<span className="text-sm font-normal text-muted-foreground">/{stats.totalMilestones}</span></div>
@@ -618,7 +618,7 @@ export default function ReportsPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <AlertTriangle className="h-3.5 w-3.5" /> 風險 / 延期
                 </div>
                 <div className="flex items-baseline gap-3">
@@ -654,8 +654,8 @@ export default function ReportsPage() {
                   {taskSegments.filter(s => s.value > 0).map(seg => (
                     <div key={seg.label} className="flex items-center gap-1.5">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                      <span className="text-xs text-muted-foreground">{seg.label}</span>
-                      <span className="text-xs font-semibold">{seg.value}</span>
+                      <span className="text-sm text-muted-foreground">{seg.label}</span>
+                      <span className="text-sm font-semibold">{seg.value}</span>
                     </div>
                   ))}
                 </div>
@@ -713,8 +713,8 @@ export default function ReportsPage() {
                       {statusSegments.filter(s => s.value > 0).map(seg => (
                         <div key={seg.label} className="flex items-center gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                          <span className="text-xs text-muted-foreground">{seg.label}</span>
-                          <span className="text-xs font-semibold">{seg.value}</span>
+                          <span className="text-sm text-muted-foreground">{seg.label}</span>
+                          <span className="text-sm font-semibold">{seg.value}</span>
                         </div>
                       ))}
                     </div>
@@ -744,13 +744,13 @@ export default function ReportsPage() {
                 <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
-                    <span className="text-xs text-muted-foreground">已使用</span>
-                    <span className="text-xs font-semibold">{fmtMoney(stats.budgetUsed)}</span>
+                    <span className="text-sm text-muted-foreground">已使用</span>
+                    <span className="text-sm font-semibold">{fmtMoney(stats.budgetUsed)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
-                    <span className="text-xs text-muted-foreground">剩餘</span>
-                    <span className="text-xs font-semibold">{fmtMoney(Math.max(stats.budget - stats.budgetUsed, 0))}</span>
+                    <span className="text-sm text-muted-foreground">剩餘</span>
+                    <span className="text-sm font-semibold">{fmtMoney(Math.max(stats.budget - stats.budgetUsed, 0))}</span>
                   </div>
                 </div>
               </CardContent>
@@ -778,7 +778,7 @@ export default function ReportsPage() {
                         >
                           <MiniRing value={p.progress} color={getStatusRingColor(p.status)} />
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium truncate">{p.name}</div>
+                            <div className="text-sm font-medium truncate">{p.name}</div>
                             <div className="flex items-center gap-2 mt-1">
                               <StatusDot status={p.status} />
                               <span className="text-[10px] text-muted-foreground">{doneTasks}/{p.tasks.length} 任務</span>
@@ -810,7 +810,7 @@ export default function ReportsPage() {
                       const done = mTasks.filter(t => t.status === 'done').length
                       return (
                         <div key={m.id} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center justify-between text-sm">
                             <span className="font-medium truncate mr-2">{m.name}</span>
                             <span className="text-muted-foreground shrink-0">{m.progress}% ({done}/{mTasks.length})</span>
                           </div>
@@ -834,37 +834,37 @@ export default function ReportsPage() {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="p-3 rounded-lg bg-muted/50">
                         <div className="text-[10px] text-muted-foreground mb-1">專案類型</div>
-                        <div className="font-medium text-xs">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
+                        <div className="font-medium text-sm">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
                         <div className="text-[10px] text-muted-foreground mb-1">負責人</div>
-                        <div className="font-medium text-xs">{selectedProject.owner}</div>
+                        <div className="font-medium text-sm">{selectedProject.owner}</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
                         <div className="text-[10px] text-muted-foreground mb-1">專案期間</div>
-                        <div className="font-medium text-xs">
+                        <div className="font-medium text-sm">
                           {new Date(selectedProject.startDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })} ~ {new Date(selectedProject.endDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
                         </div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
                         <div className="text-[10px] text-muted-foreground mb-1">團隊</div>
-                        <div className="font-medium text-xs">{selectedProject.team.length} 人</div>
+                        <div className="font-medium text-sm">{selectedProject.team.length} 人</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
                         <div className="text-[10px] text-muted-foreground mb-1">預算</div>
-                        <div className="font-medium text-xs">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
+                        <div className="font-medium text-sm">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
                         <div className="text-[10px] text-muted-foreground mb-1">週報更新</div>
-                        <div className="font-medium text-xs">{selectedProject.weeklyUpdates.length} 次</div>
+                        <div className="font-medium text-sm">{selectedProject.weeklyUpdates.length} 次</div>
                       </div>
                     </div>
 
                     {selectedProject.risks.filter(r => r.status === 'open').length > 0 && (
                       <div className="mt-4 space-y-2">
-                        <div className="text-xs font-medium text-muted-foreground">未解決風險</div>
+                        <div className="text-sm font-medium text-muted-foreground">未解決風險</div>
                         {selectedProject.risks.filter(r => r.status === 'open').map(r => (
-                          <div key={r.id} className="flex items-center gap-2 p-2 rounded border text-xs">
+                          <div key={r.id} className="flex items-center gap-2 p-2 rounded border text-sm">
                             <AlertTriangle className={cn(
                               'h-3.5 w-3.5 shrink-0',
                               r.impact === 'high' ? 'text-red-500' : r.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
@@ -891,7 +891,7 @@ export default function ReportsPage() {
                 <CardContent className="space-y-3">
                   {memberWorkload.map(m => (
                     <div key={m.name} className="flex items-center gap-3">
-                      <span className="text-xs font-medium w-[72px] truncate shrink-0">{m.name}</span>
+                      <span className="text-sm font-medium w-[72px] truncate shrink-0">{m.name}</span>
                       <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
                         <div
                           className="h-full rounded bg-primary/80 transition-all"
@@ -902,7 +902,7 @@ export default function ReportsPage() {
                           style={{ width: `${(m.done / maxMemberTasks) * 100}%` }}
                         />
                       </div>
-                      <span className="text-xs text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
+                      <span className="text-sm text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
                     </div>
                   ))}
                   {memberWorkload.length > 0 && (
