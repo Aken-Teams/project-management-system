@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, ChevronDown, ChevronRight, Check } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, ChevronDown, ChevronRight } from 'lucide-react'
 import {
   type Project,
   type ProjectType,
@@ -62,6 +63,8 @@ export interface ProjectEditData {
   expectedBenefits?: string
   budget: number
   smartObjective?: SmartObjective
+  startDate?: string
+  endDate?: string
 }
 
 const EMPTY_SMART: SmartObjective = {
@@ -120,19 +123,12 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
   return 'low'
 }
 
-// ─── Task / Milestone labels & colors ────────────────────────
-const MS_STATUS_LABELS: Record<string, string> = { todo: '待辦', 'in-progress': '進行中', done: '完成', blocked: '阻塞' }
-const MS_STATUS_COLORS: Record<string, string> = {
-  todo: 'bg-slate-100 text-slate-600',
-  'in-progress': 'bg-blue-100 text-blue-700',
-  done: 'bg-green-100 text-green-700',
-  blocked: 'bg-red-100 text-red-700',
-}
-const PRIORITY_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
-const PRIORITY_COLORS: Record<string, { dot: string }> = {
-  low:    { dot: 'bg-slate-400' },
-  medium: { dot: 'bg-amber-500' },
-  high:   { dot: 'bg-red-500' },
+// ─── Work-item grid & priority config ────────────────────────
+const WI_GRID = 'grid grid-cols-[1fr_100px_100px_88px_52px_28px] gap-0 items-center'
+const PRIORITY_CONFIG: Record<string, { label: string; className: string }> = {
+  high:   { label: '高', className: 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' },
+  medium: { label: '中', className: 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' },
+  low:    { label: '低', className: 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200' },
 }
 
 export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange }: ProjectEditDialogProps) {
@@ -149,6 +145,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     expectedBenefits: project.expectedBenefits ?? '',
     budget: project.budget,
     smartObjective: project.smartObjective ?? { ...EMPTY_SMART },
+    startDate: project.startDate,
+    endDate: project.endDate,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -170,11 +168,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [msTasks, setMsTasks] = useState<Task[]>(project.tasks ?? [])
   const [workItemLoading, setWorkItemLoading] = useState<string | null>(null)
   const [workItemError, setWorkItemError] = useState('')
-  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
-  const [expandedMs, setExpandedMs] = useState<Set<string>>(() => new Set(project.milestones?.map(m => m.id) ?? []))
+  const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
 
-  const toggleMs = (id: string) => setExpandedMs(prev => {
+  const toggleMs = (id: string) => setCollapsedMs(prev => {
     const next = new Set(prev)
     next.has(id) ? next.delete(id) : next.add(id)
     return next
@@ -428,7 +424,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       }
       const ms = await res.json()
       setMilestones(prev => [...prev, ms])
-      setExpandedMs(prev => new Set([...prev, ms.id]))
       onWorkItemsChange?.()
     } catch {
       setWorkItemError('新增里程碑失敗')
@@ -453,7 +448,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       }
       const updated = await res.json()
       setMilestones(prev => prev.map(m => m.id === msId ? { ...m, ...updated } : m))
-      setEditingMilestoneId(null)
       onWorkItemsChange?.()
     } catch {
       setWorkItemError('更新里程碑失敗')
@@ -525,7 +519,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       }
       const updated = await res.json()
       setMsTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t))
-      setEditingTaskId(null)
       onWorkItemsChange?.()
     } catch {
       setWorkItemError('更新任務失敗')
@@ -671,7 +664,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             </div>
 
             <div className="rounded-lg border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
-              專案期間：{project.startDate} ~ {project.endDate}（由里程碑日期自動決定）
+              專案期間：{form.startDate} ~ {form.endDate}（可在「里程碑」分頁中調整）
             </div>
           </TabsContent>
 
@@ -950,45 +943,74 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           </TabsContent>
 
           {/* Tab 6: Milestones & Tasks */}
-          <TabsContent value="workitems" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
+          <TabsContent value="workitems" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 px-1">
+            {/* Project dates */}
+            <div className="grid gap-4 grid-cols-2 p-3 rounded-lg border bg-muted/30">
+              <div className="space-y-1.5">
+                <Label className="text-sm">
+                  專案開始日期 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={form.startDate || ''}
+                  onChange={e => update('startDate', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">
+                  專案結束日期 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={form.endDate || ''}
+                  onChange={e => update('endDate', e.target.value)}
+                  min={form.startDate || ''}
+                />
+              </div>
+            </div>
+
+            {/* Timeline table */}
             <div className="rounded-lg border overflow-hidden">
               {/* Header */}
-              <div className="px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide flex items-center justify-between">
-                <span>里程碑與任務</span>
-                <span className="text-xs font-normal">{milestones.length} 個里程碑、{msTasks.length} 個任務</span>
+              <div className={`${WI_GRID} px-2 py-2.5 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide`}>
+                <span className="pl-1.5">名稱</span>
+                <span className="text-center">到期/開始</span>
+                <span className="text-center">結束日期</span>
+                <span className="text-center">指派人</span>
+                <span className="text-center">優先度</span>
+                <span />
               </div>
 
               {/* Milestone groups */}
               {milestones.map(ms => {
                 const tasksInMs = msTasks.filter(t => t.milestoneId === ms.id)
+                const isCollapsed = collapsedMs.has(ms.id)
                 return (
                   <div key={ms.id}>
-                    <MilestoneCard
+                    <EditMilestoneRow
                       ms={ms}
-                      isExpanded={expandedMs.has(ms.id)}
-                      isEditing={editingMilestoneId === ms.id}
-                      loading={workItemLoading === ms.id}
+                      collapsed={isCollapsed}
                       taskCount={tasksInMs.length}
+                      loading={workItemLoading === ms.id}
                       onToggle={() => toggleMs(ms.id)}
-                      onEdit={() => setEditingMilestoneId(editingMilestoneId === ms.id ? null : ms.id)}
                       onUpdate={(data) => handleUpdateMilestone(ms.id, data)}
                       onRemove={() => handleRemoveMilestone(ms.id)}
                     />
-                    {expandedMs.has(ms.id) && (
+                    {!isCollapsed && (
                       <>
                         {tasksInMs.map(task => (
-                          <TaskCard
+                          <EditTaskRow
                             key={task.id}
                             task={task}
-                            isEditing={editingTaskId === task.id}
+                            teamMembers={teamMembers}
                             loading={workItemLoading === task.id}
-                            onEdit={() => setEditingTaskId(editingTaskId === task.id ? null : task.id)}
                             onUpdate={(data) => handleUpdateTask(task.id, data)}
                             onRemove={() => handleRemoveTask(task.id)}
                           />
                         ))}
-                        <TaskAddForm
+                        <InlineTaskAdd
                           milestoneId={ms.id}
+                          teamMembers={teamMembers}
                           onAdd={handleAddTask}
                           loading={workItemLoading === 'adding-task'}
                         />
@@ -1005,10 +1027,12 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               )}
 
               {/* Add milestone */}
-              <MilestoneAddForm
-                onAdd={handleAddMilestone}
-                loading={workItemLoading === 'adding-ms'}
-              />
+              <div className="px-2 py-1 border-t border-dashed">
+                <InlineMilestoneAdd
+                  onAdd={handleAddMilestone}
+                  loading={workItemLoading === 'adding-ms'}
+                />
+              </div>
             </div>
 
             {workItemError && (
@@ -1387,281 +1411,235 @@ function RiskAddForm({
   )
 }
 
-// ─── Milestone Card ──────────────────────────────────────────
+// ─── Edit Milestone Row (grid-based, inline editing) ─────────
 
-function MilestoneCard({
+function EditMilestoneRow({
   ms,
-  isExpanded,
-  isEditing,
-  loading,
+  collapsed,
   taskCount,
+  loading,
   onToggle,
-  onEdit,
   onUpdate,
   onRemove,
 }: {
   ms: Milestone
-  isExpanded: boolean
-  isEditing: boolean
-  loading: boolean
+  collapsed: boolean
   taskCount: number
+  loading: boolean
   onToggle: () => void
-  onEdit: () => void
-  onUpdate: (data: { name?: string; dueDate?: string; status?: string }) => void
+  onUpdate: (data: { name?: string; dueDate?: string }) => void
   onRemove: () => void
 }) {
-  const [editForm, setEditForm] = useState({ name: ms.name, dueDate: ms.dueDate, status: ms.status })
+  const [name, setName] = useState(ms.name)
 
-  const handleSave = () => {
-    if (!editForm.name.trim()) return
-    onUpdate(editForm)
+  const commitName = () => {
+    const trimmed = name.trim()
+    if (trimmed && trimmed !== ms.name) onUpdate({ name: trimmed })
+    else setName(ms.name)
   }
 
-  if (isEditing) {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 border-t bg-primary/5">
+  return (
+    <div className={`${WI_GRID} px-2 py-1.5 bg-muted/40 border-t font-medium`}>
+      {/* Name + collapse toggle */}
+      <div className="pr-2 flex items-center gap-0.5 min-w-0">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-center justify-center h-6 w-6 shrink-0 rounded hover:bg-muted transition-colors"
+        >
+          {collapsed
+            ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          }
+        </button>
         <Input
-          value={editForm.name}
-          onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
           placeholder="里程碑名稱"
-          className="h-7 text-sm flex-1 min-w-0"
-          autoFocus
+          className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
         />
+        {collapsed && taskCount > 0 && (
+          <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+            {taskCount} 任務
+          </span>
+        )}
+      </div>
+
+      {/* Due date */}
+      <div>
         <Input
           type="date"
-          value={editForm.dueDate}
-          onChange={e => setEditForm(prev => ({ ...prev, dueDate: e.target.value }))}
-          className="h-7 text-sm w-[130px] shrink-0"
+          value={ms.dueDate}
+          onChange={e => onUpdate({ dueDate: e.target.value })}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
         />
-        <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Milestone['status'] }))}>
-          <SelectTrigger className="h-7 text-xs w-[80px] shrink-0"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {Object.entries(MS_STATUS_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary" onClick={handleSave} disabled={loading || !editForm.name.trim()}>
-          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-        </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={onEdit}>
-          <X className="h-3.5 w-3.5" />
+      </div>
+
+      {/* End date (empty for milestone) */}
+      <div />
+
+      {/* Assignee (empty for milestone) */}
+      <div />
+
+      {/* Priority (empty for milestone) */}
+      <div />
+
+      {/* Delete */}
+      <div className="flex justify-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+          disabled={loading}
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
         </Button>
       </div>
-    )
-  }
-
-  const statusC = MS_STATUS_COLORS[ms.status] || MS_STATUS_COLORS.todo
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 border-t hover:bg-muted/30 transition-colors cursor-pointer" onClick={onToggle}>
-      {isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-      <span className="font-medium text-sm truncate flex-1">{ms.name}</span>
-      <span className="text-xs text-muted-foreground shrink-0">{ms.dueDate}</span>
-      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusC}`}>
-        {MS_STATUS_LABELS[ms.status] || ms.status}
-      </span>
-      <span className="text-xs text-muted-foreground shrink-0">{taskCount} 任務</span>
-      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); onEdit() }} disabled={loading}>
-        <Pencil className="h-3 w-3" />
-      </Button>
-      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={e => { e.stopPropagation(); onRemove() }} disabled={loading}>
-        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-      </Button>
     </div>
   )
 }
 
-// ─── Task Card ───────────────────────────────────────────────
+// ─── Edit Task Row (grid-based, inline editing) ──────────────
 
-function TaskCard({
+function EditTaskRow({
   task,
-  isEditing,
+  teamMembers,
   loading,
-  onEdit,
   onUpdate,
   onRemove,
 }: {
   task: Task
-  isEditing: boolean
+  teamMembers: { id: string; name: string; role: string }[]
   loading: boolean
-  onEdit: () => void
   onUpdate: (data: Record<string, unknown>) => void
   onRemove: () => void
 }) {
-  const [editForm, setEditForm] = useState({
-    title: task.title,
-    priority: task.priority,
-    assignee: task.assignee,
-    status: task.status,
-    startDate: task.startDate,
-    endDate: task.endDate,
-  })
+  const [title, setTitle] = useState(task.title)
 
-  const handleSave = () => {
-    if (!editForm.title.trim()) return
-    onUpdate(editForm)
+  const commitTitle = () => {
+    const trimmed = title.trim()
+    if (trimmed && trimmed !== task.title) onUpdate({ title: trimmed })
+    else setTitle(task.title)
   }
 
-  if (isEditing) {
-    return (
-      <div className="pl-8 pr-3 py-2 border-t bg-primary/5 space-y-2">
-        <div className="flex items-center gap-2">
-          <Input
-            value={editForm.title}
-            onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value }))}
-            placeholder="任務標題"
-            className="h-7 text-sm flex-1 min-w-0"
-            autoFocus
-          />
-          <Select value={editForm.priority} onValueChange={v => setEditForm(prev => ({ ...prev, priority: v as Task['priority'] }))}>
-            <SelectTrigger className="h-7 text-xs w-[72px] shrink-0"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}優先</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Task['status'] }))}>
-            <SelectTrigger className="h-7 text-xs w-[80px] shrink-0"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(MS_STATUS_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary" onClick={handleSave} disabled={loading || !editForm.title.trim()}>
-            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={onEdit}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            value={editForm.assignee}
-            onChange={e => setEditForm(prev => ({ ...prev, assignee: e.target.value }))}
-            placeholder="負責人"
-            className="h-7 text-sm flex-1 min-w-0 border-dashed"
-          />
-          <Input
-            type="date"
-            value={editForm.startDate}
-            onChange={e => setEditForm(prev => ({ ...prev, startDate: e.target.value }))}
-            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
-          />
-          <span className="text-xs text-muted-foreground">~</span>
-          <Input
-            type="date"
-            value={editForm.endDate}
-            onChange={e => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
-            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
-            onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-          />
-        </div>
-      </div>
-    )
+  const cyclePriority = () => {
+    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
+    const idx = order.indexOf(task.priority as 'low' | 'medium' | 'high')
+    onUpdate({ priority: order[(idx + 1) % order.length] })
   }
 
-  const pC = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium
-  const sC = MS_STATUS_COLORS[task.status] || MS_STATUS_COLORS.todo
-  return (
-    <div className="flex items-center gap-2 pl-8 pr-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm">
-      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pC.dot}`} />
-      <span className="truncate flex-1">{task.title}</span>
-      {task.assignee && <span className="text-xs text-muted-foreground truncate max-w-[60px] shrink-0">{task.assignee}</span>}
-      <span className="text-xs text-muted-foreground shrink-0">{task.startDate}~{task.endDate}</span>
-      <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${sC}`}>
-        {MS_STATUS_LABELS[task.status] || task.status}
-      </span>
-      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={onEdit} disabled={loading}>
-        <Pencil className="h-3 w-3" />
-      </Button>
-      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove} disabled={loading}>
-        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-      </Button>
-    </div>
-  )
-}
-
-// ─── Milestone Add Form ──────────────────────────────────────
-
-function MilestoneAddForm({
-  onAdd,
-  loading,
-}: {
-  onAdd: (data: { name: string; dueDate: string }) => void
-  loading: boolean
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const [name, setName] = useState('')
-  const [dueDate, setDueDate] = useState('')
-
-  const handleAdd = () => {
-    if (!name.trim() || !dueDate) return
-    onAdd({ name: name.trim(), dueDate })
-    setName('')
-    setDueDate('')
-    setExpanded(false)
-  }
-
-  if (!expanded) {
-    return (
-      <div
-        className="border-t px-3 py-2 flex items-center gap-2 text-sm text-muted-foreground/60 cursor-pointer hover:bg-muted/30 transition-colors"
-        onClick={() => setExpanded(true)}
-      >
-        <Plus className="h-3.5 w-3.5" />
-        <span>新增里程碑...</span>
-      </div>
-    )
-  }
+  const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium
 
   return (
-    <div className="border-t bg-muted/20 px-3 py-2">
-      <div className="flex items-center gap-2">
+    <div className={`${WI_GRID} px-2 py-1 hover:bg-muted/20 transition-colors text-sm`}>
+      {/* Title (indented) */}
+      <div className="pl-5 flex items-center gap-1 min-w-0 pr-2">
+        <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
         <Input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="+ 里程碑名稱..."
-          className="h-7 text-sm flex-1 min-w-0 border-dashed"
-          autoFocus
-          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          onBlur={commitTitle}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          placeholder="任務標題"
+          className="h-7 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
         />
+      </div>
+
+      {/* Start date */}
+      <div>
         <Input
           type="date"
-          value={dueDate}
-          onChange={e => setDueDate(e.target.value)}
-          className="h-7 text-sm w-[130px] shrink-0 border-dashed"
-          onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+          value={task.startDate}
+          onChange={e => onUpdate({ startDate: e.target.value })}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
         />
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary hover:text-primary" onClick={handleAdd} disabled={loading || !name.trim() || !dueDate}>
-          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-        </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={() => setExpanded(false)}>
-          <X className="h-3.5 w-3.5" />
+      </div>
+
+      {/* End date */}
+      <div>
+        <Input
+          type="date"
+          value={task.endDate}
+          onChange={e => onUpdate({ endDate: e.target.value })}
+          min={task.startDate}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+        />
+      </div>
+
+      {/* Assignee */}
+      <div>
+        <Select
+          value={task.assignee || ' '}
+          onValueChange={v => onUpdate({ assignee: v === ' ' ? '' : v })}
+        >
+          <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value=" ">未指派</SelectItem>
+            {teamMembers.map(m => (
+              <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Priority (click to cycle) */}
+      <div className="flex justify-center">
+        <button type="button" onClick={cyclePriority} className="transition-opacity">
+          <Badge
+            variant="outline"
+            className={`text-[10px] px-1.5 py-0 cursor-pointer ${p.className}`}
+          >
+            {p.label}
+          </Badge>
+        </button>
+      </div>
+
+      {/* Delete */}
+      <div className="flex justify-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+          disabled={loading}
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
         </Button>
       </div>
     </div>
   )
 }
 
-// ─── Task Add Form ───────────────────────────────────────────
+// ─── Inline Task Add (grid-based) ────────────────────────────
 
-function TaskAddForm({
+function InlineTaskAdd({
   milestoneId,
+  teamMembers,
   onAdd,
   loading,
 }: {
   milestoneId: string
+  teamMembers: { id: string; name: string; role: string }[]
   onAdd: (data: { milestoneId: string; title: string; priority?: string; assignee?: string; startDate: string; endDate: string }) => void
   loading: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
   const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState('medium')
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
   const [assignee, setAssignee] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+
+  const cyclePriority = () => {
+    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
+    setPriority(prev => order[(order.indexOf(prev) + 1) % order.length])
+  }
 
   const handleAdd = () => {
     if (!title.trim() || !startDate || !endDate) return
@@ -1671,70 +1649,182 @@ function TaskAddForm({
     setAssignee('')
     setStartDate('')
     setEndDate('')
-    setExpanded(false)
   }
 
-  if (!expanded) {
+  const p = PRIORITY_CONFIG[priority]
+
+  if (!title) {
     return (
-      <div
-        className="border-t pl-8 pr-3 py-1.5 flex items-center gap-2 text-xs text-muted-foreground/50 cursor-pointer hover:bg-muted/20 transition-colors"
-        onClick={() => setExpanded(true)}
-      >
-        <Plus className="h-3 w-3" />
-        <span>新增任務...</span>
+      <div className={`${WI_GRID} px-2 py-1`}>
+        <div className="pl-5 flex items-center gap-1 min-w-0 pr-2">
+          <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
+          <Input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="+ 新增任務..."
+            className="h-7 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5 placeholder:text-muted-foreground/40"
+          />
+        </div>
+        <div /><div /><div /><div /><div />
       </div>
     )
   }
 
   return (
-    <div className="border-t bg-muted/10 pl-8 pr-3 py-2 space-y-2">
-      <div className="flex items-center gap-2">
+    <div className={`${WI_GRID} px-2 py-1 bg-primary/5`}>
+      {/* Title */}
+      <div className="pl-5 flex items-center gap-1 min-w-0 pr-2">
+        <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
         <Input
           value={title}
           onChange={e => setTitle(e.target.value)}
-          placeholder="+ 任務標題..."
-          className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setTitle(''); setStartDate(''); setEndDate(''); setAssignee('') } }}
+          placeholder="任務標題"
+          className="h-7 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
           autoFocus
         />
-        <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger className="h-7 text-xs w-[72px] shrink-0"><SelectValue /></SelectTrigger>
+      </div>
+
+      {/* Start date */}
+      <div>
+        <Input
+          type="date"
+          value={startDate}
+          onChange={e => setStartDate(e.target.value)}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+        />
+      </div>
+
+      {/* End date */}
+      <div>
+        <Input
+          type="date"
+          value={endDate}
+          onChange={e => setEndDate(e.target.value)}
+          min={startDate}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+        />
+      </div>
+
+      {/* Assignee */}
+      <div>
+        <Select
+          value={assignee || ' '}
+          onValueChange={v => setAssignee(v === ' ' ? '' : v)}
+        >
+          <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
           <SelectContent>
-            {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}優先</SelectItem>
+            <SelectItem value=" ">未指派</SelectItem>
+            {teamMembers.map(m => (
+              <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary" onClick={handleAdd} disabled={loading || !title.trim() || !startDate || !endDate}>
+      </div>
+
+      {/* Priority (click to cycle) */}
+      <div className="flex justify-center">
+        <button type="button" onClick={cyclePriority} className="transition-opacity">
+          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 cursor-pointer ${p.className}`}>
+            {p.label}
+          </Badge>
+        </button>
+      </div>
+
+      {/* Add/Cancel */}
+      <div className="flex justify-center gap-0.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-primary hover:text-primary"
+          onClick={handleAdd}
+          disabled={loading || !title.trim() || !startDate || !endDate}
+        >
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
         </Button>
-        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={() => setExpanded(false)}>
-          <X className="h-3.5 w-3.5" />
-        </Button>
       </div>
-      {title.trim() && (
-        <div className="flex items-center gap-2">
+    </div>
+  )
+}
+
+// ─── Inline Milestone Add ────────────────────────────────────
+
+function InlineMilestoneAdd({
+  onAdd,
+  loading,
+}: {
+  onAdd: (data: { name: string; dueDate: string }) => void
+  loading: boolean
+}) {
+  const [name, setName] = useState('')
+  const [dueDate, setDueDate] = useState('')
+
+  const handleAdd = () => {
+    if (!name.trim() || !dueDate) return
+    onAdd({ name: name.trim(), dueDate })
+    setName('')
+    setDueDate('')
+  }
+
+  if (!name) {
+    return (
+      <div className={`${WI_GRID}`}>
+        <div className="flex items-center min-w-0 pr-2">
           <Input
-            value={assignee}
-            onChange={e => setAssignee(e.target.value)}
-            placeholder="負責人（選填）"
-            className="h-7 text-sm flex-1 min-w-0 border-dashed"
-          />
-          <Input
-            type="date"
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
-          />
-          <span className="text-xs text-muted-foreground">~</span>
-          <Input
-            type="date"
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            className="h-7 text-sm w-[130px] shrink-0 border-dashed"
-            onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="+ 新增里程碑..."
+            className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5 placeholder:text-muted-foreground/40"
           />
         </div>
-      )}
+        <div /><div /><div /><div /><div />
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${WI_GRID} bg-primary/5`}>
+      {/* Name */}
+      <div className="flex items-center min-w-0 pr-2">
+        <Input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setName(''); setDueDate('') } }}
+          placeholder="里程碑名稱"
+          className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
+          autoFocus
+        />
+      </div>
+
+      {/* Due date */}
+      <div>
+        <Input
+          type="date"
+          value={dueDate}
+          onChange={e => setDueDate(e.target.value)}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+        />
+      </div>
+
+      {/* Empty cols */}
+      <div /><div /><div />
+
+      {/* Add */}
+      <div className="flex justify-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-primary hover:text-primary"
+          onClick={handleAdd}
+          disabled={loading || !name.trim() || !dueDate}
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+        </Button>
+      </div>
     </div>
   )
 }
