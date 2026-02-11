@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,8 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, ChevronDown, ChevronRight } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks } from 'lucide-react'
+import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
+import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
+import { arrayMove } from '@dnd-kit/sortable'
 import {
   type Project,
   type ProjectType,
@@ -31,8 +33,6 @@ import {
   type SmartObjective,
   type TeamRole,
   type Risk,
-  type Task,
-  type Milestone,
   PROJECT_TYPE_LABELS,
   PROJECT_TIER_LABELS,
   DEMAND_SOURCE_LABELS,
@@ -123,14 +123,6 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
   return 'low'
 }
 
-// ─── Work-item grid & priority config ────────────────────────
-const WI_GRID = 'grid grid-cols-[1fr_100px_100px_88px_52px_28px] gap-0 items-center'
-const PRIORITY_CONFIG: Record<string, { label: string; className: string }> = {
-  high:   { label: '高', className: 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' },
-  medium: { label: '中', className: 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' },
-  low:    { label: '低', className: 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200' },
-}
-
 export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange }: ProjectEditDialogProps) {
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
@@ -163,18 +155,53 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [riskError, setRiskError] = useState('')
   const [editingRiskId, setEditingRiskId] = useState<string | null>(null)
 
-  // ─── Milestone & Task state ─────────────────────────────────
-  const [milestones, setMilestones] = useState<Milestone[]>(project.milestones ?? [])
-  const [msTasks, setMsTasks] = useState<Task[]>(project.tasks ?? [])
-  const [workItemLoading, setWorkItemLoading] = useState<string | null>(null)
+  // ─── Milestone & Task state (TimelineTable format) ──────────
+  const [tlInit] = useState(() =>
+    dbToTimelineState(project.milestones ?? [], project.tasks ?? [], project.startDate)
+  )
+  const [tlMilestones, setTlMilestones] = useState(tlInit.milestones)
+  const [tlTasks, setTlTasks] = useState(tlInit.tasks)
   const [workItemError, setWorkItemError] = useState('')
-  const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
 
-  const toggleMs = (id: string) => setCollapsedMs(prev => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    return next
-  })
+  // Snapshot of original data for diff on save
+  const [origMilestones] = useState(() =>
+    (project.milestones ?? []).map(m => ({ id: m.id, name: m.name, dueDate: m.dueDate }))
+  )
+  const [origTasks] = useState(() =>
+    (project.tasks ?? []).map(t => ({
+      id: t.id, milestoneId: t.milestoneId, title: t.title,
+      assignee: t.assignee, priority: t.priority,
+      durationWeeks: t.durationWeeks, startDate: t.startDate, endDate: t.endDate,
+    }))
+  )
+
+  // Recalculate dates on every render
+  const recalcMilestones = calculateMilestoneDates(tlMilestones, form.startDate || project.startDate, tlTasks)
+  const tlTaskDates = calculateTaskDates(tlTasks, recalcMilestones)
+
+  // Auto-expand milestone when tasks exceed its duration
+  useEffect(() => {
+    const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks)
+    if (changed) setTlMilestones(updated)
+  }, [tlTasks]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-update project end date from last milestone
+  const lastMsEndDate = useMemo(() => {
+    const last = [...recalcMilestones].reverse().find(m => m.endDate && m.durationWeeks > 0)
+    return last?.endDate || ''
+  }, [recalcMilestones])
+
+  useEffect(() => {
+    if (lastMsEndDate && form.startDate) {
+      update('endDate', lastMsEndDate)
+    }
+  }, [lastMsEndDate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Convert team members for TimelineTable
+  const tlTeamMembers: TimelineTeamMember[] = useMemo(() =>
+    (teamMembers ?? []).map(m => ({ id: m.id, name: m.name, role: m.role, responsibility: m.responsibility })),
+    [teamMembers],
+  )
 
   const handleSave = async () => {
     // Validation matching the creation form
@@ -235,6 +262,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
 
     setError('')
+    setWorkItemError('')
     setSaving(true)
     try {
       // Auto-generate objective from SMART (matching creation form logic)
@@ -243,6 +271,59 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         ? `${smart.specific}${smart.measurable ? '，' + smart.measurable : ''}`
         : form.objective
       await onSave({ ...form, objective: autoObjective })
+
+      // ─── Batch save work items ──────────────────────────────
+      const diff = computeWorkItemsDiff(origMilestones, origTasks, recalcMilestones, tlTasks, tlTaskDates)
+
+      // 1. Delete tasks first (milestone DELETE rejects if tasks exist)
+      for (const taskId of diff.tasksToDelete) {
+        await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
+      }
+      // 2. Delete milestones
+      for (const msId of diff.milestonesToDelete) {
+        await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
+      }
+      // 3. Create new milestones → collect real IDs
+      const newMsIdMap = new Map<string, string>()
+      for (const ms of diff.milestonesToAdd) {
+        const res = await fetch(`/api/projects/${project.id}/milestones`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ms),
+        })
+        if (res.ok) {
+          const created = await res.json()
+          const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
+          if (draftMs) newMsIdMap.set(draftMs.id, created.id)
+        }
+      }
+      // 4. Update existing milestones
+      for (const ms of diff.milestonesToUpdate) {
+        await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ms),
+        })
+      }
+      // 5. Create new tasks (resolve draft milestone IDs)
+      for (const task of diff.tasksToAdd) {
+        const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
+        await fetch(`/api/projects/${project.id}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...task, milestoneId: resolvedMsId }),
+        })
+      }
+      // 6. Update existing tasks
+      for (const task of diff.tasksToUpdate) {
+        await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task),
+        })
+      }
+
+      onWorkItemsChange?.()
       onOpenChange(false)
     } catch {
       setError('儲存失敗，請稍後再試')
@@ -406,151 +487,47 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
   }, [project.id, onRiskChange])
 
-  // ─── Milestone API calls ───────────────────────────────────
+  // ─── TimelineTable callbacks (local state only, batch save on submit) ──
 
-  const handleAddMilestone = useCallback(async (data: { name: string; dueDate: string }) => {
-    setWorkItemError('')
-    setWorkItemLoading('adding-ms')
-    try {
-      const res = await fetch(`/api/projects/${project.id}/milestones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setWorkItemError(err.error || '新增里程碑失敗')
-        return
-      }
-      const ms = await res.json()
-      setMilestones(prev => [...prev, ms])
-      onWorkItemsChange?.()
-    } catch {
-      setWorkItemError('新增里程碑失敗')
-    } finally {
-      setWorkItemLoading(null)
-    }
-  }, [project.id, onWorkItemsChange])
+  const handleTlMilestoneUpdate = useCallback((index: number, field: 'name' | 'durationWeeks', value: string | number) => {
+    setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, [field]: value } : m))
+  }, [])
 
-  const handleUpdateMilestone = useCallback(async (msId: string, data: { name?: string; dueDate?: string; status?: string }) => {
-    setWorkItemError('')
-    setWorkItemLoading(msId)
-    try {
-      const res = await fetch(`/api/projects/${project.id}/milestones/${msId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setWorkItemError(err.error || '更新里程碑失敗')
-        return
-      }
-      const updated = await res.json()
-      setMilestones(prev => prev.map(m => m.id === msId ? { ...m, ...updated } : m))
-      onWorkItemsChange?.()
-    } catch {
-      setWorkItemError('更新里程碑失敗')
-    } finally {
-      setWorkItemLoading(null)
-    }
-  }, [project.id, onWorkItemsChange])
+  const handleTlMilestoneRemove = useCallback((index: number) => {
+    setTlMilestones(prev => {
+      const msId = prev[index].id
+      setTlTasks(t => t.filter(task => task.milestoneId !== msId))
+      return prev.filter((_, i) => i !== index)
+    })
+  }, [])
 
-  const handleRemoveMilestone = useCallback(async (msId: string) => {
-    setWorkItemError('')
-    setWorkItemLoading(msId)
-    try {
-      const res = await fetch(`/api/projects/${project.id}/milestones/${msId}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setWorkItemError(err.error || '刪除里程碑失敗')
-        return
-      }
-      setMilestones(prev => prev.filter(m => m.id !== msId))
-      onWorkItemsChange?.()
-    } catch {
-      setWorkItemError('刪除里程碑失敗')
-    } finally {
-      setWorkItemLoading(null)
-    }
-  }, [project.id, onWorkItemsChange])
+  const handleTlMilestoneAdd = useCallback(() => {
+    setTlMilestones(prev => [...prev, { id: `draft-ms-${Date.now()}`, name: '', durationWeeks: 0 }])
+  }, [])
 
-  // ─── Task API calls ────────────────────────────────────────
+  const handleTlMilestoneReorder = useCallback((oldIdx: number, newIdx: number) => {
+    setTlMilestones(prev => arrayMove(prev, oldIdx, newIdx))
+  }, [])
 
-  const handleAddTask = useCallback(async (data: { milestoneId: string; title: string; priority?: string; assignee?: string; startDate: string; endDate: string }) => {
-    setWorkItemError('')
-    setWorkItemLoading('adding-task')
-    try {
-      const res = await fetch(`/api/projects/${project.id}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setWorkItemError(err.error || '新增任務失敗')
-        return
-      }
-      const task = await res.json()
-      setMsTasks(prev => [...prev, task])
-      onWorkItemsChange?.()
-    } catch {
-      setWorkItemError('新增任務失敗')
-    } finally {
-      setWorkItemLoading(null)
-    }
-  }, [project.id, onWorkItemsChange])
+  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationWeeks: number }) => {
+    setTlTasks(prev => [...prev, task])
+  }, [])
 
-  const handleUpdateTask = useCallback(async (taskId: string, data: Record<string, unknown>) => {
-    setWorkItemError('')
-    setWorkItemLoading(taskId)
-    try {
-      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setWorkItemError(err.error || '更新任務失敗')
-        return
-      }
-      const updated = await res.json()
-      setMsTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updated } : t))
-      onWorkItemsChange?.()
-    } catch {
-      setWorkItemError('更新任務失敗')
-    } finally {
-      setWorkItemLoading(null)
-    }
-  }, [project.id, onWorkItemsChange])
+  const handleTlTaskRemove = useCallback((taskId: string) => {
+    setTlTasks(prev => prev.filter(t => t.id !== taskId))
+  }, [])
 
-  const handleRemoveTask = useCallback(async (taskId: string) => {
-    setWorkItemError('')
-    setWorkItemLoading(taskId)
-    try {
-      const res = await fetch(`/api/projects/${project.id}/tasks/${taskId}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setWorkItemError(err.error || '刪除任務失敗')
-        return
-      }
-      setMsTasks(prev => prev.filter(t => t.id !== taskId))
-      onWorkItemsChange?.()
-    } catch {
-      setWorkItemError('刪除任務失敗')
-    } finally {
-      setWorkItemLoading(null)
-    }
-  }, [project.id, onWorkItemsChange])
+  const handleTlTaskUpdate = useCallback((taskId: string, field: string, value: string | number) => {
+    setTlTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
+  }, [])
+
+  const handleTlTaskReorder = useCallback((oldIdx: number, newIdx: number) => {
+    setTlTasks(prev => arrayMove(prev, oldIdx, newIdx))
+  }, [])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle>編輯專案</DialogTitle>
           <DialogDescription>
@@ -957,83 +934,31 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">
-                  專案結束日期 <span className="text-destructive">*</span>
-                </Label>
+                <Label className="text-sm">專案結束日期</Label>
                 <Input
                   type="date"
                   value={form.endDate || ''}
-                  onChange={e => update('endDate', e.target.value)}
-                  min={form.startDate || ''}
+                  disabled
+                  className="text-muted-foreground"
                 />
+                <p className="text-xs text-muted-foreground">自動依里程碑計算</p>
               </div>
             </div>
 
-            {/* Timeline table */}
-            <div className="rounded-lg border overflow-hidden">
-              {/* Header */}
-              <div className={`${WI_GRID} px-2 py-2.5 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide`}>
-                <span className="pl-1.5">名稱</span>
-                <span className="text-center">到期/開始</span>
-                <span className="text-center">結束日期</span>
-                <span className="text-center">指派人</span>
-                <span className="text-center">優先度</span>
-                <span />
-              </div>
-
-              {/* Milestone groups */}
-              {milestones.map(ms => {
-                const tasksInMs = msTasks.filter(t => t.milestoneId === ms.id)
-                const isCollapsed = collapsedMs.has(ms.id)
-                return (
-                  <div key={ms.id}>
-                    <EditMilestoneRow
-                      ms={ms}
-                      collapsed={isCollapsed}
-                      taskCount={tasksInMs.length}
-                      loading={workItemLoading === ms.id}
-                      onToggle={() => toggleMs(ms.id)}
-                      onUpdate={(data) => handleUpdateMilestone(ms.id, data)}
-                      onRemove={() => handleRemoveMilestone(ms.id)}
-                    />
-                    {!isCollapsed && (
-                      <>
-                        {tasksInMs.map(task => (
-                          <EditTaskRow
-                            key={task.id}
-                            task={task}
-                            teamMembers={teamMembers}
-                            loading={workItemLoading === task.id}
-                            onUpdate={(data) => handleUpdateTask(task.id, data)}
-                            onRemove={() => handleRemoveTask(task.id)}
-                          />
-                        ))}
-                        <InlineTaskAdd
-                          milestoneId={ms.id}
-                          teamMembers={teamMembers}
-                          onAdd={handleAddTask}
-                          loading={workItemLoading === 'adding-task'}
-                        />
-                      </>
-                    )}
-                  </div>
-                )
-              })}
-
-              {milestones.length === 0 && (
-                <div className="text-center py-6 text-sm text-muted-foreground">
-                  目前沒有里程碑
-                </div>
-              )}
-
-              {/* Add milestone */}
-              <div className="px-2 py-1 border-t border-dashed">
-                <InlineMilestoneAdd
-                  onAdd={handleAddMilestone}
-                  loading={workItemLoading === 'adding-ms'}
-                />
-              </div>
-            </div>
+            <TimelineTable
+              milestones={recalcMilestones}
+              tasks={tlTasks}
+              taskDates={tlTaskDates}
+              teamMembers={tlTeamMembers}
+              onMilestoneUpdate={handleTlMilestoneUpdate}
+              onMilestoneRemove={handleTlMilestoneRemove}
+              onMilestoneAdd={handleTlMilestoneAdd}
+              onMilestoneReorder={handleTlMilestoneReorder}
+              onTaskAdd={handleTlTaskAdd}
+              onTaskRemove={handleTlTaskRemove}
+              onTaskUpdate={handleTlTaskUpdate}
+              onTaskReorder={handleTlTaskReorder}
+            />
 
             {workItemError && (
               <p className="text-sm text-destructive">{workItemError}</p>
@@ -1411,420 +1336,4 @@ function RiskAddForm({
   )
 }
 
-// ─── Edit Milestone Row (grid-based, inline editing) ─────────
 
-function EditMilestoneRow({
-  ms,
-  collapsed,
-  taskCount,
-  loading,
-  onToggle,
-  onUpdate,
-  onRemove,
-}: {
-  ms: Milestone
-  collapsed: boolean
-  taskCount: number
-  loading: boolean
-  onToggle: () => void
-  onUpdate: (data: { name?: string; dueDate?: string }) => void
-  onRemove: () => void
-}) {
-  const [name, setName] = useState(ms.name)
-
-  const commitName = () => {
-    const trimmed = name.trim()
-    if (trimmed && trimmed !== ms.name) onUpdate({ name: trimmed })
-    else setName(ms.name)
-  }
-
-  return (
-    <div className={`${WI_GRID} px-2 py-1.5 bg-muted/40 border-t font-medium`}>
-      {/* Name + collapse toggle */}
-      <div className="pr-2 flex items-center gap-0.5 min-w-0">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex items-center justify-center h-6 w-6 shrink-0 rounded hover:bg-muted transition-colors"
-        >
-          {collapsed
-            ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          }
-        </button>
-        <Input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onBlur={commitName}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-          placeholder="里程碑名稱"
-          className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
-        />
-        {collapsed && taskCount > 0 && (
-          <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
-            {taskCount} 任務
-          </span>
-        )}
-      </div>
-
-      {/* Due date */}
-      <div>
-        <Input
-          type="date"
-          value={ms.dueDate}
-          onChange={e => onUpdate({ dueDate: e.target.value })}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-        />
-      </div>
-
-      {/* End date (empty for milestone) */}
-      <div />
-
-      {/* Assignee (empty for milestone) */}
-      <div />
-
-      {/* Priority (empty for milestone) */}
-      <div />
-
-      {/* Delete */}
-      <div className="flex justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-          onClick={onRemove}
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Edit Task Row (grid-based, inline editing) ──────────────
-
-function EditTaskRow({
-  task,
-  teamMembers,
-  loading,
-  onUpdate,
-  onRemove,
-}: {
-  task: Task
-  teamMembers: { id: string; name: string; role: string }[]
-  loading: boolean
-  onUpdate: (data: Record<string, unknown>) => void
-  onRemove: () => void
-}) {
-  const [title, setTitle] = useState(task.title)
-
-  const commitTitle = () => {
-    const trimmed = title.trim()
-    if (trimmed && trimmed !== task.title) onUpdate({ title: trimmed })
-    else setTitle(task.title)
-  }
-
-  const cyclePriority = () => {
-    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
-    const idx = order.indexOf(task.priority as 'low' | 'medium' | 'high')
-    onUpdate({ priority: order[(idx + 1) % order.length] })
-  }
-
-  const p = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium
-
-  return (
-    <div className={`${WI_GRID} px-2 py-1 hover:bg-muted/20 transition-colors text-sm`}>
-      {/* Title (indented) */}
-      <div className="pl-5 flex items-center gap-1 min-w-0 pr-2">
-        <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
-        <Input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          onBlur={commitTitle}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-          placeholder="任務標題"
-          className="h-7 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
-        />
-      </div>
-
-      {/* Start date */}
-      <div>
-        <Input
-          type="date"
-          value={task.startDate}
-          onChange={e => onUpdate({ startDate: e.target.value })}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-        />
-      </div>
-
-      {/* End date */}
-      <div>
-        <Input
-          type="date"
-          value={task.endDate}
-          onChange={e => onUpdate({ endDate: e.target.value })}
-          min={task.startDate}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-        />
-      </div>
-
-      {/* Assignee */}
-      <div>
-        <Select
-          value={task.assignee || ' '}
-          onValueChange={v => onUpdate({ assignee: v === ' ' ? '' : v })}
-        >
-          <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value=" ">未指派</SelectItem>
-            {teamMembers.map(m => (
-              <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Priority (click to cycle) */}
-      <div className="flex justify-center">
-        <button type="button" onClick={cyclePriority} className="transition-opacity">
-          <Badge
-            variant="outline"
-            className={`text-[10px] px-1.5 py-0 cursor-pointer ${p.className}`}
-          >
-            {p.label}
-          </Badge>
-        </button>
-      </div>
-
-      {/* Delete */}
-      <div className="flex justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-          onClick={onRemove}
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Inline Task Add (grid-based) ────────────────────────────
-
-function InlineTaskAdd({
-  milestoneId,
-  teamMembers,
-  onAdd,
-  loading,
-}: {
-  milestoneId: string
-  teamMembers: { id: string; name: string; role: string }[]
-  onAdd: (data: { milestoneId: string; title: string; priority?: string; assignee?: string; startDate: string; endDate: string }) => void
-  loading: boolean
-}) {
-  const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
-  const [assignee, setAssignee] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-
-  const cyclePriority = () => {
-    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
-    setPriority(prev => order[(order.indexOf(prev) + 1) % order.length])
-  }
-
-  const handleAdd = () => {
-    if (!title.trim() || !startDate || !endDate) return
-    onAdd({ milestoneId, title: title.trim(), priority, assignee: assignee.trim() || undefined, startDate, endDate })
-    setTitle('')
-    setPriority('medium')
-    setAssignee('')
-    setStartDate('')
-    setEndDate('')
-  }
-
-  const p = PRIORITY_CONFIG[priority]
-
-  if (!title) {
-    return (
-      <div className={`${WI_GRID} px-2 py-1`}>
-        <div className="pl-5 flex items-center gap-1 min-w-0 pr-2">
-          <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
-          <Input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="+ 新增任務..."
-            className="h-7 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5 placeholder:text-muted-foreground/40"
-          />
-        </div>
-        <div /><div /><div /><div /><div />
-      </div>
-    )
-  }
-
-  return (
-    <div className={`${WI_GRID} px-2 py-1 bg-primary/5`}>
-      {/* Title */}
-      <div className="pl-5 flex items-center gap-1 min-w-0 pr-2">
-        <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
-        <Input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setTitle(''); setStartDate(''); setEndDate(''); setAssignee('') } }}
-          placeholder="任務標題"
-          className="h-7 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
-          autoFocus
-        />
-      </div>
-
-      {/* Start date */}
-      <div>
-        <Input
-          type="date"
-          value={startDate}
-          onChange={e => setStartDate(e.target.value)}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-        />
-      </div>
-
-      {/* End date */}
-      <div>
-        <Input
-          type="date"
-          value={endDate}
-          onChange={e => setEndDate(e.target.value)}
-          min={startDate}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-        />
-      </div>
-
-      {/* Assignee */}
-      <div>
-        <Select
-          value={assignee || ' '}
-          onValueChange={v => setAssignee(v === ' ' ? '' : v)}
-        >
-          <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value=" ">未指派</SelectItem>
-            {teamMembers.map(m => (
-              <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Priority (click to cycle) */}
-      <div className="flex justify-center">
-        <button type="button" onClick={cyclePriority} className="transition-opacity">
-          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 cursor-pointer ${p.className}`}>
-            {p.label}
-          </Badge>
-        </button>
-      </div>
-
-      {/* Add/Cancel */}
-      <div className="flex justify-center gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-primary hover:text-primary"
-          onClick={handleAdd}
-          disabled={loading || !title.trim() || !startDate || !endDate}
-        >
-          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Inline Milestone Add ────────────────────────────────────
-
-function InlineMilestoneAdd({
-  onAdd,
-  loading,
-}: {
-  onAdd: (data: { name: string; dueDate: string }) => void
-  loading: boolean
-}) {
-  const [name, setName] = useState('')
-  const [dueDate, setDueDate] = useState('')
-
-  const handleAdd = () => {
-    if (!name.trim() || !dueDate) return
-    onAdd({ name: name.trim(), dueDate })
-    setName('')
-    setDueDate('')
-  }
-
-  if (!name) {
-    return (
-      <div className={`${WI_GRID}`}>
-        <div className="flex items-center min-w-0 pr-2">
-          <Input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="+ 新增里程碑..."
-            className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5 placeholder:text-muted-foreground/40"
-          />
-        </div>
-        <div /><div /><div /><div /><div />
-      </div>
-    )
-  }
-
-  return (
-    <div className={`${WI_GRID} bg-primary/5`}>
-      {/* Name */}
-      <div className="flex items-center min-w-0 pr-2">
-        <Input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setName(''); setDueDate('') } }}
-          placeholder="里程碑名稱"
-          className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
-          autoFocus
-        />
-      </div>
-
-      {/* Due date */}
-      <div>
-        <Input
-          type="date"
-          value={dueDate}
-          onChange={e => setDueDate(e.target.value)}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-        />
-      </div>
-
-      {/* Empty cols */}
-      <div /><div /><div />
-
-      {/* Add */}
-      <div className="flex justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-primary hover:text-primary"
-          onClick={handleAdd}
-          disabled={loading || !name.trim() || !dueDate}
-        >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}

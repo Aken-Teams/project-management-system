@@ -16,6 +16,8 @@ interface UpdateTaskBody {
   milestoneId?: string
   status?: string
   progress?: number
+  sortOrder?: number
+  durationWeeks?: number
 }
 
 export async function PUT(
@@ -46,6 +48,8 @@ export async function PUT(
     if (body.progress !== undefined) data.progress = body.progress
     if (body.startDate !== undefined) data.startDate = new Date(body.startDate)
     if (body.endDate !== undefined) data.endDate = new Date(body.endDate)
+    if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
+    if (body.durationWeeks !== undefined) data.durationWeeks = body.durationWeeks
     if (body.milestoneId !== undefined) {
       const ms = await prisma.milestone.findFirst({ where: { id: body.milestoneId, projectId: id } })
       if (!ms) return NextResponse.json({ error: '找不到該里程碑' }, { status: 404 })
