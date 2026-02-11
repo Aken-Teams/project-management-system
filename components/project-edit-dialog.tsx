@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2 } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X } from 'lucide-react'
 import {
   type Project,
   type ProjectType,
@@ -29,6 +29,7 @@ import {
   type DemandSource,
   type SmartObjective,
   type TeamRole,
+  type Risk,
   PROJECT_TYPE_LABELS,
   PROJECT_TIER_LABELS,
   DEMAND_SOURCE_LABELS,
@@ -42,6 +43,7 @@ interface ProjectEditDialogProps {
   project: Project
   onSave: (data: ProjectEditData) => Promise<void>
   onTeamChange?: () => void
+  onRiskChange?: () => void
 }
 
 export interface ProjectEditData {
@@ -88,7 +90,17 @@ function RoleBadge({ role, label }: { role: string; label: string }) {
   )
 }
 
-export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange }: ProjectEditDialogProps) {
+// ─── Risk labels ────────────────────────────────────────────
+const RISK_IMPACT_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
+const RISK_PROBABILITY_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
+const RISK_STATUS_LABELS: Record<string, string> = { open: '未處理', mitigated: '已緩解', closed: '已關閉' }
+const RISK_STATUS_COLORS: Record<string, string> = {
+  open: 'bg-red-50 text-red-700 border-red-200',
+  mitigated: 'bg-amber-50 text-amber-700 border-amber-200',
+  closed: 'bg-green-50 text-green-700 border-green-200',
+}
+
+export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange }: ProjectEditDialogProps) {
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
     projectType: project.projectType,
@@ -111,6 +123,12 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [teamMembers, setTeamMembers] = useState(project.teamMembers ?? [])
   const [teamLoading, setTeamLoading] = useState<string | null>(null)
   const [teamError, setTeamError] = useState('')
+
+  // ─── Risk state ─────────────────────────────────────────
+  const [risks, setRisks] = useState<Risk[]>(project.risks ?? [])
+  const [riskLoading, setRiskLoading] = useState<string | null>(null)
+  const [riskError, setRiskError] = useState('')
+  const [editingRiskId, setEditingRiskId] = useState<string | null>(null)
 
   const handleSave = async () => {
     // Validation matching the creation form
@@ -270,6 +288,78 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
   }, [project.id, onTeamChange])
 
+  // ─── Risk API calls ───────────────────────────────────────
+
+  const handleAddRisk = useCallback(async (data: { title: string; description: string; impact: string; probability: string; mitigation: string }) => {
+    setRiskError('')
+    setRiskLoading('adding')
+    try {
+      const res = await fetch(`/api/projects/${project.id}/risks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setRiskError(err.error || '新增風險失敗')
+        return
+      }
+      const newRisk = await res.json()
+      setRisks(prev => [...prev, newRisk])
+      onRiskChange?.()
+    } catch {
+      setRiskError('新增風險失敗')
+    } finally {
+      setRiskLoading(null)
+    }
+  }, [project.id, onRiskChange])
+
+  const handleUpdateRisk = useCallback(async (riskId: string, data: Partial<Pick<Risk, 'title' | 'description' | 'impact' | 'probability' | 'mitigation' | 'status'>>) => {
+    setRiskError('')
+    setRiskLoading(riskId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/risks/${riskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setRiskError(err.error || '更新風險失敗')
+        return
+      }
+      const updated = await res.json()
+      setRisks(prev => prev.map(r => r.id === riskId ? { ...r, ...updated } : r))
+      setEditingRiskId(null)
+      onRiskChange?.()
+    } catch {
+      setRiskError('更新風險失敗')
+    } finally {
+      setRiskLoading(null)
+    }
+  }, [project.id, onRiskChange])
+
+  const handleRemoveRisk = useCallback(async (riskId: string) => {
+    setRiskError('')
+    setRiskLoading(riskId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/risks/${riskId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setRiskError(err.error || '刪除風險失敗')
+        return
+      }
+      setRisks(prev => prev.filter(r => r.id !== riskId))
+      onRiskChange?.()
+    } catch {
+      setRiskError('刪除風險失敗')
+    } finally {
+      setRiskLoading(null)
+    }
+  }, [project.id, onRiskChange])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
@@ -281,22 +371,26 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
-          <TabsList className="shrink-0 w-full grid grid-cols-4">
-            <TabsTrigger value="basic" className="gap-1.5 text-sm">
+          <TabsList className="shrink-0 w-full grid grid-cols-5">
+            <TabsTrigger value="basic" className="gap-1 text-sm">
               <Settings2 className="h-3.5 w-3.5" />
               基本資訊
             </TabsTrigger>
-            <TabsTrigger value="smart" className="gap-1.5 text-sm">
+            <TabsTrigger value="smart" className="gap-1 text-sm">
               <Target className="h-3.5 w-3.5" />
-              SMART 目標
+              SMART
             </TabsTrigger>
-            <TabsTrigger value="description" className="gap-1.5 text-sm">
+            <TabsTrigger value="description" className="gap-1 text-sm">
               <FileText className="h-3.5 w-3.5" />
               專案說明
             </TabsTrigger>
-            <TabsTrigger value="team" className="gap-1.5 text-sm">
+            <TabsTrigger value="team" className="gap-1 text-sm">
               <Users className="h-3.5 w-3.5" />
               團隊成員
+            </TabsTrigger>
+            <TabsTrigger value="risks" className="gap-1 text-sm">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              風險管理
             </TabsTrigger>
           </TabsList>
 
@@ -612,6 +706,42 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               <p className="text-sm text-destructive">{teamError}</p>
             )}
           </TabsContent>
+
+          {/* Tab 5: Risks */}
+          <TabsContent value="risks" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
+            <div className="space-y-3">
+              {risks.map((risk) => {
+                const isEditing = editingRiskId === risk.id
+                return (
+                  <RiskCard
+                    key={risk.id}
+                    risk={risk}
+                    isEditing={isEditing}
+                    loading={riskLoading === risk.id}
+                    onEdit={() => setEditingRiskId(isEditing ? null : risk.id)}
+                    onUpdate={(data) => handleUpdateRisk(risk.id, data)}
+                    onRemove={() => handleRemoveRisk(risk.id)}
+                  />
+                )
+              })}
+
+              {risks.length === 0 && (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  目前沒有風險紀錄
+                </div>
+              )}
+            </div>
+
+            {/* Add risk */}
+            <RiskAddForm
+              onAdd={handleAddRisk}
+              loading={riskLoading === 'adding'}
+            />
+
+            {riskError && (
+              <p className="text-sm text-destructive">{riskError}</p>
+            )}
+          </TabsContent>
         </Tabs>
 
         {error && (
@@ -744,6 +874,264 @@ function TeamMemberAddRow({
             )}
           </Button>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Risk Card ───────────────────────────────────────────────
+
+function RiskCard({
+  risk,
+  isEditing,
+  loading,
+  onEdit,
+  onUpdate,
+  onRemove,
+}: {
+  risk: Risk
+  isEditing: boolean
+  loading: boolean
+  onEdit: () => void
+  onUpdate: (data: Partial<Pick<Risk, 'title' | 'description' | 'impact' | 'probability' | 'mitigation' | 'status'>>) => void
+  onRemove: () => void
+}) {
+  const [editForm, setEditForm] = useState({
+    title: risk.title,
+    description: risk.description,
+    impact: risk.impact,
+    probability: risk.probability,
+    mitigation: risk.mitigation,
+    status: risk.status,
+  })
+
+  const handleSave = () => {
+    if (!editForm.title.trim()) return
+    onUpdate(editForm)
+  }
+
+  if (!isEditing) {
+    return (
+      <div className="rounded-lg border p-3 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="font-medium text-sm">{risk.title}</div>
+            {risk.description && (
+              <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{risk.description}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${RISK_STATUS_COLORS[risk.status] || ''}`}>
+              {RISK_STATUS_LABELS[risk.status] || risk.status}
+            </span>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={onEdit} disabled={loading}>
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={onRemove} disabled={loading}>
+              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+            </Button>
+          </div>
+        </div>
+        <div className="flex gap-3 text-xs text-muted-foreground">
+          <span>影響：<strong className="text-foreground">{RISK_IMPACT_LABELS[risk.impact]}</strong></span>
+          <span>機率：<strong className="text-foreground">{RISK_PROBABILITY_LABELS[risk.probability]}</strong></span>
+          {risk.mitigation && <span className="truncate">對策：{risk.mitigation}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-primary/30 p-3 space-y-3 bg-primary/5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">編輯風險</span>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">風險標題 <span className="text-destructive">*</span></Label>
+        <Input
+          value={editForm.title}
+          onChange={e => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+          className="h-8 text-sm"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">風險描述</Label>
+        <Textarea
+          value={editForm.description}
+          onChange={e => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+          rows={2}
+          className="text-sm"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <Label className="text-sm">影響程度</Label>
+          <Select value={editForm.impact} onValueChange={v => setEditForm(prev => ({ ...prev, impact: v as Risk['impact'] }))}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">發生機率</Label>
+          <Select value={editForm.probability} onValueChange={v => setEditForm(prev => ({ ...prev, probability: v as Risk['probability'] }))}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">狀態</Label>
+          <Select value={editForm.status} onValueChange={v => setEditForm(prev => ({ ...prev, status: v as Risk['status'] }))}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(RISK_STATUS_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">緩解對策</Label>
+        <Textarea
+          value={editForm.mitigation}
+          onChange={e => setEditForm(prev => ({ ...prev, mitigation: e.target.value }))}
+          rows={2}
+          className="text-sm"
+        />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onEdit} className="h-7 text-sm">取消</Button>
+        <Button size="sm" onClick={handleSave} disabled={loading || !editForm.title.trim()} className="h-7 text-sm">
+          {loading && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+          儲存
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Risk Add Form ───────────────────────────────────────────
+
+function RiskAddForm({
+  onAdd,
+  loading,
+}: {
+  onAdd: (data: { title: string; description: string; impact: string; probability: string; mitigation: string }) => void
+  loading: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [impact, setImpact] = useState('medium')
+  const [probability, setProbability] = useState('medium')
+  const [mitigation, setMitigation] = useState('')
+
+  const handleAdd = () => {
+    if (!title.trim()) return
+    onAdd({ title: title.trim(), description: description.trim(), impact, probability, mitigation: mitigation.trim() })
+    setTitle('')
+    setDescription('')
+    setImpact('medium')
+    setProbability('medium')
+    setMitigation('')
+    setExpanded(false)
+  }
+
+  if (!expanded) {
+    return (
+      <Button
+        variant="outline"
+        className="w-full border-dashed text-muted-foreground gap-1.5"
+        onClick={() => setExpanded(true)}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        新增風險
+      </Button>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed p-3 space-y-3">
+      <div className="space-y-1.5">
+        <Label className="text-sm">風險標題 <span className="text-destructive">*</span></Label>
+        <Input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="簡述風險項目"
+          className="h-8 text-sm"
+          autoFocus
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">風險描述</Label>
+        <Textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="詳細說明風險內容"
+          rows={2}
+          className="text-sm"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-sm">影響程度</Label>
+          <Select value={impact} onValueChange={setImpact}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-sm">發生機率</Label>
+          <Select value={probability} onValueChange={setProbability}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm">緩解對策</Label>
+        <Textarea
+          value={mitigation}
+          onChange={e => setMitigation(e.target.value)}
+          placeholder="預計如何緩解或處理此風險"
+          rows={2}
+          className="text-sm"
+        />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => setExpanded(false)} className="h-7 text-sm">取消</Button>
+        <Button size="sm" onClick={handleAdd} disabled={loading || !title.trim()} className="h-7 text-sm">
+          {loading && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+          新增
+        </Button>
       </div>
     </div>
   )
