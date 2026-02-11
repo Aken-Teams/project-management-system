@@ -13,11 +13,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { GanttChart } from '@/components/gantt-chart'
-import { getAllProjects } from '@/lib/mock-data'
+import { useProjectStore } from '@/lib/project-store'
 import { Download, Filter, Calendar } from 'lucide-react'
 
 export default function GanttPage() {
-  const projects = getAllProjects()
+  const { projects } = useProjectStore()
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || '')
   
   const selectedProject = projects.find(p => p.id === selectedProjectId)

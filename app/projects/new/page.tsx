@@ -1248,7 +1248,7 @@ export default function NewProjectPage() {
         )}
 
         {/* Add new member form */}
-        <div className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 space-y-3">
+        <div className="p-4 rounded-lg border border-dashed space-y-3">
           <Label className="text-sm font-medium">新增成員</Label>
           <div className="grid gap-2 md:grid-cols-3">
             <div className="space-y-1">
@@ -1892,16 +1892,77 @@ export default function NewProjectPage() {
                     >
                       <SortableContext items={aiMilestones.map(m => m.id)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-3">
-                          {recalculatedAiMilestones.map((milestone, index) => (
-                            <SortableAiMilestoneItem
-                              key={milestone.id}
-                              milestone={milestone}
-                              index={index}
-                              onUpdate={updateAiMilestone}
-                              onRemove={removeAiMilestone}
-                              canRemove={aiMilestones.length > 1}
-                            />
-                          ))}
+                          {recalculatedAiMilestones.map((milestone, index) => {
+                            const milestoneTasks = aiTasks.filter(t => t.milestoneId === milestone.id)
+                            return (
+                              <div key={milestone.id}>
+                                <SortableAiMilestoneItem
+                                  milestone={milestone}
+                                  index={index}
+                                  onUpdate={updateAiMilestone}
+                                  onRemove={removeAiMilestone}
+                                  canRemove={aiMilestones.length > 1}
+                                />
+                                {/* Task section under AI milestone */}
+                                {milestone.name.trim() && (
+                                  <div className="ml-9 border-l-2 border-primary/30 pl-4 pt-2 pb-2 bg-primary/5 rounded-r-lg pr-3">
+                                    <button
+                                      type="button"
+                                      className="flex items-center gap-2 w-full text-sm font-medium hover:text-primary transition-colors"
+                                      onClick={() => {
+                                        const next = new Set(aiExpandedMilestones)
+                                        if (next.has(milestone.id)) next.delete(milestone.id)
+                                        else next.add(milestone.id)
+                                        setAiExpandedMilestones(next)
+                                      }}
+                                    >
+                                      {aiExpandedMilestones.has(milestone.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                      <ListTodo className="h-4 w-4 text-primary" />
+                                      <span>任務</span>
+                                      <Badge variant="secondary" className="text-xs px-2 py-0.5 ml-1">{milestoneTasks.length}</Badge>
+                                    </button>
+                                    {aiExpandedMilestones.has(milestone.id) && (
+                                      <div className="mt-2 space-y-2">
+                                        <DndContext
+                                          sensors={sensors}
+                                          collisionDetection={closestCenter}
+                                          onDragEnd={(event) => {
+                                            const { active, over } = event
+                                            if (over && active.id !== over.id) {
+                                              setAiTasks((prev) => {
+                                                const oldIndex = prev.findIndex(t => t.id === active.id)
+                                                const newIndex = prev.findIndex(t => t.id === over.id)
+                                                return arrayMove(prev, oldIndex, newIndex)
+                                              })
+                                            }
+                                          }}
+                                        >
+                                          <SortableContext
+                                            items={milestoneTasks.map(t => t.id)}
+                                            strategy={verticalListSortingStrategy}
+                                          >
+                                            {milestoneTasks.map((task) => (
+                                              <SortableTaskItem
+                                                key={task.id}
+                                                task={task}
+                                                onRemove={(id) => setAiTasks(aiTasks.filter(t => t.id !== id))}
+                                                onUpdate={(id, field, value) => setAiTasks(aiTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
+                                              />
+                                            ))}
+                                          </SortableContext>
+                                        </DndContext>
+                                        <MilestoneTaskAdder
+                                          milestoneId={milestone.id}
+                                          onAdd={(task) => setAiTasks([...aiTasks, task])}
+                                          teamMembers={aiTeamDetails}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       </SortableContext>
                     </DndContext>
@@ -2372,10 +2433,10 @@ export default function NewProjectPage() {
                               {milestone.name.trim() && (() => {
                                 const milestoneTasks = manualTasks.filter(t => t.milestoneId === milestone.id)
                                 return (
-                                  <div className="ml-9 border-l-2 border-muted pl-4 pt-2 pb-1">
+                                  <div className="ml-9 border-l-2 border-primary/30 pl-4 pt-2 pb-2 bg-primary/5 rounded-r-lg pr-3">
                                     <button
                                       type="button"
-                                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                      className="flex items-center gap-2 w-full text-sm font-medium hover:text-primary transition-colors"
                                       onClick={() => {
                                         const next = new Set(expandedMilestones)
                                         if (next.has(milestone.id)) next.delete(milestone.id)
@@ -2383,9 +2444,10 @@ export default function NewProjectPage() {
                                         setExpandedMilestones(next)
                                       }}
                                     >
-                                      {expandedMilestones.has(milestone.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                      <ListTodo className="h-3.5 w-3.5" />
-                                      任務 ({milestoneTasks.length})
+                                      {expandedMilestones.has(milestone.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                      <ListTodo className="h-4 w-4 text-primary" />
+                                      <span>任務</span>
+                                      <Badge variant="secondary" className="text-xs px-2 py-0.5 ml-1">{milestoneTasks.length}</Badge>
                                     </button>
                                     {expandedMilestones.has(milestone.id) && (
                                       <div className="mt-2 space-y-2">

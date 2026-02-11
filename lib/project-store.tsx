@@ -59,7 +59,7 @@ const ProjectStoreContext = createContext<ProjectStoreContextType | undefined>(u
 
 const STORAGE_KEY = 'pm-system-projects'
 const STORAGE_VERSION_KEY = 'pm-system-version'
-const CURRENT_VERSION = '10'
+const CURRENT_VERSION = '11'
 
 export function ProjectStoreProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])

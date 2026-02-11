@@ -37,7 +37,7 @@ const NotificationStoreContext = createContext<NotificationStoreContextType | un
 
 const STORAGE_KEY = 'pm-system-notifications'
 const VERSION_KEY = 'pm-system-notifications-version'
-const CURRENT_VERSION = '1'
+const CURRENT_VERSION = '2'
 
 export function NotificationStoreProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])

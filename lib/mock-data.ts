@@ -156,7 +156,7 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 }
 
 // Project code generation helper
-let codeCounter = 7
+let codeCounter = 0
 export function generateProjectCode(type: ProjectType): string {
   codeCounter++
   const prefix: Record<ProjectType, string> = {
@@ -170,8 +170,11 @@ export function generateProjectCode(type: ProjectType): string {
   return `${prefix[type]}-${year}-${String(codeCounter).padStart(3, '0')}`
 }
 
-// Mock projects data
-export const MOCK_PROJECTS: Project[] = [
+// Initial projects data (empty — ready for backend integration)
+export const MOCK_PROJECTS: Project[] = []
+
+/* ---- Legacy mock data removed ---- */
+/*
   {
     id: 'proj-1',
     projectCode: 'NPI-2024-001',
@@ -729,6 +732,7 @@ export const MOCK_PROJECTS: Project[] = [
     ],
   },
 ]
+*/
 
 export function getProjectById(id: string): Project | undefined {
   return MOCK_PROJECTS.find(p => p.id === id)

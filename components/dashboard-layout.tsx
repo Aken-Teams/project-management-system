@@ -39,7 +39,6 @@ import { useProjectStore } from '@/lib/project-store'
 import { computeTaskStatus } from '@/lib/task-utils'
 import { Badge } from '@/components/ui/badge'
 import { NotificationBell } from '@/components/notification-bell'
-import { useNotificationStore } from '@/lib/notification-store'
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -70,9 +69,8 @@ const SIDEBAR_KEY = 'sidebar-collapsed'
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, loading, logout, switchRole } = useAuth()
-  const { projects, getPendingApprovals, getTasksForUser } = useProjectStore()
-  const { generateDemoNotifications } = useNotificationStore()
+  const { user, loading, logout } = useAuth()
+  const { getPendingApprovals, getTasksForUser } = useProjectStore()
   const pendingCount = getPendingApprovals().length
   const userTasks = user ? getTasksForUser(user.name) : []
   const atRiskCount = userTasks.filter(({ project, task }) => {
@@ -123,12 +121,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     setMobileOpen(false)
   }, [pathname])
 
-  // Seed demo notifications on first load
-  useEffect(() => {
-    if (user && projects.length > 0) {
-      generateDemoNotifications(projects, user)
-    }
-  }, [user, projects, generateDemoNotifications])
+  // Demo notifications removed — will be replaced by real notification system
 
   if (loading || !user) {
     return (
@@ -271,19 +264,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <DropdownMenuItem onClick={() => router.push('/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 設定
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                切換角色（示範）
-              </DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => switchRole('pm')}>
-                切換為專案經理
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => switchRole('member')}>
-                切換為團隊成員
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => switchRole('executive')}>
-                切換為主管
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>
