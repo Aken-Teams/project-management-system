@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,23 +21,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2 } from 'lucide-react'
 import {
   type Project,
   type ProjectType,
   type ProjectTier,
   type DemandSource,
   type SmartObjective,
+  type TeamRole,
   PROJECT_TYPE_LABELS,
   PROJECT_TIER_LABELS,
   DEMAND_SOURCE_LABELS,
+  TEAM_ROLE_LABELS,
 } from '@/lib/mock-data'
+import { TeamMemberAutocomplete } from '@/components/team-member-autocomplete'
 
 interface ProjectEditDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   project: Project
   onSave: (data: ProjectEditData) => Promise<void>
+  onTeamChange?: () => void
 }
 
 export interface ProjectEditData {
@@ -63,7 +67,28 @@ const EMPTY_SMART: SmartObjective = {
   timeBound: '',
 }
 
-export function ProjectEditDialog({ open, onOpenChange, project, onSave }: ProjectEditDialogProps) {
+// ─── Role color map ─────────────────────────────────────────
+const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  pm:            { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
+  engineer:      { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  procurement:   { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
+  qa:            { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500' },
+  manufacturing: { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
+  designer:      { bg: 'bg-pink-50',   text: 'text-pink-700',   dot: 'bg-pink-500' },
+  other:         { bg: 'bg-slate-50',  text: 'text-slate-600',  dot: 'bg-slate-400' },
+}
+
+function RoleBadge({ role, label }: { role: string; label: string }) {
+  const c = ROLE_COLORS[role] || ROLE_COLORS.other
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${c.bg} ${c.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
+      {label}
+    </span>
+  )
+}
+
+export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange }: ProjectEditDialogProps) {
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
     projectType: project.projectType,
@@ -81,6 +106,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('basic')
+
+  // ─── Team member state ────────────────────────────────────
+  const [teamMembers, setTeamMembers] = useState(project.teamMembers ?? [])
+  const [teamLoading, setTeamLoading] = useState<string | null>(null)
+  const [teamError, setTeamError] = useState('')
 
   const handleSave = async () => {
     // Validation matching the creation form
@@ -168,6 +198,78 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
     }))
   }
 
+  // ─── Team member API calls ────────────────────────────────
+
+  const handleAddMember = useCallback(async (user: { name: string; email?: string }, role: string, responsibility: string) => {
+    setTeamError('')
+    setTeamLoading('adding')
+    try {
+      const res = await fetch(`/api/projects/${project.id}/team`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: user.name, email: user.email, role, responsibility }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setTeamError(err.error || '新增成員失敗')
+        return
+      }
+      const newMember = await res.json()
+      setTeamMembers(prev => [...prev, { ...newMember, email: user.email }])
+      onTeamChange?.()
+    } catch {
+      setTeamError('新增成員失敗')
+    } finally {
+      setTeamLoading(null)
+    }
+  }, [project.id, onTeamChange])
+
+  const handleUpdateMember = useCallback(async (memberId: string, field: 'role' | 'responsibility', value: string) => {
+    setTeamError('')
+    setTeamLoading(memberId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/team/${memberId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setTeamError(err.error || '更新成員失敗')
+        return
+      }
+      setTeamMembers(prev => prev.map(m =>
+        m.id === memberId ? { ...m, [field]: value } : m
+      ))
+      onTeamChange?.()
+    } catch {
+      setTeamError('更新成員失敗')
+    } finally {
+      setTeamLoading(null)
+    }
+  }, [project.id, onTeamChange])
+
+  const handleRemoveMember = useCallback(async (memberId: string) => {
+    setTeamError('')
+    setTeamLoading(memberId)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/team/${memberId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setTeamError(err.error || '移除成員失敗')
+        return
+      }
+      setTeamMembers(prev => prev.filter(m => m.id !== memberId))
+      onTeamChange?.()
+    } catch {
+      setTeamError('移除成員失敗')
+    } finally {
+      setTeamLoading(null)
+    }
+  }, [project.id, onTeamChange])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
@@ -179,7 +281,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
-          <TabsList className="shrink-0 w-full grid grid-cols-3">
+          <TabsList className="shrink-0 w-full grid grid-cols-4">
             <TabsTrigger value="basic" className="gap-1.5 text-sm">
               <Settings2 className="h-3.5 w-3.5" />
               基本資訊
@@ -191,6 +293,10 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             <TabsTrigger value="description" className="gap-1.5 text-sm">
               <FileText className="h-3.5 w-3.5" />
               專案說明
+            </TabsTrigger>
+            <TabsTrigger value="team" className="gap-1.5 text-sm">
+              <Users className="h-3.5 w-3.5" />
+              團隊成員
             </TabsTrigger>
           </TabsList>
 
@@ -276,7 +382,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
           </TabsContent>
 
-          {/* Tab 3: Description */}
+          {/* Tab 2: Description */}
           <TabsContent value="description" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 px-1">
             <div className="space-y-1.5">
               <Label htmlFor="edit-purpose">
@@ -389,6 +495,123 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
             </div>
 
           </TabsContent>
+
+          {/* Tab 4: Team Members */}
+          <TabsContent value="team" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
+            <div className="rounded-lg border overflow-hidden">
+              {/* Header */}
+              <div className="grid grid-cols-[1fr_80px_140px_1fr_32px] gap-0 items-center px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide">
+                <span>姓名</span>
+                <span>組織</span>
+                <span>角色</span>
+                <span className="pl-1.5">負責工作項目</span>
+                <span />
+              </div>
+
+              {/* Member rows */}
+              {teamMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="grid grid-cols-[1fr_80px_140px_1fr_32px] gap-0 items-center px-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm"
+                >
+                  {/* Name */}
+                  <div className="flex items-center gap-2 pr-2 min-w-0">
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).text}`}>
+                      {member.name.charAt(0)}
+                    </div>
+                    <span className="truncate font-medium">{member.name}</span>
+                  </div>
+
+                  {/* Organization */}
+                  <div className="px-1 min-w-0">
+                    {member.organization ? (
+                      <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
+                        <Building2 className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{member.organization}</span>
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground/40">—</span>
+                    )}
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <Select
+                      value={member.role}
+                      onValueChange={(v) => handleUpdateMember(member.id, 'role', v)}
+                      disabled={teamLoading === member.id}
+                    >
+                      <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">
+                        <RoleBadge role={member.role} label={TEAM_ROLE_LABELS[member.role as TeamRole] || member.role} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(TEAM_ROLE_LABELS) as [TeamRole, string][]).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>
+                            <RoleBadge role={k} label={v} />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Responsibility */}
+                  <div className="px-1">
+                    <Input
+                      value={member.responsibility}
+                      onChange={(e) => {
+                        setTeamMembers(prev => prev.map(m =>
+                          m.id === member.id ? { ...m, responsibility: e.target.value } : m
+                        ))
+                      }}
+                      onBlur={(e) => {
+                        const original = project.teamMembers?.find(m => m.id === member.id)
+                        if (original && original.responsibility !== e.target.value) {
+                          handleUpdateMember(member.id, 'responsibility', e.target.value)
+                        }
+                      }}
+                      placeholder="負責工作項目"
+                      className="h-8 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
+                      disabled={teamLoading === member.id}
+                    />
+                  </div>
+
+                  {/* Remove */}
+                  <div className="flex justify-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemoveMember(member.id)}
+                      disabled={teamLoading === member.id}
+                    >
+                      {teamLoading === member.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Inline add row */}
+              <TeamMemberAddRow
+                existingEmails={new Set(teamMembers.map(m => m.email).filter(Boolean) as string[])}
+                onAdd={handleAddMember}
+                loading={teamLoading === 'adding'}
+              />
+
+              {/* Footer */}
+              <div className="px-3 py-2 border-t bg-muted/20 text-sm text-muted-foreground">
+                共 {teamMembers.length} 位成員
+              </div>
+            </div>
+
+            {teamError && (
+              <p className="text-sm text-destructive">{teamError}</p>
+            )}
+          </TabsContent>
         </Tabs>
 
         {error && (
@@ -406,5 +629,122 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave }: Proje
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── Inline Add Row ──────────────────────────────────────────
+
+function TeamMemberAddRow({
+  existingEmails,
+  onAdd,
+  loading,
+}: {
+  existingEmails: Set<string>
+  onAdd: (user: { name: string; email?: string }, role: string, responsibility: string) => void
+  loading: boolean
+}) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [organization, setOrganization] = useState('')
+  const [role, setRole] = useState<string>('engineer')
+  const [responsibility, setResponsibility] = useState('')
+
+  const handleAdd = () => {
+    if (!name.trim()) return
+    onAdd({ name: name.trim(), email: email || undefined }, role, responsibility.trim())
+    setName('')
+    setEmail('')
+    setOrganization('')
+    setRole('engineer')
+    setResponsibility('')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAdd()
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-[1fr_80px_140px_1fr_32px] gap-0 items-center px-3 py-1 border-t">
+      {/* Name with autocomplete */}
+      <div className="pr-2">
+        <TeamMemberAutocomplete
+          value={name}
+          onChange={(val: string) => { setName(val); setEmail(''); setOrganization('') }}
+          onSelect={(user: { name: string; email: string; organization: string }) => {
+            setName(user.name)
+            setEmail(user.email)
+            setOrganization(user.organization || '')
+          }}
+          onKeyDown={handleKeyDown}
+          excludeEmails={existingEmails}
+          placeholder="+ 新增成員..."
+          className="h-8 border-0 bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:border-b focus-visible:border-primary focus-visible:rounded-none px-1.5"
+        />
+      </div>
+
+      {/* Organization (auto-filled, read-only) */}
+      <div className="px-1 min-w-0">
+        {organization && (
+          <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
+            <Building2 className="h-3 w-3 shrink-0" />
+            <span className="truncate">{organization}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Role */}
+      <div>
+        {name.trim() && (
+          <Select value={role} onValueChange={setRole}>
+            <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">
+              <RoleBadge role={role} label={TEAM_ROLE_LABELS[role as TeamRole] || role} />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.entries(TEAM_ROLE_LABELS) as [TeamRole, string][]).map(([k, v]) => (
+                <SelectItem key={k} value={k}>
+                  <RoleBadge role={k} label={v} />
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* Responsibility */}
+      <div className="px-1">
+        {name.trim() && (
+          <Input
+            value={responsibility}
+            onChange={(e) => setResponsibility(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="負責工作項目"
+            className="h-8 border-0 bg-transparent text-sm text-muted-foreground focus-visible:ring-1 px-1.5"
+          />
+        )}
+      </div>
+
+      {/* Add button */}
+      <div className="flex justify-center">
+        {name.trim() && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-primary"
+            onClick={handleAdd}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Plus className="h-3 w-3" />
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }

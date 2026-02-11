@@ -149,7 +149,10 @@ export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
 }
 
 export interface TeamMember {
+  id: string
   name: string
+  email?: string
+  organization?: string
   role: TeamRole
   responsibility: string
 }

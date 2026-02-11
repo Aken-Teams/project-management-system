@@ -1095,7 +1095,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               團隊
             </div>
             <span className="text-xl font-bold">{project.team.length}</span>
-            <div className="text-sm text-muted-foreground">負責人：{project.owner}</div>
+            <div className="text-sm text-muted-foreground">負責人：{project.teamMembers?.find(m => m.role === 'pm')?.name ?? project.owner}</div>
           </div>
 
           <div className="flex-1 px-4 py-3">
@@ -1265,11 +1265,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       團隊成員
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {project.team.map(member => (
-                        <Badge key={member} variant={member === project.owner ? 'default' : 'secondary'} className="text-sm">
-                          {member}{member === project.owner && ' (負責人)'}
-                        </Badge>
-                      ))}
+                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'other' as const, responsibility: '' }))).map(member => {
+                        const isPm = member.role === 'pm'
+                        return (
+                          <Badge key={member.id ?? member.name} variant={isPm ? 'default' : 'secondary'} className="text-sm">
+                            {member.name}{isPm && ' (負責人)'}
+                          </Badge>
+                        )
+                      })}
                     </div>
                   </div>
                 </CardContent>
@@ -1394,6 +1397,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           onOpenChange={setEditOpen}
           project={project}
           onSave={handleSaveProject}
+          onTeamChange={async () => {
+            const res = await fetch(`/api/projects/${id}`)
+            if (res.ok) setProject(await res.json())
+          }}
         />
       )}
       <ProjectDeleteDialog

@@ -123,7 +123,8 @@ export function dbProjectToFrontend(
       status: string
     }[]
     teamMembers: {
-      user: { name: string }
+      id: string
+      user: { name: string; email: string; organization: string }
       role: string
       responsibility: string
     }[]
@@ -314,7 +315,10 @@ export function dbProjectToFrontend(
     owner: proj.owner.name,
     team: teamNames,
     teamMembers: proj.teamMembers.map((tm) => ({
+      id: tm.id,
       name: tm.user.name,
+      email: tm.user.email,
+      organization: tm.user.organization || '',
       role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
       responsibility: tm.responsibility,
     })),

@@ -758,7 +758,7 @@ export default function NewProjectPage() {
         teamNames.push(m.name)
       }
     })
-    const teamMembersData = aiTeamDetails.map(m => ({ name: m.name, role: m.role, responsibility: m.responsibility }))
+    const teamMembersData = aiTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
 
     const newProject = addProject({
       projectType: aiProjectType,
@@ -844,7 +844,7 @@ export default function NewProjectPage() {
         teamNames.push(m.name)
       }
     })
-    const teamMembersData = manualTeamDetails.map(m => ({ name: m.name, role: m.role, responsibility: m.responsibility }))
+    const teamMembersData = manualTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
 
     setIsCreating(true)
     try {
