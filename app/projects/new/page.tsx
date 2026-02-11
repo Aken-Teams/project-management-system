@@ -88,6 +88,7 @@ interface TeamMemberDraft {
   role: TeamRole
   responsibility: string
   organization?: string
+  email?: string
 }
 
 interface MilestoneTaskDraft {
@@ -1577,7 +1578,7 @@ export default function NewProjectPage() {
                       roleLabels={TEAM_ROLE_LABELS}
                       onAdd={(m) => setAiTeamDetails([...aiTeamDetails, { ...m, role: m.role as TeamRole }])}
                       onRemove={(id) => setAiTeamDetails(aiTeamDetails.filter(m => m.id !== id))}
-                      onUpdate={(id, field, value) => setAiTeamDetails(aiTeamDetails.map(m => m.id === id ? { ...m, [field]: value } : m))}
+                      onUpdate={(id, field, value) => setAiTeamDetails(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m))}
                     />
                   </div>
 
@@ -2097,7 +2098,7 @@ export default function NewProjectPage() {
                       roleLabels={TEAM_ROLE_LABELS}
                       onAdd={(m) => setManualTeamDetails([...manualTeamDetails, { ...m, role: m.role as TeamRole }])}
                       onRemove={(id) => setManualTeamDetails(manualTeamDetails.filter(m => m.id !== id))}
-                      onUpdate={(id, field, value) => setManualTeamDetails(manualTeamDetails.map(m => m.id === id ? { ...m, [field]: value } : m))}
+                      onUpdate={(id, field, value) => setManualTeamDetails(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m))}
                     />
                   </div>
 
