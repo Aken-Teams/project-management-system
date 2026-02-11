@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useToast } from '@/hooks/use-toast'
-import { parseProjectRequirements, type ParsedProjectData } from '@/lib/ai-service'
+import { type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
@@ -176,7 +176,6 @@ export default function NewProjectPage() {
 
   // AI Mode
   const [requirements, setRequirements] = useState('')
-  const [isProcessing, setIsProcessing] = useState(false)
   const [parsedData, setParsedData] = useState<ParsedProjectData | null>(null)
   const [aiProjectType, setAiProjectType] = useState<ProjectType | ''>('')
   const [aiProjectTier, setAiProjectTier] = useState<ProjectTier | ''>('')
@@ -693,46 +692,10 @@ export default function NewProjectPage() {
     }
   }
 
-  const handleAIParse = async () => {
-    if (!requirements.trim()) return
+  const [showAiComingSoon, setShowAiComingSoon] = useState(false)
 
-    setIsProcessing(true)
-    try {
-      const result = await parseProjectRequirements({ description: requirements })
-      setParsedData(result)
-
-      // Populate editable fields with AI results
-      setAiEditableData({
-        name: result.name,
-        budget: (result.estimatedBudget / 1000000).toFixed(1),
-        startDate: result.startDate,
-        endDate: result.endDate,
-        purpose: result.purpose,
-        scope: result.scope,
-        roi: result.roi,
-        expectedBenefits: aiExpectedBenefits,
-      })
-      setAiSmartObjective(result.smartObjective)
-      setAiMilestones(result.suggestedMilestones.map((m, index) => {
-        // Parse weeks from duration string (e.g., "3 週" -> 3)
-        const weeksMatch = m.estimatedDuration.match(/(\d+)\s*週/)
-        const weeks = weeksMatch ? parseInt(weeksMatch[1]) : 0
-        return {
-          id: `ai-milestone-${Date.now()}-${index}`,
-          name: m.name,
-          description: m.description,
-          durationWeeks: weeks,
-        }
-      }))
-      setAiRisks(result.identifiedRisks)
-
-      // Move to step 1 (Basic Info)
-      setAiCurrentStep(1)
-    } catch (error) {
-      console.error('Failed to parse requirements:', error)
-    } finally {
-      setIsProcessing(false)
-    }
+  const handleAIParse = () => {
+    setShowAiComingSoon(true)
   }
 
   const handleCreateFromAI = () => {
@@ -1281,22 +1244,32 @@ export default function NewProjectPage() {
 
                   <Button
                     onClick={handleAIParse}
-                    disabled={!requirements.trim() || isProcessing}
+                    disabled={!requirements.trim()}
                     className="w-full gap-2"
                     size="lg"
                   >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        AI 解析中...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        使用 AI 解析並產生規劃
-                      </>
-                    )}
+                    <Sparkles className="h-4 w-4" />
+                    使用 AI 解析並產生規劃
                   </Button>
+
+                  <Dialog open={showAiComingSoon} onOpenChange={setShowAiComingSoon}>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-primary" />
+                          功能開發中
+                        </DialogTitle>
+                        <DialogDescription>
+                          AI 解析功能尚在開發中，敬請期待！
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex justify-end">
+                        <Button onClick={() => setShowAiComingSoon(false)}>
+                          我知道了
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </CardContent>
               </Card>
             )}
