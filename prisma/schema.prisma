@@ -1,0 +1,401 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────
+
+enum ProjectStatus {
+  green
+  yellow
+  red
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+  blocked
+}
+
+enum ProjectType {
+  sourcing
+  npi
+  cost_saving
+  cip
+  other
+}
+
+enum TeamRole {
+  pm
+  engineer
+  procurement
+  qa
+  manufacturing
+  designer
+  other
+}
+
+enum UserRole {
+  pm
+  member
+  executive
+}
+
+enum Priority {
+  low
+  medium
+  high
+}
+
+enum RiskImpact {
+  low
+  medium
+  high
+}
+
+enum RiskProbability {
+  low
+  medium
+  high
+}
+
+enum RiskStatus {
+  open
+  mitigated
+  closed
+}
+
+enum DelayRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+enum WeeklyUpdateStatus {
+  on_time
+  delay
+}
+
+enum NotificationType {
+  task_assigned
+  delay_submitted
+  delay_approved
+  delay_rejected
+  task_overdue
+  support_needed
+}
+
+// ─── Models ──────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole @default(member)
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  ownedProjects       Project[]           @relation("ProjectOwner")
+  teamMemberships     ProjectTeamMember[]
+  weeklyUpdates       WeeklyUpdate[]
+  delayRequests       DelayRequest[]      @relation("DelayRequester")
+  reviewedDelays      DelayRequest[]      @relation("DelayReviewer")
+  resolvedDelays      DelayRequest[]      @relation("DelaySupportResolver")
+  taskLogs            TaskLog[]
+  notifications       Notification[]
+
+  @@map("users")
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  projectCode     String        @unique @map("project_code")
+  projectType     ProjectType   @map("project_type")
+  name            String
+  objective       String        @default("")
+  purpose         String        @default("")
+  scope           String        @default("")
+  roi             String        @default("")
+  createdReason   String        @default("") @map("created_reason")
+  expectedBenefits String?      @map("expected_benefits")
+
+  // SMART Objective (individual columns)
+  smartSpecific   String?       @map("smart_specific")
+  smartMeasurable String?       @map("smart_measurable")
+  smartAchievable String?       @map("smart_achievable")
+  smartRelevant   String?       @map("smart_relevant")
+  smartTimeBound  String?       @map("smart_time_bound")
+
+  startDate       DateTime      @map("start_date")
+  endDate         DateTime      @map("end_date")
+  status          ProjectStatus @default(green)
+  progress        Int           @default(0)
+  budget          Float         @default(0)
+  budgetUsed      Float         @default(0) @map("budget_used")
+
+  ownerId         String        @map("owner_id")
+  owner           User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  teamMembers     ProjectTeamMember[]
+  milestones      Milestone[]
+  baselines       MilestoneBaseline[]
+  tasks           Task[]
+  risks           Risk[]
+  weeklyUpdates   WeeklyUpdate[]
+  delayRequests   DelayRequest[]
+  taskLogs        TaskLog[]
+  notifications   Notification[]
+
+  @@index([startDate, endDate])
+  @@map("projects")
+}
+
+model ProjectTeamMember {
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  userId         String   @map("user_id")
+  role           TeamRole
+  responsibility String   @default("")
+
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_team_members")
+}
+
+model Milestone {
+  id        String     @id @default(cuid())
+  projectId String     @map("project_id")
+  name      String
+  dueDate   DateTime   @map("due_date")
+  status    TaskStatus @default(todo)
+  progress  Int        @default(0)
+  sortOrder Int        @default(0) @map("sort_order")
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Relations
+  tasks              Task[]
+  baselines          MilestoneBaseline[]
+  milestoneUpdates   MilestoneUpdate[]
+  affectedMilestones AffectedMilestone[]
+
+  @@index([projectId, sortOrder])
+  @@map("milestones")
+}
+
+model MilestoneBaseline {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  milestoneId String   @map("milestone_id")
+  name        String
+  dueDate     DateTime @map("due_date")
+  baselinedAt DateTime @default(now()) @map("baselined_at")
+
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone   Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([milestoneId])
+  @@map("milestone_baselines")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  projectId   String     @map("project_id")
+  milestoneId String     @map("milestone_id")
+  title       String
+  description String     @default("")
+  assignee    String     @default("")
+  status      TaskStatus @default(todo)
+  priority    Priority   @default(medium)
+  startDate   DateTime   @map("start_date")
+  endDate     DateTime   @map("end_date")
+  progress    Int        @default(0)
+  sortOrder   Int        @default(0) @map("sort_order")
+  completedAt DateTime?  @map("completed_at")
+  completedBy String?    @map("completed_by")
+
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone   Milestone  @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  // Self-referential many-to-many for dependencies
+  dependsOn   TaskDependency[] @relation("DependentTask")
+  dependedBy  TaskDependency[] @relation("PrerequisiteTask")
+
+  taskLogs    TaskLog[]
+
+  @@index([projectId, milestoneId, sortOrder])
+  @@index([assignee])
+  @@index([status])
+  @@map("tasks")
+}
+
+model TaskDependency {
+  dependentId    String @map("dependent_id")
+  prerequisiteId String @map("prerequisite_id")
+
+  dependent      Task   @relation("DependentTask", fields: [dependentId], references: [id], onDelete: Cascade)
+  prerequisite   Task   @relation("PrerequisiteTask", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@id([dependentId, prerequisiteId])
+  @@index([prerequisiteId])
+  @@map("task_dependencies")
+}
+
+model TaskLog {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  projectId String   @map("project_id")
+  authorId  String   @map("author_id")
+  logDate   DateTime @map("log_date")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id])
+
+  @@index([taskId])
+  @@index([projectId])
+  @@map("task_logs")
+}
+
+model Risk {
+  id          String          @id @default(cuid())
+  projectId   String          @map("project_id")
+  title       String
+  description String          @default("")
+  impact      RiskImpact      @default(medium)
+  probability RiskProbability @default(medium)
+  mitigation  String          @default("")
+  status      RiskStatus      @default(open)
+
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("risks")
+}
+
+model WeeklyUpdate {
+  id               String             @id @default(cuid())
+  projectId        String             @map("project_id")
+  weekOf           DateTime           @map("week_of")
+  updatedById      String             @map("updated_by_id")
+  overallStatus    WeeklyUpdateStatus @default(on_time) @map("overall_status")
+  overallNotes     String             @default("") @map("overall_notes")
+  blockers         String             @default("")
+  nextWeekPlan     String             @default("") @map("next_week_plan")
+  keyAchievements  String             @default("") @map("key_achievements")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  updatedBy        User               @relation(fields: [updatedById], references: [id])
+
+  milestoneUpdates MilestoneUpdate[]
+
+  @@index([projectId, weekOf])
+  @@map("weekly_updates")
+}
+
+model MilestoneUpdate {
+  id             String       @id @default(cuid())
+  weeklyUpdateId String       @map("weekly_update_id")
+  milestoneId    String       @map("milestone_id")
+  progress       Int          @default(0)
+  notes          String       @default("")
+
+  weeklyUpdate   WeeklyUpdate @relation(fields: [weeklyUpdateId], references: [id], onDelete: Cascade)
+  milestone      Milestone    @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([weeklyUpdateId])
+  @@index([milestoneId])
+  @@map("milestone_updates")
+}
+
+model DelayRequest {
+  id                   String             @id @default(cuid())
+  projectId            String             @map("project_id")
+  requesterId          String             @map("requester_id")
+  reason               String
+  canCatchUp           Boolean            @default(false) @map("can_catch_up")
+  supportNeeded        String             @default("") @map("support_needed")
+  status               DelayRequestStatus @default(pending)
+  reviewerId           String?            @map("reviewer_id")
+  reviewedAt           DateTime?          @map("reviewed_at")
+  reviewNotes          String?            @map("review_notes")
+  supportResolved      Boolean?           @map("support_resolved")
+  supportResolvedAt    DateTime?          @map("support_resolved_at")
+  supportResolvedById  String?            @map("support_resolved_by_id")
+  supportResolvedNotes String?            @map("support_resolved_notes")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  project              Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requester            User               @relation("DelayRequester", fields: [requesterId], references: [id])
+  reviewer             User?              @relation("DelayReviewer", fields: [reviewerId], references: [id])
+  supportResolvedBy    User?              @relation("DelaySupportResolver", fields: [supportResolvedById], references: [id])
+
+  affectedMilestones   AffectedMilestone[]
+
+  @@index([projectId])
+  @@index([requesterId])
+  @@map("delay_requests")
+}
+
+model AffectedMilestone {
+  id             String       @id @default(cuid())
+  delayRequestId String       @map("delay_request_id")
+  milestoneId    String       @map("milestone_id")
+  originalDate   DateTime     @map("original_date")
+  proposedDate   DateTime     @map("proposed_date")
+
+  delayRequest   DelayRequest @relation(fields: [delayRequestId], references: [id], onDelete: Cascade)
+  milestone      Milestone    @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([delayRequestId])
+  @@index([milestoneId])
+  @@map("affected_milestones")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  projectId String?          @map("project_id")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, read])
+  @@index([projectId])
+  @@map("notifications")
+}
+
+model ProjectCodeSequence {
+  id          String      @id @default(cuid())
+  projectType ProjectType @map("project_type")
+  year        Int
+  lastSeq     Int         @default(0) @map("last_seq")
+
+  @@unique([projectType, year])
+  @@map("project_code_sequences")
+}
