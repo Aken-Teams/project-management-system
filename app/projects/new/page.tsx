@@ -411,18 +411,26 @@ export default function NewProjectPage() {
   }
 
   // Calculate milestone dates based on duration weeks
-  const calculateMilestoneDates = (milestones: ManualMilestone[], projectStartDate: string) => {
+  const calculateMilestoneDates = (milestones: ManualMilestone[], projectStartDate: string, tasks: MilestoneTaskDraft[]) => {
     if (!projectStartDate) return milestones
 
     let currentDate = new Date(projectStartDate)
 
     return milestones.map((milestone) => {
-      if (milestone.durationWeeks <= 0) {
+      // Sum task durations for this milestone
+      const totalTaskWeeks = tasks
+        .filter(t => t.milestoneId === milestone.id)
+        .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
+
+      // Effective duration = max(milestone's own duration, total task duration)
+      const effectiveWeeks = Math.max(milestone.durationWeeks, totalTaskWeeks)
+
+      if (effectiveWeeks <= 0) {
         return { ...milestone, startDate: undefined, endDate: undefined }
       }
 
       const startDate = new Date(currentDate)
-      const daysToAdd = milestone.durationWeeks * 7 - 1 // weeks to days, -1 because start day is included
+      const daysToAdd = effectiveWeeks * 7 - 1 // weeks to days, -1 because start day is included
       const endDate = new Date(currentDate)
       endDate.setDate(endDate.getDate() + daysToAdd)
 
@@ -439,7 +447,7 @@ export default function NewProjectPage() {
   }
 
   // Recalculate dates when milestones or start date changes
-  const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate)
+  const recalculatedMilestones = calculateMilestoneDates(manualMilestones, manualData.startDate, manualTasks)
 
   // Calculate task dates within each milestone's date range
   const calculateTaskDates = (
@@ -472,6 +480,22 @@ export default function NewProjectPage() {
   }
 
   const manualTaskDates = calculateTaskDates(manualTasks, recalculatedMilestones)
+
+  // Auto-expand milestone duration when tasks exceed it
+  useEffect(() => {
+    let changed = false
+    const updated = manualMilestones.map((ms) => {
+      const totalTaskWeeks = manualTasks
+        .filter(t => t.milestoneId === ms.id)
+        .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
+      if (totalTaskWeeks > ms.durationWeeks) {
+        changed = true
+        return { ...ms, durationWeeks: totalTaskWeeks }
+      }
+      return ms
+    })
+    if (changed) setManualMilestones(updated)
+  }, [manualTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track the last milestone's end date (only changes when milestones actually change)
   const lastMilestoneEndDate = useMemo(() => {
@@ -528,36 +552,58 @@ export default function NewProjectPage() {
   }
 
   // AI Milestone date calculation (same as manual mode)
-  const calculateAiMilestoneDates = (milestones: AiMilestone[], startDate: string): AiMilestone[] => {
+  const calculateAiMilestoneDates = (milestones: AiMilestone[], startDate: string, tasks: MilestoneTaskDraft[]): AiMilestone[] => {
     if (!startDate) return milestones
 
     let currentDate = new Date(startDate)
 
     return milestones.map((milestone) => {
-      if (!milestone.durationWeeks || milestone.durationWeeks <= 0) {
+      const totalTaskWeeks = tasks
+        .filter(t => t.milestoneId === milestone.id)
+        .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
+
+      const effectiveWeeks = Math.max(milestone.durationWeeks || 0, totalTaskWeeks)
+
+      if (effectiveWeeks <= 0) {
         return { ...milestone, startDate: undefined, endDate: undefined }
       }
 
-      const startDate = new Date(currentDate)
-      const daysToAdd = milestone.durationWeeks * 7 - 1
-      const endDate = new Date(currentDate)
-      endDate.setDate(endDate.getDate() + daysToAdd)
+      const msStart = new Date(currentDate)
+      const daysToAdd = effectiveWeeks * 7 - 1
+      const msEnd = new Date(currentDate)
+      msEnd.setDate(msEnd.getDate() + daysToAdd)
 
-      currentDate = new Date(endDate)
+      currentDate = new Date(msEnd)
       currentDate.setDate(currentDate.getDate() + 1)
 
       return {
         ...milestone,
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate: msStart.toISOString().split('T')[0],
+        endDate: msEnd.toISOString().split('T')[0],
       }
     })
   }
 
   // Recalculate AI milestone dates
-  const recalculatedAiMilestones = calculateAiMilestoneDates(aiMilestones, aiEditableData.startDate)
+  const recalculatedAiMilestones = calculateAiMilestoneDates(aiMilestones, aiEditableData.startDate, aiTasks)
 
   const aiTaskDates = calculateTaskDates(aiTasks, recalculatedAiMilestones)
+
+  // Auto-expand AI milestone duration when tasks exceed it
+  useEffect(() => {
+    let changed = false
+    const updated = aiMilestones.map((ms) => {
+      const totalTaskWeeks = aiTasks
+        .filter(t => t.milestoneId === ms.id)
+        .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
+      if (totalTaskWeeks > (ms.durationWeeks || 0)) {
+        changed = true
+        return { ...ms, durationWeeks: totalTaskWeeks }
+      }
+      return ms
+    })
+    if (changed) setAiMilestones(updated)
+  }, [aiTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track AI last milestone end date
   const aiLastMilestoneEndDate = useMemo(() => {

@@ -78,14 +78,20 @@ function MilestoneRow({
   milestone,
   index,
   canRemove,
+  collapsed,
+  taskCount,
   onUpdate,
   onRemove,
+  onToggleCollapse,
 }: {
   milestone: TimelineMilestone
   index: number
   canRemove: boolean
+  collapsed: boolean
+  taskCount: number
   onUpdate: (index: number, field: 'name' | 'durationWeeks', value: string | number) => void
   onRemove: (index: number) => void
+  onToggleCollapse: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: milestone.id })
@@ -111,14 +117,29 @@ function MilestoneRow({
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
 
-      {/* Name */}
-      <div className="pr-2">
+      {/* Name + collapse toggle */}
+      <div className="pr-2 flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="flex items-center justify-center h-6 w-6 shrink-0 rounded hover:bg-muted transition-colors"
+        >
+          {collapsed
+            ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          }
+        </button>
         <Input
           value={milestone.name}
           onChange={(e) => onUpdate(index, 'name', e.target.value)}
           placeholder="里程碑名稱"
           className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
         />
+        {collapsed && taskCount > 0 && (
+          <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+            {taskCount} 任務
+          </span>
+        )}
       </div>
 
       {/* Duration */}
@@ -301,12 +322,17 @@ function TaskRow({
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
   milestoneId,
+  teamMembers,
   onAdd,
 }: {
   milestoneId: string
+  teamMembers: TimelineTeamMember[]
   onAdd: (task: TimelineTask) => void
 }) {
   const [title, setTitle] = useState('')
+  const [durationWeeks, setDurationWeeks] = useState(1)
+  const [assignee, setAssignee] = useState('')
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
 
   const handleAdd = () => {
     if (!title.trim()) return
@@ -314,31 +340,123 @@ function InlineTaskInput({
       id: `draft-task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       milestoneId,
       title: title.trim(),
-      assignee: '',
-      priority: 'medium',
-      durationWeeks: 1,
+      assignee,
+      priority,
+      durationWeeks,
     })
     setTitle('')
+    setDurationWeeks(1)
+    setAssignee('')
+    setPriority('medium')
+  }
+
+  const cyclePriority = () => {
+    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
+    const idx = order.indexOf(priority)
+    setPriority(order[(idx + 1) % order.length])
+  }
+
+  const priorityConfig = {
+    high: { label: '高', className: 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' },
+    medium: { label: '中', className: 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' },
+    low: { label: '低', className: 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200' },
+  }
+
+  const p = priorityConfig[priority]
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAdd()
+    }
   }
 
   return (
     <div className={`${GRID_COLS} px-2 py-0.5`}>
+      {/* Drag placeholder */}
       <div />
+
+      {/* Title */}
       <div className="pl-4">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              handleAdd()
-            }
-          }}
+          onKeyDown={handleKeyDown}
           placeholder="+ 新增任務..."
           className="h-7 border-0 bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:border-b focus-visible:border-primary focus-visible:rounded-none px-1.5"
         />
       </div>
-      <div className="col-span-6" />
+
+      {/* Duration */}
+      <div className="flex justify-center">
+        {title.trim() && (
+          <Input
+            type="number"
+            min={1}
+            value={durationWeeks}
+            onChange={(e) => setDurationWeeks(Number(e.target.value) || 1)}
+            onKeyDown={handleKeyDown}
+            className="h-7 w-12 text-center text-xs border-0 bg-transparent focus-visible:ring-1 px-0 text-muted-foreground"
+          />
+        )}
+      </div>
+
+      {/* Start date placeholder */}
+      <div />
+
+      {/* End date placeholder */}
+      <div />
+
+      {/* Assignee */}
+      <div>
+        {title.trim() && (
+          <Select
+            value={assignee || ' '}
+            onValueChange={(v) => setAssignee(v === ' ' ? '' : v)}
+          >
+            <SelectTrigger className="h-7 border-0 bg-transparent text-xs focus:ring-1 px-1.5 text-muted-foreground">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value=" ">未指派</SelectItem>
+              {teamMembers.map((m) => (
+                <SelectItem key={m.id} value={m.name}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* Priority */}
+      <div className="flex justify-center">
+        {title.trim() && (
+          <button type="button" onClick={cyclePriority} className="transition-opacity">
+            <Badge
+              variant="outline"
+              className={`text-[10px] px-1.5 py-0 cursor-pointer opacity-60 hover:opacity-100 ${p.className}`}
+            >
+              {p.label}
+            </Badge>
+          </button>
+        )}
+      </div>
+
+      {/* Add button */}
+      <div className="flex justify-center">
+        {title.trim() && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-primary"
+            onClick={handleAdd}
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -358,6 +476,27 @@ export function TimelineTable({
   onTaskUpdate,
   onTaskReorder,
 }: TimelineTableProps) {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+
+  const toggleCollapse = (msId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(msId)) next.delete(msId)
+      else next.add(msId)
+      return next
+    })
+  }
+
+  const allCollapsed = milestones.length > 0 && milestones.every((m) => collapsedIds.has(m.id))
+
+  const toggleAll = () => {
+    if (allCollapsed) {
+      setCollapsedIds(new Set())
+    } else {
+      setCollapsedIds(new Set(milestones.map((m) => m.id)))
+    }
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -406,17 +545,29 @@ export function TimelineTable({
 
   return (
     <div className="rounded-lg border overflow-hidden">
+      {/* Toolbar: expand/collapse all */}
+      <div className="flex items-center justify-end px-3 py-2 bg-muted/30 border-b">
+        <button
+          type="button"
+          onClick={toggleAll}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronsUpDown className="h-4 w-4" />
+          {allCollapsed ? '全部展開' : '全部收合'}
+        </button>
+      </div>
+
       {/* Header */}
       <div
-        className={`${GRID_COLS} px-2 py-2 bg-muted/60 border-b text-[11px] font-medium text-muted-foreground uppercase tracking-wider`}
+        className={`${GRID_COLS} px-2 py-2.5 bg-muted/60 border-b text-xs font-medium text-muted-foreground tracking-wide`}
       >
         <span />
         <span className="pl-1.5">名稱</span>
         <span className="text-center">期程(週)</span>
-        <span className="text-center">開始</span>
-        <span className="text-center">結束</span>
+        <span className="text-center">開始日期</span>
+        <span className="text-center">結束日期</span>
         <span className="text-center">指派人</span>
-        <span className="text-center">優先</span>
+        <span className="text-center">優先度</span>
         <span />
       </div>
 
@@ -425,27 +576,35 @@ export function TimelineTable({
         <SortableContext items={flatIds} strategy={verticalListSortingStrategy}>
           {milestones.map((milestone, msIndex) => {
             const msTasks = tasks.filter((t) => t.milestoneId === milestone.id)
+            const isCollapsed = collapsedIds.has(milestone.id)
             return (
               <div key={milestone.id}>
                 <MilestoneRow
                   milestone={milestone}
                   index={msIndex}
                   canRemove={milestones.length > 1}
+                  collapsed={isCollapsed}
+                  taskCount={msTasks.length}
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
+                  onToggleCollapse={() => toggleCollapse(milestone.id)}
                 />
-                {msTasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    startDate={taskDates.get(task.id)?.startDate}
-                    endDate={taskDates.get(task.id)?.endDate}
-                    teamMembers={teamMembers}
-                    onRemove={onTaskRemove}
-                    onUpdate={onTaskUpdate}
-                  />
-                ))}
-                <InlineTaskInput milestoneId={milestone.id} onAdd={onTaskAdd} />
+                {!isCollapsed && (
+                  <>
+                    {msTasks.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        startDate={taskDates.get(task.id)?.startDate}
+                        endDate={taskDates.get(task.id)?.endDate}
+                        teamMembers={teamMembers}
+                        onRemove={onTaskRemove}
+                        onUpdate={onTaskUpdate}
+                      />
+                    ))}
+                    <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} onAdd={onTaskAdd} />
+                  </>
+                )}
               </div>
             )
           })}
