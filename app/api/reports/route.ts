@@ -228,11 +228,26 @@ export async function GET(request: NextRequest) {
     // ── Transform projects to frontend format ──
     const feProjects = projectsWithProgress.map(p => {
       const doneTasks = p.tasks.filter(t => t.status === 'done').length
+      const inProgressTasks = p.tasks.filter(t => t.status === 'in_progress').length
+      const blockedTasks = p.tasks.filter(t => t.status === 'blocked').length
+      const todoTasks = p.tasks.filter(t => t.status === 'todo').length
       const doneMilestones = p.milestones.filter(m => m.status === 'done').length
 
       // Find the PM (project manager) from team members, fallback to project owner
       const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
       const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+
+      // Calculate team workload for this project
+      const projectWorkloadMap = new Map<string, { total: number; done: number }>()
+      p.tasks.forEach(t => {
+        const entry = projectWorkloadMap.get(t.assignee) || { total: 0, done: 0 }
+        entry.total++
+        if (t.status === 'done') entry.done++
+        projectWorkloadMap.set(t.assignee, entry)
+      })
+      const projectTeamWorkload = [...projectWorkloadMap.entries()]
+        .map(([name, data]) => ({ name, total: data.total, done: data.done }))
+        .sort((a, b) => b.total - a.total)
 
       return {
         id: p.id,
@@ -249,6 +264,9 @@ export async function GET(request: NextRequest) {
         teamSize: p.teamMembers.length,
         totalTasks: p.tasks.length,
         doneTasks,
+        inProgressTasks,
+        blockedTasks,
+        todoTasks,
         totalMilestones: p.milestones.length,
         doneMilestones,
         openRisks: p.risks.length,
@@ -266,6 +284,7 @@ export async function GET(request: NextRequest) {
           impact: r.impact,
           status: r.status,
         })),
+        teamWorkload: projectTeamWorkload,
       }
     })
 

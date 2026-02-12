@@ -83,6 +83,9 @@ interface ReportsData {
     teamSize: number
     totalTasks: number
     doneTasks: number
+    inProgressTasks: number
+    blockedTasks: number
+    todoTasks: number
     totalMilestones: number
     doneMilestones: number
     openRisks: number
@@ -99,6 +102,11 @@ interface ReportsData {
       title: string
       impact: string
       status: string
+    }>
+    teamWorkload: Array<{
+      name: string
+      total: number
+      done: number
     }>
   }>
   teamWorkload: Array<{
@@ -236,6 +244,57 @@ export default function ReportsPage() {
     fetchReports()
   }, [user])
 
+  // Calculate display stats based on selected project or all projects
+  // Must be declared before any early returns to follow React Hooks rules
+  const displayStats = useMemo(() => {
+    if (!data) return null
+
+    const selectedProject = selectedProjectId === 'all' ? null : data.projects.find(p => p.id === selectedProjectId)
+    if (!selectedProject) return data.stats
+
+    // Use actual task status counts from the project
+    return {
+      totalProjects: 1,
+      totalTasks: selectedProject.totalTasks,
+      doneTasks: selectedProject.doneTasks,
+      inProgressTasks: selectedProject.inProgressTasks,
+      blockedTasks: selectedProject.blockedTasks,
+      todoTasks: selectedProject.todoTasks,
+      totalMilestones: selectedProject.totalMilestones,
+      doneMilestones: selectedProject.doneMilestones,
+      budget: selectedProject.budget,
+      budgetUsed: selectedProject.budgetUsed,
+      openRisks: selectedProject.openRisks,
+      pendingDelays: 0, // Single project view doesn't show pending delays
+      teamSize: selectedProject.teamSize,
+      progress: selectedProject.progress,
+    }
+  }, [data, selectedProjectId])
+
+  const displayStatusDistribution = useMemo(() => {
+    if (!data) return null
+
+    const selectedProject = selectedProjectId === 'all' ? null : data.projects.find(p => p.id === selectedProjectId)
+    if (!selectedProject) return data.statusDistribution
+
+    // For single project, show count of 1 for the project's status
+    return {
+      green: selectedProject.status === 'green' ? 1 : 0,
+      yellow: selectedProject.status === 'yellow' ? 1 : 0,
+      red: selectedProject.status === 'red' ? 1 : 0,
+    }
+  }, [data, selectedProjectId])
+
+  const displayTeamWorkload = useMemo(() => {
+    if (!data) return []
+
+    const selectedProject = selectedProjectId === 'all' ? null : data.projects.find(p => p.id === selectedProjectId)
+    if (!selectedProject) return data.teamWorkload
+
+    // For single project, use the project's team workload
+    return selectedProject.teamWorkload
+  }, [data, selectedProjectId])
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -246,7 +305,7 @@ export default function ReportsPage() {
     )
   }
 
-  if (error || !data) {
+  if (error || !data || !displayStats || !displayStatusDistribution) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-96">
@@ -262,23 +321,23 @@ export default function ReportsPage() {
   const { stats, statusDistribution, projects, teamWorkload } = data
   const selectedProject = selectedProjectId === 'all' ? null : projects.find(p => p.id === selectedProjectId)
 
-  const budgetPct = stats.budget > 0 ? Math.round((stats.budgetUsed / stats.budget) * 100) : 0
+  const budgetPct = displayStats.budget > 0 ? Math.round((displayStats.budgetUsed / displayStats.budget) * 100) : 0
 
   // ── Donut segments ──
   const taskSegments = [
-    { value: stats.doneTasks, color: '#10b981', label: '已完成' },
-    { value: stats.inProgressTasks, color: '#3b82f6', label: '進行中' },
-    { value: stats.todoTasks, color: '#94a3b8', label: '待辦' },
-    { value: stats.blockedTasks, color: '#ef4444', label: '受阻' },
+    { value: displayStats.doneTasks, color: '#10b981', label: '已完成' },
+    { value: displayStats.inProgressTasks, color: '#3b82f6', label: '進行中' },
+    { value: displayStats.todoTasks, color: '#94a3b8', label: '待辦' },
+    { value: displayStats.blockedTasks, color: '#ef4444', label: '受阻' },
   ]
 
   const statusSegments = [
-    { value: statusDistribution.green, color: '#10b981', label: '正常' },
-    { value: statusDistribution.yellow, color: '#f59e0b', label: '注意' },
-    { value: statusDistribution.red, color: '#ef4444', label: '風險' },
+    { value: displayStatusDistribution.green, color: '#10b981', label: '正常' },
+    { value: displayStatusDistribution.yellow, color: '#f59e0b', label: '注意' },
+    { value: displayStatusDistribution.red, color: '#ef4444', label: '風險' },
   ]
 
-  const maxMemberTasks = Math.max(...teamWorkload.map(m => m.total), 1)
+  const maxMemberTasks = Math.max(...displayTeamWorkload.map(m => m.total), 1)
 
   // ── Export handlers ──
   const handleOpenPdfDialog = () => {
@@ -815,9 +874,9 @@ ${selectedProjects.map((p, i) => {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <Target className="h-3.5 w-3.5" /> 整體進度
                 </div>
-                <div className="text-2xl font-bold">{stats.progress}%</div>
+                <div className="text-2xl font-bold">{displayStats.progress}%</div>
                 <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${stats.progress}%` }} />
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${displayStats.progress}%` }} />
                 </div>
               </CardContent>
             </Card>
@@ -831,7 +890,7 @@ ${selectedProjects.map((p, i) => {
                   <div className={cn('h-full rounded-full transition-all', budgetPct > 100 ? 'bg-destructive' : 'bg-emerald-500')} style={{ width: `${Math.min(budgetPct, 100)}%` }} />
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  {fmtMoney(stats.budgetUsed)} / {fmtMoney(stats.budget)}
+                  {fmtMoney(displayStats.budgetUsed)} / {fmtMoney(displayStats.budget)}
                 </div>
               </CardContent>
             </Card>
@@ -840,9 +899,9 @@ ${selectedProjects.map((p, i) => {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <BarChart3 className="h-3.5 w-3.5" /> 里程碑
                 </div>
-                <div className="text-2xl font-bold">{stats.doneMilestones}<span className="text-sm font-normal text-muted-foreground">/{stats.totalMilestones}</span></div>
+                <div className="text-2xl font-bold">{displayStats.doneMilestones}<span className="text-sm font-normal text-muted-foreground">/{displayStats.totalMilestones}</span></div>
                 <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${stats.totalMilestones > 0 ? (stats.doneMilestones / stats.totalMilestones) * 100 : 0}%` }} />
+                  <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${displayStats.totalMilestones > 0 ? (displayStats.doneMilestones / displayStats.totalMilestones) * 100 : 0}%` }} />
                 </div>
               </CardContent>
             </Card>
@@ -852,15 +911,15 @@ ${selectedProjects.map((p, i) => {
                   <AlertTriangle className="h-3.5 w-3.5" /> 風險 / 延期
                 </div>
                 <div className="flex items-baseline gap-3">
-                  <div className={cn('text-2xl font-bold', stats.openRisks > 0 ? 'text-destructive' : 'text-emerald-600')}>
-                    {stats.openRisks}
+                  <div className={cn('text-2xl font-bold', displayStats.openRisks > 0 ? 'text-destructive' : 'text-emerald-600')}>
+                    {displayStats.openRisks}
                   </div>
-                  {stats.pendingDelays > 0 && (
-                    <Badge variant="destructive" className="text-[10px]">{stats.pendingDelays} 待審</Badge>
+                  {displayStats.pendingDelays > 0 && (
+                    <Badge variant="destructive" className="text-[10px]">{displayStats.pendingDelays} 待審</Badge>
                   )}
                 </div>
                 <div className="text-[10px] text-muted-foreground mt-1">
-                  {stats.openRisks === 0 ? '無未解決風險' : `${stats.openRisks} 個未解決風險`}
+                  {displayStats.openRisks === 0 ? '無未解決風險' : `${displayStats.openRisks} 個未解決風險`}
                 </div>
               </CardContent>
             </Card>
@@ -876,7 +935,7 @@ ${selectedProjects.map((p, i) => {
               <CardContent className="flex flex-col items-center py-5 gap-4">
                 <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">{stats.totalTasks}</div>
+                    <div className="text-2xl font-bold">{displayStats.totalTasks}</div>
                     <div className="text-xs text-muted-foreground">總任務</div>
                   </div>
                 </DonutChart>
@@ -961,8 +1020,8 @@ ${selectedProjects.map((p, i) => {
               <CardContent className="flex flex-col items-center py-5 gap-4">
                 <DonutChart
                   segments={[
-                    { value: stats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
-                    { value: Math.max(stats.budget - stats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
+                    { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
+                    { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
                   ]}
                   size={150} strokeWidth={22}
                 >
@@ -975,12 +1034,12 @@ ${selectedProjects.map((p, i) => {
                   <div className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
                     <span className="text-sm text-muted-foreground">已使用</span>
-                    <span className="text-sm font-semibold">{fmtMoney(stats.budgetUsed)}</span>
+                    <span className="text-sm font-semibold">{fmtMoney(displayStats.budgetUsed)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
                     <span className="text-sm text-muted-foreground">剩餘</span>
-                    <span className="text-sm font-semibold">{fmtMoney(Math.max(stats.budget - stats.budgetUsed, 0))}</span>
+                    <span className="text-sm font-semibold">{fmtMoney(Math.max(displayStats.budget - displayStats.budgetUsed, 0))}</span>
                   </div>
                 </div>
               </CardContent>
@@ -1111,7 +1170,7 @@ ${selectedProjects.map((p, i) => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {teamWorkload.map(m => (
+                  {displayTeamWorkload.map(m => (
                     <div key={m.name} className="flex items-center gap-3">
                       <span className="text-sm font-medium w-[72px] truncate shrink-0">{m.name}</span>
                       <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
@@ -1127,7 +1186,7 @@ ${selectedProjects.map((p, i) => {
                       <span className="text-sm text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
                     </div>
                   ))}
-                  {teamWorkload.length > 0 && (
+                  {displayTeamWorkload.length > 0 && (
                     <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
                       <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-emerald-500 inline-block" />已完成</span>
                       <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-primary/80 inline-block" />總任務</span>
