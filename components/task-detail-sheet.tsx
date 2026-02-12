@@ -37,6 +37,7 @@ interface TaskDetailSheetProps {
 const STATUS_DOT_COLORS: Record<string, string> = {
   done: 'bg-green-500',
   'in-progress': 'bg-blue-500',
+  'overdue-not-started': 'bg-orange-500',
   todo: 'bg-slate-400',
   blocked: 'bg-red-500',
 }
@@ -59,6 +60,15 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   if (!task) return null
 
   const effectiveStatus = (t: Task): TaskStatus => t.progress >= 100 ? 'done' : t.status
+  type DisplayStatus = TaskStatus | 'overdue-not-started'
+  const displayStatus = (t: Task): DisplayStatus => {
+    if (t.progress >= 100) return 'done'
+    if (t.status === 'in-progress' && t.progress === 0) {
+      const hasLogs = project.taskLogs.some(tl => tl.taskId === t.id)
+      if (!hasLogs) return 'overdue-not-started'
+    }
+    return t.status
+  }
   const isOverdue = (t: Task) => effectiveStatus(t) !== 'done' && new Date() > new Date(t.endDate)
 
   const node = nodeMap.get(task.id)
@@ -66,19 +76,21 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const milestone = project.milestones.find(m => m.id === task.milestoneId)
   const taskOverdue = isOverdue(task)
 
-  const getStatusBadge = (status: TaskStatus) => {
+  const getStatusBadge = (status: DisplayStatus) => {
     switch (status) {
       case 'done': return <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
       case 'in-progress': return <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
+      case 'overdue-not-started': return <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">逾期未開始</Badge>
       case 'blocked': return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">受阻</Badge>
       default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
     }
   }
 
-  const getStatusBadgeLarge = (status: TaskStatus) => {
+  const getStatusBadgeLarge = (status: DisplayStatus) => {
     switch (status) {
       case 'done': return <Badge className="text-sm bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
       case 'in-progress': return <Badge className="text-sm bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
+      case 'overdue-not-started': return <Badge className="text-sm bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">逾期未開始</Badge>
       case 'blocked': return <Badge variant="destructive" className="text-sm">受阻</Badge>
       default: return <Badge className="text-sm bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
     }
@@ -115,11 +127,13 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
                 effectiveStatus(task) === 'done' ? 'bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400' :
                 taskOverdue ? 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400' :
+                displayStatus(task) === 'overdue-not-started' ? 'bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400' :
                 effectiveStatus(task) === 'blocked' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
                 'bg-primary/10 text-primary'
               )}>
                 {effectiveStatus(task) === 'done' ? <Clock className="h-5 w-5" /> :
                  taskOverdue ? <AlertTriangle className="h-5 w-5" /> :
+                 displayStatus(task) === 'overdue-not-started' ? <AlertTriangle className="h-5 w-5" /> :
                  <Flag className="h-5 w-5" />}
               </div>
               <div className="flex-1 min-w-0 space-y-1">
@@ -144,7 +158,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
           {/* Status badges + Progress */}
           <div className="px-6 py-4 border-t space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              {getStatusBadgeLarge(effectiveStatus(task))}
+              {getStatusBadgeLarge(displayStatus(task))}
               <Badge className={cn('text-sm', getPriorityColor(task.priority))}>
                 {getPriorityText(task.priority)}優先
               </Badge>
@@ -225,9 +239,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         className="flex items-center gap-2 p-2 rounded-md border text-sm cursor-pointer hover:bg-muted/30"
                         onClick={() => handleSelectTask(t)}
                       >
-                        <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[t.status]}`} />
+                        <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[displayStatus(t)]}`} />
                         <span className="flex-1 truncate">{t.title}</span>
-                        {t.status === 'done' ? (
+                        {effectiveStatus(t) === 'done' ? (
                           <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
                         ) : (
                           <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
@@ -252,9 +266,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         className="flex items-center gap-2 p-2 rounded-md border text-sm cursor-pointer hover:bg-muted/30"
                         onClick={() => handleSelectTask(t)}
                       >
-                        <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[effectiveStatus(t)]}`} />
+                        <div className={`w-2 h-2 rounded-full ${STATUS_DOT_COLORS[displayStatus(t)]}`} />
                         <span className="flex-1 truncate">{t.title}</span>
-                        {getStatusBadge(effectiveStatus(t))}
+                        {getStatusBadge(displayStatus(t))}
                       </div>
                     ))}
                   </div>

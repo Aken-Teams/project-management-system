@@ -1,6 +1,6 @@
 import { type Task, type TaskLog } from './mock-data'
 
-export type ComputedTaskStatus = 'completed' | 'on-track' | 'at-risk' | 'overdue' | 'not-started'
+export type ComputedTaskStatus = 'completed' | 'on-track' | 'at-risk' | 'overdue' | 'overdue-not-started' | 'not-started'
 
 const AT_RISK_THRESHOLD_DAYS = 7
 const NO_RECENT_LOG_DAYS = 7
@@ -20,6 +20,9 @@ export function computeTaskStatus(
   const taskSpecificLogs = taskLogs.filter(l => l.taskId === task.id)
 
   if (referenceDate < startDate && taskSpecificLogs.length === 0) return 'not-started'
+
+  // Start date has passed but nobody has done anything (progress=0, no logs)
+  if (task.progress === 0 && taskSpecificLogs.length === 0) return 'overdue-not-started'
 
   const daysToDeadline = Math.ceil(
     (endDate.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -56,6 +59,7 @@ export function getStatusLabel(status: ComputedTaskStatus): string {
     case 'on-track': return '正常'
     case 'at-risk': return '注意'
     case 'overdue': return '逾期'
+    case 'overdue-not-started': return '逾期未開始'
     case 'not-started': return '未開始'
   }
 }
@@ -66,6 +70,7 @@ export function getStatusColor(status: ComputedTaskStatus): string {
     case 'on-track': return 'bg-blue-100 text-blue-700 border-blue-300'
     case 'at-risk': return 'bg-amber-100 text-amber-700 border-amber-300'
     case 'overdue': return 'bg-red-100 text-red-700 border-red-300'
+    case 'overdue-not-started': return 'bg-orange-100 text-orange-700 border-orange-300'
     case 'not-started': return 'bg-slate-100 text-slate-600 border-slate-300'
   }
 }

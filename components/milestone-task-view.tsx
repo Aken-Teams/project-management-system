@@ -119,16 +119,6 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
     return map
   }, [project.milestones, filteredTasks])
 
-  // Pre-compute set of milestone IDs with no activity (for Gantt chart prop)
-  const noActivityMilestoneIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const ms of project.milestones) {
-      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
-      if (isMilestoneNoActivity(ms.id, msTasks)) ids.add(ms.id)
-    }
-    return ids
-  }, [project.milestones, project.tasks, project.taskLogs])
-
   const toggleMilestone = (id: string) => {
     setExpandedMilestones(prev => {
       const next = new Set(prev)
@@ -143,19 +133,21 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
     setTaskDetailOpen(true)
   }
 
-  const getStatusBadge = (status: TaskStatus) => {
+  const getStatusBadge = (status: DisplayStatus) => {
     switch (status) {
       case 'done': return <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
       case 'in-progress': return <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
+      case 'overdue-not-started': return <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">逾期未開始</Badge>
       case 'blocked': return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">受阻</Badge>
       default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
     }
   }
 
-  const getStatusBadgeLarge = (status: TaskStatus) => {
+  const getStatusBadgeLarge = (status: DisplayStatus) => {
     switch (status) {
       case 'done': return <Badge className="text-sm bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
       case 'in-progress': return <Badge className="text-sm bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
+      case 'overdue-not-started': return <Badge className="text-sm bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">逾期未開始</Badge>
       case 'blocked': return <Badge variant="destructive" className="text-sm">受阻</Badge>
       default: return <Badge className="text-sm bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
     }
@@ -170,6 +162,17 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
   }
 
   // Normalize: progress >= 100 should always be treated as 'done'
+  // Also detect "overdue-not-started": auto-progressed to in-progress but nobody has done anything
+  type DisplayStatus = TaskStatus | 'overdue-not-started'
+  const displayStatus = (task: Task): DisplayStatus => {
+    if (task.progress >= 100) return 'done' as const
+    if (task.status === 'in-progress' && task.progress === 0) {
+      const hasLogs = project.taskLogs.some(tl => tl.taskId === task.id)
+      if (!hasLogs) return 'overdue-not-started'
+    }
+    return task.status
+  }
+  // Keep effectiveStatus for logic that only cares about raw status (overdue check etc.)
   const effectiveStatus = (task: Task) => {
     if (task.progress >= 100) return 'done' as const
     return task.status
@@ -191,6 +194,27 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
     const hasLogs = project.taskLogs.some(tl => tasks.some(t => t.id === tl.taskId))
     return !hasLogs
   }
+
+  // Pre-compute set of milestone IDs with no activity (for Gantt chart prop)
+  const noActivityMilestoneIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const ms of project.milestones) {
+      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+      if (isMilestoneNoActivity(ms.id, msTasks)) ids.add(ms.id)
+    }
+    return ids
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.milestones, project.tasks, project.taskLogs])
+
+  // Pre-compute set of task IDs that are "overdue not started" (for Gantt chart orange bars)
+  const overdueNotStartedTaskIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const t of project.tasks) {
+      if (displayStatus(t) === 'overdue-not-started') ids.add(t.id)
+    }
+    return ids
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.tasks, project.taskLogs])
 
   // Sequential color assignment guarantees no collisions
   const AVATAR_COLORS = [
@@ -403,6 +427,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
           nodeMap={nodeMap}
           selectedTaskId={selectedTask?.id ?? null}
           noActivityMilestoneIds={noActivityMilestoneIds}
+          overdueNotStartedTaskIds={overdueNotStartedTaskIds}
         />
       ) : (
         <div className="space-y-3">
@@ -509,7 +534,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                     )}>{task.title}</span>
                                   </div>
                                   {/* Status */}
-                                  <div>{getStatusBadge(effectiveStatus(task))}</div>
+                                  <div>{getStatusBadge(displayStatus(task))}</div>
                                   {/* Priority */}
                                   <div>{getPriorityBadge(task.priority)}</div>
                                   {/* Assignee */}

@@ -28,18 +28,20 @@ interface GanttChartProps {
   selectedTaskId?: string | null
   onTaskHover?: (task: Task | null) => void
   noActivityMilestoneIds?: Set<string>
+  overdueNotStartedTaskIds?: Set<string>
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
   'done': { bg: '#10b981', border: '#059669' },
   'in-progress': { bg: '#3b82f6', border: '#2563eb' },
+  'overdue-not-started': { bg: '#f97316', border: '#ea580c' },
   'blocked': { bg: '#ef4444', border: '#dc2626' },
   'todo': { bg: '#94a3b8', border: '#64748b' },
 }
 
 const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
@@ -364,7 +366,8 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
 
                 {/* Expanded task rows — lighter background for clear distinction */}
                 {expanded && msTasks.map((task, ti) => {
-                  const taskColors = STATUS_COLORS[effectiveStatus(task)] || STATUS_COLORS.todo
+                  const taskDisplayStatus = overdueNotStartedTaskIds?.has(task.id) ? 'overdue-not-started' : effectiveStatus(task)
+                  const taskColors = STATUS_COLORS[taskDisplayStatus] || STATUS_COLORS.todo
                   const taskOverdue = isTaskOverdue(task)
                   const isCritical = showDependencies && nodeMap?.get(task.id)?.isOnCriticalPath
                   const node = showDependencies ? nodeMap?.get(task.id) : undefined
@@ -498,6 +501,10 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
           <div className="flex items-center gap-1.5">
             <div className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
             <span>進行中</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#f97316' }} />
+            <span>逾期未開始</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#94a3b8' }} />

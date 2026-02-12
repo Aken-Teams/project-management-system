@@ -67,6 +67,7 @@ function getStatusDot(status: ComputedTaskStatus) {
     'on-track': 'bg-blue-500',
     'at-risk': 'bg-amber-500',
     overdue: 'bg-red-500',
+    'overdue-not-started': 'bg-orange-500',
     'not-started': 'bg-gray-300',
   }
   return <div className={cn('h-2 w-2 rounded-full shrink-0', colors[status])} />
@@ -183,7 +184,7 @@ export default function MyTasksPage() {
     g.milestoneGroups.flatMap(m =>
       m.tasks.filter(t => {
         const s = computeTaskStatus(t, g.project.taskLogs)
-        return s === 'at-risk' || s === 'overdue'
+        return s === 'at-risk' || s === 'overdue' || s === 'overdue-not-started'
       })
     )
   ).length
@@ -476,7 +477,7 @@ export default function MyTasksPage() {
               <AlertCircle className="h-4 w-4 text-amber-500" />
             </div>
             <div className="text-2xl font-bold text-amber-600">{atRiskCount}</div>
-            <p className="text-sm text-muted-foreground mt-1">即將到期或逾期</p>
+            <p className="text-sm text-muted-foreground mt-1">逾期未開始、即將到期或逾期</p>
           </Card>
         </div>
 
