@@ -408,11 +408,41 @@ export default function MyTasksPage() {
     }
   }
 
-  const handleSubmitExtension = () => {
-    // Delay request API not yet implemented
-    alert('延期申請功能即將推出')
-    setShowExtensionForm(false)
-    setShowActions(true)
+  const handleSubmitExtension = async () => {
+    if (!dialogTask || !user) return
+    const { task, project } = dialogTask
+    const milestone = project.milestones.find(m => m.id === task.milestoneId)
+    if (!milestone) return
+
+    try {
+      const res = await fetch('/api/delay-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          requesterId: user.id,
+          reason: extensionReason.trim(),
+          canCatchUp: false,
+          supportNeeded: extensionSupport.trim() || '',
+          affectedMilestones: [{
+            milestoneId: milestone.id,
+            originalDate: milestone.dueDate,
+            proposedDate: extensionDate || milestone.dueDate,
+          }],
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '送出失敗')
+      }
+      setShowExtensionForm(false)
+      setShowActions(true)
+      setExtensionReason('')
+      setExtensionDate('')
+      setExtensionSupport('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '送出延期申請失敗')
+    }
   }
 
   // Fresh task data for dialog

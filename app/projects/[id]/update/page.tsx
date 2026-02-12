@@ -40,7 +40,7 @@ function getMondayOfCurrentWeek(): string {
 export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { getProject, addWeeklyUpdate, submitDelayRequest } = useProjectStore()
+  const { getProject, addWeeklyUpdate } = useProjectStore()
   const { user } = useAuth()
   const project = getProject(id)
 
@@ -115,7 +115,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
     )
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!user) {
       alert('請先登入')
       return
@@ -158,13 +158,17 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
           })
 
         if (affectedMilestones.length > 0) {
-          submitDelayRequest(id, {
-            requestedBy: user.name,
-            requestedAt: new Date().toISOString(),
-            reason: delayReason,
-            affectedMilestones,
-            canCatchUp: false,
-            supportNeeded,
+          await fetch('/api/delay-requests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId: id,
+              requesterId: user.id,
+              reason: delayReason,
+              canCatchUp: false,
+              supportNeeded,
+              affectedMilestones,
+            }),
           })
         }
       }
