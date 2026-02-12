@@ -96,3 +96,95 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Print styles for PDF export */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 15mm;
+  }
+
+  /* Force background colors and borders to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide elements that shouldn't be printed */
+  nav,
+  aside,
+  header button,
+  .no-print,
+  [data-radix-dialog-overlay],
+  [data-radix-dialog-content] {
+    display: none !important;
+  }
+
+  /* Adjust body for print */
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ensure cards and backgrounds are visible */
+  [class*="bg-"],
+  [class*="border"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Page breaks */
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Optimize spacing for print */
+  h1 {
+    font-size: 24px !important;
+    margin-bottom: 8px !important;
+  }
+
+  h2 {
+    font-size: 18px !important;
+    margin-top: 16px !important;
+    margin-bottom: 12px !important;
+  }
+
+  /* Ensure SVG charts print correctly */
+  svg {
+    max-width: 100% !important;
+  }
+
+  /* Remove interactive states */
+  button,
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  /* Compact spacing for print */
+  .gap-4 {
+    gap: 0.75rem !important;
+  }
+
+  .gap-6 {
+    gap: 1rem !important;
+  }
+
+  .p-6 {
+    padding: 1rem !important;
+  }
+
+  /* Ensure good contrast */
+  .text-muted-foreground {
+    color: #64748b !important;
+  }
+}
