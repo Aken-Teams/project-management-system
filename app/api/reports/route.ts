@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { projectTypeToFe } from '@/lib/enum-mappers'
 
 // ─── Auto-compute project status & progress from tasks ─────
 interface FeTask {
@@ -229,14 +230,18 @@ export async function GET(request: NextRequest) {
       const doneTasks = p.tasks.filter(t => t.status === 'done').length
       const doneMilestones = p.milestones.filter(m => m.status === 'done').length
 
+      // Find the PM (project manager) from team members, fallback to project owner
+      const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
+      const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+
       return {
         id: p.id,
         projectCode: p.projectCode,
         name: p.name,
-        projectType: p.projectType,
+        projectType: projectTypeToFe(p.projectType),
         status: p.actualStatus,
         progress: p.actualProgress,
-        owner: p.owner.name,
+        owner: displayOwner,
         startDate: p.startDate.toISOString().split('T')[0],
         endDate: p.endDate.toISOString().split('T')[0],
         budget: p.budget,

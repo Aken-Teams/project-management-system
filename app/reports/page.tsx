@@ -216,11 +216,7 @@ export default function ReportsPage() {
         if (user.id) params.append('userId', user.id)
         else if (user.email) params.append('userEmail', user.email)
 
-        // If specific project is selected, add projectId filter
-        if (selectedProjectId !== 'all') {
-          params.append('projectId', selectedProjectId)
-        }
-
+        // Always fetch all projects, filter on frontend
         const response = await fetch(`/api/reports?${params}`)
         if (!response.ok) {
           throw new Error('Failed to fetch reports data')
@@ -238,7 +234,7 @@ export default function ReportsPage() {
     }
 
     fetchReports()
-  }, [user, selectedProjectId])
+  }, [user])
 
   if (loading) {
     return (
