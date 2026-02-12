@@ -146,9 +146,9 @@ export async function autoProgressTasks(
     updatedIds.push(...toBlocked)
   }
 
-  // ── in_progress → todo: startDate moved to future AND no work done ──
+  // ── in_progress/blocked → todo: startDate moved to future AND no work done ──
   const toRevert = tasks.filter(t =>
-    t.status === 'in_progress' && t.startDate > today && t.progress === 0 && !t.completedAt,
+    (t.status === 'in_progress' || t.status === 'blocked') && t.startDate > today && t.progress === 0 && !t.completedAt,
   )
   if (toRevert.length > 0) {
     await prisma.task.updateMany({

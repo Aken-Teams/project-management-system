@@ -94,6 +94,8 @@ interface MyTasksProject {
   milestones: { id: string; name: string; dueDate: string; status: string; progress: number }[]
   tasks: Task[]
   taskLogs: TaskLog[]
+  pendingDelayMilestoneIds?: string[]
+  pendingDelayProposedDates?: Record<string, string>
 }
 
 export default function MyTasksPage() {
@@ -435,6 +437,17 @@ export default function MyTasksPage() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || '送出失敗')
       }
+      // Update local state to mark milestone as pending delay
+      const proposedDate = extensionDate || milestone.dueDate
+      setApiProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? {
+              ...p,
+              pendingDelayMilestoneIds: [...(p.pendingDelayMilestoneIds || []), milestone.id],
+              pendingDelayProposedDates: { ...(p.pendingDelayProposedDates || {}), [milestone.id]: proposedDate },
+            }
+          : p
+      ))
       setShowExtensionForm(false)
       setShowActions(true)
       setExtensionReason('')
@@ -588,6 +601,7 @@ export default function MyTasksPage() {
                               const status = computeTaskStatus(task, project.taskLogs)
                               const days = getDaysUntilDeadline(task)
                               const isCompleted = !!task.completedAt
+                              const taskPendingDelay = (project.pendingDelayMilestoneIds || []).includes(task.milestoneId)
 
                               return (
                                 <button
@@ -602,16 +616,19 @@ export default function MyTasksPage() {
                                   )}>
                                     {task.title}
                                   </span>
-                                  {status === 'overdue' && (
+                                  {taskPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? (
+                                    <span className="text-sm text-amber-600 font-medium shrink-0">
+                                      延期申請中
+                                    </span>
+                                  ) : status === 'overdue' ? (
                                     <span className="text-sm text-destructive font-medium shrink-0">
                                       逾期{Math.abs(days)}天
                                     </span>
-                                  )}
-                                  {status === 'overdue-not-started' && (
+                                  ) : status === 'overdue-not-started' ? (
                                     <span className="text-sm text-orange-600 font-medium shrink-0">
                                       逾期未開始
                                     </span>
-                                  )}
+                                  ) : null}
                                   {status === 'at-risk' && (
                                     <span className="text-sm text-amber-600 font-medium shrink-0">
                                       剩{days}天
@@ -668,9 +685,14 @@ export default function MyTasksPage() {
 
             const hasBlockedUpstream = upstreamTasks.some(u => u.status !== 'completed')
 
+            // Check if this task's milestone has a pending delay request
+            const hasPendingDelay = (project.pendingDelayMilestoneIds || []).includes(task.milestoneId)
+            const pendingProposedDate = (project.pendingDelayProposedDates || {})[task.milestoneId]
+
             // Badge text with days info
             const badgeText = (() => {
               if (isCompleted) return '已完成'
+              if (hasPendingDelay && (status === 'overdue' || status === 'overdue-not-started')) return '延期申請中'
               if (status === 'overdue') return `逾期${Math.abs(days)}天`
               if (status === 'at-risk') return `剩${days}天`
               return getStatusLabel(status)
@@ -685,12 +707,14 @@ export default function MyTasksPage() {
                       <div className={cn(
                         'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
                         isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400' :
+                        hasPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
                         status === 'overdue' ? 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400' :
                         status === 'overdue-not-started' ? 'bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400' :
                         status === 'at-risk' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
                         'bg-primary/10 text-primary'
                       )}>
                         {isCompleted ? <CheckCircle2 className="h-5 w-5" /> :
+                         hasPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? <Clock className="h-5 w-5" /> :
                          status === 'overdue' ? <AlertTriangle className="h-5 w-5" /> :
                          status === 'overdue-not-started' ? <AlertTriangle className="h-5 w-5" /> :
                          status === 'at-risk' ? <AlertCircle className="h-5 w-5" /> :
@@ -701,7 +725,11 @@ export default function MyTasksPage() {
                           <DialogTitle className={cn('text-base text-left leading-tight', isCompleted && 'text-muted-foreground')}>
                             {task.title}
                           </DialogTitle>
-                          <Badge className={cn('text-xs px-2 py-0.5 shrink-0', getStatusColor(status))}>
+                          <Badge className={cn('text-xs px-2 py-0.5 shrink-0',
+                            hasPendingDelay && (status === 'overdue' || status === 'overdue-not-started')
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                              : getStatusColor(status)
+                          )}>
                             {badgeText}
                           </Badge>
                         </div>
@@ -719,6 +747,12 @@ export default function MyTasksPage() {
                           <div className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400">
                             <div className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
                             前置任務尚未完成
+                          </div>
+                        )}
+                        {hasPendingDelay && pendingProposedDate && (
+                          <div className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+                            <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                            已申請延期至 {new Date(pendingProposedDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}（等待審核）
                           </div>
                         )}
                       </div>
@@ -899,6 +933,17 @@ export default function MyTasksPage() {
                             </button>
 
                             {(status === 'at-risk' || status === 'overdue' || status === 'overdue-not-started') ? (
+                              hasPendingDelay ? (
+                                <div
+                                  className="flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/20 text-left opacity-70"
+                                >
+                                  <Clock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                                  <div>
+                                    <p className="text-sm font-medium text-amber-700 dark:text-amber-400">延期申請中</p>
+                                    <p className="text-[11px] text-muted-foreground">等待主管審核</p>
+                                  </div>
+                                </div>
+                              ) : (
                               <button
                                 className="group flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 transition-all text-left"
                                 onClick={() => {
@@ -912,6 +957,7 @@ export default function MyTasksPage() {
                                   <p className="text-[11px] text-muted-foreground">需要更多時間</p>
                                 </div>
                               </button>
+                              )
                             ) : (
                               <button
                                 className="group flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/50 transition-all text-left"

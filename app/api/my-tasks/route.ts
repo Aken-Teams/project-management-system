@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user, projects: [] })
     }
 
-    // Fetch projects with milestones, ALL tasks (for dependency analysis), and task logs
+    // Fetch projects with milestones, ALL tasks (for dependency analysis), task logs, and pending delay requests
     const projects = await prisma.project.findMany({
       where: { id: { in: projectIds } },
       select: {
@@ -61,6 +61,15 @@ export async function GET(request: NextRequest) {
         taskLogs: {
           include: { author: true },
           orderBy: { createdAt: 'desc' },
+        },
+        delayRequests: {
+          where: { status: 'pending' },
+          select: {
+            id: true,
+            affectedMilestones: {
+              select: { milestoneId: true, proposedDate: true },
+            },
+          },
         },
       },
     })
@@ -129,6 +138,19 @@ export async function GET(request: NextRequest) {
           content: tl.content,
           createdAt: tl.createdAt.toISOString(),
         })),
+        pendingDelayMilestoneIds: [
+          ...new Set(
+            p.delayRequests.flatMap(dr => dr.affectedMilestones.map(am => am.milestoneId))
+          ),
+        ],
+        pendingDelayProposedDates: Object.fromEntries(
+          p.delayRequests.flatMap(dr =>
+            dr.affectedMilestones.map(am => [
+              am.milestoneId,
+              am.proposedDate.toISOString().split('T')[0],
+            ])
+          )
+        ),
       }))
 
     return NextResponse.json({ user, projects: feProjects })
