@@ -323,13 +323,52 @@ export default function ReportsPage() {
     )
   }
 
-  const handleExportPdf = () => {
-    // Mock PDF export
-    setExportSuccess(true)
-    setTimeout(() => {
-      setShowPdfDialog(false)
-      setExportSuccess(false)
-    }, 2000)
+  const handleExportPdf = async () => {
+    if (!data || selectedProjectIds.length === 0) return
+
+    try {
+      // Call the PDF generation API
+      const response = await fetch('/api/reports/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectIds: selectedProjectIds,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+
+      // Get the HTML content
+      const html = await response.text()
+
+      // Open in a new window for printing
+      const printWindow = window.open('', '_blank')
+      if (printWindow) {
+        printWindow.document.write(html)
+        printWindow.document.close()
+
+        // Wait for content to load, then trigger print dialog
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print()
+          }, 500)
+        }
+      }
+
+      // Show success message
+      setExportSuccess(true)
+      setTimeout(() => {
+        setShowPdfDialog(false)
+        setExportSuccess(false)
+      }, 2000)
+    } catch (error) {
+      console.error('PDF export failed:', error)
+      alert('PDF 匯出失敗，請稍後再試')
+    }
   }
 
   const handleSendEmail = () => {
