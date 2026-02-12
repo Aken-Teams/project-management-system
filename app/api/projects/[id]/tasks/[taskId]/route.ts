@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
 import type { Priority, TaskStatus } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> }
@@ -65,6 +66,16 @@ export async function PUT(
       data,
     })
 
+    // ── Auto-sync milestone status & progress ──
+    const milestoneId = updated.milestoneId ?? task.milestoneId
+    if (milestoneId && (data.status !== undefined || data.progress !== undefined || data.milestoneId !== undefined)) {
+      await syncMilestoneStatus(milestoneId, id)
+      // If task moved to a different milestone, also sync the old one
+      if (data.milestoneId !== undefined && task.milestoneId && task.milestoneId !== milestoneId) {
+        await syncMilestoneStatus(task.milestoneId, id)
+      }
+    }
+
     return NextResponse.json({
       id: updated.id,
       projectId: id,
@@ -102,6 +113,11 @@ export async function DELETE(
     }
 
     await prisma.task.delete({ where: { id: taskId } })
+
+    // Sync milestone after task removal
+    if (task.milestoneId) {
+      await syncMilestoneStatus(task.milestoneId, id)
+    }
 
     return NextResponse.json({ success: true, message: '任務已刪除' })
   } catch (error) {

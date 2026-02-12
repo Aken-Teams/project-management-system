@@ -26,6 +26,25 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
+    // Auto-sync milestone statuses from task data (fix any stale status)
+    for (const ms of project.milestones) {
+      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+      if (msTasks.length === 0) continue
+      const allDone = msTasks.every(t => t.status === 'done')
+      const allTodo = msTasks.every(t => t.status === 'todo')
+      const correctStatus = allDone ? 'done' : allTodo ? 'todo' : 'in_progress'
+      const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)
+      if (ms.status !== correctStatus || ms.progress !== correctProgress) {
+        await prisma.milestone.update({
+          where: { id: ms.id },
+          data: { status: correctStatus, progress: correctProgress },
+        })
+        // Patch in-memory so transformer picks up the fix
+        ;(ms as { status: string }).status = correctStatus
+        ;(ms as { progress: number }).progress = correctProgress
+      }
+    }
+
     const feProject = dbProjectToFrontend(project as Parameters<typeof dbProjectToFrontend>[0])
 
     return NextResponse.json(feProject)
