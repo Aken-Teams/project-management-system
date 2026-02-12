@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { autoProgressTasks, syncTaskProgressFromLogs } from '@/lib/sync-milestone-status'
+import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import {
   projectTypeToDb,
@@ -27,19 +27,17 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
-    // ── Auto-progress: todo→in_progress when startDate passed, in_progress→todo when moved to future ──
-    await autoProgressTasks(project.tasks)
+    // ── Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo ──
+    await autoProgressTasks(project.tasks, project.taskLogs)
 
     // ── Compute task progress from task-log coverage ──
     await syncTaskProgressFromLogs(project.tasks, project.taskLogs)
 
-    // ── Auto-sync milestone statuses from (now-updated) task data ──
+    // ── Auto-sync milestone statuses (now includes blocked) ──
     for (const ms of project.milestones) {
       const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
       if (msTasks.length === 0) continue
-      const allDone = msTasks.every(t => t.status === 'done')
-      const allTodo = msTasks.every(t => t.status === 'todo')
-      const correctStatus = allDone ? 'done' : allTodo ? 'todo' : 'in_progress'
+      const correctStatus = computeMilestoneStatus(msTasks)
       const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)
       if (ms.status !== correctStatus || ms.progress !== correctProgress) {
         await prisma.milestone.update({

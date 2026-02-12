@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { autoProgressTasks, syncTaskProgressFromLogs } from '@/lib/sync-milestone-status'
+import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus } from '@/lib/sync-milestone-status'
 
 // ─── GET /api/my-tasks — Fetch tasks for the current user ────
 // Returns all projects where the user is a team member, with their
@@ -67,19 +67,17 @@ export async function GET(request: NextRequest) {
 
     // ── Auto-progress, compute progress from logs, sync milestones ──
     for (const p of projects) {
-      // 1. Auto-progress: todo→in_progress when startDate passed, in_progress→todo when moved to future
-      await autoProgressTasks(p.tasks)
+      // 1. Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo
+      await autoProgressTasks(p.tasks, p.taskLogs)
 
       // 2. Compute task progress from task-log coverage
       await syncTaskProgressFromLogs(p.tasks, p.taskLogs)
 
-      // 3. Re-sync milestone statuses
+      // 3. Re-sync milestone statuses (now includes blocked)
       for (const ms of p.milestones) {
         const msTasks = p.tasks.filter(t => t.milestoneId === ms.id)
         if (msTasks.length === 0) continue
-        const allDone = msTasks.every(t => t.status === 'done')
-        const allTodo = msTasks.every(t => t.status === 'todo')
-        const correctStatus = allDone ? 'done' : allTodo ? 'todo' : 'in_progress'
+        const correctStatus = computeMilestoneStatus(msTasks)
         const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)
         if (ms.status !== correctStatus || ms.progress !== correctProgress) {
           await prisma.milestone.update({
