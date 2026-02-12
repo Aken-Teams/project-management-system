@@ -181,6 +181,25 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const recalcMilestones = calculateMilestoneDates(tlMilestones, form.startDate || project.startDate, tlTasks)
   const tlTaskDates = calculateTaskDates(tlTasks, recalcMilestones)
 
+  // Detect if milestones or tasks changed (for showing reset baseline prompt)
+  const hasWorkItemChanges = useMemo(() => {
+    if (tlMilestones.length !== origMilestones.length) return true
+    for (let i = 0; i < tlMilestones.length; i++) {
+      const curr = tlMilestones[i]
+      const orig = origMilestones[i]
+      if (!orig || curr.id !== orig.id || curr.name !== orig.name || curr.durationWeeks !== tlInit.milestones[i]?.durationWeeks) return true
+    }
+    if (tlTasks.length !== origTasks.length) return true
+    for (const curr of tlTasks) {
+      const orig = origTasks.find(o => o.id === curr.id)
+      if (!orig) return true
+      if (curr.milestoneId !== orig.milestoneId || curr.title !== orig.title ||
+          curr.assignee !== orig.assignee || curr.priority !== orig.priority ||
+          curr.durationWeeks !== orig.durationWeeks) return true
+    }
+    return false
+  }, [tlMilestones, tlTasks, origMilestones, origTasks, tlInit.milestones])
+
   // Auto-expand milestone when tasks exceed its duration
   useEffect(() => {
     const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks)
@@ -323,6 +342,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(task),
         })
+      }
+
+      // 7. Rebuild sequential task dependencies
+      if (diff.tasksToAdd.length > 0 || diff.tasksToDelete.length > 0 || diff.milestonesToDelete.length > 0) {
+        await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
       }
 
       onWorkItemsChange?.()
@@ -947,12 +971,12 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               </div>
             </div>
 
-            {/* Reset Baseline button */}
-            {(project.milestones?.length ?? 0) > 0 && (
-              <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2">
+            {/* Reset Baseline — only shown when work items have changed, sticky at top */}
+            {hasWorkItemChanges && (project.milestones?.length ?? 0) > 0 && (
+              <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-3 py-2 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
                   <TimerReset className="h-4 w-4 shrink-0" />
-                  <span>編輯里程碑或任務後，建議重設基線以更新甘特圖基準線</span>
+                  <span>里程碑或任務已變更，建議重設基線</span>
                 </div>
                 <Button
                   variant="outline"
