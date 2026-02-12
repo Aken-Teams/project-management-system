@@ -668,6 +668,7 @@ export default function MyTasksPage() {
                           <>
                             <div className="flex items-center gap-2">
                               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">填寫日期</span>
                               <input
                                 type="date"
                                 value={logDate}
