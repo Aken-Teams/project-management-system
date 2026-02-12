@@ -25,11 +25,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Mock users data
+// Mock users data — emails must match DB seed users
 const MOCK_USERS: User[] = [
-  { id: '1', name: 'Alice Chen', email: 'pm@example.com', role: 'pm', avatar: '/avatars/alice.jpg' },
-  { id: '2', name: 'Bob Wang', email: 'member@example.com', role: 'member', avatar: '/avatars/bob.jpg' },
-  { id: '3', name: 'Carol Lin', email: 'exec@example.com', role: 'executive', avatar: '/avatars/carol.jpg' },
+  { id: '1', name: 'Alice Chen', email: 'alice@example.com', role: 'pm', avatar: '/avatars/alice.jpg' },
+  { id: '2', name: 'Bob Wang', email: 'bob@example.com', role: 'member', avatar: '/avatars/bob.jpg' },
+  { id: '3', name: 'Carol Lee', email: 'carol@example.com', role: 'executive', avatar: '/avatars/carol.jpg' },
 ]
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -39,26 +39,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check if user is stored in localStorage
     const storedUser = localStorage.getItem('currentUser')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Failed to parse stored user:', error)
-        localStorage.removeItem('currentUser')
-      }
+    if (!storedUser) {
+      setLoading(false)
+      return
     }
-    setLoading(false)
+
+    let parsed: User
+    try {
+      parsed = JSON.parse(storedUser)
+    } catch {
+      localStorage.removeItem('currentUser')
+      setLoading(false)
+      return
+    }
+
+    // Always re-resolve DB user ID from email (localStorage may have stale mock ID)
+    fetch(`/api/users/search?q=${encodeURIComponent(parsed.email)}&limit=1`)
+      .then(res => res.ok ? res.json() : [])
+      .then((users: { id: string; email: string }[]) => {
+        const dbUser = users.find(u => u.email === parsed.email)
+        if (dbUser && dbUser.id !== parsed.id) {
+          const updated = { ...parsed, id: dbUser.id }
+          setUser(updated)
+          localStorage.setItem('currentUser', JSON.stringify(updated))
+        } else {
+          setUser(parsed)
+        }
+      })
+      .catch(() => setUser(parsed))
+      .finally(() => setLoading(false))
   }, [])
 
   const login = async (email: string, password: string) => {
     // Mock login - in real app, this would call an API
     const foundUser = MOCK_USERS.find(u => u.email === email)
-    if (foundUser) {
-      setUser(foundUser)
-      localStorage.setItem('currentUser', JSON.stringify(foundUser))
-    } else {
-      throw new Error('Invalid credentials')
-    }
+    if (!foundUser) throw new Error('Invalid credentials')
+
+    // Resolve real DB user ID (mock IDs '1','2','3' don't match DB cuids)
+    let resolvedUser = { ...foundUser }
+    try {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(email)}&limit=1`)
+      if (res.ok) {
+        const users = await res.json()
+        const dbUser = users.find((u: { email: string }) => u.email === email)
+        if (dbUser) resolvedUser = { ...foundUser, id: dbUser.id }
+      }
+    } catch { /* fallback to mock id */ }
+
+    setUser(resolvedUser)
+    localStorage.setItem('currentUser', JSON.stringify(resolvedUser))
   }
 
   const logout = () => {

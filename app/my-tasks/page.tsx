@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Dialog,
@@ -16,10 +15,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { type Project, type Task, type DelayRequest } from '@/lib/mock-data'
-import Link from 'next/link'
+import { type Task, type TaskLog } from '@/lib/mock-data'
 import {
   computeTaskStatus,
   getStatusLabel,
@@ -47,9 +44,7 @@ import {
   MicOff,
   ImagePlus,
   Paperclip,
-  SkipForward,
-  HelpCircle,
-  ExternalLink,
+  Loader2,
 } from 'lucide-react'
 
 function getStatusDot(status: ComputedTaskStatus) {
@@ -78,14 +73,23 @@ interface MilestoneTaskGroup {
   tasks: Task[]
 }
 
+interface MyTasksProject {
+  id: string
+  name: string
+  milestones: { id: string; name: string; dueDate: string; status: string; progress: number }[]
+  tasks: Task[]
+  taskLogs: TaskLog[]
+}
+
 export default function MyTasksPage() {
   const { user } = useAuth()
-  const { projects, addTaskLog, completeTask, uncompleteTask, submitDelayRequest, resolveSupport, getUnresolvedSupportRequests } = useProjectStore()
 
+  const [apiProjects, setApiProjects] = useState<MyTasksProject[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogTask, setDialogTask] = useState<{ task: Task; project: Project } | null>(null)
+  const [dialogTask, setDialogTask] = useState<{ task: Task; project: MyTasksProject } | null>(null)
   const [logContent, setLogContent] = useState('')
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
   const [showExtensionForm, setShowExtensionForm] = useState(false)
@@ -95,20 +99,27 @@ export default function MyTasksPage() {
   const [showActions, setShowActions] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [attachments, setAttachments] = useState<string[]>([])
-  const [supportDialogOpen, setSupportDialogOpen] = useState(false)
-  const [supportDialogItem, setSupportDialogItem] = useState<{ project: Project; request: DelayRequest } | null>(null)
-  const [supportNotes, setSupportNotes] = useState('')
   const recognitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
-  if (!user) return null
+  // Fetch tasks from API
+  useEffect(() => {
+    if (!user) return
+    setLoading(true)
+    fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => setApiProjects(data.projects ?? []))
+      .catch(() => setApiProjects([]))
+      .finally(() => setLoading(false))
+  }, [user])
 
   // Build grouped data: project → milestone groups → tasks
   const projectGroups = useMemo(() => {
-    const result: { project: Project; milestoneGroups: MilestoneTaskGroup[]; completedCount: number; totalCount: number }[] = []
+    if (!user) return []
+    const result: { project: MyTasksProject; milestoneGroups: MilestoneTaskGroup[]; completedCount: number; totalCount: number }[] = []
 
-    projects.forEach(p => {
+    apiProjects.forEach(p => {
       const userTasks = p.tasks.filter(t => t.assignee === user.name)
       if (userTasks.length === 0) return
 
@@ -138,7 +149,7 @@ export default function MyTasksPage() {
     })
 
     return result
-  }, [projects, user.name])
+  }, [apiProjects, user])
 
   const userProjects = projectGroups.map(g => g.project)
 
@@ -160,25 +171,6 @@ export default function MyTasksPage() {
   ).length
   const onTrackCount = totalTasks - completedCount - atRiskCount
 
-  // Support requests for PM/executive
-  const unresolvedSupport = useMemo(() => {
-    if (user.role === 'member') return []
-    return getUnresolvedSupportRequests()
-  }, [user.role, getUnresolvedSupportRequests])
-
-  const handleResolveSupport = () => {
-    if (!supportDialogItem) return
-    resolveSupport(
-      supportDialogItem.project.id,
-      supportDialogItem.request.id,
-      user.name,
-      supportNotes.trim(),
-    )
-    setSupportDialogOpen(false)
-    setSupportDialogItem(null)
-    setSupportNotes('')
-  }
-
   const toggleProject = (projectId: string) => {
     setCollapsedProjects(prev => {
       const next = new Set(prev)
@@ -188,7 +180,7 @@ export default function MyTasksPage() {
     })
   }
 
-  const openTaskDialog = (task: Task, project: Project) => {
+  const openTaskDialog = (task: Task, project: MyTasksProject) => {
     setDialogTask({ task, project })
     setLogContent('')
     setLogDate(new Date().toISOString().split('T')[0])
@@ -243,6 +235,8 @@ export default function MyTasksPage() {
     setIsListening(true)
   }, [isListening])
 
+  if (!user) return null
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
     const files = e.target.files
     if (!files) return
@@ -251,64 +245,122 @@ export default function MyTasksPage() {
     e.target.value = ''
   }
 
-  const handleSubmitLog = () => {
+  const handleSubmitLog = async () => {
     if (!dialogTask || !logContent.trim()) return
     const content = attachments.length > 0
       ? `${logContent.trim()}\n\n附件：${attachments.join('、')}`
       : logContent.trim()
-    addTaskLog(dialogTask.project.id, {
-      taskId: dialogTask.task.id,
-      author: user.name,
-      logDate,
-      content,
-    })
+
+    try {
+      const res = await fetch(`/api/projects/${dialogTask.project.id}/task-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: dialogTask.task.id,
+          userId: user.id,
+          logDate,
+          content,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const newLog: TaskLog = await res.json()
+      // Optimistic update: add the new log to local state
+      setApiProjects(prev => prev.map(p =>
+        p.id === dialogTask.project.id
+          ? { ...p, taskLogs: [newLog, ...p.taskLogs] }
+          : p
+      ))
+    } catch {
+      // Silently fail — log will appear on next reload
+    }
+
     setLogContent('')
     setAttachments([])
     setShowActions(true)
   }
 
-  const handleCompleteTask = () => {
+  const handleCompleteTask = async () => {
     if (!dialogTask) return
-    completeTask(dialogTask.project.id, dialogTask.task.id, user.name)
+    const { project, task } = dialogTask
+    const now = new Date().toISOString().split('T')[0]
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done' as const, progress: 100 }),
+      })
+      if (!res.ok) throw new Error()
+      // Optimistic update
+      setApiProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? {
+              ...p,
+              tasks: p.tasks.map(t =>
+                t.id === task.id
+                  ? { ...t, status: 'done' as const, progress: 100, completedAt: now, completedBy: user.name }
+                  : t
+              ),
+            }
+          : p
+      ))
+    } catch {
+      // ignore
+    }
   }
 
-  const handleUncompleteTask = () => {
+  const handleUncompleteTask = async () => {
     if (!dialogTask) return
-    uncompleteTask(dialogTask.project.id, dialogTask.task.id)
+    const { project, task } = dialogTask
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'in_progress', progress: 0 }),
+      })
+      if (!res.ok) throw new Error()
+      // Optimistic update
+      setApiProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? {
+              ...p,
+              tasks: p.tasks.map(t =>
+                t.id === task.id
+                  ? { ...t, status: 'in-progress' as const, progress: 0, completedAt: undefined, completedBy: undefined }
+                  : t
+              ),
+            }
+          : p
+      ))
+    } catch {
+      // ignore
+    }
   }
 
   const handleSubmitExtension = () => {
-    if (!dialogTask || !extensionReason.trim()) return
-    const { task, project } = dialogTask
-    const milestone = project.milestones.find(m => m.id === task.milestoneId)
-    if (!milestone) return
-    const proposedDate = extensionDate || (() => {
-      const d = new Date(task.endDate)
-      d.setDate(d.getDate() + 14)
-      return d.toISOString().split('T')[0]
-    })()
-    submitDelayRequest(project.id, {
-      requestedBy: user.name,
-      requestedAt: new Date().toISOString(),
-      reason: extensionReason.trim(),
-      affectedMilestones: [{
-        milestoneId: milestone.id,
-        originalDate: milestone.dueDate,
-        proposedDate,
-      }],
-      canCatchUp: false,
-      supportNeeded: extensionSupport.trim(),
-    })
-    setDialogOpen(false)
+    // Delay request API not yet implemented
+    alert('延期申請功能即將推出')
+    setShowExtensionForm(false)
+    setShowActions(true)
   }
 
   // Fresh task data for dialog
   const currentDialogTask = dialogTask
-    ? projects.find(p => p.id === dialogTask.project.id)?.tasks.find(t => t.id === dialogTask.task.id)
+    ? apiProjects.find(p => p.id === dialogTask.project.id)?.tasks.find(t => t.id === dialogTask.task.id)
     : null
   const currentDialogProject = dialogTask
-    ? projects.find(p => p.id === dialogTask.project.id)
+    ? apiProjects.find(p => p.id === dialogTask.project.id)
     : null
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">載入任務中...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
@@ -356,60 +408,6 @@ export default function MyTasksPage() {
             <p className="text-sm text-muted-foreground mt-1">即將到期或逾期</p>
           </Card>
         </div>
-
-        {/* Support Needs — PM/Executive only */}
-        {unresolvedSupport.length > 0 && (
-          <Card className="border-amber-200 bg-amber-50/30 dark:border-amber-900 dark:bg-amber-950/10">
-            <CardHeader className="py-3 px-4">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-amber-500" />
-                待處理的支援需求
-                <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-sm ml-1">
-                  {unresolvedSupport.length}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-3 pt-0 space-y-2">
-              {unresolvedSupport.map(({ project, request }) => (
-                <div key={request.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                    <HelpCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{request.requestedBy} 需要協助</span>
-                      <Link href={`/projects/${project.id}`}>
-                        <Badge variant="outline" className="text-[10px] cursor-pointer hover:bg-muted gap-1">
-                          {project.name}
-                          <ExternalLink className="h-2.5 w-2.5" />
-                        </Badge>
-                      </Link>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{request.supportNeeded}</p>
-                    <div className="text-sm text-muted-foreground">
-                      延期原因：{request.reason.length > 40 ? request.reason.substring(0, 40) + '...' : request.reason}
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 text-sm gap-1"
-                        onClick={() => {
-                          setSupportDialogItem({ project, request })
-                          setSupportNotes('')
-                          setSupportDialogOpen(true)
-                        }}
-                      >
-                        <CircleCheck className="h-3 w-3" />
-                        標記已處理
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Project Filter */}
         {userProjects.length > 1 && (
@@ -1011,60 +1009,6 @@ export default function MyTasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Support Resolution Dialog */}
-      <Dialog open={supportDialogOpen} onOpenChange={(open) => {
-        setSupportDialogOpen(open)
-        if (!open) setSupportDialogItem(null)
-      }}>
-        <DialogContent className="sm:max-w-md">
-          {supportDialogItem && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                    <HelpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-base">處理支援需求</DialogTitle>
-                    <DialogDescription className="text-sm mt-0.5">
-                      {supportDialogItem.project.name} — {supportDialogItem.request.requestedBy}
-                    </DialogDescription>
-                  </div>
-                </div>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground">需要的支援</div>
-                  <p className="text-sm">{supportDialogItem.request.supportNeeded}</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50 border space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground">延遲原因</div>
-                  <p className="text-sm">{supportDialogItem.request.reason}</p>
-                </div>
-                <div>
-                  <Label className="text-sm text-muted-foreground">處理說明</Label>
-                  <Textarea
-                    placeholder="描述您如何處理此支援需求..."
-                    value={supportNotes}
-                    onChange={e => setSupportNotes(e.target.value)}
-                    rows={3}
-                    className="text-sm mt-1.5 rounded-lg"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="outline" onClick={() => setSupportDialogOpen(false)}>
-                  取消
-                </Button>
-                <Button size="sm" className="gap-1.5" onClick={handleResolveSupport}>
-                  <CircleCheck className="h-3.5 w-3.5" />
-                  確認已處理
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   )
 }

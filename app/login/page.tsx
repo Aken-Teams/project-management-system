@@ -35,9 +35,9 @@ export default function LoginPage() {
 
   const quickLogin = (role: 'pm' | 'member' | 'executive') => {
     const emails = {
-      pm: 'pm@example.com',
-      member: 'member@example.com',
-      executive: 'exec@example.com'
+      pm: 'alice@example.com',
+      member: 'bob@example.com',
+      executive: 'carol@example.com'
     }
     setEmail(emails[role])
     setPassword('demo')
