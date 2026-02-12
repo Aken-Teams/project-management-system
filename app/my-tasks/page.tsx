@@ -15,6 +15,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
 import { type Task, type TaskLog } from '@/lib/mock-data'
 import {
@@ -45,6 +55,10 @@ import {
   ImagePlus,
   Paperclip,
   Loader2,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from 'lucide-react'
 
 function getStatusDot(status: ComputedTaskStatus) {
@@ -99,6 +113,10 @@ export default function MyTasksPage() {
   const [showActions, setShowActions] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [attachments, setAttachments] = useState<string[]>([])
+  const [editingLogId, setEditingLogId] = useState<string | null>(null)
+  const [editLogContent, setEditLogContent] = useState('')
+  const [editLogDate, setEditLogDate] = useState('')
+  const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
   const recognitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -191,6 +209,7 @@ export default function MyTasksPage() {
     setShowActions(false)
     setAttachments([])
     setIsListening(false)
+    setEditingLogId(null)
     setDialogOpen(true)
   }
 
@@ -277,6 +296,58 @@ export default function MyTasksPage() {
     setLogContent('')
     setAttachments([])
     setShowActions(true)
+  }
+
+  const handleStartEditLog = (log: TaskLog) => {
+    setEditingLogId(log.id)
+    setEditLogContent(log.content)
+    setEditLogDate(log.logDate)
+  }
+
+  const handleCancelEditLog = () => {
+    setEditingLogId(null)
+    setEditLogContent('')
+    setEditLogDate('')
+  }
+
+  const handleSaveEditLog = async (log: TaskLog) => {
+    if (!dialogTask || !editLogContent.trim()) return
+    try {
+      const res = await fetch(`/api/projects/${log.projectId}/task-logs/${log.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editLogContent.trim(), logDate: editLogDate }),
+      })
+      if (!res.ok) throw new Error()
+      const updated: TaskLog = await res.json()
+      setApiProjects(prev => prev.map(p =>
+        p.id === log.projectId
+          ? { ...p, taskLogs: p.taskLogs.map(tl => tl.id === log.id ? updated : tl) }
+          : p
+      ))
+    } catch {
+      // fail silently
+    }
+    handleCancelEditLog()
+  }
+
+  const handleConfirmDeleteLog = async () => {
+    if (!deletingLog) return
+    const log = deletingLog
+    setDeletingLog(null)
+    try {
+      const res = await fetch(`/api/projects/${log.projectId}/task-logs/${log.id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error()
+      setApiProjects(prev => prev.map(p =>
+        p.id === log.projectId
+          ? { ...p, taskLogs: p.taskLogs.filter(tl => tl.id !== log.id) }
+          : p
+      ))
+    } catch {
+      // fail silently
+    }
   }
 
   const handleCompleteTask = async () => {
@@ -847,21 +918,85 @@ export default function MyTasksPage() {
 
                           <div className="space-y-4">
                             {taskLogs.map((log, i) => (
-                              <div key={log.id} className="relative">
+                              <div key={log.id} className="relative group">
                                 {/* Timeline dot */}
                                 <div className={cn(
                                   'absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background',
                                   i === 0 ? 'bg-primary' : 'bg-muted-foreground/30'
                                 )} />
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">{log.author}</span>
-                                    <span className="text-[11px] text-muted-foreground tabular-nums">
-                                      {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
-                                    </span>
+
+                                {editingLogId === log.id ? (
+                                  /* ── Inline edit mode ── */
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium">{log.author}</span>
+                                      <input
+                                        type="date"
+                                        value={editLogDate}
+                                        onChange={e => setEditLogDate(e.target.value)}
+                                        className="h-7 text-sm border rounded px-2 bg-background"
+                                      />
+                                    </div>
+                                    <Textarea
+                                      value={editLogContent}
+                                      onChange={e => setEditLogContent(e.target.value)}
+                                      className="text-sm min-h-[60px] resize-none"
+                                    />
+                                    <div className="flex items-center gap-1.5 justify-end">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 px-2 text-sm"
+                                        onClick={handleCancelEditLog}
+                                      >
+                                        <X className="h-3.5 w-3.5 mr-1" />
+                                        取消
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        className="h-7 px-2 text-sm"
+                                        disabled={!editLogContent.trim()}
+                                        onClick={() => handleSaveEditLog(log)}
+                                      >
+                                        <Check className="h-3.5 w-3.5 mr-1" />
+                                        儲存
+                                      </Button>
+                                    </div>
                                   </div>
-                                  <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.content}</p>
-                                </div>
+                                ) : (
+                                  /* ── Display mode ── */
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-medium">{log.author}</span>
+                                      <div className="flex items-center gap-1">
+                                        {log.author === user.name && (
+                                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button
+                                              size="icon"
+                                              variant="ghost"
+                                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                              onClick={() => handleStartEditLog(log)}
+                                            >
+                                              <Pencil className="h-3 w-3" />
+                                            </Button>
+                                            <Button
+                                              size="icon"
+                                              variant="ghost"
+                                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                              onClick={() => setDeletingLog(log)}
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        )}
+                                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                                          {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.content}</p>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -1009,6 +1144,32 @@ export default function MyTasksPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Delete task log confirmation */}
+      <AlertDialog open={!!deletingLog} onOpenChange={open => { if (!open) setDeletingLog(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除工作紀錄</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除這筆工作紀錄嗎？此操作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deletingLog && (
+            <div className="rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground line-clamp-3 whitespace-pre-line">
+              {deletingLog.content}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDeleteLog}
+            >
+              刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </DashboardLayout>
   )
