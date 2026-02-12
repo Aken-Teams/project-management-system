@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, TimerReset } from 'lucide-react'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -162,6 +162,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [tlMilestones, setTlMilestones] = useState(tlInit.milestones)
   const [tlTasks, setTlTasks] = useState(tlInit.tasks)
   const [workItemError, setWorkItemError] = useState('')
+  const [resettingBaseline, setResettingBaseline] = useState(false)
+  const [baselineResetDialogOpen, setBaselineResetDialogOpen] = useState(false)
 
   // Snapshot of original data for diff on save
   const [origMilestones] = useState(() =>
@@ -945,6 +947,26 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               </div>
             </div>
 
+            {/* Reset Baseline button */}
+            {(project.milestones?.length ?? 0) > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2">
+                <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                  <TimerReset className="h-4 w-4 shrink-0" />
+                  <span>編輯里程碑或任務後，建議重設基線以更新甘特圖基準線</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-sm gap-1.5 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-900 shrink-0 ml-3"
+                  disabled={resettingBaseline}
+                  onClick={() => setBaselineResetDialogOpen(true)}
+                >
+                  {resettingBaseline ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TimerReset className="h-3.5 w-3.5" />}
+                  重設基線
+                </Button>
+              </div>
+            )}
+
             <TimelineTable
               milestones={recalcMilestones}
               tasks={tlTasks}
@@ -980,6 +1002,41 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Reset Baseline Confirmation Dialog */}
+      <Dialog open={baselineResetDialogOpen} onOpenChange={setBaselineResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>重設里程碑基線</DialogTitle>
+            <DialogDescription>
+              將目前的里程碑日期設為新的基線。原本的基線紀錄會被覆蓋，延遲標示將會清除。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBaselineResetDialogOpen(false)} disabled={resettingBaseline}>
+              取消
+            </Button>
+            <Button
+              disabled={resettingBaseline}
+              onClick={async () => {
+                setResettingBaseline(true)
+                try {
+                  const res = await fetch(`/api/projects/${project.id}/reset-baseline`, { method: 'POST' })
+                  if (res.ok) {
+                    setBaselineResetDialogOpen(false)
+                    onWorkItemsChange?.()
+                  }
+                } finally {
+                  setResettingBaseline(false)
+                }
+              }}
+            >
+              {resettingBaseline && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              確認重設
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }
