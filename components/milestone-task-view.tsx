@@ -58,13 +58,18 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
   const [resettingBaseline, setResettingBaseline] = useState(false)
   const [baselineDialogOpen, setBaselineDialogOpen] = useState(false)
 
-  // Check if any milestone has baseline delay
-  const hasBaselineDelay = useMemo(() => {
+  // Check if any milestone date differs from baseline (delay, moved earlier, or any change)
+  const hasBaselineMismatch = useMemo(() => {
     if (!project.baseline?.length) return false
-    return project.milestones.some(ms => {
+    // Any milestone where dueDate ≠ baseline dueDate
+    const anyDiff = project.milestones.some(ms => {
       const bl = project.baseline.find(b => b.id === ms.id)
-      return bl && ms.dueDate > bl.dueDate
+      return bl && ms.dueDate !== bl.dueDate
     })
+    if (anyDiff) return true
+    // Milestone count changed (added or removed)
+    if (project.milestones.length !== project.baseline.length) return true
+    return false
   }, [project.milestones, project.baseline])
 
   // Compute dependency graph (only when toggle is on)
@@ -391,7 +396,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
               </PopoverContent>
             </Popover>
           )}
-          {hasBaselineDelay && onBaselineReset && (
+          {hasBaselineMismatch && onBaselineReset && (
             <Button
               variant="outline"
               size="sm"
@@ -436,6 +441,16 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
           })()}
         </div>
       </div>
+
+      {/* Baseline mismatch banner — visible in both list & Gantt views */}
+      {hasBaselineMismatch && onBaselineReset && (
+        <div className="flex items-center rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+            <TimerReset className="h-4 w-4 shrink-0" />
+            <span>里程碑日期與基線不一致，建議重設基線以反映最新時程</span>
+          </div>
+        </div>
+      )}
 
       {viewMode === 'gantt' ? (
         <GanttChart
