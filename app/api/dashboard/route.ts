@@ -1,6 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+// ─── Auto-compute project status & progress from tasks ─────
+interface FeTask {
+  status: string
+  progress: number
+  endDate: string
+}
+
+function computeProjectProgress(tasks: FeTask[]): number {
+  if (tasks.length === 0) return 0
+  const total = tasks.reduce((sum, t) => sum + t.progress, 0)
+  return Math.round(total / tasks.length)
+}
+
+function computeProjectStatus(
+  tasks: FeTask[],
+  projectEndDate: Date,
+): 'green' | 'yellow' | 'red' {
+  if (tasks.length === 0) return 'green'
+
+  const today = new Date().toISOString().split('T')[0]
+  const overdueTasks = tasks.filter(t => t.status !== 'done' && t.endDate < today)
+  const blockedTasks = tasks.filter(t => t.status === 'blocked')
+  const doneTasks = tasks.filter(t => t.status === 'done')
+
+  // All done → green
+  if (doneTasks.length === tasks.length) return 'green'
+
+  const overdueRatio = overdueTasks.length / tasks.length
+  const blockedRatio = blockedTasks.length / tasks.length
+
+  // Red: >30% overdue or >20% blocked, or project end date passed
+  const projectEnd = projectEndDate.toISOString().split('T')[0]
+  if (overdueRatio > 0.3 || blockedRatio > 0.2 || (projectEnd < today && doneTasks.length < tasks.length)) {
+    return 'red'
+  }
+
+  // Yellow: any overdue or blocked tasks
+  if (overdueTasks.length > 0 || blockedTasks.length > 0) {
+    return 'yellow'
+  }
+
+  return 'green'
+}
+
 // ─── GET /api/dashboard — Get dashboard data for current user ───
 export async function GET(request: NextRequest) {
   try {
@@ -92,17 +136,33 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // ── Calculate statistics ──
+    // ── Calculate actual status & progress for each project from tasks ──
+    const projectsWithProgress = projects.map(p => {
+      // Convert tasks to frontend format for status calculation
+      const feTasks = p.tasks.map(t => ({
+        status: t.status === 'in_progress' ? 'in-progress' : t.status,
+        progress: t.progress,
+        endDate: t.endDate.toISOString().split('T')[0],
+      }))
+
+      // Compute actual status and progress from tasks
+      const actualStatus = computeProjectStatus(feTasks, p.endDate)
+      const actualProgress = computeProjectProgress(feTasks)
+
+      return { ...p, actualStatus, actualProgress }
+    })
+
+    // ── Calculate statistics using actual status & progress ──
     const stats = {
-      total: projects.length,
-      green: projects.filter(p => p.status === 'green').length,
-      yellow: projects.filter(p => p.status === 'yellow').length,
-      red: projects.filter(p => p.status === 'red').length,
-      avgProgress: projects.length > 0
-        ? Math.round(projects.reduce((acc, p) => acc + p.progress, 0) / projects.length)
+      total: projectsWithProgress.length,
+      green: projectsWithProgress.filter(p => p.actualStatus === 'green').length,
+      yellow: projectsWithProgress.filter(p => p.actualStatus === 'yellow').length,
+      red: projectsWithProgress.filter(p => p.actualStatus === 'red').length,
+      avgProgress: projectsWithProgress.length > 0
+        ? Math.round(projectsWithProgress.reduce((acc, p) => acc + p.actualProgress, 0) / projectsWithProgress.length)
         : 0,
-      totalBudget: projects.reduce((acc, p) => acc + p.budget, 0),
-      totalBudgetUsed: projects.reduce((acc, p) => acc + p.budgetUsed, 0),
+      totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budget, 0),
+      totalBudgetUsed: projectsWithProgress.reduce((acc, p) => acc + p.budgetUsed, 0),
       budgetUtilization: 0,
     }
     stats.budgetUtilization = stats.totalBudget > 0
@@ -110,23 +170,27 @@ export async function GET(request: NextRequest) {
       : 0
 
     // ── Transform projects to frontend format ──
-    const feProjects = projects.map(p => ({
+    const feProjects = projectsWithProgress.map(p => ({
       id: p.id,
       projectCode: p.projectCode,
       name: p.name,
       projectType: p.projectType,
-      status: p.status,
-      progress: p.progress,
+      status: p.actualStatus,
+      progress: p.actualProgress,
       owner: p.owner.name,
     }))
 
     // ── Open risks (high priority for executives) ──
-    const openRisks = projects
-      .filter(p => p.status === 'red' || p.status === 'yellow')
-      .flatMap(p =>
-        p.risks
-          .filter(r => user.role !== 'executive' || r.impact === 'high')
-          .map(risk => ({
+    // For each red/yellow project, if it has open risks, show them;
+    // otherwise, create a synthetic risk entry indicating the project status itself
+    const openRisks = projectsWithProgress
+      .filter(p => p.actualStatus === 'red' || p.actualStatus === 'yellow')
+      .flatMap(p => {
+        const risks = p.risks.filter(r => user.role !== 'executive' || r.impact === 'high')
+
+        if (risks.length > 0) {
+          // Has explicit risk records
+          return risks.map(risk => ({
             id: risk.id,
             projectId: p.id,
             projectName: p.name,
@@ -136,11 +200,24 @@ export async function GET(request: NextRequest) {
             probability: risk.probability,
             mitigation: risk.mitigation,
           }))
-      )
+        } else {
+          // No explicit risks but project is red/yellow - show project status as risk
+          return [{
+            id: `project-status-${p.id}`,
+            projectId: p.id,
+            projectName: p.name,
+            title: p.actualStatus === 'red' ? '專案處於風險狀態' : '專案需要注意',
+            description: '專案狀態異常，但尚未建立具體風險項目',
+            impact: p.actualStatus === 'red' ? 'high' : 'medium',
+            probability: 'medium',
+            mitigation: '請檢查專案進度並建立具體風險項目',
+          }]
+        }
+      })
 
     // ── Upcoming milestones (within 30 days, not done) ──
     const today = new Date()
-    const upcomingMilestones = projects
+    const upcomingMilestones = projectsWithProgress
       .flatMap(p =>
         p.milestones
           .filter(m => m.status !== 'done')
@@ -151,7 +228,7 @@ export async function GET(request: NextRequest) {
               id: m.id,
               projectId: p.id,
               projectName: p.name,
-              projectStatus: p.status,
+              projectStatus: p.actualStatus,
               name: m.name,
               dueDate: m.dueDate.toISOString().split('T')[0],
               diffDays,
@@ -171,7 +248,7 @@ export async function GET(request: NextRequest) {
     }
     const thisMonday = getMonday(today)
 
-    const missingUpdates = projects
+    const missingUpdates = projectsWithProgress
       .filter(p => {
         const hasThisWeek = p.weeklyUpdates.some(u => {
           const updateMonday = getMonday(new Date(u.weekOf))
@@ -182,7 +259,7 @@ export async function GET(request: NextRequest) {
       .map(p => ({
         id: p.id,
         name: p.name,
-        status: p.status,
+        status: p.actualStatus,
         owner: p.owner.name,
         lastUpdateWeekOf: p.weeklyUpdates[0]?.weekOf.toISOString().split('T')[0] || null,
       }))

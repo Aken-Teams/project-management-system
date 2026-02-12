@@ -242,8 +242,16 @@ export default function DashboardPage() {
                 <TrendingDown className="h-4 w-4 text-destructive" />
               )}
             </div>
-            <div className="text-2xl font-bold text-success">{stats.green}<span className="text-base font-normal text-muted-foreground">/{stats.total}</span></div>
-            <p className="text-sm text-muted-foreground mt-1">專案運行正常</p>
+            <div className={`text-2xl font-bold ${stats.red > 0 ? 'text-destructive' : stats.yellow > 0 ? 'text-warning' : 'text-success'}`}>
+              {stats.green}<span className="text-base font-normal text-muted-foreground">/{stats.total}</span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {stats.red > 0
+                ? `${stats.red} 個專案有風險`
+                : stats.yellow > 0
+                  ? `${stats.yellow} 個專案需注意`
+                  : '專案運行正常'}
+            </p>
           </Card>
         </div>
 
