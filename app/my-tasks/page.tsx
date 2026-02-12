@@ -359,7 +359,7 @@ export default function MyTasksPage() {
       const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'done' as const, progress: 100 }),
+        body: JSON.stringify({ status: 'done' as const, progress: 100, completedBy: user.name }),
       })
       if (!res.ok) throw new Error()
       // Optimistic update

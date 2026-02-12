@@ -19,6 +19,7 @@ interface UpdateTaskBody {
   progress?: number
   sortOrder?: number
   durationWeeks?: number
+  completedBy?: string
 }
 
 export async function PUT(
@@ -45,8 +46,24 @@ export async function PUT(
     if (body.description !== undefined) data.description = body.description.trim()
     if (body.assignee !== undefined) data.assignee = body.assignee.trim()
     if (body.priority !== undefined) data.priority = body.priority as Priority
-    if (body.status !== undefined) data.status = body.status as TaskStatus
-    if (body.progress !== undefined) data.progress = body.progress
+    if (body.status !== undefined) {
+      data.status = body.status as TaskStatus
+      if (body.status === 'done') {
+        // Auto-set completedAt when marking done
+        if (!task.completedAt) {
+          data.completedAt = new Date()
+        }
+        if (body.completedBy) {
+          data.completedBy = body.completedBy
+        }
+        data.progress = 100
+      } else if (task.status === 'done') {
+        // Clearing completedAt/completedBy when un-completing
+        data.completedAt = null
+        data.completedBy = null
+      }
+    }
+    if (body.progress !== undefined && data.progress === undefined) data.progress = body.progress
     if (body.startDate !== undefined) data.startDate = new Date(body.startDate)
     if (body.endDate !== undefined) data.endDate = new Date(body.endDate)
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
@@ -89,6 +106,8 @@ export async function PUT(
       endDate: updated.endDate.toISOString().slice(0, 10),
       durationWeeks: updated.durationWeeks,
       progress: updated.progress,
+      ...(updated.completedAt ? { completedAt: updated.completedAt.toISOString().slice(0, 10) } : {}),
+      ...(updated.completedBy ? { completedBy: updated.completedBy } : {}),
     })
   } catch (error) {
     console.error('Failed to update task:', error)
