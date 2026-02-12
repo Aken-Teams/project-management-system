@@ -80,7 +80,10 @@ export async function POST(request: NextRequest) {
         page-break-inside: avoid;
         break-inside: avoid;
       }
-      body { margin: 0; padding: 0; }
+      body {
+        margin: 0;
+        padding: 20px 16px !important;
+      }
       * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
@@ -92,7 +95,7 @@ export async function POST(request: NextRequest) {
       line-height: 1.5;
       color: #0f172a;
       margin: 0;
-      padding: 16px;
+      padding: 20px 16px;
       font-size: 12px;
       background: #f8fafc;
     }
@@ -537,9 +540,9 @@ export async function POST(request: NextRequest) {
       project.status === 'yellow' ? '注意' : '風險'
 
     return `
-      <div class="page-break"></div>
+      ${index > 0 ? '<div class="page-break"></div>' : ''}
       <div class="avoid-break" style="margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: ${index === 0 ? '20px' : '8px'}; margin-bottom: 20px;">
           <h2 style="margin: 0; font-size: 20px; font-weight: 700;">${index + 1}. ${project.name}</h2>
           <span class="badge ${statusClass}">${statusText}</span>
         </div>
