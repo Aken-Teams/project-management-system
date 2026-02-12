@@ -582,7 +582,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                     'text-sm text-right',
                                     overdue ? 'text-destructive font-medium' : 'text-muted-foreground',
                                   )}>
-                                    {new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                    {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                   </div>
                                 </div>
                               )

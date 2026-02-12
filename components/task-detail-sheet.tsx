@@ -219,6 +219,28 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </span>
               </div>
             </div>
+            {task.completedAt && (
+              <div className="grid grid-cols-3 gap-4 mt-4">
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3 w-3" />
+                    完成日期
+                  </div>
+                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                    {new Date(task.completedAt).toLocaleDateString('zh-TW')}
+                  </span>
+                </div>
+                {task.completedBy && (
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-wider flex items-center gap-1.5">
+                      <User className="h-3 w-3" />
+                      完成者
+                    </div>
+                    <span className="text-sm font-medium">{task.completedBy}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Prerequisites */}
