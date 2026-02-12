@@ -75,7 +75,7 @@ function getStatusDot(status: ComputedTaskStatus) {
 
 function getStatusBadge(status: ComputedTaskStatus) {
   return (
-    <Badge className={cn('text-[10px] px-1.5 py-0 shrink-0', getStatusColor(status))}>
+    <Badge className={cn('text-xs px-2 py-0.5 shrink-0', getStatusColor(status))}>
       {getStatusLabel(status)}
     </Badge>
   )
@@ -671,7 +671,7 @@ export default function MyTasksPage() {
                           <DialogTitle className={cn('text-base text-left leading-tight', isCompleted && 'text-muted-foreground')}>
                             {task.title}
                           </DialogTitle>
-                          <Badge className={cn('text-[10px] px-1.5 py-0 shrink-0', getStatusColor(status))}>
+                          <Badge className={cn('text-xs px-2 py-0.5 shrink-0', getStatusColor(status))}>
                             {badgeText}
                           </Badge>
                         </div>

@@ -135,11 +135,11 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
 
   const getStatusBadge = (status: DisplayStatus) => {
     switch (status) {
-      case 'done': return <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
-      case 'in-progress': return <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
-      case 'overdue-not-started': return <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">逾期未開始</Badge>
-      case 'blocked': return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">受阻</Badge>
-      default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
+      case 'done': return <Badge className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
+      case 'in-progress': return <Badge className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">進行中</Badge>
+      case 'overdue-not-started': return <Badge className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-700">逾期未開始</Badge>
+      case 'blocked': return <Badge variant="destructive" className="text-xs px-2 py-0.5">受阻</Badge>
+      default: return <Badge className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">待辦</Badge>
     }
   }
 
@@ -155,9 +155,9 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
 
   const getPriorityBadge = (priority: 'low' | 'medium' | 'high') => {
     switch (priority) {
-      case 'high': return <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">高</Badge>
-      case 'medium': return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">中</Badge>
-      case 'low': return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">低</Badge>
+      case 'high': return <Badge className="text-xs px-2 py-0.5 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">高</Badge>
+      case 'medium': return <Badge className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">中</Badge>
+      case 'low': return <Badge className="text-xs px-2 py-0.5 bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">低</Badge>
     }
   }
 
@@ -507,11 +507,11 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                         ) : (
                           <div className="divide-y">
                             {/* Table header */}
-                            <div className="grid grid-cols-[minmax(0,1fr)_68px_70px_52px_120px_90px] gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                            <div className="grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                               <span>任務</span>
                               <span>狀態</span>
                               <span>進度</span>
-                              <span>優先</span>
+                              <span className="text-center">優先</span>
                               <span>負責人</span>
                               <span className="text-right">截止日</span>
                             </div>
@@ -522,7 +522,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                   key={task.id}
                                   onClick={() => handleTaskClick(task)}
                                   className={cn(
-                                    'grid grid-cols-[minmax(0,1fr)_68px_70px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                    'grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
                                     overdue && 'bg-destructive/5',
                                   )}
                                 >
@@ -539,10 +539,10 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                   {/* Progress */}
                                   <div className="flex items-center gap-1.5">
                                     <Progress value={task.progress} className="h-1.5 flex-1" />
-                                    <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right">{task.progress}%</span>
+                                    <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{task.progress}%</span>
                                   </div>
                                   {/* Priority */}
-                                  <div>{getPriorityBadge(task.priority)}</div>
+                                  <div className="flex justify-center">{getPriorityBadge(task.priority)}</div>
                                   {/* Assignee */}
                                   <div className="flex items-center gap-1.5 min-w-0">
                                     <Avatar className="h-6 w-6 shrink-0">
