@@ -482,8 +482,8 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                             ...barStyle(task.startDate, earlyComplete ? task.completedAt! : task.endDate),
                             top: earlyComplete ? 26 : 12,
                             backgroundColor: taskColors.bg,
-                            borderColor: isCritical ? '#f59e0b' : taskColors.border,
-                            ...(isCritical ? { boxShadow: '0 0 0 1.5px #f59e0b' } : {}),
+                            borderColor: isCritical ? '#64748b' : taskColors.border,
+                            ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                           }}
                         >
                           {task.progress > 0 && task.progress < 100 && (
@@ -592,7 +592,11 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
             <>
               <span className="text-muted-foreground">|</span>
               <div className="flex items-center gap-1.5">
-                <svg width="24" height="10"><path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#f59e0b" strokeWidth="2" fill="none" /></svg>
+                <svg width="24" height="10">
+                  <style>{`@keyframes legend-flow { to { stroke-dashoffset: -20; } }`}</style>
+                  <path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#64748b" strokeWidth="2" fill="none" opacity="0.3" />
+                  <path d="M 0 5 C 8 5, 16 5, 24 5" stroke="#64748b" strokeWidth="2" fill="none" strokeDasharray="12 8" style={{ animation: 'legend-flow 0.8s linear infinite' }} />
+                </svg>
                 <span>關鍵路徑</span>
               </div>
               <div className="flex items-center gap-1.5">

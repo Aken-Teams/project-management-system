@@ -25,6 +25,12 @@ interface TaskRect {
   barCenterY: number
 }
 
+// ─── Colors ──────────────────────────────────────────────────
+const CRITICAL_COLOR = '#64748b'       // slate-500 — muted, professional
+const CRITICAL_HIGHLIGHT = '#475569'   // slate-600 — slightly darker on hover
+const DEP_COLOR = '#94a3b8'            // slate-400
+const DEP_HIGHLIGHT = '#3b82f6'        // blue-500
+
 export function GanttDependencyOverlay({
   tasks,
   milestones,
@@ -168,6 +174,18 @@ export function GanttDependencyOverlay({
       className="absolute top-0 right-0 pointer-events-none"
       style={{ left: 260, width: containerWidth, height: svgHeight }}
     >
+      {/* Flowing animation for critical path lines */}
+      <defs>
+        <style>{`
+          @keyframes dash-flow {
+            to { stroke-dashoffset: -20; }
+          }
+          .critical-flow {
+            animation: dash-flow 0.8s linear infinite;
+          }
+        `}</style>
+      </defs>
+
       {/* Render non-highlighted arrows first, then highlighted ones on top */}
       {arrows
         .sort((a, b) => {
@@ -177,32 +195,55 @@ export function GanttDependencyOverlay({
           if (!a.isCritical && b.isCritical) return -1
           return 0
         })
-        .map((arrow, i) => (
-          <g key={i}>
-            <path
-              d={arrow.path}
-              fill="none"
-              stroke={
-                arrow.isHighlighted
-                  ? arrow.isCritical ? '#f59e0b' : '#3b82f6'
-                  : arrow.isCritical ? '#f59e0b' : '#94a3b8'
-              }
-              strokeWidth={arrow.isHighlighted ? 2.5 : arrow.isCritical ? 2 : 1.5}
-              strokeDasharray={arrow.isCritical ? 'none' : '6 3'}
-              opacity={arrow.isHighlighted ? 1 : 0.5}
-            />
-            {/* Arrow head */}
-            <polygon
-              points={`${arrow.headX},${arrow.headY} ${arrow.headX - 5},${arrow.headY - 5} ${arrow.headX - 5},${arrow.headY + 5}`}
-              fill={
-                arrow.isHighlighted
-                  ? arrow.isCritical ? '#f59e0b' : '#3b82f6'
-                  : arrow.isCritical ? '#f59e0b' : '#94a3b8'
-              }
-              opacity={arrow.isHighlighted ? 1 : 0.6}
-            />
-          </g>
-        ))
+        .map((arrow, i) => {
+          const color = arrow.isHighlighted
+            ? arrow.isCritical ? CRITICAL_HIGHLIGHT : DEP_HIGHLIGHT
+            : arrow.isCritical ? CRITICAL_COLOR : DEP_COLOR
+
+          return (
+            <g key={i}>
+              {/* Critical path: solid background + animated flowing dashes */}
+              {arrow.isCritical ? (
+                <>
+                  {/* Base solid line */}
+                  <path
+                    d={arrow.path}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={arrow.isHighlighted ? 2.5 : 2}
+                    opacity={arrow.isHighlighted ? 0.7 : 0.3}
+                  />
+                  {/* Animated dash overlay — creates the flow effect */}
+                  <path
+                    d={arrow.path}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={arrow.isHighlighted ? 2.5 : 2}
+                    strokeDasharray="12 8"
+                    opacity={arrow.isHighlighted ? 1 : 0.7}
+                    className="critical-flow"
+                  />
+                </>
+              ) : (
+                /* Regular dependency: static dashed line */
+                <path
+                  d={arrow.path}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={arrow.isHighlighted ? 2.5 : 1.5}
+                  strokeDasharray="6 3"
+                  opacity={arrow.isHighlighted ? 1 : 0.5}
+                />
+              )}
+              {/* Arrow head */}
+              <polygon
+                points={`${arrow.headX},${arrow.headY} ${arrow.headX - 5},${arrow.headY - 5} ${arrow.headX - 5},${arrow.headY + 5}`}
+                fill={color}
+                opacity={arrow.isHighlighted ? 1 : 0.6}
+              />
+            </g>
+          )
+        })
       }
     </svg>
   )
