@@ -27,6 +27,7 @@ interface GanttChartProps {
   nodeMap?: Map<string, DepNode>
   selectedTaskId?: string | null
   onTaskHover?: (task: Task | null) => void
+  noActivityMilestoneIds?: Set<string>
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
@@ -38,7 +39,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 
 const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, nodeMap, selectedTaskId, onTaskHover }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
@@ -306,6 +307,12 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                           <AlertTriangle className="h-3 w-3" />
                           +{delayDays}天
                         </span>
+                      )}
+                      {noActivityMilestoneIds?.has(milestone.id) && (
+                        <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
+                          <AlertTriangle className="h-3 w-3 mr-0.5" />
+                          尚無人回報
+                        </Badge>
                       )}
                     </div>
                     <div className="text-sm text-muted-foreground ml-[38px] mt-0.5">

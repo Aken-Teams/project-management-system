@@ -27,3 +27,25 @@ export async function syncMilestoneStatus(milestoneId: string, projectId: string
     data: { status, progress },
   })
 }
+
+/**
+ * Auto-progress tasks whose startDate has passed but are still 'todo'.
+ * Works on an in-memory array of tasks (from a prior DB fetch).
+ * Returns the IDs of tasks that were updated in the DB.
+ */
+export async function autoProgressTasks(
+  tasks: { id: string; status: string; startDate: Date }[],
+): Promise<string[]> {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const stale = tasks.filter(t => t.status === 'todo' && t.startDate <= today)
+  if (stale.length === 0) return []
+
+  await prisma.task.updateMany({
+    where: { id: { in: stale.map(t => t.id) } },
+    data: { status: 'in_progress' },
+  })
+
+  return stale.map(t => t.id)
+}

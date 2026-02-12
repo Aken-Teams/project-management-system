@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { autoProgressTasks } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import {
   projectTypeToDb,
@@ -26,7 +27,17 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
-    // Auto-sync milestone statuses from task data (fix any stale status)
+    // ── Auto-progress: tasks whose startDate has passed but still 'todo' → 'in_progress' ──
+    const progressedIds = await autoProgressTasks(project.tasks)
+    if (progressedIds.length > 0) {
+      for (const t of project.tasks) {
+        if (progressedIds.includes(t.id)) {
+          ;(t as { status: string }).status = 'in_progress'
+        }
+      }
+    }
+
+    // ── Auto-sync milestone statuses from (now-updated) task data ──
     for (const ms of project.milestones) {
       const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
       if (msTasks.length === 0) continue
@@ -39,7 +50,6 @@ export async function GET(
           where: { id: ms.id },
           data: { status: correctStatus, progress: correctProgress },
         })
-        // Patch in-memory so transformer picks up the fix
         ;(ms as { status: string }).status = correctStatus
         ;(ms as { progress: number }).progress = correctProgress
       }

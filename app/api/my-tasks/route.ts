@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { autoProgressTasks } from '@/lib/sync-milestone-status'
 
 // ─── GET /api/my-tasks — Fetch tasks for the current user ────
 // Returns all projects where the user is a team member, with their
@@ -63,6 +64,35 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+
+    // ── Auto-progress tasks whose startDate has passed but still 'todo' ──
+    for (const p of projects) {
+      const progressedIds = await autoProgressTasks(p.tasks)
+      if (progressedIds.length > 0) {
+        for (const t of p.tasks) {
+          if (progressedIds.includes(t.id)) {
+            ;(t as { status: string }).status = 'in_progress'
+          }
+        }
+        // Re-sync milestone statuses for this project
+        for (const ms of p.milestones) {
+          const msTasks = p.tasks.filter(t => t.milestoneId === ms.id)
+          if (msTasks.length === 0) continue
+          const allDone = msTasks.every(t => t.status === 'done')
+          const allTodo = msTasks.every(t => t.status === 'todo')
+          const correctStatus = allDone ? 'done' : allTodo ? 'todo' : 'in_progress'
+          const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)
+          if (ms.status !== correctStatus || ms.progress !== correctProgress) {
+            await prisma.milestone.update({
+              where: { id: ms.id },
+              data: { status: correctStatus, progress: correctProgress },
+            })
+            ;(ms as { status: string }).status = correctStatus
+            ;(ms as { progress: number }).progress = correctProgress
+          }
+        }
+      }
+    }
 
     // Transform to frontend format
     const feProjects = projects

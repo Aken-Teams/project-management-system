@@ -119,6 +119,16 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
     return map
   }, [project.milestones, filteredTasks])
 
+  // Pre-compute set of milestone IDs with no activity (for Gantt chart prop)
+  const noActivityMilestoneIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const ms of project.milestones) {
+      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+      if (isMilestoneNoActivity(ms.id, msTasks)) ids.add(ms.id)
+    }
+    return ids
+  }, [project.milestones, project.tasks, project.taskLogs])
+
   const toggleMilestone = (id: string) => {
     setExpandedMilestones(prev => {
       const next = new Set(prev)
@@ -168,6 +178,18 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
   const isTaskOverdue = (task: Task) => {
     if (effectiveStatus(task) === 'done') return false
     return new Date() > new Date(task.endDate)
+  }
+
+  // Detect milestones where tasks should have started but nobody reported any progress
+  const isMilestoneNoActivity = (milestoneId: string, tasks: Task[]) => {
+    if (tasks.length === 0) return false
+    const today = new Date()
+    const hasStartedTasks = tasks.some(t => new Date(t.startDate) <= today)
+    if (!hasStartedTasks) return false
+    const allZeroProgress = tasks.every(t => t.progress === 0)
+    if (!allZeroProgress) return false
+    const hasLogs = project.taskLogs.some(tl => tasks.some(t => t.id === tl.taskId))
+    return !hasLogs
   }
 
   // Sequential color assignment guarantees no collisions
@@ -380,6 +402,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
           showDependencies={showDependencies}
           nodeMap={nodeMap}
           selectedTaskId={selectedTask?.id ?? null}
+          noActivityMilestoneIds={noActivityMilestoneIds}
         />
       ) : (
         <div className="space-y-3">
@@ -393,6 +416,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
             const isExpanded = expandedMilestones.has(milestone.id)
             const doneTasks = tasks.filter(t => t.status === 'done').length
             const overdueTasks = tasks.filter(t => isTaskOverdue(t)).length
+            const noActivity = isMilestoneNoActivity(milestone.id, tasks)
 
             return (
               <Collapsible
@@ -418,6 +442,12 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                             <Badge variant="secondary" className="bg-warning text-warning-foreground text-sm">
                               <AlertTriangle className="h-3 w-3 mr-1" />
                               +{delayDays}天
+                            </Badge>
+                          )}
+                          {noActivity && (
+                            <Badge variant="secondary" className="bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700 text-sm">
+                              <AlertTriangle className="h-3 w-3 mr-1" />
+                              尚無人回報進度
                             </Badge>
                           )}
                         </div>
