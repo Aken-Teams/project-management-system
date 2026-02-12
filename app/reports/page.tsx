@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,8 +23,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useProjectStore } from '@/lib/project-store'
 import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
+import { useAuth } from '@/lib/auth-context'
 import {
   Mail,
   FileDown,
@@ -36,8 +36,77 @@ import {
   DollarSign,
   BarChart3,
   Users,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// ── Types ──
+interface ReportsData {
+  user: {
+    id: string
+    name: string
+    role: string
+  }
+  stats: {
+    totalProjects: number
+    totalTasks: number
+    doneTasks: number
+    inProgressTasks: number
+    blockedTasks: number
+    todoTasks: number
+    totalMilestones: number
+    doneMilestones: number
+    budget: number
+    budgetUsed: number
+    openRisks: number
+    pendingDelays: number
+    teamSize: number
+    progress: number
+  }
+  statusDistribution: {
+    green: number
+    yellow: number
+    red: number
+  }
+  projects: Array<{
+    id: string
+    projectCode: string
+    name: string
+    projectType: string
+    status: ProjectStatus
+    progress: number
+    owner: string
+    startDate: string
+    endDate: string
+    budget: number
+    budgetUsed: number
+    teamSize: number
+    totalTasks: number
+    doneTasks: number
+    totalMilestones: number
+    doneMilestones: number
+    openRisks: number
+    weeklyUpdatesCount: number
+    milestones: Array<{
+      id: string
+      name: string
+      status: string
+      progress: number
+      dueDate: string
+    }>
+    risks: Array<{
+      id: string
+      title: string
+      impact: string
+      status: string
+    }>
+  }>
+  teamWorkload: Array<{
+    name: string
+    total: number
+    done: number
+  }>
+}
 
 // ── SVG Donut Chart ──
 function DonutChart({ segments, size = 180, strokeWidth = 26, children }: {
@@ -101,7 +170,7 @@ function MiniRing({ value, size = 44, strokeWidth = 5, color }: {
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
           strokeDasharray={`${dashLen} ${circumference - dashLen}`} strokeLinecap="round" />
       </svg>
-      <span className="absolute text-[10px] font-bold">{value}%</span>
+      <span className="absolute text-xs font-bold">{value}%</span>
     </div>
   )
 }
@@ -123,7 +192,10 @@ function fmtMoney(n: number) {
 }
 
 export default function ReportsPage() {
-  const { projects } = useProjectStore()
+  const { user } = useAuth()
+  const [data, setData] = useState<ReportsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [showPdfDialog, setShowPdfDialog] = useState(false)
   const [showEmailDialog, setShowEmailDialog] = useState(false)
@@ -133,38 +205,66 @@ export default function ReportsPage() {
   const [exportSuccess, setExportSuccess] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState(false)
 
-  const selectedProject = selectedProjectId === 'all'
-    ? null
-    : projects.find(p => p.id === selectedProjectId)
+  // ── Fetch reports data from API ──
+  useEffect(() => {
+    if (!user) return
 
-  const targetProjects = selectedProject ? [selectedProject] : projects
+    const fetchReports = async () => {
+      try {
+        setLoading(true)
+        const params = new URLSearchParams()
+        if (user.id) params.append('userId', user.id)
+        else if (user.email) params.append('userEmail', user.email)
 
-  // ── Aggregate stats ──
-  const stats = useMemo(() => {
-    const ps = targetProjects
-    const totalTasks = ps.reduce((a, p) => a + p.tasks.length, 0)
-    const doneTasks = ps.reduce((a, p) => a + p.tasks.filter(t => t.status === 'done').length, 0)
-    const inProgressTasks = ps.reduce((a, p) => a + p.tasks.filter(t => t.status === 'in-progress').length, 0)
-    const blockedTasks = ps.reduce((a, p) => a + p.tasks.filter(t => t.status === 'blocked').length, 0)
-    const todoTasks = totalTasks - doneTasks - inProgressTasks - blockedTasks
+        // If specific project is selected, add projectId filter
+        if (selectedProjectId !== 'all') {
+          params.append('projectId', selectedProjectId)
+        }
 
-    const totalMilestones = ps.reduce((a, p) => a + p.milestones.length, 0)
-    const doneMilestones = ps.reduce((a, p) => a + p.milestones.filter(m => m.status === 'done').length, 0)
+        const response = await fetch(`/api/reports?${params}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch reports data')
+        }
 
-    const budget = ps.reduce((a, p) => a + p.budget, 0)
-    const budgetUsed = ps.reduce((a, p) => a + p.budgetUsed, 0)
-    const openRisks = ps.reduce((a, p) => a + p.risks.filter(r => r.status === 'open').length, 0)
-    const pendingDelays = ps.reduce((a, p) => a + p.delayRequests.filter(r => r.status === 'pending').length, 0)
-    const teamSize = new Set(ps.flatMap(p => p.team)).size
-    const progress = ps.length > 0 ? Math.round(ps.reduce((a, p) => a + p.progress, 0) / ps.length) : 0
-
-    return {
-      totalTasks, doneTasks, inProgressTasks, blockedTasks, todoTasks,
-      totalMilestones, doneMilestones,
-      budget, budgetUsed,
-      openRisks, pendingDelays, teamSize, progress,
+        const reportsData: ReportsData = await response.json()
+        setData(reportsData)
+        setError(null)
+      } catch (err) {
+        console.error('Failed to fetch reports:', err)
+        setError('載入報告資料失敗')
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [targetProjects])
+
+    fetchReports()
+  }, [user, selectedProjectId])
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <p className="text-lg font-semibold">{error || '載入失敗'}</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const { stats, statusDistribution, projects, teamWorkload } = data
+  const selectedProject = selectedProjectId === 'all' ? null : projects.find(p => p.id === selectedProjectId)
 
   const budgetPct = stats.budget > 0 ? Math.round((stats.budgetUsed / stats.budget) * 100) : 0
 
@@ -176,45 +276,23 @@ export default function ReportsPage() {
     { value: stats.blockedTasks, color: '#ef4444', label: '受阻' },
   ]
 
-  const statusSegments = useMemo(() => {
-    const green = projects.filter(p => p.status === 'green').length
-    const yellow = projects.filter(p => p.status === 'yellow').length
-    const red = projects.filter(p => p.status === 'red').length
-    return [
-      { value: green, color: '#10b981', label: '正常' },
-      { value: yellow, color: '#f59e0b', label: '注意' },
-      { value: red, color: '#ef4444', label: '風險' },
-    ]
-  }, [projects])
+  const statusSegments = [
+    { value: statusDistribution.green, color: '#10b981', label: '正常' },
+    { value: statusDistribution.yellow, color: '#f59e0b', label: '注意' },
+    { value: statusDistribution.red, color: '#ef4444', label: '風險' },
+  ]
 
-  // ── Member workload ──
-  const memberWorkload = useMemo(() => {
-    const map = new Map<string, { total: number; done: number }>()
-    targetProjects.forEach(p => {
-      p.tasks.forEach(t => {
-        const entry = map.get(t.assignee) || { total: 0, done: 0 }
-        entry.total++
-        if (t.status === 'done') entry.done++
-        map.set(t.assignee, entry)
-      })
-    })
-    return [...map.entries()]
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8)
-  }, [targetProjects])
-
-  const maxMemberTasks = Math.max(...memberWorkload.map(m => m.total), 1)
+  const maxMemberTasks = Math.max(...teamWorkload.map(m => m.total), 1)
 
   // ── Export handlers ──
   const handleOpenPdfDialog = () => {
-    setSelectedProjectIds(projects.map(p => p.id))
+    setSelectedProjectIds(data.projects.map(p => p.id))
     setShowPdfDialog(true)
     setExportSuccess(false)
   }
 
   const handleOpenEmailDialog = () => {
-    setSelectedProjectIds(projects.map(p => p.id))
+    setSelectedProjectIds(data.projects.map(p => p.id))
     setEmailRecipients('')
     setSelectedReports(['summary', 'tasks', 'milestones'])
     setShowEmailDialog(true)
@@ -285,7 +363,7 @@ export default function ReportsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">所有專案（總覽）</SelectItem>
-                  {projects.map(p => (
+                  {data.projects.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -343,7 +421,7 @@ export default function ReportsPage() {
                     </div>
 
                     <div className="border rounded-lg p-3 space-y-2 max-h-[300px] overflow-y-auto">
-                      {projects.map(project => (
+                      {data.projects.map(project => (
                         <div key={project.id} className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
                           <Checkbox
                             id={`pdf-project-${project.id}`}
@@ -458,7 +536,7 @@ export default function ReportsPage() {
                       </div>
 
                       <div className="border rounded-lg p-3 space-y-2 max-h-[200px] overflow-y-auto">
-                        {projects.map(project => (
+                        {data.projects.map(project => (
                           <div key={project.id} className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
                             <Checkbox
                               id={`email-project-${project.id}`}
@@ -646,8 +724,8 @@ export default function ReportsPage() {
               <CardContent className="flex flex-col items-center py-5 gap-4">
                 <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
                   <div className="text-center">
-                    <div className="text-xl font-bold">{stats.totalTasks}</div>
-                    <div className="text-[10px] text-muted-foreground">總任務</div>
+                    <div className="text-2xl font-bold">{stats.totalTasks}</div>
+                    <div className="text-xs text-muted-foreground">總任務</div>
                   </div>
                 </DonutChart>
                 <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
@@ -682,8 +760,8 @@ export default function ReportsPage() {
                       size={150} strokeWidth={22}
                     >
                       <div className="text-center">
-                        <div className="text-xl font-bold">{selectedProject.progress}%</div>
-                        <div className="text-[10px] text-muted-foreground">進度</div>
+                        <div className="text-2xl font-bold">{selectedProject.progress}%</div>
+                        <div className="text-xs text-muted-foreground">進度</div>
                       </div>
                     </DonutChart>
                     <div className="w-full space-y-1.5 px-2">
@@ -705,8 +783,8 @@ export default function ReportsPage() {
                   <>
                     <DonutChart segments={statusSegments} size={150} strokeWidth={22}>
                       <div className="text-center">
-                        <div className="text-xl font-bold">{projects.length}</div>
-                        <div className="text-[10px] text-muted-foreground">專案</div>
+                        <div className="text-2xl font-bold">{data.projects.length}</div>
+                        <div className="text-xs text-muted-foreground">專案</div>
                       </div>
                     </DonutChart>
                     <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
@@ -737,8 +815,8 @@ export default function ReportsPage() {
                   size={150} strokeWidth={22}
                 >
                   <div className="text-center">
-                    <div className={cn('text-xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
-                    <div className="text-[10px] text-muted-foreground">執行率</div>
+                    <div className={cn('text-2xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
+                    <div className="text-xs text-muted-foreground">執行率</div>
                   </div>
                 </DonutChart>
                 <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
@@ -767,27 +845,23 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    {projects.map(p => {
-                      const doneTasks = p.tasks.filter(t => t.status === 'done').length
-                      const doneMs = p.milestones.filter(m => m.status === 'done').length
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => setSelectedProjectId(p.id)}
-                          className="p-3 rounded-lg border hover:border-primary/40 hover:shadow-sm transition-all text-left flex items-center gap-3"
-                        >
-                          <MiniRing value={p.progress} color={getStatusRingColor(p.status)} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{p.name}</div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <StatusDot status={p.status} />
-                              <span className="text-[10px] text-muted-foreground">{doneTasks}/{p.tasks.length} 任務</span>
-                              <span className="text-[10px] text-muted-foreground">{doneMs}/{p.milestones.length} 里程碑</span>
-                            </div>
+                    {data.projects.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedProjectId(p.id)}
+                        className="p-3 rounded-lg border hover:border-primary/40 hover:shadow-sm transition-all text-left flex items-center gap-3"
+                      >
+                        <MiniRing value={p.progress} color={getStatusRingColor(p.status)} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{p.name}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <StatusDot status={p.status} />
+                            <span className="text-xs text-muted-foreground">{p.doneTasks}/{p.totalTasks} 任務</span>
+                            <span className="text-xs text-muted-foreground">{p.doneMilestones}/{p.totalMilestones} 里程碑</span>
                           </div>
-                        </button>
-                      )
-                    })}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -805,24 +879,20 @@ export default function ReportsPage() {
                     <CardTitle className="text-sm">里程碑進度</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {selectedProject.milestones.map(m => {
-                      const mTasks = selectedProject.tasks.filter(t => t.milestoneId === m.id)
-                      const done = mTasks.filter(t => t.status === 'done').length
-                      return (
-                        <div key={m.id} className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium truncate mr-2">{m.name}</span>
-                            <span className="text-muted-foreground shrink-0">{m.progress}% ({done}/{mTasks.length})</span>
-                          </div>
-                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full transition-all" style={{
-                              width: `${m.progress}%`,
-                              backgroundColor: m.status === 'done' ? '#10b981' : m.status === 'blocked' ? '#ef4444' : '#3b82f6',
-                            }} />
-                          </div>
+                    {selectedProject.milestones.map(m => (
+                      <div key={m.id} className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium truncate mr-2">{m.name}</span>
+                          <span className="text-muted-foreground shrink-0">{m.progress}%</span>
                         </div>
-                      )
-                    })}
+                        <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{
+                            width: `${m.progress}%`,
+                            backgroundColor: m.status === 'done' ? '#10b981' : m.status === 'blocked' ? '#ef4444' : '#3b82f6',
+                          }} />
+                        </div>
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
 
@@ -831,39 +901,39 @@ export default function ReportsPage() {
                     <CardTitle className="text-sm">專案資訊</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-[10px] text-muted-foreground mb-1">專案類型</div>
-                        <div className="font-medium text-sm">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
+                        <div className="text-xs text-muted-foreground mb-1.5">專案類型</div>
+                        <div className="font-medium">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-[10px] text-muted-foreground mb-1">負責人</div>
-                        <div className="font-medium text-sm">{selectedProject.owner}</div>
+                        <div className="text-xs text-muted-foreground mb-1.5">負責人</div>
+                        <div className="font-medium">{selectedProject.owner}</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-[10px] text-muted-foreground mb-1">專案期間</div>
-                        <div className="font-medium text-sm">
+                        <div className="text-xs text-muted-foreground mb-1.5">專案期間</div>
+                        <div className="font-medium">
                           {new Date(selectedProject.startDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })} ~ {new Date(selectedProject.endDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
                         </div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-[10px] text-muted-foreground mb-1">團隊</div>
-                        <div className="font-medium text-sm">{selectedProject.team.length} 人</div>
+                        <div className="text-xs text-muted-foreground mb-1.5">預算</div>
+                        <div className="font-medium">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-[10px] text-muted-foreground mb-1">預算</div>
-                        <div className="font-medium text-sm">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
+                        <div className="text-xs text-muted-foreground mb-1.5">週報更新</div>
+                        <div className="font-medium">{selectedProject.weeklyUpdatesCount} 次</div>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-[10px] text-muted-foreground mb-1">週報更新</div>
-                        <div className="font-medium text-sm">{selectedProject.weeklyUpdates.length} 次</div>
+                        <div className="text-xs text-muted-foreground mb-1.5">團隊</div>
+                        <div className="font-medium">{selectedProject.teamSize} 人</div>
                       </div>
                     </div>
 
-                    {selectedProject.risks.filter(r => r.status === 'open').length > 0 && (
+                    {selectedProject.risks.length > 0 && (
                       <div className="mt-4 space-y-2">
-                        <div className="text-sm font-medium text-muted-foreground">未解決風險</div>
-                        {selectedProject.risks.filter(r => r.status === 'open').map(r => (
+                        <div className="text-sm font-medium text-muted-foreground mb-2">未解決風險</div>
+                        {selectedProject.risks.map(r => (
                           <div key={r.id} className="flex items-center gap-2 p-2 rounded border text-sm">
                             <AlertTriangle className={cn(
                               'h-3.5 w-3.5 shrink-0',
@@ -889,7 +959,7 @@ export default function ReportsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {memberWorkload.map(m => (
+                  {teamWorkload.map(m => (
                     <div key={m.name} className="flex items-center gap-3">
                       <span className="text-sm font-medium w-[72px] truncate shrink-0">{m.name}</span>
                       <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
@@ -905,7 +975,7 @@ export default function ReportsPage() {
                       <span className="text-sm text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
                     </div>
                   ))}
-                  {memberWorkload.length > 0 && (
+                  {teamWorkload.length > 0 && (
                     <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
                       <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-emerald-500 inline-block" />已完成</span>
                       <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-primary/80 inline-block" />總任務</span>
