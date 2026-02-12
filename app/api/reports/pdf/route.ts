@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       .page-break {
         page-break-before: always;
         break-before: page;
+        margin-top: 24px !important;
       }
       .avoid-break {
         page-break-inside: avoid;
@@ -541,8 +542,8 @@ export async function POST(request: NextRequest) {
 
     return `
       ${index > 0 ? '<div class="page-break"></div>' : ''}
-      <div class="avoid-break" style="margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: ${index === 0 ? '20px' : '8px'}; margin-bottom: 20px;">
+      <div class="avoid-break" style="margin-bottom: 16px; padding-top: ${index > 0 ? '40px' : '0'};">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: ${index === 0 ? '20px' : '0'}; margin-bottom: 20px;">
           <h2 style="margin: 0; font-size: 20px; font-weight: 700;">${index + 1}. ${project.name}</h2>
           <span class="badge ${statusClass}">${statusText}</span>
         </div>
