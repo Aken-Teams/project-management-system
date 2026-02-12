@@ -507,9 +507,10 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                         ) : (
                           <div className="divide-y">
                             {/* Table header */}
-                            <div className="grid grid-cols-[minmax(0,1fr)_68px_52px_120px_90px] gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                            <div className="grid grid-cols-[minmax(0,1fr)_68px_70px_52px_120px_90px] gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                               <span>任務</span>
                               <span>狀態</span>
+                              <span>進度</span>
                               <span>優先</span>
                               <span>負責人</span>
                               <span className="text-right">截止日</span>
@@ -521,7 +522,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                   key={task.id}
                                   onClick={() => handleTaskClick(task)}
                                   className={cn(
-                                    'grid grid-cols-[minmax(0,1fr)_68px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                    'grid grid-cols-[minmax(0,1fr)_68px_70px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
                                     overdue && 'bg-destructive/5',
                                   )}
                                 >
@@ -535,6 +536,11 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                   </div>
                                   {/* Status */}
                                   <div>{getStatusBadge(displayStatus(task))}</div>
+                                  {/* Progress */}
+                                  <div className="flex items-center gap-1.5">
+                                    <Progress value={task.progress} className="h-1.5 flex-1" />
+                                    <span className="text-[10px] text-muted-foreground tabular-nums w-7 text-right">{task.progress}%</span>
+                                  </div>
                                   {/* Priority */}
                                   <div>{getPriorityBadge(task.priority)}</div>
                                   {/* Assignee */}

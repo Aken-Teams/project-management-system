@@ -577,6 +577,11 @@ export default function MyTasksPage() {
                                       逾期{Math.abs(days)}天
                                     </span>
                                   )}
+                                  {status === 'overdue-not-started' && (
+                                    <span className="text-sm text-orange-600 font-medium shrink-0">
+                                      逾期未開始
+                                    </span>
+                                  )}
                                   {status === 'at-risk' && (
                                     <span className="text-sm text-amber-600 font-medium shrink-0">
                                       剩{days}天
@@ -651,11 +656,13 @@ export default function MyTasksPage() {
                         'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
                         isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400' :
                         status === 'overdue' ? 'bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400' :
+                        status === 'overdue-not-started' ? 'bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400' :
                         status === 'at-risk' ? 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' :
                         'bg-primary/10 text-primary'
                       )}>
                         {isCompleted ? <CheckCircle2 className="h-5 w-5" /> :
                          status === 'overdue' ? <AlertTriangle className="h-5 w-5" /> :
+                         status === 'overdue-not-started' ? <AlertTriangle className="h-5 w-5" /> :
                          status === 'at-risk' ? <AlertCircle className="h-5 w-5" /> :
                          <ListChecks className="h-5 w-5" />}
                       </div>
@@ -861,7 +868,7 @@ export default function MyTasksPage() {
                               </div>
                             </button>
 
-                            {(status === 'at-risk' || status === 'overdue') ? (
+                            {(status === 'at-risk' || status === 'overdue' || status === 'overdue-not-started') ? (
                               <button
                                 className="group flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 transition-all text-left"
                                 onClick={() => {

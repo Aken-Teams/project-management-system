@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -49,6 +50,14 @@ export async function POST(
       },
       include: { author: true },
     })
+
+    // ── Sync task progress & milestone after adding log ──
+    const allLogs = await prisma.taskLog.findMany({
+      where: { taskId: body.taskId },
+      select: { taskId: true, logDate: true },
+    })
+    await syncTaskProgressFromLogs([task], allLogs)
+    await syncMilestoneStatus(task.milestoneId, id)
 
     return NextResponse.json({
       id: log.id,

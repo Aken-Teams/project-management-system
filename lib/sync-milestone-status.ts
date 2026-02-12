@@ -49,3 +49,37 @@ export async function autoProgressTasks(
 
   return stale.map(t => t.id)
 }
+
+/**
+ * Compute task progress from task-log coverage:
+ *   progress = uniqueLogDates / taskDurationDays × 100  (capped at 100)
+ * Completed tasks (completedAt set) are forced to 100%.
+ * Works on in-memory arrays; updates DB + patches objects in place.
+ */
+export async function syncTaskProgressFromLogs(
+  tasks: { id: string; startDate: Date; endDate: Date; progress: number; completedAt: Date | null }[],
+  taskLogs: { taskId: string; logDate: Date }[],
+): Promise<void> {
+  const msPerDay = 1000 * 60 * 60 * 24
+
+  for (const task of tasks) {
+    let target: number
+
+    if (task.completedAt) {
+      target = 100
+    } else {
+      const durationDays = Math.max(1, Math.round((task.endDate.getTime() - task.startDate.getTime()) / msPerDay) + 1)
+      const logDates = new Set(
+        taskLogs
+          .filter(l => l.taskId === task.id)
+          .map(l => l.logDate.toISOString().split('T')[0]),
+      )
+      target = Math.min(100, Math.round((logDates.size / durationDays) * 100))
+    }
+
+    if (target !== task.progress) {
+      await prisma.task.update({ where: { id: task.id }, data: { progress: target } })
+      ;(task as { progress: number }).progress = target
+    }
+  }
+}

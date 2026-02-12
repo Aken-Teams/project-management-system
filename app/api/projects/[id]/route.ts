@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { autoProgressTasks } from '@/lib/sync-milestone-status'
+import { autoProgressTasks, syncTaskProgressFromLogs } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import {
   projectTypeToDb,
@@ -36,6 +36,9 @@ export async function GET(
         }
       }
     }
+
+    // ── Compute task progress from task-log coverage ──
+    await syncTaskProgressFromLogs(project.tasks, project.taskLogs)
 
     // ── Auto-sync milestone statuses from (now-updated) task data ──
     for (const ms of project.milestones) {

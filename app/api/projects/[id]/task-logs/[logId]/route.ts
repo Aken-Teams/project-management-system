@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 
 type RouteContext = { params: Promise<{ id: string; logId: string }> }
+
+// ─── Helper: re-sync task progress & milestone after log change ──
+
+async function syncAfterLogChange(taskId: string, projectId: string) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { id: true, startDate: true, endDate: true, progress: true, completedAt: true, milestoneId: true },
+  })
+  if (!task) return
+
+  const allLogs = await prisma.taskLog.findMany({
+    where: { taskId },
+    select: { taskId: true, logDate: true },
+  })
+  await syncTaskProgressFromLogs([task], allLogs)
+  await syncMilestoneStatus(task.milestoneId, projectId)
+}
 
 // ─── PUT /api/projects/[id]/task-logs/[logId] — Update task log ──
 
@@ -45,6 +63,11 @@ export async function PUT(
       include: { author: true },
     })
 
+    // Sync progress if logDate changed (may affect unique-date count)
+    if (body.logDate !== undefined) {
+      await syncAfterLogChange(updated.taskId, id)
+    }
+
     return NextResponse.json({
       id: updated.id,
       taskId: updated.taskId,
@@ -76,7 +99,11 @@ export async function DELETE(
       return NextResponse.json({ error: '找不到該工作紀錄' }, { status: 404 })
     }
 
+    const taskId = log.taskId
     await prisma.taskLog.delete({ where: { id: logId } })
+
+    // Sync progress after deletion
+    await syncAfterLogChange(taskId, id)
 
     return NextResponse.json({ success: true })
   } catch (error) {
