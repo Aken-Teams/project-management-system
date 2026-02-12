@@ -270,13 +270,19 @@ export async function GET(request: NextRequest) {
         })
         return !hasThisWeek
       })
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        status: p.actualStatus,
-        owner: p.owner.name,
-        lastUpdateWeekOf: p.weeklyUpdates[0]?.weekOf.toISOString().split('T')[0] || null,
-      }))
+      .map(p => {
+        // Find the PM (project manager) from team members, fallback to project owner
+        const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
+        const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+
+        return {
+          id: p.id,
+          name: p.name,
+          status: p.actualStatus,
+          owner: displayOwner,
+          lastUpdateWeekOf: p.weeklyUpdates[0]?.weekOf.toISOString().split('T')[0] || null,
+        }
+      })
 
     // ── Pending approvals (for PM and executives only) ──
     let pendingApprovals = 0
