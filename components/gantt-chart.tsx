@@ -24,6 +24,7 @@ interface GanttChartProps {
   expandedMilestoneIds?: Set<string>
   onExpandedMilestoneIdsChange?: (ids: Set<string>) => void
   showDependencies?: boolean
+  showBaseline?: boolean
   nodeMap?: Map<string, DepNode>
   selectedTaskId?: string | null
   onTaskHover?: (task: Task | null) => void
@@ -41,7 +42,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 
 const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
@@ -165,11 +166,24 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
     return new Date(ms.dueDate).getTime() > new Date(bl.dueDate).getTime()
   }
 
+  // Baseline date differs from current (delayed OR early)
+  const isBaselineChanged = (ms: Milestone) => {
+    const bl = baselineMap.get(ms.id)
+    if (!bl) return false
+    return new Date(ms.dueDate).getTime() !== new Date(bl.dueDate).getTime()
+  }
+
   const getDelayDays = (ms: Milestone) => {
     const bl = baselineMap.get(ms.id)
     if (!bl) return 0
     const diff = new Date(ms.dueDate).getTime() - new Date(bl.dueDate).getTime()
     return Math.round(diff / (1000 * 60 * 60 * 24))
+  }
+
+  // Task completed before its planned end date
+  const isEarlyComplete = (task: Task) => {
+    if (!task.completedAt) return false
+    return new Date(task.completedAt).getTime() < new Date(task.endDate).getTime()
   }
 
   const formatDate = (d: string) => {
@@ -324,16 +338,24 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                           (原定 {formatDate(blMs.dueDate)})
                         </span>
                       )}
+                      {showBaseline && blMs && !delayed && isBaselineChanged(milestone) && (
+                        <span className="text-emerald-600 ml-1">
+                          (原定 {formatDate(blMs.dueDate)}，提前)
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className={cn('flex-1 relative', delayed && blMs ? 'h-14' : 'h-10')}>
+                  {(() => {
+                    const showMsBaseline = showBaseline && blMs && isBaselineChanged(milestone) && msTasks.length > 0
+                    return (
+                  <div className={cn('flex-1 relative', showMsBaseline ? 'h-14' : 'h-10')}>
                     <WeekGrid />
                     {/* Baseline bar (ghost) */}
-                    {blMs && delayed && msTasks.length > 0 && (
+                    {showMsBaseline && (
                       <div
                         className="absolute h-4 rounded-sm border opacity-80"
                         style={{
-                          ...barStyle(msBar.start, blMs.dueDate),
+                          ...barStyle(msBar.start, blMs!.dueDate),
                           top: 4,
                           backgroundColor: BASELINE_COLOR.bg,
                           borderColor: BASELINE_COLOR.border,
@@ -346,7 +368,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                         className="absolute h-4 rounded-sm border"
                         style={{
                           ...barStyle(msBar.start, milestone.dueDate),
-                          top: delayed && blMs ? 26 : 12,
+                          top: showMsBaseline ? 26 : 12,
                           backgroundColor: colors.bg,
                           borderColor: colors.border,
                           opacity: 0.7,
@@ -362,6 +384,8 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                     )}
                     <TodayLine />
                   </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Expanded task rows — lighter background for clear distinction */}
@@ -421,12 +445,29 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                           <span className="text-sm text-muted-foreground ml-4">{task.assignee}</span>
                         )}
                       </div>
-                      <div className="flex-1 relative h-10" data-timeline-area>
+                      {(() => {
+                        const earlyComplete = showBaseline && isEarlyComplete(task)
+                        return (
+                      <div className={cn('flex-1 relative', earlyComplete ? 'h-14' : 'h-10')} data-timeline-area>
                         <WeekGrid />
+                        {/* Early-complete baseline ghost: original planned range */}
+                        {earlyComplete && (
+                          <div
+                            className="absolute h-4 rounded-sm border opacity-80"
+                            style={{
+                              ...barStyle(task.startDate, task.endDate),
+                              top: 4,
+                              backgroundColor: BASELINE_COLOR.bg,
+                              borderColor: BASELINE_COLOR.border,
+                            }}
+                          />
+                        )}
+                        {/* Actual task bar */}
                         <div
-                          className="absolute h-4 rounded-sm top-3 border"
+                          className="absolute h-4 rounded-sm border"
                           style={{
-                            ...barStyle(task.startDate, task.endDate),
+                            ...barStyle(task.startDate, earlyComplete ? task.completedAt! : task.endDate),
+                            top: earlyComplete ? 26 : 12,
                             backgroundColor: taskColors.bg,
                             borderColor: isCritical ? '#f59e0b' : taskColors.border,
                             ...(isCritical ? { boxShadow: '0 0 0 1.5px #f59e0b' } : {}),
@@ -441,6 +482,8 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                         </div>
                         <TodayLine />
                       </div>
+                        )
+                      })()}
                     </div>
                   )
                 })}
@@ -514,11 +557,15 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
             <div className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
             <span>受阻</span>
           </div>
-          <span className="text-muted-foreground">|</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3.5 h-2 rounded-sm border opacity-80" style={{ backgroundColor: BASELINE_COLOR.bg, borderColor: BASELINE_COLOR.border }} />
-            <span>基線計畫</span>
-          </div>
+          {showBaseline && (
+            <>
+              <span className="text-muted-foreground">|</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-2 rounded-sm border opacity-80" style={{ backgroundColor: BASELINE_COLOR.bg, borderColor: BASELINE_COLOR.border }} />
+                <span>基線計畫</span>
+              </div>
+            </>
+          )}
           {showToday && (
             <>
               <span className="text-muted-foreground">|</span>

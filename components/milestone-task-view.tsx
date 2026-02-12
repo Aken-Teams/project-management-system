@@ -37,6 +37,7 @@ import {
   ChevronsUpDown,
   TimerReset,
   Loader2,
+  Settings2,
 } from 'lucide-react'
 
 interface MilestoneTaskViewProps {
@@ -53,6 +54,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
   const [showDependencies, setShowDependencies] = useState(false)
+  const [showBaseline, setShowBaseline] = useState(false)
   const [resettingBaseline, setResettingBaseline] = useState(false)
   const [baselineDialogOpen, setBaselineDialogOpen] = useState(false)
 
@@ -352,20 +354,42 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
             {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
           </span>
           {viewMode === 'gantt' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                'h-7 text-sm gap-1.5',
-                showDependencies
-                  ? 'border-violet-400 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-950 dark:text-violet-400 dark:hover:bg-violet-900'
-                  : '',
-              )}
-              onClick={() => setShowDependencies(prev => !prev)}
-            >
-              <Network className="h-3.5 w-3.5" />
-              相依關係
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    'h-7 text-sm gap-1.5',
+                    (showDependencies || showBaseline)
+                      ? 'border-violet-400 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600 dark:bg-violet-950 dark:text-violet-400 dark:hover:bg-violet-900'
+                      : '',
+                  )}
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  進階選項
+                  {(showDependencies || showBaseline) && (
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full ml-0.5">
+                      {[showDependencies, showBaseline].filter(Boolean).length}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-52 p-3">
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <Checkbox checked={showDependencies} onCheckedChange={(v) => setShowDependencies(!!v)} />
+                    <Network className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm">相依關係</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <Checkbox checked={showBaseline} onCheckedChange={(v) => setShowBaseline(!!v)} />
+                    <TimerReset className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm">基線顯示</span>
+                  </label>
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
           {hasBaselineDelay && onBaselineReset && (
             <Button
@@ -424,6 +448,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
           expandedMilestoneIds={ganttExpandedMs}
           onExpandedMilestoneIdsChange={setGanttExpandedMs}
           showDependencies={showDependencies}
+          showBaseline={showBaseline}
           nodeMap={nodeMap}
           selectedTaskId={selectedTask?.id ?? null}
           noActivityMilestoneIds={noActivityMilestoneIds}
