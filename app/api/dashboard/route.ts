@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { projectTypeToFe } from '@/lib/enum-mappers'
 
 // ─── Auto-compute project status & progress from tasks ─────
 interface FeTask {
@@ -174,7 +175,7 @@ export async function GET(request: NextRequest) {
       id: p.id,
       projectCode: p.projectCode,
       name: p.name,
-      projectType: p.projectType,
+      projectType: projectTypeToFe(p.projectType),
       status: p.actualStatus,
       progress: p.actualProgress,
       owner: p.owner.name,
