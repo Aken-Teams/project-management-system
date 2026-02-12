@@ -47,7 +47,7 @@ interface ProjectEditDialogProps {
   onSave: (data: ProjectEditData) => Promise<void>
   onTeamChange?: () => void
   onRiskChange?: () => void
-  onWorkItemsChange?: () => void
+  onWorkItemsChange?: () => Promise<void> | void
 }
 
 export interface ProjectEditData {
@@ -224,133 +224,167 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     [teamMembers],
   )
 
-  const handleSave = async () => {
+  // ─── Core validate + save logic (shared by Save and Reset Baseline) ───
+  const validateAndSaveAll = async (options?: { resetBaseline?: boolean }): Promise<boolean> => {
     // Validation matching the creation form
     if (!form.name.trim()) {
       setError('專案名稱不可為空')
       setActiveTab('basic')
-      return
+      return false
     }
     if (!form.projectTier) {
       setError('專案層級為必填')
       setActiveTab('basic')
-      return
+      return false
     }
     if (!form.projectType) {
       setError('專案類型為必填')
       setActiveTab('basic')
-      return
+      return false
     }
     if (!form.demandSource) {
       setError('需求來源為必填')
       setActiveTab('basic')
-      return
+      return false
     }
     if (!form.createdReason.trim()) {
       setError('開案原因不可為空')
       setActiveTab('basic')
-      return
+      return false
     }
     if (!form.smartObjective?.specific?.trim()) {
       setError('SMART 目標中「具體目標」不可為空')
       setActiveTab('smart')
-      return
+      return false
     }
     if (!form.smartObjective?.measurable?.trim()) {
       setError('SMART 目標中「可衡量指標」不可為空')
       setActiveTab('smart')
-      return
+      return false
     }
     if (!form.smartObjective?.achievable?.trim()) {
       setError('SMART 目標中「可達成性」不可為空')
       setActiveTab('smart')
-      return
+      return false
     }
     if (!form.smartObjective?.relevant?.trim()) {
       setError('SMART 目標中「相關性」不可為空')
       setActiveTab('smart')
-      return
+      return false
     }
     if (!form.smartObjective?.timeBound?.trim()) {
       setError('SMART 目標中「時限性」不可為空')
       setActiveTab('smart')
-      return
+      return false
     }
     if (!form.purpose.trim()) {
       setError('專案目的不可為空')
       setActiveTab('description')
-      return
+      return false
     }
 
     setError('')
     setWorkItemError('')
+
+    // Auto-generate objective from SMART (matching creation form logic)
+    const smart = form.smartObjective
+    const autoObjective = smart?.specific
+      ? `${smart.specific}${smart.measurable ? '，' + smart.measurable : ''}`
+      : form.objective
+    await onSave({ ...form, objective: autoObjective })
+
+    // ─── Batch save work items ──────────────────────────────
+    const diff = computeWorkItemsDiff(origMilestones, origTasks, recalcMilestones, tlTasks, tlTaskDates)
+
+    // 1. Delete tasks first (milestone DELETE rejects if tasks exist)
+    for (const taskId of diff.tasksToDelete) {
+      await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
+    }
+    // 2. Delete milestones
+    for (const msId of diff.milestonesToDelete) {
+      await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
+    }
+    // 3. Create new milestones → collect real IDs
+    const newMsIdMap = new Map<string, string>()
+    for (const ms of diff.milestonesToAdd) {
+      const res = await fetch(`/api/projects/${project.id}/milestones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ms),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
+        if (draftMs) newMsIdMap.set(draftMs.id, created.id)
+      }
+    }
+    // 4. Update existing milestones
+    for (const ms of diff.milestonesToUpdate) {
+      await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ms),
+      })
+    }
+    // 5. Create new tasks (resolve draft milestone IDs)
+    for (const task of diff.tasksToAdd) {
+      const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
+      await fetch(`/api/projects/${project.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...task, milestoneId: resolvedMsId }),
+      })
+    }
+    // 6. Update existing tasks
+    for (const task of diff.tasksToUpdate) {
+      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
+      })
+    }
+
+    // 7. Rebuild sequential task dependencies on ANY work item change
+    //    (reorder, move between milestones, add, delete all affect the sequential chain)
+    const hasAnyWorkItemChange =
+      diff.tasksToAdd.length > 0 || diff.tasksToDelete.length > 0 || diff.tasksToUpdate.length > 0 ||
+      diff.milestonesToAdd.length > 0 || diff.milestonesToDelete.length > 0 || diff.milestonesToUpdate.length > 0
+    if (hasAnyWorkItemChange) {
+      await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
+    }
+
+    // 8. Force-sync ALL milestone dueDates to calculated endDates
+    //    (ensures DB dueDate matches the calculated value before baseline snapshot)
+    for (const ms of recalcMilestones) {
+      if (!ms.endDate) continue
+      // Resolve draft milestone IDs to real IDs
+      const realId = newMsIdMap.get(ms.id) || ms.id
+      await fetch(`/api/projects/${project.id}/milestones/${realId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate: ms.endDate }),
+      })
+    }
+
+    // 9. Reset baseline if requested (runs after DB is fully in sync)
+    if (options?.resetBaseline) {
+      const res = await fetch(`/api/projects/${project.id}/reset-baseline`, { method: 'POST' })
+      if (!res.ok) {
+        setError('重設基線失敗')
+        return false
+      }
+    }
+
+    return true
+  }
+
+  const handleSave = async () => {
     setSaving(true)
     try {
-      // Auto-generate objective from SMART (matching creation form logic)
-      const smart = form.smartObjective
-      const autoObjective = smart?.specific
-        ? `${smart.specific}${smart.measurable ? '，' + smart.measurable : ''}`
-        : form.objective
-      await onSave({ ...form, objective: autoObjective })
-
-      // ─── Batch save work items ──────────────────────────────
-      const diff = computeWorkItemsDiff(origMilestones, origTasks, recalcMilestones, tlTasks, tlTaskDates)
-
-      // 1. Delete tasks first (milestone DELETE rejects if tasks exist)
-      for (const taskId of diff.tasksToDelete) {
-        await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
+      if (await validateAndSaveAll()) {
+        await onWorkItemsChange?.()
+        onOpenChange(false)
       }
-      // 2. Delete milestones
-      for (const msId of diff.milestonesToDelete) {
-        await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
-      }
-      // 3. Create new milestones → collect real IDs
-      const newMsIdMap = new Map<string, string>()
-      for (const ms of diff.milestonesToAdd) {
-        const res = await fetch(`/api/projects/${project.id}/milestones`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ms),
-        })
-        if (res.ok) {
-          const created = await res.json()
-          const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
-          if (draftMs) newMsIdMap.set(draftMs.id, created.id)
-        }
-      }
-      // 4. Update existing milestones
-      for (const ms of diff.milestonesToUpdate) {
-        await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ms),
-        })
-      }
-      // 5. Create new tasks (resolve draft milestone IDs)
-      for (const task of diff.tasksToAdd) {
-        const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
-        await fetch(`/api/projects/${project.id}/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...task, milestoneId: resolvedMsId }),
-        })
-      }
-      // 6. Update existing tasks
-      for (const task of diff.tasksToUpdate) {
-        await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(task),
-        })
-      }
-
-      // 7. Rebuild sequential task dependencies
-      if (diff.tasksToAdd.length > 0 || diff.tasksToDelete.length > 0 || diff.milestonesToDelete.length > 0) {
-        await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
-      }
-
-      onWorkItemsChange?.()
-      onOpenChange(false)
     } catch {
       setError('儲存失敗，請稍後再試')
     } finally {
@@ -976,7 +1010,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-3 py-2 shadow-sm">
                 <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
                   <TimerReset className="h-4 w-4 shrink-0" />
-                  <span>里程碑或任務已變更，建議重設基線</span>
+                  <span>里程碑或任務已變更，建議儲存並重設基線</span>
                 </div>
                 <Button
                   variant="outline"
@@ -986,7 +1020,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                   onClick={() => setBaselineResetDialogOpen(true)}
                 >
                   {resettingBaseline ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TimerReset className="h-3.5 w-3.5" />}
-                  重設基線
+                  儲存並重設基線
                 </Button>
               </div>
             )}
@@ -1031,9 +1065,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       <Dialog open={baselineResetDialogOpen} onOpenChange={setBaselineResetDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>重設里程碑基線</DialogTitle>
+            <DialogTitle>儲存變更並重設基線</DialogTitle>
             <DialogDescription>
-              將目前的里程碑日期設為新的基線。原本的基線紀錄會被覆蓋，延遲標示將會清除。
+              將先儲存目前的所有變更，再以更新後的里程碑日期設為新的基線。原本的基線紀錄會被覆蓋，延遲標示將會清除。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1045,18 +1079,22 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onClick={async () => {
                 setResettingBaseline(true)
                 try {
-                  const res = await fetch(`/api/projects/${project.id}/reset-baseline`, { method: 'POST' })
-                  if (res.ok) {
+                  // Save all changes first, then reset baseline with fresh data
+                  if (await validateAndSaveAll({ resetBaseline: true })) {
+                    await onWorkItemsChange?.()
                     setBaselineResetDialogOpen(false)
-                    onWorkItemsChange?.()
+                    onOpenChange(false)
                   }
+                } catch {
+                  setError('儲存失敗，請稍後再試')
+                  setBaselineResetDialogOpen(false)
                 } finally {
                   setResettingBaseline(false)
                 }
               }}
             >
               {resettingBaseline && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-              確認重設
+              儲存並重設
             </Button>
           </DialogFooter>
         </DialogContent>

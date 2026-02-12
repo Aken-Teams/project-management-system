@@ -27,15 +27,8 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
-    // ── Auto-progress: tasks whose startDate has passed but still 'todo' → 'in_progress' ──
-    const progressedIds = await autoProgressTasks(project.tasks)
-    if (progressedIds.length > 0) {
-      for (const t of project.tasks) {
-        if (progressedIds.includes(t.id)) {
-          ;(t as { status: string }).status = 'in_progress'
-        }
-      }
-    }
+    // ── Auto-progress: todo→in_progress when startDate passed, in_progress→todo when moved to future ──
+    await autoProgressTasks(project.tasks)
 
     // ── Compute task progress from task-log coverage ──
     await syncTaskProgressFromLogs(project.tasks, project.taskLogs)

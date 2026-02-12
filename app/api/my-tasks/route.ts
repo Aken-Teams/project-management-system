@@ -67,13 +67,8 @@ export async function GET(request: NextRequest) {
 
     // ── Auto-progress, compute progress from logs, sync milestones ──
     for (const p of projects) {
-      // 1. Auto-progress tasks whose startDate has passed but still 'todo'
-      const progressedIds = await autoProgressTasks(p.tasks)
-      for (const t of p.tasks) {
-        if (progressedIds.includes(t.id)) {
-          ;(t as { status: string }).status = 'in_progress'
-        }
-      }
+      // 1. Auto-progress: todo→in_progress when startDate passed, in_progress→todo when moved to future
+      await autoProgressTasks(p.tasks)
 
       // 2. Compute task progress from task-log coverage
       await syncTaskProgressFromLogs(p.tasks, p.taskLogs)

@@ -30,24 +30,48 @@ export async function syncMilestoneStatus(milestoneId: string, projectId: string
 
 /**
  * Auto-progress tasks whose startDate has passed but are still 'todo'.
+ * Also reverts 'in_progress' → 'todo' when startDate moves to the future
+ * AND no real work has been done (progress = 0, not completed).
  * Works on an in-memory array of tasks (from a prior DB fetch).
  * Returns the IDs of tasks that were updated in the DB.
  */
 export async function autoProgressTasks(
-  tasks: { id: string; status: string; startDate: Date }[],
+  tasks: { id: string; status: string; startDate: Date; progress: number; completedAt: Date | null }[],
 ): Promise<string[]> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const stale = tasks.filter(t => t.status === 'todo' && t.startDate <= today)
-  if (stale.length === 0) return []
+  const updatedIds: string[] = []
 
-  await prisma.task.updateMany({
-    where: { id: { in: stale.map(t => t.id) } },
-    data: { status: 'in_progress' },
-  })
+  // todo → in_progress: startDate has passed
+  const toProgress = tasks.filter(t => t.status === 'todo' && t.startDate <= today)
+  if (toProgress.length > 0) {
+    await prisma.task.updateMany({
+      where: { id: { in: toProgress.map(t => t.id) } },
+      data: { status: 'in_progress' },
+    })
+    for (const t of toProgress) {
+      ;(t as { status: string }).status = 'in_progress'
+    }
+    updatedIds.push(...toProgress.map(t => t.id))
+  }
 
-  return stale.map(t => t.id)
+  // in_progress → todo: startDate moved to future AND no work done
+  const toRevert = tasks.filter(t =>
+    t.status === 'in_progress' && t.startDate > today && t.progress === 0 && !t.completedAt
+  )
+  if (toRevert.length > 0) {
+    await prisma.task.updateMany({
+      where: { id: { in: toRevert.map(t => t.id) } },
+      data: { status: 'todo' },
+    })
+    for (const t of toRevert) {
+      ;(t as { status: string }).status = 'todo'
+    }
+    updatedIds.push(...toRevert.map(t => t.id))
+  }
+
+  return updatedIds
 }
 
 /**
