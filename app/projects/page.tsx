@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PROJECT_TYPE_LABELS, type ProjectStatus, type ProjectType, type Project } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, type ProjectStatus, type ProjectType, type ProjectTier, type Project } from '@/lib/mock-data'
 import {
   Search,
   Users,
@@ -35,6 +35,7 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
   const [typeFilter, setTypeFilter] = useState<ProjectType | 'all'>('all')
+  const [tierFilter, setTierFilter] = useState<ProjectTier | 'all'>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
 
   // Fetch projects from API
@@ -64,8 +65,9 @@ export default function ProjectsPage() {
                          project.projectCode.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === 'all' || project.status === statusFilter
     const matchesType = typeFilter === 'all' || project.projectType === typeFilter
+    const matchesTier = tierFilter === 'all' || project.projectTier === tierFilter
     const matchesOwner = ownerFilter === 'all' || project.owner === ownerFilter
-    return matchesSearch && matchesStatus && matchesType && matchesOwner
+    return matchesSearch && matchesStatus && matchesType && matchesTier && matchesOwner
   })
 
   const getStatusColor = (status: ProjectStatus) => {
@@ -170,6 +172,17 @@ export default function ProjectsPage() {
               風險
             </Button>
           </div>
+          <Select value={tierFilter} onValueChange={(v) => setTierFilter(v as ProjectTier | 'all')}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部層級</SelectItem>
+              {(Object.entries(PROJECT_TIER_LABELS) as [ProjectTier, string][]).map(([key, label]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ProjectType | 'all')}>
             <SelectTrigger className="w-[160px]">
               <SelectValue />
@@ -192,11 +205,11 @@ export default function ProjectsPage() {
               ))}
             </SelectContent>
           </Select>
-          {(statusFilter !== 'all' || typeFilter !== 'all' || ownerFilter !== 'all') && (
+          {(statusFilter !== 'all' || typeFilter !== 'all' || tierFilter !== 'all' || ownerFilter !== 'all') && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setOwnerFilter('all') }}
+              onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setTierFilter('all'); setOwnerFilter('all') }}
             >
               清除
             </Button>
