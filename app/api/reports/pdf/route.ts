@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       }
       body {
         margin: 0;
-        padding: 20px 16px !important;
+        padding: 24px 20px !important;
       }
       * {
         -webkit-print-color-adjust: exact !important;
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       line-height: 1.5;
       color: #0f172a;
       margin: 0;
-      padding: 20px 16px;
+      padding: 24px 20px;
       font-size: 12px;
       background: #f8fafc;
     }
