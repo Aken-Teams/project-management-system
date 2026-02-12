@@ -371,13 +371,130 @@ export default function ReportsPage() {
     }
   }
 
-  const handleSendEmail = () => {
-    // Mock email send
-    setEmailSuccess(true)
-    setTimeout(() => {
-      setShowEmailDialog(false)
-      setEmailSuccess(false)
-    }, 2000)
+  const handleSendEmail = async () => {
+    if (!emailRecipients.trim()) {
+      alert('請輸入至少一個 email 地址')
+      return
+    }
+
+    if (!data || selectedProjectIds.length === 0) {
+      alert('請至少選擇一個專案')
+      return
+    }
+
+    try {
+      // Get selected project names and data
+      const selectedProjects = data.projects?.filter(p => selectedProjectIds.includes(p.id)) || []
+      const projectNames = selectedProjects.map(p => p.name).join('、')
+
+      // Calculate statistics for selected projects (using aggregated data from API)
+      const totalTasks = selectedProjects.reduce((sum, p) => sum + p.totalTasks, 0)
+      const doneTasks = selectedProjects.reduce((sum, p) => sum + p.doneTasks, 0)
+      const totalMilestones = selectedProjects.reduce((sum, p) => sum + p.totalMilestones, 0)
+      const doneMilestones = selectedProjects.reduce((sum, p) => sum + p.doneMilestones, 0)
+      const totalBudget = selectedProjects.reduce((sum, p) => sum + p.budget, 0)
+      const totalBudgetUsed = selectedProjects.reduce((sum, p) => sum + p.budgetUsed, 0)
+      const avgProgress = selectedProjects.length > 0
+        ? Math.round(selectedProjects.reduce((sum, p) => sum + p.progress, 0) / selectedProjects.length)
+        : 0
+
+      // Count risks (using aggregated data)
+      const totalRisks = selectedProjects.reduce((sum, p) => sum + p.openRisks, 0)
+
+      // Map report types to Chinese names
+      const reportTypeMap: Record<string, string> = {
+        summary: '專案摘要',
+        tasks: '任務列表',
+        milestones: '里程碑',
+        budget: '預算資訊',
+        risks: '風險管理'
+      }
+      const reportNames = selectedReports.map(r => reportTypeMap[r] || r).join('、')
+
+      // Step 1: Generate and download PDF
+      const response = await fetch('/api/reports/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectIds: selectedProjectIds,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+
+      // Get the HTML content and convert to PDF using print
+      const html = await response.text()
+
+      // Create a blob from the HTML and trigger download
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+
+      // Open in new window for user to print to PDF
+      const pdfWindow = window.open(url, '_blank')
+      if (pdfWindow) {
+        pdfWindow.onload = () => {
+          // Small delay to ensure content is loaded
+          setTimeout(() => {
+            pdfWindow.print()
+          }, 500)
+        }
+      }
+
+      // Step 2: Build email content with reminder to attach PDF
+      const subject = `專案報告 - ${projectNames || '所有專案'}`
+      const body = `您好，
+
+這是專案報告的詳細資訊：
+
+【報告範圍】
+專案：${projectNames || '所有專案'}
+報告內容：${reportNames}
+生成時間：${new Date().toLocaleString('zh-TW')}
+
+【關鍵指標】
+• 專案數量：${selectedProjects.length} 個
+• 平均進度：${avgProgress}%
+• 任務完成：${doneTasks}/${totalTasks} (${totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0}%)
+• 里程碑完成：${doneMilestones}/${totalMilestones} (${totalMilestones > 0 ? Math.round((doneMilestones / totalMilestones) * 100) : 0}%)
+• 預算執行：${fmtMoney(totalBudgetUsed)}/${fmtMoney(totalBudget)} (${totalBudget > 0 ? Math.round((totalBudgetUsed / totalBudget) * 100) : 0}%)
+${totalRisks > 0 ? `• 風險項目：${totalRisks} 個` : '• 無未解決風險'}
+
+【專案狀態】
+${selectedProjects.map((p, i) => {
+  const statusText = p.status === 'green' ? '✓ 正常' : p.status === 'yellow' ? '⚠ 注意' : '✕ 風險'
+  return `${i + 1}. ${p.name} - ${statusText} (${p.progress}%)
+   任務：${p.doneTasks}/${p.totalTasks}，里程碑：${p.doneMilestones}/${p.totalMilestones}`
+}).join('\n')}
+
+📎 請記得附加剛才儲存的 PDF 報告檔案
+
+詳細報告請參考附件的 PDF 檔案。
+
+如有任何問題，歡迎隨時討論。
+
+謝謝！`
+
+      // Step 3: Open default email client after a short delay
+      setTimeout(() => {
+        const mailtoUrl = `mailto:${emailRecipients}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+        window.location.href = mailtoUrl
+      }, 1000)
+
+      // Show success message and close dialog
+      setEmailSuccess(true)
+      setTimeout(() => {
+        setShowEmailDialog(false)
+        setEmailSuccess(false)
+      }, 2000)
+
+    } catch (error) {
+      console.error('Email preparation failed:', error)
+      alert('準備郵件失敗，請稍後再試')
+    }
   }
 
   const getStatusRingColor = (status: ProjectStatus) => {
