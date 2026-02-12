@@ -441,9 +441,21 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                             <Route className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                           )}
                         </div>
-                        {task.assignee && (
-                          <span className="text-sm text-muted-foreground ml-4">{task.assignee}</span>
-                        )}
+                        <div className="flex items-center gap-2 ml-4">
+                          {task.assignee && (
+                            <span className="text-sm text-muted-foreground">{task.assignee}</span>
+                          )}
+                          {showBaseline && isEarlyComplete(task) && (() => {
+                            const earlyDays = Math.round(
+                              (new Date(task.endDate).getTime() - new Date(task.completedAt!).getTime()) / (1000 * 60 * 60 * 24)
+                            )
+                            return (
+                              <span className="text-sm text-emerald-600 dark:text-emerald-400 shrink-0">
+                                提前 {earlyDays} 天
+                              </span>
+                            )
+                          })()}
+                        </div>
                       </div>
                       {(() => {
                         const earlyComplete = showBaseline && isEarlyComplete(task)
