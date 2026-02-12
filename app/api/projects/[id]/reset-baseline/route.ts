@@ -3,10 +3,16 @@ import { prisma } from '@/lib/db'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
-// ─── POST /api/projects/[id]/reset-baseline — Snapshot current milestone dates as new baseline ───
+// ─── POST /api/projects/[id]/reset-baseline — Snapshot milestone dates as new baseline ───
+// If body contains `milestones` array, use those dates directly.
+// Otherwise, read current milestone dates from DB.
+
+interface ResetBaselineBody {
+  milestones?: { id: string; name: string; dueDate: string }[]
+}
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteContext,
 ) {
   try {
@@ -20,7 +26,23 @@ export async function POST(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
-    if (project.milestones.length === 0) {
+    // Accept milestone dates from request body, or fall back to DB
+    let body: ResetBaselineBody = {}
+    try { body = await request.json() } catch { /* empty body is OK */ }
+
+    const milestonesToSnapshot = body.milestones && body.milestones.length > 0
+      ? body.milestones.map(m => ({
+          milestoneId: m.id,
+          name: m.name,
+          dueDate: new Date(m.dueDate),
+        }))
+      : project.milestones.map(ms => ({
+          milestoneId: ms.id,
+          name: ms.name,
+          dueDate: ms.dueDate,
+        }))
+
+    if (milestonesToSnapshot.length === 0) {
       return NextResponse.json({ error: '專案沒有里程碑，無法建立基線' }, { status: 400 })
     }
 
@@ -28,12 +50,12 @@ export async function POST(
       // Delete existing baselines for this project
       await tx.milestoneBaseline.deleteMany({ where: { projectId: id } })
 
-      // Create new baselines from current milestone state
-      for (const ms of project.milestones) {
+      // Create new baselines
+      for (const ms of milestonesToSnapshot) {
         await tx.milestoneBaseline.create({
           data: {
             projectId: id,
-            milestoneId: ms.id,
+            milestoneId: ms.milestoneId,
             name: ms.name,
             dueDate: ms.dueDate,
           },

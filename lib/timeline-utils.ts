@@ -87,7 +87,9 @@ export function calculateTaskDates(
   return result
 }
 
-// ─── Auto-expand milestones when tasks exceed duration ───────
+// ─── Auto-resize milestones to match task duration ───────────
+// Expands when tasks exceed milestone duration, AND shrinks when
+// tasks are removed so milestone duration matches actual task sum.
 
 export function autoExpandMilestones<T extends MilestoneInput>(
   milestones: T[],
@@ -98,7 +100,9 @@ export function autoExpandMilestones<T extends MilestoneInput>(
     const totalTaskWeeks = tasks
       .filter(t => t.milestoneId === ms.id)
       .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
-    if (totalTaskWeeks > (ms.durationWeeks || 0)) {
+    // When tasks exist, keep durationWeeks in sync with task total
+    // (both expand and shrink). When no tasks, leave duration as-is.
+    if (totalTaskWeeks > 0 && totalTaskWeeks !== (ms.durationWeeks || 0)) {
       changed = true
       return { ...ms, durationWeeks: totalTaskWeeks }
     }

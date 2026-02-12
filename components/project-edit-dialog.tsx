@@ -200,7 +200,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     return false
   }, [tlMilestones, tlTasks, origMilestones, origTasks, tlInit.milestones])
 
-  // Auto-expand milestone when tasks exceed its duration
+  // Auto-resize milestone duration to match task total (expand + shrink)
   useEffect(() => {
     const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks)
     if (changed) setTlMilestones(updated)
@@ -353,22 +353,21 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
     }
 
-    // 8. Force-sync ALL milestone dueDates to calculated endDates
-    //    (ensures DB dueDate matches the calculated value before baseline snapshot)
-    for (const ms of recalcMilestones) {
-      if (!ms.endDate) continue
-      // Resolve draft milestone IDs to real IDs
-      const realId = newMsIdMap.get(ms.id) || ms.id
-      await fetch(`/api/projects/${project.id}/milestones/${realId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dueDate: ms.endDate }),
-      })
-    }
-
-    // 9. Reset baseline if requested (runs after DB is fully in sync)
+    // 8. Reset baseline if requested — send calculated dates directly
+    //    (avoids relying on DB milestone dates being in sync)
     if (options?.resetBaseline) {
-      const res = await fetch(`/api/projects/${project.id}/reset-baseline`, { method: 'POST' })
+      const baselineMilestones = recalcMilestones
+        .filter(ms => ms.endDate)
+        .map(ms => ({
+          id: newMsIdMap.get(ms.id) || ms.id,
+          name: ms.name,
+          dueDate: ms.endDate!,
+        }))
+      const res = await fetch(`/api/projects/${project.id}/reset-baseline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestones: baselineMilestones }),
+      })
       if (!res.ok) {
         setError('重設基線失敗')
         return false
