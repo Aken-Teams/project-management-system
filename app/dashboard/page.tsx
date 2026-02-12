@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/auth-context'
-import { useProjectStore } from '@/lib/project-store'
 import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
 import {
   TrendingUp,
@@ -22,27 +21,99 @@ import {
   CalendarClock,
   FileX,
   ArrowRight,
+  Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
+
+interface DashboardData {
+  user: {
+    id: string
+    name: string
+    role: string
+  }
+  stats: {
+    total: number
+    green: number
+    yellow: number
+    red: number
+    avgProgress: number
+    totalBudget: number
+    totalBudgetUsed: number
+    budgetUtilization: number
+  }
+  projects: Array<{
+    id: string
+    projectCode: string
+    name: string
+    projectType: string
+    status: ProjectStatus
+    progress: number
+    owner: string
+  }>
+  openRisks: Array<{
+    id: string
+    projectId: string
+    projectName: string
+    title: string
+    description: string
+    impact: string
+    probability: string
+    mitigation: string
+  }>
+  upcomingMilestones: Array<{
+    id: string
+    projectId: string
+    projectName: string
+    projectStatus: ProjectStatus
+    name: string
+    dueDate: string
+    diffDays: number
+  }>
+  missingUpdates: Array<{
+    id: string
+    name: string
+    status: ProjectStatus
+    owner: string
+    lastUpdateWeekOf: string | null
+  }>
+  pendingApprovals: number
+}
 
 export default function DashboardPage() {
   const { user } = useAuth()
-  const { projects: allProjects, getPendingApprovals } = useProjectStore()
-  const pendingApprovals = getPendingApprovals()
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const userProjects = user?.role === 'member'
-    ? allProjects.filter(p => p.team.includes(user.name))
-    : allProjects
+  useEffect(() => {
+    if (!user) return
 
-  const stats = {
-    total: userProjects.length,
-    green: userProjects.filter(p => p.status === 'green').length,
-    yellow: userProjects.filter(p => p.status === 'yellow').length,
-    red: userProjects.filter(p => p.status === 'red').length,
-    avgProgress: userProjects.length > 0 ? Math.round(userProjects.reduce((acc, p) => acc + p.progress, 0) / userProjects.length) : 0,
-    totalBudget: userProjects.reduce((acc, p) => acc + p.budget, 0),
-    totalBudgetUsed: userProjects.reduce((acc, p) => acc + p.budgetUsed, 0),
-  }
+    const fetchDashboard = async () => {
+      try {
+        setLoading(true)
+        const params = new URLSearchParams()
+        if (user.id) params.append('userId', user.id)
+        else if (user.email) params.append('userEmail', user.email)
+
+        const response = await fetch(`/api/dashboard?${params}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard data')
+        }
+
+        const dashboardData: DashboardData = await response.json()
+        setData(dashboardData)
+        setError(null)
+      } catch (err) {
+        console.error('Failed to fetch dashboard:', err)
+        setError('載入儀表板失敗')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboard()
+  }, [user])
 
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
@@ -68,44 +139,30 @@ export default function DashboardPage() {
     }
   }
 
-  const budgetUtilization = stats.totalBudget > 0 ? Math.round((stats.totalBudgetUsed / stats.totalBudget) * 100) : 0
-
-  // 風險專案的開放風險
-  const openRisks = userProjects
-    .filter(p => p.status === 'red' || p.status === 'yellow')
-    .flatMap(p =>
-      p.risks
-        .filter(r => r.status === 'open')
-        .filter(r => user?.role !== 'executive' || r.impact === 'high')
-        .map(risk => ({ ...risk, projectName: p.name }))
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
     )
-
-  // 即將到期的里程碑（未完成 + 30 天內到期）
-  const today = new Date()
-  const upcomingMilestones = userProjects
-    .flatMap(p =>
-      p.milestones
-        .filter(m => m.status !== 'done')
-        .map(m => {
-          const due = new Date(m.dueDate)
-          const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          return { ...m, projectName: p.name, projectId: p.id, projectStatus: p.status, diffDays }
-        })
-    )
-    .filter(m => m.diffDays <= 30)
-    .sort((a, b) => a.diffDays - b.diffDays)
-
-  // 本週尚未更新週報的專案
-  const getMonday = (d: Date) => {
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    return new Date(d.getFullYear(), d.getMonth(), diff).toISOString().split('T')[0]
   }
-  const thisMonday = getMonday(today)
-  const missingUpdates = userProjects.filter(p => {
-    const hasThisWeek = p.weeklyUpdates.some(u => u.weekOf === thisMonday)
-    return !hasThisWeek
-  })
+
+  if (error || !data) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <p className="text-lg font-semibold">{error || '載入失敗'}</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const { stats, projects, openRisks, upcomingMilestones, missingUpdates, pendingApprovals } = data
 
   return (
     <DashboardLayout>
@@ -114,13 +171,13 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">儀表板</h1>
-            <p className="text-sm text-muted-foreground mt-1">歡迎回來，{user?.name}</p>
+            <p className="text-sm text-muted-foreground mt-1">歡迎回來，{data.user.name}</p>
           </div>
-          {(user?.role === 'pm' || user?.role === 'executive') && pendingApprovals.length > 0 && (
+          {(data.user.role === 'pm' || data.user.role === 'executive') && pendingApprovals > 0 && (
             <Link href="/approvals">
               <Button size="sm" className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 <ClipboardCheck className="h-4 w-4" />
-                {pendingApprovals.length} 筆待審核
+                {pendingApprovals} 筆待審核
               </Button>
             </Link>
           )}
@@ -130,7 +187,7 @@ export default function DashboardPage() {
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Card className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-muted-foreground">{user?.role === 'member' ? '參與專案' : '總專案數'}</span>
+              <span className="text-sm text-muted-foreground">{data.user.role === 'member' ? '參與專案' : '總專案數'}</span>
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-2xl font-bold">{stats.total}</div>
@@ -150,13 +207,13 @@ export default function DashboardPage() {
             <Progress value={stats.avgProgress} className="mt-1.5 h-1.5" />
           </Card>
 
-          {user?.role !== 'member' ? (
+          {data.user.role !== 'member' ? (
             <Card className="p-4">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm text-muted-foreground">預算使用率</span>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </div>
-              <div className="text-2xl font-bold">{budgetUtilization}%</div>
+              <div className="text-2xl font-bold">{stats.budgetUtilization}%</div>
               <p className="text-sm text-muted-foreground mt-1">
                 ${(stats.totalBudgetUsed / 1000000).toFixed(1)}M / ${(stats.totalBudget / 1000000).toFixed(1)}M
               </p>
@@ -168,10 +225,10 @@ export default function DashboardPage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="text-2xl font-bold">
-                {userProjects.reduce((acc, p) => acc + p.tasks.filter(t => t.assignee === user?.name).length, 0)}
+                0
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                {userProjects.reduce((acc, p) => acc + p.tasks.filter(t => t.assignee === user?.name && t.status === 'done').length, 0)} 已完成
+                0 已完成
               </p>
             </Card>
           )}
@@ -196,12 +253,12 @@ export default function DashboardPage() {
           <Card className="lg:col-span-2">
             <CardHeader className="py-3 px-4">
               <CardTitle className="text-base">
-                {user?.role === 'member' ? '我的專案' : '專案總覽'}
+                {data.user.role === 'member' ? '我的專案' : '專案總覽'}
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-3">
               <div className="space-y-1.5">
-                {userProjects.map((project) => (
+                {projects.map((project) => (
                   <Link key={project.id} href={`/projects/${project.id}`}>
                     <div className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer">
                       <Badge
@@ -296,26 +353,29 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="max-h-[126px] overflow-y-auto divide-y divide-border/50">
-                  {upcomingMilestones.map((m) => (
-                    <Link key={m.id} href={`/projects/${m.projectId}`}>
-                      <div className="flex items-center gap-3 px-2 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
-                        <Badge
-                          variant="outline"
-                          className={`text-[11px] shrink-0 font-mono px-1.5 ${m.diffDays < 0 ? 'border-destructive/40 text-destructive' : m.diffDays <= 7 ? 'border-warning/40 text-warning' : ''}`}
-                        >
-                          {new Date(m.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                        </Badge>
-                        <span className="text-sm truncate flex-1 min-w-0">{m.name}</span>
-                        <span className="text-sm text-muted-foreground shrink-0 hidden sm:block">{m.projectName}</span>
-                        <Badge
-                          variant="secondary"
-                          className={`text-[11px] shrink-0 ${m.diffDays < 0 ? 'bg-destructive/10 text-destructive' : m.diffDays <= 7 ? 'bg-warning/10 text-warning' : 'bg-muted'}`}
-                        >
-                          {m.diffDays < 0 ? `逾期 ${Math.abs(m.diffDays)} 天` : m.diffDays === 0 ? '今天到期' : `剩 ${m.diffDays} 天`}
-                        </Badge>
-                      </div>
-                    </Link>
-                  ))}
+                  {upcomingMilestones.map((m) => {
+                    const dueDate = new Date(m.dueDate)
+                    return (
+                      <Link key={m.id} href={`/projects/${m.projectId}`}>
+                        <div className="flex items-center gap-3 px-2 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] shrink-0 font-mono px-1.5 ${m.diffDays < 0 ? 'border-destructive/40 text-destructive' : m.diffDays <= 7 ? 'border-warning/40 text-warning' : ''}`}
+                          >
+                            {dueDate.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                          </Badge>
+                          <span className="text-sm truncate flex-1 min-w-0">{m.name}</span>
+                          <span className="text-sm text-muted-foreground shrink-0 hidden sm:block">{m.projectName}</span>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[11px] shrink-0 ${m.diffDays < 0 ? 'bg-destructive/10 text-destructive' : m.diffDays <= 7 ? 'bg-warning/10 text-warning' : 'bg-muted'}`}
+                          >
+                            {m.diffDays < 0 ? `逾期 ${Math.abs(m.diffDays)} 天` : m.diffDays === 0 ? '今天到期' : `剩 ${m.diffDays} 天`}
+                          </Badge>
+                        </div>
+                      </Link>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
@@ -340,21 +400,18 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="max-h-[126px] overflow-y-auto divide-y divide-border/50">
-                  {missingUpdates.map((p) => {
-                    const lastUpdate = p.weeklyUpdates.length > 0 ? p.weeklyUpdates[p.weeklyUpdates.length - 1].weekOf : null
-                    return (
-                      <Link key={p.id} href={`/projects/${p.id}`}>
-                        <div className="flex items-center gap-3 px-2 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
-                          <div className={`h-2 w-2 rounded-full shrink-0 ${p.status === 'red' ? 'bg-destructive' : p.status === 'yellow' ? 'bg-warning' : 'bg-success'}`} />
-                          <span className="text-sm truncate flex-1 min-w-0">{p.name}</span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">{p.owner}</span>
-                          </div>
+                  {missingUpdates.map((p) => (
+                    <Link key={p.id} href={`/projects/${p.id}`}>
+                      <div className="flex items-center gap-3 px-2 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer">
+                        <div className={`h-2 w-2 rounded-full shrink-0 ${p.status === 'red' ? 'bg-destructive' : p.status === 'yellow' ? 'bg-warning' : 'bg-success'}`} />
+                        <span className="text-sm truncate flex-1 min-w-0">{p.name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">{p.owner}</span>
                         </div>
-                      </Link>
-                    )
-                  })}
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               )}
             </CardContent>
