@@ -133,6 +133,13 @@ export async function GET(request: NextRequest) {
         owner: {
           select: { name: true },
         },
+        teamMembers: {
+          include: {
+            user: {
+              select: { name: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -171,15 +178,21 @@ export async function GET(request: NextRequest) {
       : 0
 
     // ── Transform projects to frontend format ──
-    const feProjects = projectsWithProgress.map(p => ({
-      id: p.id,
-      projectCode: p.projectCode,
-      name: p.name,
-      projectType: projectTypeToFe(p.projectType),
-      status: p.actualStatus,
-      progress: p.actualProgress,
-      owner: p.owner.name,
-    }))
+    const feProjects = projectsWithProgress.map(p => {
+      // Find the PM (project manager) from team members, fallback to project owner
+      const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
+      const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+
+      return {
+        id: p.id,
+        projectCode: p.projectCode,
+        name: p.name,
+        projectType: projectTypeToFe(p.projectType),
+        status: p.actualStatus,
+        progress: p.actualProgress,
+        owner: displayOwner,
+      }
+    })
 
     // ── Open risks (high priority for executives) ──
     // For each red/yellow project, if it has open risks, show them;

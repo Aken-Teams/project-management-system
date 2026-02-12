@@ -292,6 +292,10 @@ export function dbProjectToFrontend(
     createdAt: tl.createdAt.toISOString(),
   }))
 
+  // Find the PM (project manager) from team members, fallback to project owner
+  const pmMember = proj.teamMembers.find((tm) => tm.role === 'pm')
+  const displayOwner = pmMember ? pmMember.user.name : proj.owner.name
+
   return {
     id: proj.id,
     projectCode: proj.projectCode,
@@ -312,7 +316,7 @@ export function dbProjectToFrontend(
     progress: computeProjectProgress(feTasks),
     budget: proj.budget,
     budgetUsed: proj.budgetUsed,
-    owner: proj.owner.name,
+    owner: displayOwner,
     team: teamNames,
     teamMembers: proj.teamMembers.map((tm) => ({
       id: tm.id,
