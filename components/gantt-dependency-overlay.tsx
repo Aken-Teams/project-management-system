@@ -13,6 +13,7 @@ interface GanttDependencyOverlayProps {
   toPercent: (date: string) => number
   hoveredTaskId: string | null
   selectedTaskId: string | null
+  showBaseline?: boolean
 }
 
 interface TaskRect {
@@ -20,6 +21,8 @@ interface TaskRect {
   height: number
   leftPct: number
   rightPct: number
+  /** Vertical offset for the actual bar center (relative to row top) */
+  barCenterY: number
 }
 
 export function GanttDependencyOverlay({
@@ -31,6 +34,7 @@ export function GanttDependencyOverlay({
   toPercent,
   hoveredTaskId,
   selectedTaskId,
+  showBaseline,
 }: GanttDependencyOverlayProps) {
   const [taskRects, setTaskRects] = useState<Map<string, TaskRect>>(new Map())
   const [containerWidth, setContainerWidth] = useState(0)
@@ -62,11 +66,17 @@ export function GanttDependencyOverlay({
         const y = elRect.top - containerRect.top
         const height = elRect.height
 
+        // Early-complete: arrow connects at the actual bar end (completedAt)
+        const earlyComplete = showBaseline && task.completedAt &&
+          new Date(task.completedAt).getTime() < new Date(task.endDate).getTime()
+
         map.set(taskId, {
           y,
           height,
           leftPct: toPercent(task.startDate),
-          rightPct: toPercent(task.endDate),
+          rightPct: toPercent(earlyComplete ? task.completedAt! : task.endDate),
+          // h-14 row: actual bar center at top:26 + h-4/2 = 34; h-10 row: top:12 + h-4/2 = 20
+          barCenterY: earlyComplete ? 34 : height / 2,
         })
       })
 
@@ -93,7 +103,7 @@ export function GanttDependencyOverlay({
       mutObserver.disconnect()
       cancelAnimationFrame(rafRef.current)
     }
-  }, [containerRef, tasks, expandedMilestoneIds, toPercent])
+  }, [containerRef, tasks, expandedMilestoneIds, toPercent, showBaseline])
 
   // Build arrows
   const arrows = useMemo(() => {
@@ -117,9 +127,9 @@ export function GanttDependencyOverlay({
 
         // X positions: convert percentage to pixels
         const fromX = (fromRect.rightPct / 100) * containerWidth
-        const fromY = fromRect.y + fromRect.height / 2
+        const fromY = fromRect.y + fromRect.barCenterY
         const toX = (toRect.leftPct / 100) * containerWidth
-        const toY = toRect.y + toRect.height / 2
+        const toY = toRect.y + toRect.barCenterY
 
         // Bezier curve
         const dx = Math.abs(toX - fromX)

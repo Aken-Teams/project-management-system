@@ -275,6 +275,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
               toPercent={toPercent}
               hoveredTaskId={hoveredTaskId}
               selectedTaskId={selectedTaskId ?? null}
+              showBaseline={showBaseline}
             />
           )}
 
