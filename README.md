@@ -203,11 +203,15 @@ Task ──< TaskDependency >── Task  (self-referential)
 | Tool | URL / Command |
 |------|---------------|
 | Prisma Studio | `pnpm db:studio` |
-| pgAdmin | http://localhost:5050 (admin@pm.local / admin) |
-| PostgreSQL | localhost:65535 (pm_admin / pm_secret_2026) |
+| pgAdmin | http://localhost:5050 |
+| PostgreSQL | localhost:65535 |
+
+> 帳號密碼請參考 `docker-compose.yml` 與 `.env` 檔案。
 
 ## Environment Variables
 
+複製 `.env.example` 為 `.env`，並依照 `docker-compose.yml` 中的設定填入資料庫連線資訊：
+
 ```env
-DATABASE_URL="postgresql://pm_admin:pm_secret_2026@localhost:65535/project_management?schema=public"
+DATABASE_URL="postgresql://<USER>:<PASSWORD>@localhost:65535/<DB_NAME>?schema=public"
 ```
