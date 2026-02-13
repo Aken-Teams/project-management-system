@@ -243,7 +243,12 @@ function TaskRow({
       {/* Name (indented) */}
       <div className="pl-4 flex items-center gap-1 min-w-0 pr-2">
         <span className="text-muted-foreground/30 text-sm select-none">└</span>
-        <span className="truncate">{task.title}</span>
+        <Input
+          value={task.title}
+          onChange={(e) => onUpdate(task.id, 'title', e.target.value)}
+          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1 truncate"
+          placeholder="任務名稱"
+        />
       </div>
 
       {/* Duration */}

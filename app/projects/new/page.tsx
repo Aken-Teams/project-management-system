@@ -41,11 +41,13 @@ import {
   Plus,
   Trash2,
   Shield,
+  ShieldAlert,
   Check,
   ChevronRight,
   ArrowLeft,
   Target,
   X,
+  Pencil,
   Lightbulb,
   Layers,
   TrendingUp,
@@ -81,6 +83,108 @@ interface ManualRisk {
   impact: 'low' | 'medium' | 'high'
   probability: 'low' | 'medium' | 'high'
   mitigation: string
+}
+
+const RISK_IMPACT_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
+const RISK_PROBABILITY_LABELS: Record<string, string> = { low: '低', medium: '中', high: '高' }
+const RISK_LEVEL_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+  high: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+}
+const RISK_SEVERITY_BORDER: Record<string, string> = {
+  low: 'border-l-emerald-400',
+  medium: 'border-l-amber-400',
+  high: 'border-l-red-400',
+}
+function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' | 'high' {
+  const scores: Record<string, number> = { low: 1, medium: 2, high: 3 }
+  const score = (scores[impact] ?? 2) * (scores[probability] ?? 2)
+  if (score >= 6) return 'high'
+  if (score >= 3) return 'medium'
+  return 'low'
+}
+
+function RiskInlineForm({
+  severity,
+  initial,
+  onConfirm,
+  onCancel,
+  onRemove,
+}: {
+  severity: string
+  initial?: ManualRisk
+  onConfirm: (data: ManualRisk) => void
+  onCancel: () => void
+  onRemove?: () => void
+}) {
+  const [form, setForm] = useState<ManualRisk>(
+    initial ?? { title: '', description: '', impact: 'medium', probability: 'medium', mitigation: '' }
+  )
+
+  const handleConfirm = () => {
+    if (!form.title.trim()) return
+    onConfirm({ ...form, title: form.title.trim(), description: form.description.trim(), mitigation: form.mitigation.trim() })
+  }
+
+  return (
+    <div className={`border-t border-l-[3px] ${RISK_SEVERITY_BORDER[severity]} bg-primary/5 px-3 py-2 space-y-2`}>
+      <div className="flex items-center gap-2">
+        <Input
+          value={form.title}
+          onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
+          placeholder="風險標題，例如：供應商交期不穩定"
+          className="h-7 text-sm flex-1 min-w-0"
+          autoFocus
+          onKeyDown={e => { if (e.key === 'Enter' && form.title.trim()) handleConfirm() }}
+        />
+        <Select value={form.impact} onValueChange={v => setForm(prev => ({ ...prev, impact: v as ManualRisk['impact'] }))}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_IMPACT_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>影響{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={form.probability} onValueChange={v => setForm(prev => ({ ...prev, probability: v as ManualRisk['probability'] }))}>
+          <SelectTrigger className="h-7 text-xs w-[88px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_PROBABILITY_LABELS).map(([k, v]) => (
+              <SelectItem key={k} value={k}>機率{v}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-primary hover:text-primary" onClick={handleConfirm} disabled={!form.title.trim()}>
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        {onRemove && (
+          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={onRemove}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
+        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={onCancel}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {form.title.trim() && (
+        <div className="flex items-center gap-2">
+          <Input
+            value={form.description}
+            onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="風險描述（選填）"
+            className="h-7 text-sm flex-1 min-w-0 border-dashed"
+          />
+          <Input
+            value={form.mitigation}
+            onChange={e => setForm(prev => ({ ...prev, mitigation: e.target.value }))}
+            placeholder="緩解對策（選填）"
+            className="h-7 text-sm flex-1 min-w-0 border-dashed"
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirm() }}
+          />
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface TeamMemberDraft {
@@ -235,6 +339,8 @@ export default function NewProjectPage() {
   const [manualDemandSource, setManualDemandSource] = useState<DemandSource | ''>('')
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([])
   const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
+  const [editingRiskIndex, setEditingRiskIndex] = useState<number | null>(null)
+  const [showRiskAddForm, setShowRiskAddForm] = useState(false)
   const [manualTeamDetails, setManualTeamDetails] = useState<TeamMemberDraft[]>([])
   // Milestone tasks
   const [manualTasks, setManualTasks] = useState<MilestoneTaskDraft[]>([])
@@ -468,18 +574,22 @@ export default function NewProjectPage() {
   }
 
   // Risk helpers
-  const addRisk = () => {
-    setManualRisks([...manualRisks, { title: '', description: '', impact: 'medium', probability: 'medium', mitigation: '' }])
+  const addRisk = (risk: ManualRisk) => {
+    if (!risk.title.trim()) return
+    setManualRisks([...manualRisks, risk])
+    setShowRiskAddForm(false)
   }
 
   const removeRisk = (index: number) => {
     setManualRisks(manualRisks.filter((_, i) => i !== index))
+    if (editingRiskIndex === index) setEditingRiskIndex(null)
   }
 
-  const updateRisk = (index: number, field: keyof ManualRisk, value: string) => {
+  const updateRisk = (index: number, data: Partial<ManualRisk>) => {
     setManualRisks(
-      manualRisks.map((r, i) => (i === index ? { ...r, [field]: value } : r))
+      manualRisks.map((r, i) => (i === index ? { ...r, ...data } : r))
     )
+    setEditingRiskIndex(null)
   }
 
   // Recalculate AI milestone dates (same algorithm as manual mode)
@@ -544,7 +654,7 @@ export default function NewProjectPage() {
       case 0: return !!manualProjectType && !!manualProjectTier && !!manualDemandSource && !!manualData.name.trim() && !!manualData.createdReason.trim()
       case 1: return !!smartObjective.specific.trim() && !!smartObjective.measurable.trim() && !!smartObjective.achievable.trim() && !!smartObjective.relevant.trim() && !!smartObjective.timeBound.trim()
       case 2: return !!manualData.purpose.trim() // 專案定義至少要有目的
-      case 3: return true // 團隊與風險（選填）
+      case 3: return manualTeamDetails.length > 0 // 團隊至少一人
       case 4: return !!manualData.startDate && !!manualData.endDate
       default: return true
     }
@@ -997,7 +1107,7 @@ export default function NewProjectPage() {
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="ai-project-tier">專案層別</Label>
+                      <Label htmlFor="ai-project-tier">專案層別 <span className="text-destructive">*</span></Label>
                       <Select
                         value={aiProjectTier}
                         onValueChange={(v) => setAiProjectTier(v as ProjectTier)}
@@ -1017,7 +1127,7 @@ export default function NewProjectPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="ai-demand-source">需求來源</Label>
+                      <Label htmlFor="ai-demand-source">需求來源 <span className="text-destructive">*</span></Label>
                       <Select
                         value={aiDemandSource}
                         onValueChange={(v) => setAiDemandSource(v as DemandSource)}
@@ -1068,7 +1178,7 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="ai-created-reason">開案原因</Label>
+                    <Label htmlFor="ai-created-reason">開案原因 <span className="text-destructive">*</span></Label>
                     <div className="flex gap-2">
                       <Textarea
                         id="ai-created-reason"
@@ -1086,7 +1196,7 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="ai-expected-benefits">預期效益</Label>
+                    <Label htmlFor="ai-expected-benefits">預期效益 <span className="text-destructive">*</span></Label>
                     <div className="flex gap-2">
                       <Textarea
                         id="ai-expected-benefits"
@@ -1104,7 +1214,7 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="requirements">專案需求描述</Label>
+                    <Label htmlFor="requirements">專案需求描述 <span className="text-destructive">*</span></Label>
                     <div className="flex gap-2">
                       <Textarea
                         id="requirements"
@@ -1126,7 +1236,7 @@ export default function NewProjectPage() {
 
                   <Button
                     onClick={handleAIParse}
-                    disabled={!requirements.trim()}
+                    disabled={!aiProjectTier || !aiDemandSource || !aiProjectType || !aiCreatedReason.trim() || !aiExpectedBenefits.trim() || !requirements.trim()}
                     className="w-full gap-2"
                     size="lg"
                   >
@@ -1949,10 +2059,12 @@ export default function NewProjectPage() {
                   <div className="space-y-2">
                     <Label className="text-base font-medium flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      團隊成員
+                      團隊成員 <span className="text-destructive">*</span>
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      組建專案團隊，輸入姓名按 Enter 即可新增
+                      組建專案團隊，輸入姓名按 Enter 即可新增{manualTeamDetails.length === 0 && (
+                        <span className="text-destructive">（至少需要一位成員）</span>
+                      )}
                     </p>
                     <TeamMemberTable
                       members={manualTeamDetails}
@@ -1967,100 +2079,97 @@ export default function NewProjectPage() {
 
                   {/* Risks Section */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base font-medium flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-muted-foreground" />
-                        風險識別
-                      </Label>
-                      <Button type="button" variant="outline" size="sm" onClick={addRisk} className="gap-1">
-                        <Plus className="h-3.5 w-3.5" />
-                        新增風險
-                      </Button>
-                    </div>
+                    <Label className="text-base font-medium flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                      風險識別
+                      {manualRisks.length > 0 && (
+                        <span className="text-xs font-normal text-muted-foreground">共 {manualRisks.length} 項</span>
+                      )}
+                    </Label>
                     <p className="text-sm text-muted-foreground -mt-1">
                       預先識別專案可能面臨的風險，評估影響程度和發生機率
                     </p>
-                    <div className="space-y-3">
-                      {manualRisks.map((risk, index) => (
-                        <div
-                          key={index}
-                          className="p-3 rounded-lg border bg-card space-y-3"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-sm font-medium mt-1">
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="flex-1 space-y-3">
-                              <div className="space-y-1">
-                                <Label className="text-sm text-muted-foreground">風險名稱</Label>
-                                <Input
-                                  placeholder="例如：供應商交期不穩定"
-                                  value={risk.title}
-                                  onChange={(e) => updateRisk(index, 'title', e.target.value)}
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-sm text-muted-foreground">風險描述</Label>
-                                <Textarea
-                                  placeholder="描述此風險的具體內容"
-                                  value={risk.description}
-                                  onChange={(e) => updateRisk(index, 'description', e.target.value)}
-                                  rows={2}
-                                />
-                              </div>
-                              <div className="grid gap-3 md:grid-cols-2">
-                                <div className="space-y-1">
-                                  <Label className="text-sm text-muted-foreground">影響程度</Label>
-                                  <Select value={risk.impact} onValueChange={(v) => updateRisk(index, 'impact', v)}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="high">高</SelectItem>
-                                      <SelectItem value="medium">中</SelectItem>
-                                      <SelectItem value="low">低</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-1">
-                                  <Label className="text-sm text-muted-foreground">發生機率</Label>
-                                  <Select value={risk.probability} onValueChange={(v) => updateRisk(index, 'probability', v)}>
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="high">高</SelectItem>
-                                      <SelectItem value="medium">中</SelectItem>
-                                      <SelectItem value="low">低</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-sm text-muted-foreground">緩解措施</Label>
-                                <Textarea
-                                  placeholder="描述如何降低或避免此風險"
-                                  value={risk.mitigation}
-                                  onChange={(e) => updateRisk(index, 'mitigation', e.target.value)}
-                                  rows={2}
-                                />
+
+                    {/* Risk list + inline add form */}
+                    <div className="rounded-lg border bg-card overflow-hidden">
+                      {manualRisks.map((risk, index) => {
+                        const severity = getRiskSeverity(risk.impact, risk.probability)
+                        const impactC = RISK_LEVEL_COLORS[risk.impact] || RISK_LEVEL_COLORS.medium
+                        const probC = RISK_LEVEL_COLORS[risk.probability] || RISK_LEVEL_COLORS.medium
+
+                        if (editingRiskIndex === index) {
+                          // ─── Inline edit mode ───
+                          return (
+                            <RiskInlineForm
+                              key={index}
+                              severity={severity}
+                              initial={risk}
+                              onConfirm={(data) => updateRisk(index, data)}
+                              onCancel={() => setEditingRiskIndex(null)}
+                              onRemove={() => removeRisk(index)}
+                            />
+                          )
+                        }
+
+                        // ─── Compact view mode ───
+                        return (
+                          <div
+                            key={index}
+                            className={`${index > 0 ? 'border-t' : ''} border-l-[3px] ${RISK_SEVERITY_BORDER[severity]} px-3 py-2 hover:bg-muted/30 transition-colors space-y-1`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <ShieldAlert className={`h-3.5 w-3.5 shrink-0 ${
+                                severity === 'high' ? 'text-red-500' : severity === 'medium' ? 'text-amber-500' : 'text-emerald-500'
+                              }`} />
+                              <span className="font-medium text-sm truncate">{risk.title}</span>
+                              <div className="flex items-center gap-1 ml-auto shrink-0">
+                                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${impactC.bg} ${impactC.text}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${impactC.dot}`} />影響{RISK_IMPACT_LABELS[risk.impact]}
+                                </span>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${probC.bg} ${probC.text}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${probC.dot}`} />機率{RISK_PROBABILITY_LABELS[risk.probability]}
+                                </span>
+                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => { setEditingRiskIndex(index); setShowRiskAddForm(false) }}>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => removeRisk(index)}>
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="shrink-0 mt-1 text-muted-foreground hover:text-destructive"
-                              onClick={() => removeRisk(index)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {(risk.description || risk.mitigation) && (
+                              <div className="pl-[1.375rem] text-sm text-muted-foreground leading-relaxed line-clamp-1">
+                                {risk.description && <span>{risk.description}</span>}
+                                {risk.description && risk.mitigation && <span className="mx-1.5 text-border">|</span>}
+                                {risk.mitigation && <span><span className="font-medium text-foreground/70">對策：</span>{risk.mitigation}</span>}
+                              </div>
+                            )}
                           </div>
+                        )
+                      })}
+
+                      {/* Inline add form */}
+                      {showRiskAddForm ? (
+                        <RiskInlineForm
+                          severity="medium"
+                          onConfirm={(data) => addRisk(data as ManualRisk)}
+                          onCancel={() => setShowRiskAddForm(false)}
+                        />
+                      ) : manualRisks.length === 0 ? (
+                        <div
+                          className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground cursor-pointer hover:bg-muted/30 transition-colors"
+                          onClick={() => setShowRiskAddForm(true)}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          點擊新增風險項目
                         </div>
-                      ))}
-                      {manualRisks.length === 0 && (
-                        <div className="text-center py-4 text-sm text-muted-foreground border border-dashed rounded-lg">
-                          尚未新增風險項目，點擊上方按鈕新增
+                      ) : (
+                        <div
+                          className="border-t px-3 py-2 flex items-center gap-2 text-sm text-muted-foreground/60 cursor-pointer hover:bg-muted/30 transition-colors"
+                          onClick={() => { setShowRiskAddForm(true); setEditingRiskIndex(null) }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>新增風險...</span>
                         </div>
                       )}
                     </div>
