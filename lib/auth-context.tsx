@@ -11,6 +11,7 @@ export interface User {
   name: string
   email: string
   role: UserRole
+  organization?: string
   avatar?: string
 }
 
@@ -20,7 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
   switchRole: (role: UserRole) => void
-  updateUser: (updates: Partial<Pick<User, 'name' | 'email'>>) => void
+  updateUser: (updates: Partial<Pick<User, 'name' | 'email' | 'organization'>>) => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -103,11 +104,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const updateUser = (updates: Partial<Pick<User, 'name' | 'email'>>) => {
-    if (user) {
-      const updatedUser = { ...user, ...updates }
+  const updateUser = async (updates: Partial<Pick<User, 'name' | 'email' | 'organization'>>): Promise<boolean> => {
+    if (!user) return false
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      const updatedUser = { ...user, name: data.name, email: data.email, organization: data.organization }
       setUser(updatedUser)
       localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+      return true
+    } catch {
+      return false
     }
   }
 

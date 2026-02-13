@@ -126,9 +126,10 @@ export async function GET(request: NextRequest) {
         risks: {
           where: { status: 'open' },
         },
-        weeklyUpdates: {
-          orderBy: { weekOf: 'desc' },
-          take: 5, // Only need recent updates
+        taskLogs: {
+          orderBy: { logDate: 'desc' },
+          take: 20,
+          select: { logDate: true, author: { select: { name: true } } },
         },
         owner: {
           select: { name: true },
@@ -252,7 +253,7 @@ export async function GET(request: NextRequest) {
       .filter(m => m.diffDays <= 30)
       .sort((a, b) => a.diffDays - b.diffDays)
 
-    // ── Projects missing this week's update ──
+    // ── Projects missing this week's task log activity ──
     const getMonday = (d: Date) => {
       const day = d.getDay()
       const diff = d.getDate() - day + (day === 0 ? -6 : 1)
@@ -261,17 +262,19 @@ export async function GET(request: NextRequest) {
       return monday
     }
     const thisMonday = getMonday(today)
+    const nextMonday = new Date(thisMonday)
+    nextMonday.setDate(nextMonday.getDate() + 7)
 
     const missingUpdates = projectsWithProgress
       .filter(p => {
-        const hasThisWeek = p.weeklyUpdates.some(u => {
-          const updateMonday = getMonday(new Date(u.weekOf))
-          return updateMonday.getTime() === thisMonday.getTime()
+        // Check if any task log was recorded for this week (logDate within this week)
+        const hasThisWeekLog = p.taskLogs.some(l => {
+          const logDate = new Date(l.logDate)
+          return logDate >= thisMonday && logDate < nextMonday
         })
-        return !hasThisWeek
+        return !hasThisWeekLog
       })
       .map(p => {
-        // Find the PM (project manager) from team members, fallback to project owner
         const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
         const displayOwner = pmMember ? pmMember.user.name : p.owner.name
 
@@ -280,7 +283,7 @@ export async function GET(request: NextRequest) {
           name: p.name,
           status: p.actualStatus,
           owner: displayOwner,
-          lastUpdateWeekOf: p.weeklyUpdates[0]?.weekOf.toISOString().split('T')[0] || null,
+          lastUpdateWeekOf: p.taskLogs[0]?.logDate.toISOString().split('T')[0] || null,
         }
       })
 
