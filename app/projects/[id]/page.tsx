@@ -336,6 +336,7 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
   })
   const [reportGenerating, setReportGenerating] = useState(false)
   const [reportDownloaded, setReportDownloaded] = useState<string | null>(null)
+  const [comingSoonOpen, setComingSoonOpen] = useState(false)
 
   const allActiveMembers = useMemo(() => {
     const members = new Set<string>()
@@ -386,46 +387,8 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
   }
 
   const handleGenerateReport = () => {
-    setReportGenerating(true)
-
-    // Filter weeks by report date range
-    const relevantWeeks = allWeeks.filter(week => {
-      if (reportDateFrom && getWeekSunday(week.weekMonday) < reportDateFrom) return false
-      if (reportDateTo && week.weekMonday > reportDateTo) return false
-      return true
-    })
-
-    setTimeout(() => {
-      const report = generateMockAIReport(project, relevantWeeks, reportType)
-
-      // Build content sections label
-      const sectionLabels: string[] = []
-      if (reportSections.summary) sectionLabels.push('整體進度摘要')
-      if (reportSections.tasks) sectionLabels.push('任務完成狀況')
-      if (reportSections.personnel) sectionLabels.push('人員工作紀錄')
-      if (reportSections.charts) sectionLabels.push('圖表分析')
-      if (reportSections.rawData) sectionLabels.push('原始資料')
-
-      const header = `[報告內容：${sectionLabels.join('、')}]\n\n`
-
-      const typeLabel = reportType === 'weekly' ? '週報' : '月報'
-      const ext = reportFormat
-      const fileName = `${project.name}_${typeLabel}_${new Date().toISOString().split('T')[0]}.${ext}`
-      const blob = new Blob([header + report], { type: 'application/octet-stream' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-
-      setReportGenerating(false)
-      setReportDialogOpen(false)
-      setReportDownloaded(fileName)
-      setTimeout(() => setReportDownloaded(null), 4000)
-    }, 2000)
+    setReportDialogOpen(false)
+    setComingSoonOpen(true)
   }
 
   if (allWeeks.length === 0) {
@@ -616,6 +579,23 @@ function WeeklyActivitySummary({ project }: { project: Project }) {
                   </>
                 )}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={comingSoonOpen} onOpenChange={setComingSoonOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                功能開發中
+              </DialogTitle>
+              <DialogDescription>
+                AI 報告產生功能尚在開發中，敬請期待！
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={() => setComingSoonOpen(false)}>確定</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
