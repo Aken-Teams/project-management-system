@@ -49,7 +49,7 @@ const navigation = [
   { name: '我的任務', href: '/my-tasks', icon: ClipboardList, roles: ['pm', 'member'] as const },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
   { name: '報告', href: '/reports', icon: FileText, roles: ['pm', 'executive'] as const },
-  { name: '審批中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
+  { name: '審核中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
 ]
 
 const defaultRoute: Record<string, string> = {
