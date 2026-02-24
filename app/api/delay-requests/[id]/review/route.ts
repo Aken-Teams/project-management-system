@@ -104,7 +104,7 @@ export async function PATCH(
 
           // Compute task-based duration (in days)
           const totalTaskDays = msTasks.reduce(
-            (sum, t) => sum + Math.max(t.durationWeeks, 1) * 7, 0
+            (sum, t) => sum + Math.max(t.durationDays, 1), 0
           )
 
           // Check if this milestone's dueDate needs to be pushed forward
@@ -143,7 +143,7 @@ export async function PATCH(
             taskCurrent = new Date(msStart)
           }
           for (const task of msTasks) {
-            const taskDurationDays = Math.max(task.durationWeeks, 1) * 7
+            const taskDurationDays = Math.max(task.durationDays, 1)
             const taskStart = new Date(taskCurrent)
             const taskEnd = addDays(taskCurrent, taskDurationDays - 1)
 

@@ -107,7 +107,7 @@ export function dbProjectToFrontend(
       priority: string
       startDate: Date
       endDate: Date
-      durationWeeks: number
+      durationDays: number
       progress: number
       completedAt: Date | null
       completedBy: string | null
@@ -211,7 +211,7 @@ export function dbProjectToFrontend(
     assignee: t.assignee,
     status: t.status === 'in_progress' ? ('in-progress' as const) : (t.status as 'todo' | 'done' | 'blocked'),
     priority: t.priority as 'low' | 'medium' | 'high',
-    durationWeeks: t.durationWeeks,
+    durationDays: t.durationDays,
     startDate: t.startDate.toISOString().split('T')[0],
     endDate: t.endDate.toISOString().split('T')[0],
     dependencies: (t.dependsOn || []).map((d) => d.prerequisiteId),

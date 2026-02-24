@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
           include: {
             dependsOn: true,
             children: {
-              select: { id: true, title: true, status: true, progress: true, assignee: true, startDate: true, endDate: true, priority: true, durationWeeks: true, completedAt: true, completedBy: true },
+              select: { id: true, title: true, status: true, progress: true, assignee: true, startDate: true, endDate: true, priority: true, durationDays: true, completedAt: true, completedBy: true },
               orderBy: { sortOrder: 'asc' },
             },
           },
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
           assignee: t.assignee,
           status: t.status === 'in_progress' ? 'in-progress' : t.status,
           priority: t.priority,
-          durationWeeks: t.durationWeeks,
+          durationDays: t.durationDays,
           startDate: t.startDate.toISOString().split('T')[0],
           endDate: t.endDate.toISOString().split('T')[0],
           dependencies: (t.dependsOn || []).map(d => d.prerequisiteId),
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
             startDate: (c.startDate as Date).toISOString().split('T')[0],
             endDate: (c.endDate as Date).toISOString().split('T')[0],
             priority: c.priority,
-            durationWeeks: c.durationWeeks as number,
+            durationDays: c.durationDays as number,
             ...(c.completedAt ? { completedAt: (c.completedAt as Date).toISOString().split('T')[0] } : {}),
             ...(c.completedBy ? { completedBy: c.completedBy } : {}),
           })),

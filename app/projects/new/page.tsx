@@ -63,7 +63,7 @@ import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones } fro
 interface ManualMilestone {
   id: string
   name: string
-  durationWeeks: number
+  durationDays: number
   startDate?: string
   endDate?: string
 }
@@ -72,7 +72,7 @@ interface AiMilestone {
   id: string
   name: string
   description: string
-  durationWeeks: number
+  durationDays: number
   startDate?: string
   endDate?: string
 }
@@ -202,7 +202,7 @@ interface MilestoneTaskDraft {
   title: string
   assignee: string
   priority: 'low' | 'medium' | 'high'
-  durationWeeks: number
+  durationDays: number
   parentId?: string
 }
 
@@ -497,7 +497,7 @@ export default function NewProjectPage() {
       const newMilestones = template.map((t, i) => ({
         id: `milestone-${Date.now()}-${i}`,
         name: t.name,
-        durationWeeks: t.durationWeeks,
+        durationDays: t.durationDays,
       }))
       setManualMilestones(newMilestones)
       setManualTasks([])
@@ -506,7 +506,7 @@ export default function NewProjectPage() {
         id: `ai-ms-${Date.now()}-${i}`,
         name: t.name,
         description: '',
-        durationWeeks: t.durationWeeks,
+        durationDays: t.durationDays,
       })))
       setAiTasks([])
     }
@@ -539,7 +539,7 @@ export default function NewProjectPage() {
   const lastMilestoneEndDate = useMemo(() => {
     const lastMilestone = [...recalculatedMilestones]
       .reverse()
-      .find(m => m.endDate && m.durationWeeks > 0)
+      .find(m => m.endDate && m.durationDays > 0)
     return lastMilestone?.endDate || ''
   }, [recalculatedMilestones])
 
@@ -560,7 +560,7 @@ export default function NewProjectPage() {
   // Milestone helpers
   const addMilestone = () => {
     const newId = `milestone-${Date.now()}`
-    setManualMilestones([...manualMilestones, { id: newId, name: '', durationWeeks: 0 }])
+    setManualMilestones([...manualMilestones, { id: newId, name: '', durationDays: 0 }])
   }
 
   const removeMilestone = (index: number) => {
@@ -608,7 +608,7 @@ export default function NewProjectPage() {
   const aiLastMilestoneEndDate = useMemo(() => {
     const lastMilestone = [...recalculatedAiMilestones]
       .reverse()
-      .find(m => m.endDate && m.durationWeeks > 0)
+      .find(m => m.endDate && m.durationDays > 0)
     return lastMilestone?.endDate || ''
   }, [recalculatedAiMilestones])
 
@@ -621,7 +621,7 @@ export default function NewProjectPage() {
   // AI Milestone helpers
   const addAiMilestone = () => {
     const newId = `ai-milestone-${Date.now()}`
-    setAiMilestones([...aiMilestones, { id: newId, name: '', description: '', durationWeeks: 0 }])
+    setAiMilestones([...aiMilestones, { id: newId, name: '', description: '', durationDays: 0 }])
   }
 
   const removeAiMilestone = (index: number) => {
@@ -740,7 +740,7 @@ export default function NewProjectPage() {
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
-          durationWeeks: t.durationWeeks || 1,
+          durationDays: t.durationDays || 1,
           startDate: dates?.startDate || parentDates?.startDate || aiEditableData.startDate,
           endDate: dates?.endDate || parentDates?.endDate || ms?.dueDate || aiEditableData.endDate,
           dependencies: [] as string[],
@@ -790,7 +790,7 @@ export default function NewProjectPage() {
     // Build milestone ID mapping: old draft ID -> new stable ID
     const milestoneIdMap = new Map<string, string>()
     const validMilestones = recalculatedMilestones
-      .filter((m) => m.name.trim() && m.durationWeeks > 0 && m.endDate)
+      .filter((m) => m.name.trim() && m.durationDays > 0 && m.endDate)
       .map((m, index) => {
         const newId = `ms-new-${index}`
         milestoneIdMap.set(m.id, newId)
@@ -832,7 +832,7 @@ export default function NewProjectPage() {
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
-          durationWeeks: t.durationWeeks || 1,
+          durationDays: t.durationDays || 1,
           startDate: dates?.startDate || parentDates?.startDate || fallbackStart,
           endDate: dates?.endDate || parentDates?.endDate || ms?.dueDate || manualData.endDate,
           ...(t.parentId ? { parentTempId: t.parentId } : {}),
@@ -2034,7 +2034,7 @@ export default function NewProjectPage() {
                   )}
 
                   <p className="text-sm text-muted-foreground">
-                    拖動左側圖標可改變順序。輸入週數後系統自動計算日期。專案結束日期會根據里程碑自動調整。
+                    拖動左側圖標可改變順序。輸入天數後系統自動計算日期。專案結束日期會根據里程碑自動調整。
                   </p>
 
                   {/* Timeline table */}

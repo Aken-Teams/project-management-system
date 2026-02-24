@@ -73,7 +73,7 @@ interface CreateProjectBody {
     description: string
     assignee: string
     priority: string
-    durationWeeks: number
+    durationDays: number
     startDate: string
     endDate: string
   }[]
@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
               description: t.description || '',
               assignee: t.assignee || '未指派',
               priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
-              durationWeeks: t.durationWeeks || 0,
+              durationDays: t.durationDays || 0,
               startDate: new Date(t.startDate),
               endDate: new Date(t.endDate),
               sortOrder: sortIdx++,
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
               description: t.description || '',
               assignee: t.assignee || '未指派',
               priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
-              durationWeeks: t.durationWeeks || 0,
+              durationDays: t.durationDays || 0,
               startDate: new Date(t.startDate),
               endDate: new Date(t.endDate),
               sortOrder: sortIdx++,

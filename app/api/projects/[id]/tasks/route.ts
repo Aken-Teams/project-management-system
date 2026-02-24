@@ -14,7 +14,7 @@ interface AddTaskBody {
   priority?: string
   startDate: string
   endDate: string
-  durationWeeks?: number
+  durationDays?: number
   parentId?: string
 }
 
@@ -70,7 +70,7 @@ export async function POST(
 
     const start = new Date(body.startDate)
     const end = new Date(body.endDate)
-    const durationWeeks = body.durationWeeks ?? Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)))
+    const durationDays = body.durationDays ?? Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1)
 
     const task = await prisma.task.create({
       data: {
@@ -82,7 +82,7 @@ export async function POST(
         priority: (body.priority || 'medium') as Priority,
         startDate: start,
         endDate: end,
-        durationWeeks,
+        durationDays,
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
         ...(body.parentId ? { parentId: body.parentId } : {}),
       },
@@ -99,7 +99,7 @@ export async function POST(
       priority: task.priority,
       startDate: task.startDate.toISOString().slice(0, 10),
       endDate: task.endDate.toISOString().slice(0, 10),
-      durationWeeks: task.durationWeeks,
+      durationDays: task.durationDays,
       progress: task.progress,
       parentId: task.parentId || null,
       dependencies: [],

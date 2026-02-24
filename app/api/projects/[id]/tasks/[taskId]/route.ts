@@ -18,7 +18,7 @@ interface UpdateTaskBody {
   status?: string
   progress?: number
   sortOrder?: number
-  durationWeeks?: number
+  durationDays?: number
   completedBy?: string
 }
 
@@ -67,7 +67,7 @@ export async function PUT(
     if (body.startDate !== undefined) data.startDate = new Date(body.startDate)
     if (body.endDate !== undefined) data.endDate = new Date(body.endDate)
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
-    if (body.durationWeeks !== undefined) data.durationWeeks = body.durationWeeks
+    if (body.durationDays !== undefined) data.durationDays = body.durationDays
     if (body.milestoneId !== undefined) {
       const ms = await prisma.milestone.findFirst({ where: { id: body.milestoneId, projectId: id } })
       if (!ms) return NextResponse.json({ error: '找不到該里程碑' }, { status: 404 })
@@ -135,7 +135,7 @@ export async function PUT(
         priority: updated.priority,
         startDate: updated.startDate.toISOString().slice(0, 10),
         endDate: updated.endDate.toISOString().slice(0, 10),
-        durationWeeks: updated.durationWeeks,
+        durationDays: updated.durationDays,
         progress: updated.progress,
         parentId: updated.parentId || null,
         parentProgress: updatedParent.progress,
@@ -156,7 +156,7 @@ export async function PUT(
       priority: updated.priority,
       startDate: updated.startDate.toISOString().slice(0, 10),
       endDate: updated.endDate.toISOString().slice(0, 10),
-      durationWeeks: updated.durationWeeks,
+      durationDays: updated.durationDays,
       progress: updated.progress,
       parentId: updated.parentId || null,
       ...(updated.completedAt ? { completedAt: updated.completedAt.toISOString().slice(0, 10) } : {}),

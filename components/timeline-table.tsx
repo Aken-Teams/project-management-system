@@ -34,7 +34,7 @@ import {
 export interface TimelineMilestone {
   id: string
   name: string
-  durationWeeks: number
+  durationDays: number
   startDate?: string
   endDate?: string
 }
@@ -45,7 +45,7 @@ export interface TimelineTask {
   title: string
   assignee: string
   priority: 'low' | 'medium' | 'high'
-  durationWeeks: number
+  durationDays: number
   parentId?: string
 }
 
@@ -61,7 +61,7 @@ export interface TimelineTableProps {
   tasks: TimelineTask[]
   taskDates: Map<string, { startDate: string; endDate: string }>
   teamMembers: TimelineTeamMember[]
-  onMilestoneUpdate: (index: number, field: 'name' | 'durationWeeks', value: string | number) => void
+  onMilestoneUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onMilestoneRemove: (index: number) => void
   onMilestoneAdd: () => void
   onMilestoneReorder: (oldIndex: number, newIndex: number) => void
@@ -90,7 +90,7 @@ function MilestoneRow({
   canRemove: boolean
   collapsed: boolean
   taskCount: number
-  onUpdate: (index: number, field: 'name' | 'durationWeeks', value: string | number) => void
+  onUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onRemove: (index: number) => void
   onToggleCollapse: () => void
 }) {
@@ -148,8 +148,8 @@ function MilestoneRow({
         <Input
           type="number"
           min={0}
-          value={milestone.durationWeeks || ''}
-          onChange={(e) => onUpdate(index, 'durationWeeks', Number(e.target.value) || 0)}
+          value={milestone.durationDays || ''}
+          onChange={(e) => onUpdate(index, 'durationDays', Number(e.target.value) || 0)}
           className="h-8 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
         />
       </div>
@@ -272,15 +272,15 @@ function TaskRow({
       {/* Duration (read-only when parent has subtasks) */}
       <div className="flex justify-center">
         {subtaskCount > 0 ? (
-          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務週數加總">
-            {task.durationWeeks || 0}
+          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務天數加總">
+            {task.durationDays || 0}
           </span>
         ) : (
           <Input
             type="number"
             min={1}
-            value={task.durationWeeks || ''}
-            onChange={(e) => onUpdate(task.id, 'durationWeeks', Number(e.target.value) || 0)}
+            value={task.durationDays || ''}
+            onChange={(e) => onUpdate(task.id, 'durationDays', Number(e.target.value) || 0)}
             className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
           />
         )}
@@ -359,7 +359,7 @@ function InlineTaskInput({
   onAdd: (task: TimelineTask) => void
 }) {
   const [title, setTitle] = useState('')
-  const [durationWeeks, setDurationWeeks] = useState(1)
+  const [durationDays, setDurationDays] = useState(1)
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
 
@@ -371,10 +371,10 @@ function InlineTaskInput({
       title: title.trim(),
       assignee,
       priority,
-      durationWeeks,
+      durationDays,
     })
     setTitle('')
-    setDurationWeeks(1)
+    setDurationDays(1)
     setAssignee('')
     setPriority('medium')
   }
@@ -422,8 +422,8 @@ function InlineTaskInput({
           <Input
             type="number"
             min={1}
-            value={durationWeeks}
-            onChange={(e) => setDurationWeeks(Number(e.target.value) || 1)}
+            value={durationDays}
+            onChange={(e) => setDurationDays(Number(e.target.value) || 1)}
             onKeyDown={handleKeyDown}
             className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0 text-muted-foreground"
           />
@@ -541,9 +541,9 @@ function SubtaskRow({
         <Input
           type="number"
           min={1}
-          max={52}
-          value={task.durationWeeks || ''}
-          onChange={(e) => onUpdate(task.id, 'durationWeeks', Math.max(1, Number(e.target.value) || 1))}
+
+          value={task.durationDays || ''}
+          onChange={(e) => onUpdate(task.id, 'durationDays', Math.max(1, Number(e.target.value) || 1))}
           className="h-7 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
       </div>
@@ -621,7 +621,7 @@ function InlineSubtaskInput({
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
-  const [durationWeeks, setDurationWeeks] = useState(1)
+  const [durationDays, setDurationDays] = useState(1)
 
   const handleAdd = () => {
     if (!title.trim()) return
@@ -631,13 +631,13 @@ function InlineSubtaskInput({
       title: title.trim(),
       assignee,
       priority,
-      durationWeeks,
+      durationDays,
       parentId: parentTask.id,
     })
     setTitle('')
     setAssignee('')
     setPriority('medium')
-    setDurationWeeks(1)
+    setDurationDays(1)
   }
 
   const cyclePriority = () => {
@@ -686,9 +686,9 @@ function InlineSubtaskInput({
           <Input
             type="number"
             min={1}
-            max={52}
-            value={durationWeeks}
-            onChange={(e) => setDurationWeeks(Math.max(1, Number(e.target.value) || 1))}
+  
+            value={durationDays}
+            onChange={(e) => setDurationDays(Math.max(1, Number(e.target.value) || 1))}
             className="h-7 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1 text-muted-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         )}
@@ -868,7 +868,7 @@ export function TimelineTable({
       >
         <span />
         <span className="pl-1.5">名稱</span>
-        <span className="text-center">期程(週)</span>
+        <span className="text-center">日曆天</span>
         <span className="text-center">開始日期</span>
         <span className="text-center">結束日期</span>
         <span className="text-center">指派人</span>

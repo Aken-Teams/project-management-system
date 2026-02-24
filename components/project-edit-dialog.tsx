@@ -171,7 +171,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     (project.tasks ?? []).map(t => ({
       id: t.id, milestoneId: t.milestoneId, title: t.title,
       assignee: t.assignee, priority: t.priority,
-      durationWeeks: t.durationWeeks, startDate: t.startDate, endDate: t.endDate,
+      durationDays: t.durationDays, startDate: t.startDate, endDate: t.endDate,
       parentId: t.parentId ?? undefined,
     }))
   )
@@ -186,7 +186,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     for (let i = 0; i < tlMilestones.length; i++) {
       const curr = tlMilestones[i]
       const orig = origMilestones[i]
-      if (!orig || curr.id !== orig.id || curr.name !== orig.name || curr.durationWeeks !== tlInit.milestones[i]?.durationWeeks) return true
+      if (!orig || curr.id !== orig.id || curr.name !== orig.name || curr.durationDays !== tlInit.milestones[i]?.durationDays) return true
     }
     if (tlTasks.length !== origTasks.length) return true
     for (const curr of tlTasks) {
@@ -194,7 +194,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       if (!orig) return true
       if (curr.milestoneId !== orig.milestoneId || curr.title !== orig.title ||
           curr.assignee !== orig.assignee || curr.priority !== orig.priority ||
-          curr.durationWeeks !== orig.durationWeeks) return true
+          curr.durationDays !== orig.durationDays) return true
     }
     return false
   }, [tlMilestones, tlTasks, origMilestones, origTasks, tlInit.milestones])
@@ -207,7 +207,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // Auto-update project end date from last milestone
   const lastMsEndDate = useMemo(() => {
-    const last = [...recalcMilestones].reverse().find(m => m.endDate && m.durationWeeks > 0)
+    const last = [...recalcMilestones].reverse().find(m => m.endDate && m.durationDays > 0)
     return last?.endDate || ''
   }, [recalcMilestones])
 
@@ -556,7 +556,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // ─── TimelineTable callbacks (local state only, batch save on submit) ──
 
-  const handleTlMilestoneUpdate = useCallback((index: number, field: 'name' | 'durationWeeks', value: string | number) => {
+  const handleTlMilestoneUpdate = useCallback((index: number, field: 'name' | 'durationDays', value: string | number) => {
     setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, [field]: value } : m))
   }, [])
 
@@ -569,14 +569,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   }, [])
 
   const handleTlMilestoneAdd = useCallback(() => {
-    setTlMilestones(prev => [...prev, { id: `draft-ms-${Date.now()}`, name: '', durationWeeks: 0 }])
+    setTlMilestones(prev => [...prev, { id: `draft-ms-${Date.now()}`, name: '', durationDays: 0 }])
   }, [])
 
   const handleTlMilestoneReorder = useCallback((oldIdx: number, newIdx: number) => {
     setTlMilestones(prev => arrayMove(prev, oldIdx, newIdx))
   }, [])
 
-  // Auto-sync parent durationWeeks = sum of children durationWeeks
+  // Auto-sync parent durationDays = sum of children durationDays
   const syncParentDurations = useCallback((tasks: typeof tlTasks) => {
     const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!))
     if (parentIds.size === 0) return tasks
@@ -585,17 +585,17 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       if (!parentIds.has(t.id)) return t
       const childSum = tasks
         .filter(c => c.parentId === t.id)
-        .reduce((sum, c) => sum + Math.max(c.durationWeeks || 1, 1), 0)
-      if (childSum > 0 && t.durationWeeks !== childSum) {
+        .reduce((sum, c) => sum + Math.max(c.durationDays || 1, 1), 0)
+      if (childSum > 0 && t.durationDays !== childSum) {
         changed = true
-        return { ...t, durationWeeks: childSum }
+        return { ...t, durationDays: childSum }
       }
       return t
     })
     return changed ? updated : tasks
   }, [])
 
-  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationWeeks: number; parentId?: string }) => {
+  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationDays: number; parentId?: string }) => {
     setTlTasks(prev => syncParentDurations([...prev, task]))
   }, [syncParentDurations])
 

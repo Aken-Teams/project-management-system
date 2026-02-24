@@ -152,7 +152,7 @@ export default function MyTasksPage() {
   // Inline subtask creation on card
   const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
   const [inlineSubtaskTitle, setInlineSubtaskTitle] = useState('')
-  const [inlineSubtaskWeeks, setInlineSubtaskWeeks] = useState(1)
+  const [inlineSubtaskDays, setInlineSubtaskDays] = useState(1)
   // PM project edit dialog
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
@@ -402,7 +402,7 @@ export default function MyTasksPage() {
           priority: 'medium',
           startDate: parentTask.startDate,
           endDate: parentTask.endDate,
-          durationWeeks: inlineSubtaskWeeks,
+          durationDays: inlineSubtaskDays,
         }),
       })
       if (!res.ok) {
@@ -423,7 +423,7 @@ export default function MyTasksPage() {
           : p
       ))
       setInlineSubtaskTitle('')
-      setInlineSubtaskWeeks(1)
+      setInlineSubtaskDays(1)
       setAddingSubtaskForId(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : '新增子任務失敗')
@@ -889,7 +889,7 @@ export default function MyTasksPage() {
                                         } else {
                                           setAddingSubtaskForId(task.id)
                                           setInlineSubtaskTitle('')
-                                          setInlineSubtaskWeeks(1)
+                                          setInlineSubtaskDays(1)
                                         }
                                       }}
                                       className="h-6 w-6 flex items-center justify-center shrink-0 rounded hover:bg-muted/60 text-muted-foreground hover:text-primary transition-colors"
@@ -900,10 +900,10 @@ export default function MyTasksPage() {
                                   </div>
                                   {/* Inline add subtask form */}
                                   {isAddingSub && (() => {
-                                    const usedWeeks = subtasks.reduce((sum, s) => sum + (s.durationWeeks || 1), 0)
-                                    const remainingWeeks = Math.max(0, task.durationWeeks - usedWeeks)
-                                    const canAdd = remainingWeeks > 0
-                                    const effectiveMax = Math.max(1, remainingWeeks)
+                                    const usedDays = subtasks.reduce((sum, s) => sum + (s.durationDays || 1), 0)
+                                    const remainingDays = Math.max(0, task.durationDays - usedDays)
+                                    const canAdd = remainingDays > 0
+                                    const effectiveMax = Math.max(1, remainingDays)
                                     return (
                                       <div className="ml-6 py-1 px-1 space-y-1">
                                         <div className="flex items-center gap-1.5">
@@ -924,13 +924,13 @@ export default function MyTasksPage() {
                                             type="number"
                                             min={1}
                                             max={effectiveMax}
-                                            value={Math.min(inlineSubtaskWeeks, effectiveMax)}
-                                            onChange={e => setInlineSubtaskWeeks(Math.min(Math.max(1, Number(e.target.value) || 1), effectiveMax))}
+                                            value={Math.min(inlineSubtaskDays, effectiveMax)}
+                                            onChange={e => setInlineSubtaskDays(Math.min(Math.max(1, Number(e.target.value) || 1), effectiveMax))}
                                             className="w-12 text-xs border rounded px-1.5 py-1 bg-background text-center"
-                                            title={`週數（剩餘 ${remainingWeeks} 週）`}
+                                            title={`天數（剩餘 ${remainingDays} 天）`}
                                             disabled={!canAdd}
                                           />
-                                          <span className="text-sm text-muted-foreground shrink-0">週</span>
+                                          <span className="text-sm text-muted-foreground shrink-0">天</span>
                                           <Button
                                             size="sm"
                                             className="h-6 text-xs px-2"
@@ -948,12 +948,12 @@ export default function MyTasksPage() {
                                         </div>
                                         {!canAdd && (
                                           <p className="ml-4 text-[11px] text-destructive">
-                                            已用完此任務的 {task.durationWeeks} 週配額，如需更多時間請提出延期申請
+                                            已用完此任務的 {task.durationDays} 天配額，如需更多時間請提出延期申請
                                           </p>
                                         )}
                                         {canAdd && (
                                           <p className="ml-4 text-[11px] text-muted-foreground">
-                                            此任務共 {task.durationWeeks} 週，已分配 {usedWeeks} 週，剩餘 {remainingWeeks} 週
+                                            此任務共 {task.durationDays} 天，已分配 {usedDays} 天，剩餘 {remainingDays} 天
                                           </p>
                                         )}
                                       </div>
@@ -976,7 +976,7 @@ export default function MyTasksPage() {
                                       assignee: sub.assignee,
                                       status: sub.status,
                                       priority: sub.priority,
-                                      durationWeeks: 1,
+                                      durationDays: 1,
                                       startDate: sub.startDate,
                                       endDate: sub.endDate,
                                       dependencies: [],

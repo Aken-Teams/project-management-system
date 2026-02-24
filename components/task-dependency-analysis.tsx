@@ -979,7 +979,7 @@ export function TaskDependencyAnalysis({ project }: { project: Project }) {
                     <span>{selectedNode.task.assignee}</span>
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    {selectedNode.task.startDate} ~ {selectedNode.task.endDate} ({selectedNode.task.durationWeeks}週)
+                    {selectedNode.task.startDate} ~ {selectedNode.task.endDate} ({selectedNode.task.durationDays}天)
                   </div>
                 </div>
 

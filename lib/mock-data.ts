@@ -109,7 +109,7 @@ export interface SubTask {
   startDate: string
   endDate: string
   priority: 'low' | 'medium' | 'high'
-  durationWeeks: number
+  durationDays: number
   completedAt?: string
   completedBy?: string
 }
@@ -123,7 +123,7 @@ export interface Task {
   assignee: string
   status: TaskStatus
   priority: 'low' | 'medium' | 'high'
-  durationWeeks: number
+  durationDays: number
   startDate: string
   endDate: string
   dependencies: string[]
