@@ -26,7 +26,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
-import { type Task, type TaskLog, type SubTask } from '@/lib/mock-data'
+import { type Task, type TaskLog, type SubTask, type Project } from '@/lib/mock-data'
+import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
 import {
   computeTaskStatus,
   getStatusLabel,
@@ -60,6 +61,7 @@ import {
   Check,
   X,
   Plus,
+  Settings2,
 } from 'lucide-react'
 
 /** Add one day to a YYYY-MM-DD string */
@@ -150,6 +152,10 @@ export default function MyTasksPage() {
   const [addingSubtask, setAddingSubtask] = useState(false)
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [subtaskAssignee, setSubtaskAssignee] = useState('')
+  // PM project edit dialog
+  const [editProjectOpen, setEditProjectOpen] = useState(false)
+  const [editProject, setEditProject] = useState<Project | null>(null)
+  const [editProjectLoading, setEditProjectLoading] = useState<string | null>(null)
   const recognitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -354,6 +360,32 @@ export default function MyTasksPage() {
     }
     setMsDateDialogOpen(false)
     setMsDateDialogData(null)
+  }
+
+  // ── PM: Open project edit dialog ──
+  const handleOpenProjectEdit = async (projectId: string) => {
+    setEditProjectLoading(projectId)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`)
+      if (!res.ok) throw new Error('載入專案失敗')
+      const proj: Project = await res.json()
+      setEditProject(proj)
+      setEditProjectOpen(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '載入專案失敗')
+    } finally {
+      setEditProjectLoading(null)
+    }
+  }
+
+  const handleEditProjectSave = async (data: ProjectEditData) => {
+    if (!editProject) return
+    const res = await fetch(`/api/projects/${editProject.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error('儲存失敗')
   }
 
   // ── Add subtask to a parent task ──
@@ -730,7 +762,27 @@ export default function MyTasksPage() {
                       {project.name}
                       {isPM && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">PM</Badge>}
                     </CardTitle>
-                    <span className="text-sm text-muted-foreground">{pCompleted}/{pTotal}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{pCompleted}/{pTotal}</span>
+                      {isPM && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          title="編輯專案"
+                          onClick={e => {
+                            e.stopPropagation()
+                            handleOpenProjectEdit(project.id)
+                          }}
+                          disabled={editProjectLoading === project.id}
+                        >
+                          {editProjectLoading === project.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Settings2 className="h-3.5 w-3.5" />
+                          }
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
 
                   {!isCollapsed && (
@@ -1348,31 +1400,31 @@ export default function MyTasksPage() {
                       {/* Subtasks */}
                       {!task.parentId && (
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-5 w-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30">
-                              <ListChecks className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="h-5 w-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30">
+                                <ListChecks className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                              </div>
+                              <span className="text-sm font-medium text-muted-foreground">子任務</span>
+                              {task.subtasks && task.subtasks.length > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {task.subtasks.filter(s => s.completedAt || s.status === 'done').length}/{task.subtasks.length}
+                                </span>
+                              )}
                             </div>
-                            <span className="text-sm font-medium text-muted-foreground">子任務</span>
-                            {task.subtasks && task.subtasks.length > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                {task.subtasks.filter(s => s.completedAt || s.status === 'done').length}/{task.subtasks.length}
-                              </span>
+                            {!addingSubtask && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-xs h-6 px-2"
+                                onClick={() => setAddingSubtask(true)}
+                              >
+                                <Plus className="h-3 w-3" /> 新增
+                              </Button>
                             )}
                           </div>
-                          {task.subtasks && task.subtasks.length > 0 && (
-                            <div className="space-y-1.5 ml-7">
-                              {task.subtasks.map(sub => (
-                                <div key={sub.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
-                                  {getStatusDot(sub.status === 'done' ? 'completed' : sub.status === 'in-progress' ? 'on-track' : sub.status === 'blocked' ? 'overdue' : 'not-started')}
-                                  <span className={cn('flex-1 truncate', sub.status === 'done' && 'text-muted-foreground')}>{sub.title}</span>
-                                  {sub.assignee && <span className="text-[11px] text-muted-foreground">{sub.assignee}</span>}
-                                  <Badge variant="outline" className="text-[10px] px-1">{sub.progress}%</Badge>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {/* Add subtask form */}
-                          {addingSubtask ? (
+                          {/* Add subtask form — shown at top when active */}
+                          {addingSubtask && (
                             <div className="ml-7 space-y-2 p-3 rounded-lg border border-dashed border-border">
                               <input
                                 type="text"
@@ -1398,16 +1450,17 @@ export default function MyTasksPage() {
                                 </Button>
                               </div>
                             </div>
-                          ) : (
-                            <div className="ml-7">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-sm h-7"
-                                onClick={() => setAddingSubtask(true)}
-                              >
-                                <Plus className="h-3 w-3" /> 新增子任務
-                              </Button>
+                          )}
+                          {task.subtasks && task.subtasks.length > 0 && (
+                            <div className="space-y-1.5 ml-7">
+                              {task.subtasks.map(sub => (
+                                <div key={sub.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
+                                  {getStatusDot(sub.status === 'done' ? 'completed' : sub.status === 'in-progress' ? 'on-track' : sub.status === 'blocked' ? 'overdue' : 'not-started')}
+                                  <span className={cn('flex-1 truncate', sub.status === 'done' && 'text-muted-foreground')}>{sub.title}</span>
+                                  {sub.assignee && <span className="text-[11px] text-muted-foreground">{sub.assignee}</span>}
+                                  <Badge variant="outline" className="text-[10px] px-1">{sub.progress}%</Badge>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -1651,6 +1704,30 @@ export default function MyTasksPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* ── PM Project Edit Dialog ── */}
+      {editProjectOpen && editProject && (
+        <ProjectEditDialog
+          open={editProjectOpen}
+          onOpenChange={open => {
+            setEditProjectOpen(open)
+            if (!open) setEditProject(null)
+          }}
+          project={editProject}
+          defaultTab="workitems"
+          onSave={handleEditProjectSave}
+          onWorkItemsChange={async () => {
+            // Refresh my-tasks data after workitems change
+            if (user) {
+              const res = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+              if (res.ok) {
+                const data = await res.json()
+                setApiProjects(data.projects ?? [])
+              }
+            }
+          }}
+        />
+      )}
 
     </DashboardLayout>
   )

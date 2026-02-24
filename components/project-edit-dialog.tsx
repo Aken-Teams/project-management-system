@@ -48,6 +48,7 @@ interface ProjectEditDialogProps {
   onTeamChange?: () => void
   onRiskChange?: () => void
   onWorkItemsChange?: () => Promise<void> | void
+  defaultTab?: string
 }
 
 export interface ProjectEditData {
@@ -123,7 +124,7 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
   return 'low'
 }
 
-export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange }: ProjectEditDialogProps) {
+export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange, defaultTab }: ProjectEditDialogProps) {
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
     projectType: project.projectType,
@@ -142,7 +143,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState('basic')
+  const [activeTab, setActiveTab] = useState(defaultTab || 'basic')
 
   // ─── Team member state ────────────────────────────────────
   const [teamMembers, setTeamMembers] = useState(project.teamMembers ?? [])
