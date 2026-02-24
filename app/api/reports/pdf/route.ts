@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Calculate summary statistics
-    const totalTasks = projects.reduce((sum, p) => sum + p.tasks.length, 0)
+    // Calculate summary statistics (parent tasks only, exclude subtasks)
+    const totalTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId).length, 0)
     const doneTasks = projects.reduce(
-      (sum, p) => sum + p.tasks.filter(t => t.status === 'done').length,
+      (sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'done').length,
       0,
     )
     const totalMilestones = projects.reduce((sum, p) => sum + p.milestones.length, 0)
@@ -367,8 +367,8 @@ export async function POST(request: NextRequest) {
   <!-- Charts Section -->
   <div class="grid grid-3 avoid-break" style="margin-bottom: 12px;">
     ${(() => {
-      const inProgressTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => t.status === 'in_progress').length, 0)
-      const blockedTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => t.status === 'blocked').length, 0)
+      const inProgressTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'in_progress').length, 0)
+      const blockedTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'blocked').length, 0)
       const todoTasks = totalTasks - doneTasks - inProgressTasks - blockedTasks
 
       const donePercent = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0

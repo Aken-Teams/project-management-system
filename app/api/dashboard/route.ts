@@ -9,10 +9,10 @@ interface FeTask {
   endDate: string
 }
 
-function computeProjectProgress(tasks: FeTask[]): number {
-  if (tasks.length === 0) return 0
-  const total = tasks.reduce((sum, t) => sum + t.progress, 0)
-  return Math.round(total / tasks.length)
+function computeProjectProgress(milestones: { progress: number }[]): number {
+  if (milestones.length === 0) return 0
+  const total = milestones.reduce((sum, m) => sum + m.progress, 0)
+  return Math.round(total / milestones.length)
 }
 
 function computeProjectStatus(
@@ -148,15 +148,16 @@ export async function GET(request: NextRequest) {
     // ── Calculate actual status & progress for each project from tasks ──
     const projectsWithProgress = projects.map(p => {
       // Convert tasks to frontend format for status calculation
-      const feTasks = p.tasks.map(t => ({
+      const parentTasks = p.tasks.filter(t => !t.parentId)
+      const feTasks = parentTasks.map(t => ({
         status: t.status === 'in_progress' ? 'in-progress' : t.status,
         progress: t.progress,
         endDate: t.endDate.toISOString().split('T')[0],
       }))
 
-      // Compute actual status and progress from tasks
+      // Compute actual status and progress (parent tasks only + milestone-based progress)
       const actualStatus = computeProjectStatus(feTasks, p.endDate)
-      const actualProgress = computeProjectProgress(feTasks)
+      const actualProgress = computeProjectProgress(p.milestones)
 
       return { ...p, actualStatus, actualProgress }
     })

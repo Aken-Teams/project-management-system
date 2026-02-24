@@ -9,10 +9,10 @@ interface FeTask {
   endDate: string
 }
 
-function computeProjectProgress(tasks: FeTask[]): number {
-  if (tasks.length === 0) return 0
-  const total = tasks.reduce((sum, t) => sum + t.progress, 0)
-  return Math.round(total / tasks.length)
+function computeProjectProgress(milestones: { progress: number }[]): number {
+  if (milestones.length === 0) return 0
+  const total = milestones.reduce((sum, m) => sum + m.progress, 0)
+  return Math.round(total / milestones.length)
 }
 
 function computeProjectStatus(
@@ -158,25 +158,26 @@ export async function GET(request: NextRequest) {
 
     // ── Calculate actual status & progress for each project from tasks ──
     const projectsWithProgress = projects.map(p => {
-      // Convert tasks to frontend format for status calculation
-      const feTasks = p.tasks.map(t => ({
+      // Convert parent tasks only to frontend format for status calculation
+      const parentTasks = p.tasks.filter(t => !t.parentId)
+      const feTasks = parentTasks.map(t => ({
         status: t.status === 'in_progress' ? 'in-progress' : t.status,
         progress: t.progress,
         endDate: t.endDate.toISOString().split('T')[0],
       }))
 
-      // Compute actual status and progress from tasks
+      // Compute actual status (parent tasks only) and progress (milestone-based)
       const actualStatus = computeProjectStatus(feTasks, p.endDate)
-      const actualProgress = computeProjectProgress(feTasks)
+      const actualProgress = computeProjectProgress(p.milestones)
 
       return { ...p, actualStatus, actualProgress }
     })
 
-    // ── Aggregate statistics ──
-    const totalTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.length, 0)
-    const doneTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => t.status === 'done').length, 0)
-    const inProgressTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => t.status === 'in_progress').length, 0)
-    const blockedTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => t.status === 'blocked').length, 0)
+    // ── Aggregate statistics (parent tasks only) ──
+    const totalTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => !t.parentId).length, 0)
+    const doneTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => !t.parentId && t.status === 'done').length, 0)
+    const inProgressTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => !t.parentId && t.status === 'in_progress').length, 0)
+    const blockedTasks = projectsWithProgress.reduce((a, p) => a + p.tasks.filter(t => !t.parentId && t.status === 'blocked').length, 0)
     const todoTasks = totalTasks - doneTasks - inProgressTasks - blockedTasks
 
     const totalMilestones = projectsWithProgress.reduce((a, p) => a + p.milestones.length, 0)
@@ -227,10 +228,11 @@ export async function GET(request: NextRequest) {
 
     // ── Transform projects to frontend format ──
     const feProjects = projectsWithProgress.map(p => {
-      const doneTasks = p.tasks.filter(t => t.status === 'done').length
-      const inProgressTasks = p.tasks.filter(t => t.status === 'in_progress').length
-      const blockedTasks = p.tasks.filter(t => t.status === 'blocked').length
-      const todoTasks = p.tasks.filter(t => t.status === 'todo').length
+      const parentTasks = p.tasks.filter(t => !t.parentId)
+      const doneTasks = parentTasks.filter(t => t.status === 'done').length
+      const inProgressTasks = parentTasks.filter(t => t.status === 'in_progress').length
+      const blockedTasks = parentTasks.filter(t => t.status === 'blocked').length
+      const todoTasks = parentTasks.filter(t => t.status === 'todo').length
       const doneMilestones = p.milestones.filter(m => m.status === 'done').length
 
       // Find the Accountable (A) member from team, fallback to project owner
@@ -262,7 +264,7 @@ export async function GET(request: NextRequest) {
         budget: p.budget,
         budgetUsed: p.budgetUsed,
         teamSize: p.teamMembers.length,
-        totalTasks: p.tasks.length,
+        totalTasks: parentTasks.length,
         doneTasks,
         inProgressTasks,
         blockedTasks,

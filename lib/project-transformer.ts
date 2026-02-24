@@ -13,10 +13,10 @@ interface FeTask {
   endDate: string
 }
 
-function computeProjectProgress(tasks: FeTask[]): number {
-  if (tasks.length === 0) return 0
-  const total = tasks.reduce((sum, t) => sum + t.progress, 0)
-  return Math.round(total / tasks.length)
+function computeProjectProgress(milestones: { progress: number }[]): number {
+  if (milestones.length === 0) return 0
+  const total = milestones.reduce((sum, m) => sum + m.progress, 0)
+  return Math.round(total / milestones.length)
 }
 
 function computeProjectStatus(
@@ -316,8 +316,8 @@ export function dbProjectToFrontend(
     smartObjective,
     startDate: proj.startDate.toISOString().split('T')[0],
     endDate: proj.endDate.toISOString().split('T')[0],
-    status: computeProjectStatus(feTasks, proj.endDate),
-    progress: computeProjectProgress(feTasks),
+    status: computeProjectStatus(feTasks.filter(t => !t.parentId), proj.endDate),
+    progress: computeProjectProgress(feMilestones),
     budget: proj.budget,
     budgetUsed: proj.budgetUsed,
     owner: displayOwner,

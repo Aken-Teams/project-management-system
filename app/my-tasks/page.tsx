@@ -170,6 +170,7 @@ export default function MyTasksPage() {
   const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
   const [inlineSubtaskTitle, setInlineSubtaskTitle] = useState('')
   const [inlineSubtaskDays, setInlineSubtaskDays] = useState(1)
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   // PM project edit dialog
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
@@ -970,10 +971,32 @@ export default function MyTasksPage() {
                               const subtasks = task.subtasks || []
                               const isAddingSub = addingSubtaskForId === task.id
 
+                              const hasSubtasks = subtasks.length > 0
+                              const isSubExpanded = expandedTasks.has(task.id)
+
                               return (
                                 <div key={task.id}>
                                   {/* Parent task row */}
                                   <div className="flex items-center gap-0.5">
+                                    {/* Subtask expand/collapse toggle */}
+                                    {hasSubtasks ? (
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation()
+                                          setExpandedTasks(prev => {
+                                            const next = new Set(prev)
+                                            if (next.has(task.id)) next.delete(task.id)
+                                            else next.add(task.id)
+                                            return next
+                                          })
+                                        }}
+                                        className="h-5 w-5 flex items-center justify-center shrink-0 rounded hover:bg-muted/60 text-muted-foreground transition-transform"
+                                      >
+                                        <ChevronDown className={cn('h-3 w-3 transition-transform', !isSubExpanded && '-rotate-90')} />
+                                      </button>
+                                    ) : (
+                                      <div className="w-5 shrink-0" />
+                                    )}
                                     <button
                                       onClick={() => openTaskDialog(task, project)}
                                       className="flex-1 flex items-center gap-2 px-1 py-1.5 text-left transition-colors hover:bg-muted/40 rounded-sm min-w-0"
@@ -1007,6 +1030,7 @@ export default function MyTasksPage() {
                                           setAddingSubtaskForId(task.id)
                                           setInlineSubtaskTitle('')
                                           setInlineSubtaskDays(1)
+                                          setExpandedTasks(prev => new Set(prev).add(task.id))
                                         }
                                       }}
                                       className="h-6 w-6 flex items-center justify-center shrink-0 rounded hover:bg-muted/60 text-muted-foreground hover:text-primary transition-colors"
@@ -1015,6 +1039,15 @@ export default function MyTasksPage() {
                                       <Plus className="h-3 w-3" />
                                     </button>
                                   </div>
+                                  {/* Subtask count hint when collapsed */}
+                                  {hasSubtasks && !isSubExpanded && !isAddingSub && (
+                                    <button
+                                      onClick={() => setExpandedTasks(prev => new Set(prev).add(task.id))}
+                                      className="ml-12 text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
+                                    >
+                                      {subtasks.length} 個子任務
+                                    </button>
+                                  )}
                                   {/* Inline add subtask form */}
                                   {isAddingSub && (() => {
                                     const usedDays = subtasks.reduce((sum, s) => sum + (s.durationDays || 1), 0)
@@ -1076,8 +1109,8 @@ export default function MyTasksPage() {
                                       </div>
                                     )
                                   })()}
-                                  {/* Subtask rows — indented */}
-                                  {subtasks.map(sub => {
+                                  {/* Subtask rows — indented (collapsed by default) */}
+                                  {isSubExpanded && subtasks.map(sub => {
                                     // Build a Task-like object so subtask opens in the same dialog
                                     const subAsTask: Task = {
                                       id: sub.id,
@@ -1100,7 +1133,7 @@ export default function MyTasksPage() {
                                     const subStatus = computeTaskStatus(subAsTask, project.taskLogs)
                                     const subCompleted = !!sub.completedAt || sub.status === 'done'
                                     return (
-                                      <div key={sub.id} className="group/sub flex items-center ml-6 pr-1">
+                                      <div key={sub.id} className="group/sub flex items-center ml-10 pr-1">
                                         <button
                                           onClick={() => openTaskDialog(subAsTask, project)}
                                           className="flex-1 flex items-center gap-2 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm min-w-0"

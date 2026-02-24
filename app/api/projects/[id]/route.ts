@@ -35,7 +35,7 @@ export async function GET(
 
     // ── Auto-sync milestone statuses (now includes blocked) ──
     for (const ms of project.milestones) {
-      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id && !t.parentId)
       if (msTasks.length === 0) continue
       const correctStatus = computeMilestoneStatus(msTasks)
       const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)

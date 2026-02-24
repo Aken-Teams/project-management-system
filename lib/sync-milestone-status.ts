@@ -169,20 +169,39 @@ export async function autoProgressTasks(
  * Compute task progress from task-log coverage:
  *   progress = uniqueLogDates / taskDurationDays × 100  (capped at 100)
  * Completed tasks (completedAt set) are forced to 100%.
+ * Parent tasks with subtasks: progress = weighted avg of subtask progress (by durationDays).
  * Works on in-memory arrays; updates DB + patches objects in place.
  */
 export async function syncTaskProgressFromLogs(
-  tasks: { id: string; startDate: Date; endDate: Date; progress: number; completedAt: Date | null }[],
+  tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; progress: number; completedAt: Date | null }[],
   taskLogs: { taskId: string; logDate: Date }[],
 ): Promise<void> {
   const msPerDay = 1000 * 60 * 60 * 24
 
-  for (const task of tasks) {
-    let target: number
+  // First pass: compute progress for leaf tasks (subtasks + tasks without subtasks)
+  const subtasksByParent = new Map<string, typeof tasks>()
+  for (const t of tasks) {
+    if (t.parentId) {
+      const list = subtasksByParent.get(t.parentId) || []
+      list.push(t)
+      subtasksByParent.set(t.parentId, list)
+    }
+  }
 
+  for (const task of tasks) {
+    const subtasks = subtasksByParent.get(task.id)
+
+    let target: number
     if (task.completedAt) {
       target = 100
+    } else if (subtasks && subtasks.length > 0) {
+      // Parent task: weighted average of subtask progress by durationDays
+      const totalDays = subtasks.reduce((sum, s) => sum + (s.durationDays || 1), 0)
+      target = totalDays > 0
+        ? Math.round(subtasks.reduce((sum, s) => sum + s.progress * (s.durationDays || 1), 0) / totalDays)
+        : 0
     } else {
+      // Leaf task: compute from log coverage
       const durationDays = Math.max(1, Math.round((task.endDate.getTime() - task.startDate.getTime()) / msPerDay) + 1)
       const logDates = new Set(
         taskLogs
