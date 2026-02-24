@@ -934,53 +934,63 @@ export default function MyTasksPage() {
                               isMsCollapsed && '-rotate-90',
                             )} />
                             <span className="text-sm font-medium text-muted-foreground">{mg.milestoneName}</span>
-                            {isPM && milestone ? (
-                              <>
-                                <span className="text-[10px] font-mono text-muted-foreground">
-                                  {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                            {/* Date badge — unified style */}
+                            <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                              {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                            </Badge>
+                            {/* PM: pending delay or edit button */}
+                            {isPM && milestone && (
+                              msPendingDelay ? (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950/20">
+                                  審核中
+                                </Badge>
+                              ) : (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    const sortedMs = [...project.milestones].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                                    const msIdx = sortedMs.findIndex(m => m.id === mg.milestoneId)
+                                    const msStartDate = msIdx > 0
+                                      ? addOneDayStr(sortedMs[msIdx - 1].dueDate)
+                                      : (project.startDate || sortedMs[0]?.dueDate || '')
+                                    const nextMs = msIdx >= 0 && msIdx < sortedMs.length - 1 ? sortedMs[msIdx + 1] : null
+                                    setMsDateDialogData({
+                                      milestoneId: mg.milestoneId,
+                                      milestoneName: mg.milestoneName,
+                                      projectId: project.id,
+                                      projectName: project.name,
+                                      currentStartDate: msStartDate,
+                                      currentDueDate: milestone.dueDate,
+                                      nextMilestoneDueDate: nextMs?.dueDate ?? null,
+                                      nextMilestoneName: nextMs?.name ?? null,
+                                      proposedDate: milestone.dueDate,
+                                    })
+                                    setMsDateDialogOpen(true)
+                                  }}
+                                  className="inline-flex items-center gap-0.5 text-[10px] text-primary/70 hover:text-primary transition-colors group"
+                                  title="提出延期申請（需審核）"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  <span className="group-hover:underline">提出延期</span>
+                                </button>
+                              )
+                            )}
+                            {/* Progress indicator */}
+                            {milestone && (
+                              <span className="ml-auto flex items-center gap-1 shrink-0">
+                                <span className="text-[10px] font-medium tabular-nums" style={{ color: milestone.progress >= 100 ? 'var(--color-green-600)' : milestone.progress >= 50 ? 'var(--color-blue-600)' : undefined }}>
+                                  {milestone.progress}%
                                 </span>
-                                {msPendingDelay ? (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950/20">
-                                    審核中
-                                  </Badge>
-                                ) : (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation()
-                                      const sortedMs = [...project.milestones].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                                      const msIdx = sortedMs.findIndex(m => m.id === mg.milestoneId)
-                                      const msStartDate = msIdx > 0
-                                        ? addOneDayStr(sortedMs[msIdx - 1].dueDate)
-                                        : (project.startDate || sortedMs[0]?.dueDate || '')
-                                      const nextMs = msIdx >= 0 && msIdx < sortedMs.length - 1 ? sortedMs[msIdx + 1] : null
-                                      setMsDateDialogData({
-                                        milestoneId: mg.milestoneId,
-                                        milestoneName: mg.milestoneName,
-                                        projectId: project.id,
-                                        projectName: project.name,
-                                        currentStartDate: msStartDate,
-                                        currentDueDate: milestone.dueDate,
-                                        nextMilestoneDueDate: nextMs?.dueDate ?? null,
-                                        nextMilestoneName: nextMs?.name ?? null,
-                                        proposedDate: milestone.dueDate,
-                                      })
-                                      setMsDateDialogOpen(true)
-                                    }}
-                                    className="inline-flex items-center gap-0.5 text-[10px] text-primary/70 hover:text-primary transition-colors group"
-                                    title="提出延期申請（需審核）"
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                    <span className="group-hover:underline">提出延期</span>
-                                  </button>
-                                )}
-                                {milestone.progress > 0 && (
-                                  <span className="text-[10px] text-muted-foreground">{milestone.progress}%</span>
-                                )}
-                              </>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] font-mono px-1">
-                                {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                              </Badge>
+                                <span className="h-1 w-10 rounded-full bg-muted overflow-hidden">
+                                  <span
+                                    className={cn(
+                                      'block h-full rounded-full transition-all',
+                                      milestone.progress >= 100 ? 'bg-green-500' : milestone.progress >= 50 ? 'bg-blue-500' : 'bg-amber-500',
+                                    )}
+                                    style={{ width: `${Math.min(100, milestone.progress)}%` }}
+                                  />
+                                </span>
+                              </span>
                             )}
                           </div>
 
