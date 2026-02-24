@@ -57,6 +57,7 @@ import {
   Paperclip,
   Loader2,
   Pencil,
+  ChevronsUpDown,
   Trash2,
   Check,
   X,
@@ -254,6 +255,15 @@ export default function MyTasksPage() {
       else next.add(projectId)
       return next
     })
+  }
+
+  const allProjectsCollapsed = filteredGroups.length > 0 && filteredGroups.every(g => collapsedProjects.has(g.project.id))
+  const toggleAllProjects = () => {
+    if (allProjectsCollapsed) {
+      setCollapsedProjects(new Set())
+    } else {
+      setCollapsedProjects(new Set(filteredGroups.map(g => g.project.id)))
+    }
   }
 
   const openTaskDialog = (task: Task, project: MyTasksProject) => {
@@ -733,6 +743,19 @@ export default function MyTasksPage() {
           </div>
         )}
 
+        {/* Expand/Collapse All */}
+        {filteredGroups.length > 1 && (
+          <div className="flex justify-end">
+            <button
+              onClick={toggleAllProjects}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronsUpDown className="h-4 w-4" />
+              {allProjectsCollapsed ? '全部展開' : '全部收合'}
+            </button>
+          </div>
+        )}
+
         {/* Project Cards — 3 per row */}
         {filteredGroups.length === 0 ? (
           <Card className="p-8 text-center text-muted-foreground">
@@ -989,7 +1012,7 @@ export default function MyTasksPage() {
                                       <button
                                         key={sub.id}
                                         onClick={() => openTaskDialog(subAsTask, project)}
-                                        className="w-full flex items-center gap-2 ml-6 pr-1 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm"
+                                        className="w-full flex items-center gap-2 ml-6 pr-8 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm"
                                       >
                                         {getStatusDot(subStatus)}
                                         <span className={cn('text-xs flex-1 min-w-0 truncate', subCompleted && 'text-muted-foreground')}>
