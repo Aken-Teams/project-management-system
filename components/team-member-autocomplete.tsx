@@ -8,6 +8,7 @@ interface SearchResult {
   id: string
   name: string
   email: string
+  jobTitle: string
   organization: string
 }
 
@@ -169,6 +170,7 @@ export function TeamMemberAutocomplete({
                   <div className="truncate font-medium">{user.name}</div>
                   <div className="truncate text-sm text-muted-foreground">
                     {user.email}
+                    {user.jobTitle && ` · ${user.jobTitle}`}
                     {user.organization && ` · ${user.organization}`}
                   </div>
                 </div>

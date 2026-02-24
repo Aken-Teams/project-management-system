@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, X, Building2 } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,19 +13,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-// ─── Role color map ─────────────────────────────────────────
+// ─── Role color map (RACI) ───────────────────────────────────
 const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  pm:            { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
-  engineer:      { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  procurement:   { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
-  qa:            { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500' },
-  manufacturing: { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
-  designer:      { bg: 'bg-pink-50',   text: 'text-pink-700',   dot: 'bg-pink-500' },
-  other:         { bg: 'bg-slate-50',  text: 'text-slate-600',  dot: 'bg-slate-400' },
+  R: { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
+  A: { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
+  C: { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500' },
+  I: { bg: 'bg-slate-50',  text: 'text-slate-600',  dot: 'bg-slate-400' },
 }
 
 function RoleBadge({ role, label }: { role: string; label: string }) {
-  const c = ROLE_COLORS[role] || ROLE_COLORS.other
+  const c = ROLE_COLORS[role] || ROLE_COLORS.I
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${c.bg} ${c.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
@@ -39,6 +36,7 @@ export interface TeamMember {
   id: string
   name: string
   role: string
+  jobTitle?: string
   responsibility: string
   organization?: string
   email?: string
@@ -48,6 +46,7 @@ interface SearchResult {
   id: string
   name: string
   email: string
+  jobTitle: string
   organization: string
 }
 
@@ -60,7 +59,7 @@ export interface TeamMemberTableProps {
 }
 
 // ─── Column grid class ──────────────────────────────────────
-const GRID_COLS = 'grid grid-cols-[1fr_100px_140px_1fr_32px] gap-0 items-center'
+const GRID_COLS = 'grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center'
 
 // ─── NameAutocompleteInput (shared) ─────────────────────────
 function NameAutocompleteInput({
@@ -219,6 +218,7 @@ function NameAutocompleteInput({
                   <div className="truncate font-medium">{user.name}</div>
                   <div className="truncate text-sm text-muted-foreground">
                     {user.email}
+                    {user.jobTitle && ` · ${user.jobTitle}`}
                     {user.organization && ` · ${user.organization}`}
                   </div>
                 </div>
@@ -254,7 +254,7 @@ function MemberRow({
     <div className={`${GRID_COLS} px-3 py-1.5 hover:bg-muted/20 transition-colors text-sm border-t`}>
       {/* Name with avatar + autocomplete */}
       <div className="flex items-center gap-2 pr-2 min-w-0">
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).text}`}>
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.I).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.I).text}`}>
           {member.name.charAt(0)}
         </div>
         <NameAutocompleteInput
@@ -263,6 +263,7 @@ function MemberRow({
           onChange={(val) => onUpdate(member.id, 'name', val)}
           onSelect={(user) => {
             onUpdate(member.id, 'name', user.name)
+            onUpdate(member.id, 'jobTitle', user.jobTitle || '')
             onUpdate(member.id, 'organization', user.organization || '')
             onUpdate(member.id, 'email', user.email)
           }}
@@ -270,20 +271,28 @@ function MemberRow({
         />
       </div>
 
-      {/* Organization (read-only) */}
-      <div className="px-1 min-w-0">
-        {member.organization ? (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">{member.organization}</span>
-          </span>
-        ) : (
-          <span className="text-sm text-muted-foreground/40">—</span>
-        )}
+      {/* Job Title */}
+      <div className="px-1 min-w-0 text-center">
+        <Input
+          value={member.jobTitle || ''}
+          onChange={(e) => onUpdate(member.id, 'jobTitle', e.target.value)}
+          placeholder="—"
+          className="h-8 border-0 bg-transparent text-sm text-center focus-visible:ring-1 px-1"
+        />
+      </div>
+
+      {/* Organization */}
+      <div className="px-1 min-w-0 text-center">
+        <Input
+          value={member.organization || ''}
+          onChange={(e) => onUpdate(member.id, 'organization', e.target.value)}
+          placeholder="—"
+          className="h-8 border-0 bg-transparent text-sm text-center focus-visible:ring-1 px-1"
+        />
       </div>
 
       {/* Role */}
-      <div>
+      <div className="flex justify-center">
         <Select value={member.role} onValueChange={(v) => onUpdate(member.id, 'role', v)}>
           <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">
             <RoleBadge role={member.role} label={roleLabels[member.role] || member.role} />
@@ -335,7 +344,8 @@ function InlineMemberInput({
   onAdd: (member: TeamMember) => void
 }) {
   const [name, setName] = useState('')
-  const [role, setRole] = useState('engineer')
+  const [role, setRole] = useState('R')
+  const [jobTitle, setJobTitle] = useState('')
   const [responsibility, setResponsibility] = useState('')
   const [organization, setOrganization] = useState('')
   const [email, setEmail] = useState('')
@@ -346,12 +356,14 @@ function InlineMemberInput({
       id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: name.trim(),
       role,
+      jobTitle: jobTitle.trim() || undefined,
       responsibility: responsibility.trim(),
       organization: organization.trim() || undefined,
       email: email.trim() || undefined,
     })
     setName('')
-    setRole('engineer')
+    setRole('R')
+    setJobTitle('')
     setResponsibility('')
     setOrganization('')
     setEmail('')
@@ -371,9 +383,10 @@ function InlineMemberInput({
         <NameAutocompleteInput
           value={name}
           excludeEmails={excludeEmails}
-          onChange={(val) => { setName(val); setOrganization(''); setEmail('') }}
+          onChange={(val) => { setName(val); setJobTitle(''); setOrganization(''); setEmail('') }}
           onSelect={(user) => {
             setName(user.name)
+            setJobTitle(user.jobTitle || '')
             setOrganization(user.organization || '')
             setEmail(user.email)
           }}
@@ -383,18 +396,34 @@ function InlineMemberInput({
         />
       </div>
 
-      {/* Organization (read-only, auto-filled) */}
-      <div className="px-1 min-w-0">
-        {organization && (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">{organization}</span>
-          </span>
+      {/* Job Title (auto-filled, editable) */}
+      <div className="px-1 min-w-0 text-center">
+        {name.trim() && (
+          <Input
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="—"
+            className="h-8 border-0 bg-transparent text-sm text-center text-muted-foreground focus-visible:ring-1 px-1"
+          />
+        )}
+      </div>
+
+      {/* Organization (auto-filled, editable) */}
+      <div className="px-1 min-w-0 text-center">
+        {name.trim() && (
+          <Input
+            value={organization}
+            onChange={(e) => setOrganization(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="—"
+            className="h-8 border-0 bg-transparent text-sm text-center text-muted-foreground focus-visible:ring-1 px-1"
+          />
         )}
       </div>
 
       {/* Role */}
-      <div>
+      <div className="flex justify-center">
         {name.trim() && (
           <Select value={role} onValueChange={setRole}>
             <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">
@@ -459,8 +488,9 @@ export function TeamMemberTable({
         className={`${GRID_COLS} px-3 py-2.5 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide`}
       >
         <span>姓名</span>
-        <span>組織</span>
-        <span>角色</span>
+        <span className="text-center">職稱</span>
+        <span className="text-center">組織</span>
+        <span className="text-center">角色</span>
         <span className="pl-1.5">負責工作項目</span>
         <span />
       </div>

@@ -233,9 +233,9 @@ export async function GET(request: NextRequest) {
       const todoTasks = p.tasks.filter(t => t.status === 'todo').length
       const doneMilestones = p.milestones.filter(m => m.status === 'done').length
 
-      // Find the PM (project manager) from team members, fallback to project owner
-      const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
-      const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+      // Find the Accountable (A) member from team, fallback to project owner
+      const accountableMember = p.teamMembers.find((tm) => tm.role === 'A')
+      const displayOwner = accountableMember ? accountableMember.user.name : p.owner.name
 
       // Calculate team workload for this project
       const projectWorkloadMap = new Map<string, { total: number; done: number }>()

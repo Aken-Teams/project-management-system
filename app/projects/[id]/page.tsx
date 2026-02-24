@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -1075,7 +1075,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               團隊
             </div>
             <span className="text-xl font-bold">{project.team.length}</span>
-            <div className="text-sm text-muted-foreground">負責人：{project.teamMembers?.find(m => m.role === 'pm')?.name ?? project.owner}</div>
+            <div className="text-sm text-muted-foreground">當責：{project.teamMembers?.find(m => m.role === 'A')?.name ?? project.owner}</div>
           </div>
 
           <div className="flex-1 px-4 py-3">
@@ -1245,11 +1245,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       團隊成員
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'other' as const, responsibility: '' }))).map(member => {
-                        const isPm = member.role === 'pm'
+                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).map(member => {
+                        const roleLabel = TEAM_ROLE_LABELS[member.role as TeamRole] || member.role
+                        const isAccountable = member.role === 'A'
                         return (
-                          <Badge key={member.id ?? member.name} variant={isPm ? 'default' : 'secondary'} className="text-sm">
-                            {member.name}{isPm && ' (負責人)'}
+                          <Badge key={member.id ?? member.name} variant={isAccountable ? 'default' : 'secondary'} className="text-sm">
+                            {member.name}
+                            {member.jobTitle && <span className="text-muted-foreground ml-1">({member.jobTitle})</span>}
+                            <span className="ml-1 opacity-70">{roleLabel}</span>
                           </Badge>
                         )
                       })}

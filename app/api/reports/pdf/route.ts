@@ -667,6 +667,7 @@ export async function POST(request: NextRequest) {
               <thead>
                 <tr>
                   <th>姓名</th>
+                  <th>職稱</th>
                   <th>Email</th>
                   <th>角色</th>
                   <th>職責</th>
@@ -676,8 +677,9 @@ export async function POST(request: NextRequest) {
                 ${project.teamMembers.map(tm => `
                   <tr>
                     <td>${tm.user.name}</td>
+                    <td>${tm.jobTitle || ''}</td>
                     <td>${tm.user.email}</td>
-                    <td>${tm.role === 'pm' ? 'PM' : tm.role === 'engineer' ? '工程師' : tm.role === 'qa' ? 'QA' : tm.role}</td>
+                    <td>${tm.role === 'R' ? '負責 (R)' : tm.role === 'A' ? '當責 (A)' : tm.role === 'C' ? '諮詢 (C)' : tm.role === 'I' ? '知會 (I)' : tm.role}</td>
                     <td>${tm.responsibility}</td>
                   </tr>
                 `).join('')}

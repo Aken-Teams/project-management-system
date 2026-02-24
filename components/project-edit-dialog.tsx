@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, Building2, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, TimerReset } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, TimerReset } from 'lucide-react'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -76,19 +76,16 @@ const EMPTY_SMART: SmartObjective = {
   timeBound: '',
 }
 
-// ─── Role color map ─────────────────────────────────────────
+// ─── Role color map (RACI) ───────────────────────────────────
 const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  pm:            { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
-  engineer:      { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  procurement:   { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
-  qa:            { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500' },
-  manufacturing: { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
-  designer:      { bg: 'bg-pink-50',   text: 'text-pink-700',   dot: 'bg-pink-500' },
-  other:         { bg: 'bg-slate-50',  text: 'text-slate-600',  dot: 'bg-slate-400' },
+  R: { bg: 'bg-blue-50',   text: 'text-blue-700',   dot: 'bg-blue-500' },
+  A: { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
+  C: { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500' },
+  I: { bg: 'bg-slate-50',  text: 'text-slate-600',  dot: 'bg-slate-400' },
 }
 
 function RoleBadge({ role, label }: { role: string; label: string }) {
-  const c = ROLE_COLORS[role] || ROLE_COLORS.other
+  const c = ROLE_COLORS[role] || ROLE_COLORS.I
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${c.bg} ${c.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
@@ -415,14 +412,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // ─── Team member API calls ────────────────────────────────
 
-  const handleAddMember = useCallback(async (user: { name: string; email?: string }, role: string, responsibility: string) => {
+  const handleAddMember = useCallback(async (user: { name: string; email?: string }, role: string, jobTitle: string, organization: string, responsibility: string) => {
     setTeamError('')
     setTeamLoading('adding')
     try {
       const res = await fetch(`/api/projects/${project.id}/team`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: user.name, email: user.email, role, responsibility }),
+        body: JSON.stringify({ name: user.name, email: user.email, role, jobTitle, organization, responsibility }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -439,7 +436,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
   }, [project.id, onTeamChange])
 
-  const handleUpdateMember = useCallback(async (memberId: string, field: 'role' | 'responsibility', value: string) => {
+  const handleUpdateMember = useCallback(async (memberId: string, field: 'role' | 'jobTitle' | 'organization' | 'responsibility', value: string) => {
     setTeamError('')
     setTeamLoading(memberId)
     try {
@@ -858,10 +855,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           <TabsContent value="team" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
             <div className="rounded-lg border overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[1fr_80px_140px_1fr_32px] gap-0 items-center px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide">
+              <div className="grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide">
                 <span>姓名</span>
-                <span>組織</span>
-                <span>角色</span>
+                <span className="text-center">職稱</span>
+                <span className="text-center">組織</span>
+                <span className="text-center">角色</span>
                 <span className="pl-1.5">負責工作項目</span>
                 <span />
               </div>
@@ -870,30 +868,60 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               {teamMembers.map((member) => (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[1fr_80px_140px_1fr_32px] gap-0 items-center px-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm"
+                  className="grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center px-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm"
                 >
                   {/* Name */}
                   <div className="flex items-center gap-2 pr-2 min-w-0">
-                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.other).text}`}>
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${(ROLE_COLORS[member.role] || ROLE_COLORS.I).bg} ${(ROLE_COLORS[member.role] || ROLE_COLORS.I).text}`}>
                       {member.name.charAt(0)}
                     </div>
                     <span className="truncate font-medium">{member.name}</span>
                   </div>
 
+                  {/* Job Title */}
+                  <div className="px-1 min-w-0 text-center">
+                    <Input
+                      value={member.jobTitle || ''}
+                      onChange={(e) => {
+                        setTeamMembers(prev => prev.map(m =>
+                          m.id === member.id ? { ...m, jobTitle: e.target.value } : m
+                        ))
+                      }}
+                      onBlur={(e) => {
+                        const original = project.teamMembers?.find(m => m.id === member.id)
+                        if (original && (original.jobTitle || '') !== e.target.value) {
+                          handleUpdateMember(member.id, 'jobTitle', e.target.value)
+                        }
+                      }}
+                      placeholder="—"
+                      className="h-8 border-0 bg-transparent text-sm text-center focus-visible:ring-1 px-1"
+                      disabled={teamLoading === member.id}
+                    />
+                  </div>
+
                   {/* Organization */}
-                  <div className="px-1 min-w-0">
-                    {member.organization ? (
-                      <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
-                        <Building2 className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{member.organization}</span>
-                      </span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground/40">—</span>
-                    )}
+                  <div className="px-1 min-w-0 text-center">
+                    <Input
+                      value={member.organization || ''}
+                      onChange={(e) => {
+                        setTeamMembers(prev => prev.map(m =>
+                          m.id === member.id ? { ...m, organization: e.target.value } : m
+                        ))
+                      }}
+                      onBlur={(e) => {
+                        const original = project.teamMembers?.find(m => m.id === member.id)
+                        if (original && (original.organization || '') !== e.target.value) {
+                          handleUpdateMember(member.id, 'organization', e.target.value)
+                        }
+                      }}
+                      placeholder="—"
+                      className="h-8 border-0 bg-transparent text-sm text-center focus-visible:ring-1 px-1"
+                      disabled={teamLoading === member.id}
+                    />
                   </div>
 
                   {/* Role */}
-                  <div>
+                  <div className="flex justify-center">
                     <Select
                       value={member.role}
                       onValueChange={(v) => handleUpdateMember(member.id, 'role', v)}
@@ -1146,22 +1174,24 @@ function TeamMemberAddRow({
   loading,
 }: {
   existingEmails: Set<string>
-  onAdd: (user: { name: string; email?: string }, role: string, responsibility: string) => void
+  onAdd: (user: { name: string; email?: string }, role: string, jobTitle: string, organization: string, responsibility: string) => void
   loading: boolean
 }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [jobTitle, setJobTitle] = useState('')
   const [organization, setOrganization] = useState('')
-  const [role, setRole] = useState<string>('engineer')
+  const [role, setRole] = useState<string>('R')
   const [responsibility, setResponsibility] = useState('')
 
   const handleAdd = () => {
     if (!name.trim()) return
-    onAdd({ name: name.trim(), email: email || undefined }, role, responsibility.trim())
+    onAdd({ name: name.trim(), email: email || undefined }, role, jobTitle.trim(), organization.trim(), responsibility.trim())
     setName('')
     setEmail('')
+    setJobTitle('')
     setOrganization('')
-    setRole('engineer')
+    setRole('R')
     setResponsibility('')
   }
 
@@ -1173,15 +1203,16 @@ function TeamMemberAddRow({
   }
 
   return (
-    <div className="grid grid-cols-[1fr_80px_140px_1fr_32px] gap-0 items-center px-3 py-1 border-t">
+    <div className="grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center px-3 py-1 border-t">
       {/* Name with autocomplete */}
       <div className="pr-2">
         <TeamMemberAutocomplete
           value={name}
-          onChange={(val: string) => { setName(val); setEmail(''); setOrganization('') }}
-          onSelect={(user: { name: string; email: string; organization: string }) => {
+          onChange={(val: string) => { setName(val); setEmail(''); setJobTitle(''); setOrganization('') }}
+          onSelect={(user: { name: string; email: string; jobTitle?: string; organization: string }) => {
             setName(user.name)
             setEmail(user.email)
+            setJobTitle(user.jobTitle || '')
             setOrganization(user.organization || '')
           }}
           onKeyDown={handleKeyDown}
@@ -1191,18 +1222,34 @@ function TeamMemberAddRow({
         />
       </div>
 
-      {/* Organization (auto-filled, read-only) */}
-      <div className="px-1 min-w-0">
-        {organization && (
-          <span className="flex items-center gap-1 text-sm text-muted-foreground truncate">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">{organization}</span>
-          </span>
+      {/* Job Title (auto-filled, editable) */}
+      <div className="px-1 min-w-0 text-center">
+        {name.trim() && (
+          <Input
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="—"
+            className="h-8 border-0 bg-transparent text-sm text-center text-muted-foreground focus-visible:ring-1 px-1"
+          />
+        )}
+      </div>
+
+      {/* Organization (auto-filled, editable) */}
+      <div className="px-1 min-w-0 text-center">
+        {name.trim() && (
+          <Input
+            value={organization}
+            onChange={(e) => setOrganization(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="—"
+            className="h-8 border-0 bg-transparent text-sm text-center text-muted-foreground focus-visible:ring-1 px-1"
+          />
         )}
       </div>
 
       {/* Role */}
-      <div>
+      <div className="flex justify-center">
         {name.trim() && (
           <Select value={role} onValueChange={setRole}>
             <SelectTrigger className="h-8 border-0 bg-transparent text-sm focus:ring-1 px-0.5 [&>span]:overflow-visible">

@@ -155,22 +155,20 @@ export interface Risk {
   status: 'open' | 'mitigated' | 'closed'
 }
 
-export type TeamRole = 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other'
+export type TeamRole = 'R' | 'A' | 'C' | 'I'
 
 export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
-  'pm': '專案經理 (PM)',
-  'engineer': '工程師',
-  'procurement': '採購',
-  'qa': '品保',
-  'manufacturing': '製造',
-  'designer': '設計',
-  'other': '其他',
+  'R': '負責 (R)',
+  'A': '當責 (A)',
+  'C': '諮詢 (C)',
+  'I': '知會 (I)',
 }
 
 export interface TeamMember {
   id: string
   name: string
   email?: string
+  jobTitle?: string
   organization?: string
   role: TeamRole
   responsibility: string

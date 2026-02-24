@@ -65,7 +65,7 @@ interface CreateProjectBody {
   budget: number
   ownerName: string
   team: string[]
-  teamMembers?: { name: string; role: string; responsibility: string }[]
+  teamMembers?: { name: string; role: string; jobTitle?: string; organization?: string; responsibility: string }[]
   milestones: { id: string; name: string; dueDate: string }[]
   tasks?: {
     milestoneId: string
@@ -351,13 +351,17 @@ export async function POST(request: NextRequest) {
               },
             },
             update: {
-              role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+              role: tm.role as 'R' | 'A' | 'C' | 'I',
+              jobTitle: tm.jobTitle?.trim() || '',
+              organization: tm.organization?.trim() || '',
               responsibility: tm.responsibility || '',
             },
             create: {
               projectId: proj.id,
               userId: memberUser.id,
-              role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+              role: tm.role as 'R' | 'A' | 'C' | 'I',
+              jobTitle: tm.jobTitle?.trim() || '',
+              organization: tm.organization?.trim() || '',
               responsibility: tm.responsibility || '',
             },
           })

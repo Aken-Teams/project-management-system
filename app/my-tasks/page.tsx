@@ -178,7 +178,7 @@ export default function MyTasksPage() {
     const result: { project: MyTasksProject; milestoneGroups: MilestoneTaskGroup[]; completedCount: number; totalCount: number; isPM: boolean }[] = []
 
     apiProjects.forEach(p => {
-      const isPM = p.userRole === 'pm'
+      const isPM = p.userRole === 'A'
       // PM sees all top-level tasks; members see only their assigned tasks
       const visibleTasks = isPM
         ? p.tasks.filter(t => !t.parentId)
@@ -756,7 +756,7 @@ export default function MyTasksPage() {
                         isCollapsed && '-rotate-90',
                       )} />
                       {project.name}
-                      {isPM && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">PM</Badge>}
+                      {isPM && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">當責</Badge>}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">{pCompleted}/{pTotal}</span>

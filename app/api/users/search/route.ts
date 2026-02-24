@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         email: true,
+        jobTitle: true,
         organization: true,
       },
       take: limit,

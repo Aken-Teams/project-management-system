@@ -125,8 +125,10 @@ export function dbProjectToFrontend(
     }[]
     teamMembers: {
       id: string
-      user: { name: string; email: string; organization: string }
+      user: { name: string; email: string; jobTitle: string; organization: string }
       role: string
+      jobTitle: string
+      organization: string
       responsibility: string
     }[]
     weeklyUpdates: {
@@ -294,9 +296,9 @@ export function dbProjectToFrontend(
     createdAt: tl.createdAt.toISOString(),
   }))
 
-  // Find the PM (project manager) from team members, fallback to project owner
-  const pmMember = proj.teamMembers.find((tm) => tm.role === 'pm')
-  const displayOwner = pmMember ? pmMember.user.name : proj.owner.name
+  // Find the Accountable (A) member from team, fallback to project owner
+  const accountableMember = proj.teamMembers.find((tm) => tm.role === 'A')
+  const displayOwner = accountableMember ? accountableMember.user.name : proj.owner.name
 
   return {
     id: proj.id,
@@ -324,8 +326,9 @@ export function dbProjectToFrontend(
       id: tm.id,
       name: tm.user.name,
       email: tm.user.email,
-      organization: tm.user.organization || '',
-      role: tm.role as 'pm' | 'engineer' | 'procurement' | 'qa' | 'manufacturing' | 'designer' | 'other',
+      jobTitle: tm.jobTitle || tm.user.jobTitle || '',
+      organization: tm.organization || tm.user.organization || '',
+      role: tm.role as 'R' | 'A' | 'C' | 'I',
       responsibility: tm.responsibility,
     })),
     milestones: feMilestones,

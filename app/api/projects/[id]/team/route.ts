@@ -12,6 +12,8 @@ interface AddMemberBody {
   name?: string
   email?: string
   role: string
+  jobTitle?: string
+  organization?: string
   responsibility?: string
 }
 
@@ -61,6 +63,8 @@ export async function POST(
         projectId: id,
         userId,
         role: toDbEnum<DbTeamRole>(body.role),
+        jobTitle: body.jobTitle?.trim() || '',
+        organization: body.organization?.trim() || '',
         responsibility: body.responsibility?.trim() || '',
       },
       include: { user: true },
@@ -69,6 +73,9 @@ export async function POST(
     return NextResponse.json({
       id: member.id,
       name: member.user.name,
+      email: member.user.email,
+      jobTitle: member.jobTitle,
+      organization: member.organization || member.user.organization || '',
       role: body.role,
       responsibility: member.responsibility,
     }, { status: 201 })

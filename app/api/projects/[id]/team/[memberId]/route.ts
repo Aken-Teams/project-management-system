@@ -9,6 +9,8 @@ type RouteContext = { params: Promise<{ id: string; memberId: string }> }
 
 interface UpdateMemberBody {
   role?: string
+  jobTitle?: string
+  organization?: string
   responsibility?: string
 }
 
@@ -31,6 +33,12 @@ export async function PUT(
     if (body.role !== undefined) {
       data.role = toDbEnum<DbTeamRole>(body.role)
     }
+    if (body.jobTitle !== undefined) {
+      data.jobTitle = body.jobTitle.trim()
+    }
+    if (body.organization !== undefined) {
+      data.organization = body.organization.trim()
+    }
     if (body.responsibility !== undefined) {
       data.responsibility = body.responsibility.trim()
     }
@@ -48,6 +56,9 @@ export async function PUT(
     return NextResponse.json({
       id: updated.id,
       name: updated.user.name,
+      email: updated.user.email,
+      jobTitle: updated.jobTitle,
+      organization: updated.organization || updated.user.organization || '',
       role: body.role ?? updated.role,
       responsibility: updated.responsibility,
     })

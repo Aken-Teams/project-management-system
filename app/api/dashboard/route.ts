@@ -180,9 +180,9 @@ export async function GET(request: NextRequest) {
 
     // ── Transform projects to frontend format ──
     const feProjects = projectsWithProgress.map(p => {
-      // Find the PM (project manager) from team members, fallback to project owner
-      const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
-      const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+      // Find the Accountable (A) member from team, fallback to project owner
+      const accountableMember = p.teamMembers.find((tm) => tm.role === 'A')
+      const displayOwner = accountableMember ? accountableMember.user.name : p.owner.name
 
       return {
         id: p.id,
@@ -275,8 +275,8 @@ export async function GET(request: NextRequest) {
         return !hasThisWeekLog
       })
       .map(p => {
-        const pmMember = p.teamMembers.find((tm) => tm.role === 'pm')
-        const displayOwner = pmMember ? pmMember.user.name : p.owner.name
+        const accountableMember = p.teamMembers.find((tm) => tm.role === 'A')
+        const displayOwner = accountableMember ? accountableMember.user.name : p.owner.name
 
         return {
           id: p.id,
