@@ -111,6 +111,7 @@ export function dbProjectToFrontend(
       progress: number
       completedAt: Date | null
       completedBy: string | null
+      parentId: string | null
       dependsOn: { prerequisiteId: string }[]
     }[]
     risks: {
@@ -215,6 +216,7 @@ export function dbProjectToFrontend(
     progress: t.progress,
     ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
     ...(t.completedBy ? { completedBy: t.completedBy } : {}),
+    ...(t.parentId ? { parentId: t.parentId } : {}),
   }))
 
   const feRisks = proj.risks.map((r) => ({

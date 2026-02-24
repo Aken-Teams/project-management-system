@@ -218,7 +218,7 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     return weekMap.get(weekMonday)!
   }
 
-  project.tasks.forEach(task => {
+  project.tasks.filter(t => !t.parentId).forEach(task => {
     if (task.completedAt) {
       const monday = getWeekMonday(task.completedAt)
       const milestone = project.milestones.find(m => m.id === task.milestoneId)
@@ -302,7 +302,7 @@ function generateMockAIReport(
     report += `\n`
   }
   report += `### 下一步\n`
-  const nextTasks = project.tasks.filter(t => t.status === 'in-progress' || t.status === 'todo').slice(0, 3)
+  const nextTasks = project.tasks.filter(t => !t.parentId && (t.status === 'in-progress' || t.status === 'todo')).slice(0, 3)
   if (nextTasks.length > 0) {
     nextTasks.forEach(t => { report += `- ${t.title}（${t.assignee}）\n` })
   } else {

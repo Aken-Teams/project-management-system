@@ -149,9 +149,10 @@ export default function MyTasksPage() {
     nextMilestoneName: string | null
     proposedDate: string
   } | null>(null)
-  const [addingSubtask, setAddingSubtask] = useState(false)
-  const [subtaskTitle, setSubtaskTitle] = useState('')
-  const [subtaskAssignee, setSubtaskAssignee] = useState('')
+  // Inline subtask creation on card
+  const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
+  const [inlineSubtaskTitle, setInlineSubtaskTitle] = useState('')
+  const [inlineSubtaskWeeks, setInlineSubtaskWeeks] = useState(1)
   // PM project edit dialog
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
@@ -267,9 +268,6 @@ export default function MyTasksPage() {
     setAttachments([])
     setIsListening(false)
     setEditingLogId(null)
-    setAddingSubtask(false)
-    setSubtaskTitle('')
-    setSubtaskAssignee('')
     setDialogOpen(true)
   }
 
@@ -388,24 +386,23 @@ export default function MyTasksPage() {
     if (!res.ok) throw new Error('儲存失敗')
   }
 
-  // ── Add subtask to a parent task ──
-  const handleAddSubtask = async () => {
-    if (!dialogTask || !subtaskTitle.trim()) return
-    const { project, task } = dialogTask
+  // ── Add subtask inline on card ──
+  const handleAddSubtaskInline = async (parentTask: Task, project: MyTasksProject) => {
+    if (!inlineSubtaskTitle.trim() || !user) return
 
     try {
       const res = await fetch(`/api/projects/${project.id}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          milestoneId: task.milestoneId,
-          parentId: task.id,
-          title: subtaskTitle.trim(),
-          assignee: subtaskAssignee.trim() || task.assignee,
+          milestoneId: parentTask.milestoneId,
+          parentId: parentTask.id,
+          title: inlineSubtaskTitle.trim(),
+          assignee: user.name,
           priority: 'medium',
-          startDate: task.startDate,
-          endDate: task.endDate,
-          durationWeeks: 1,
+          startDate: parentTask.startDate,
+          endDate: parentTask.endDate,
+          durationWeeks: inlineSubtaskWeeks,
         }),
       })
       if (!res.ok) {
@@ -413,22 +410,21 @@ export default function MyTasksPage() {
         throw new Error(data.error || '新增子任務失敗')
       }
       const newSubtask = await res.json()
-      // Optimistic update
       setApiProjects(prev => prev.map(p =>
         p.id === project.id
           ? {
               ...p,
               tasks: p.tasks.map(t =>
-                t.id === task.id
+                t.id === parentTask.id
                   ? { ...t, subtasks: [...(t.subtasks || []), { ...newSubtask, status: newSubtask.status === 'in_progress' ? 'in-progress' : newSubtask.status }] }
                   : t
               ),
             }
           : p
       ))
-      setSubtaskTitle('')
-      setSubtaskAssignee('')
-      setAddingSubtask(false)
+      setInlineSubtaskTitle('')
+      setInlineSubtaskWeeks(1)
+      setAddingSubtaskForId(null)
     } catch (err) {
       alert(err instanceof Error ? err.message : '新增子任務失敗')
     }
@@ -847,55 +843,148 @@ export default function MyTasksPage() {
                             )}
                           </div>
 
-                          {/* Tasks — compact lines */}
+                          {/* Tasks + Subtasks — compact lines */}
                           <div className="divide-y divide-border/40">
                             {mg.tasks.map(task => {
                               const status = computeTaskStatus(task, project.taskLogs)
                               const days = getDaysUntilDeadline(task)
                               const isCompleted = !!task.completedAt
                               const taskPendingDelay = (project.pendingDelayMilestoneIds || []).includes(task.milestoneId)
+                              const subtasks = task.subtasks || []
+                              const isAddingSub = addingSubtaskForId === task.id
 
                               return (
-                                <button
-                                  key={task.id}
-                                  onClick={() => openTaskDialog(task, project)}
-                                  className="w-full flex items-center gap-2 px-1 py-1.5 text-left transition-colors hover:bg-muted/40 rounded-sm"
-                                >
-                                  {getStatusDot(status)}
-                                  <span className={cn(
-                                    'text-sm flex-1 min-w-0 truncate',
-                                    isCompleted && 'text-muted-foreground',
-                                  )}>
-                                    {task.title}
-                                  </span>
-                                  {/* PM view: show assignee */}
-                                  {isPM && task.assignee && (
-                                    <span className="text-[11px] text-muted-foreground shrink-0 max-w-[60px] truncate">
-                                      {task.assignee}
-                                    </span>
+                                <div key={task.id}>
+                                  {/* Parent task row */}
+                                  <div className="flex items-center gap-0.5">
+                                    <button
+                                      onClick={() => openTaskDialog(task, project)}
+                                      className="flex-1 flex items-center gap-2 px-1 py-1.5 text-left transition-colors hover:bg-muted/40 rounded-sm min-w-0"
+                                    >
+                                      {getStatusDot(status)}
+                                      <span className={cn('text-sm flex-1 min-w-0 truncate', isCompleted && 'text-muted-foreground')}>
+                                        {task.title}
+                                      </span>
+                                      {isPM && task.assignee && (
+                                        <span className="text-[11px] text-muted-foreground shrink-0 max-w-[60px] truncate">{task.assignee}</span>
+                                      )}
+                                      {taskPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? (
+                                        <span className="text-[11px] text-amber-600 font-medium shrink-0">延期申請中</span>
+                                      ) : status === 'overdue' ? (
+                                        <span className="text-[11px] text-destructive font-medium shrink-0">逾期{Math.abs(days)}天</span>
+                                      ) : status === 'overdue-not-started' ? (
+                                        <span className="text-[11px] text-orange-600 font-medium shrink-0">逾期未開始</span>
+                                      ) : null}
+                                      {status === 'at-risk' && (
+                                        <span className="text-[11px] text-amber-600 font-medium shrink-0">剩{days}天</span>
+                                      )}
+                                      {isCompleted && <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />}
+                                    </button>
+                                    {/* Add subtask button */}
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation()
+                                        if (isAddingSub) {
+                                          setAddingSubtaskForId(null)
+                                        } else {
+                                          setAddingSubtaskForId(task.id)
+                                          setInlineSubtaskTitle('')
+                                          setInlineSubtaskWeeks(1)
+                                        }
+                                      }}
+                                      className="h-6 w-6 flex items-center justify-center shrink-0 rounded hover:bg-muted/60 text-muted-foreground hover:text-primary transition-colors"
+                                      title="新增子任務"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  {/* Inline add subtask form */}
+                                  {isAddingSub && (
+                                    <div className="ml-6 flex items-center gap-1.5 py-1 px-1">
+                                      <div className="h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0" />
+                                      <input
+                                        type="text"
+                                        placeholder="子任務名稱"
+                                        value={inlineSubtaskTitle}
+                                        onChange={e => setInlineSubtaskTitle(e.target.value)}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter' && inlineSubtaskTitle.trim()) handleAddSubtaskInline(task, project)
+                                          if (e.key === 'Escape') setAddingSubtaskForId(null)
+                                        }}
+                                        className="flex-1 text-sm border rounded px-2 py-1 bg-background min-w-0"
+                                        autoFocus
+                                      />
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        max={52}
+                                        value={inlineSubtaskWeeks}
+                                        onChange={e => setInlineSubtaskWeeks(Number(e.target.value) || 1)}
+                                        className="w-12 text-xs border rounded px-1.5 py-1 bg-background text-center"
+                                        title="週數"
+                                      />
+                                      <span className="text-sm text-muted-foreground shrink-0">週</span>
+                                      <Button
+                                        size="sm"
+                                        className="h-6 text-xs px-2"
+                                        disabled={!inlineSubtaskTitle.trim()}
+                                        onClick={() => handleAddSubtaskInline(task, project)}
+                                      >
+                                        新增
+                                      </Button>
+                                      <button
+                                        onClick={() => setAddingSubtaskForId(null)}
+                                        className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
                                   )}
-                                  {taskPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? (
-                                    <span className="text-sm text-amber-600 font-medium shrink-0">
-                                      延期申請中
-                                    </span>
-                                  ) : status === 'overdue' ? (
-                                    <span className="text-sm text-destructive font-medium shrink-0">
-                                      逾期{Math.abs(days)}天
-                                    </span>
-                                  ) : status === 'overdue-not-started' ? (
-                                    <span className="text-sm text-orange-600 font-medium shrink-0">
-                                      逾期未開始
-                                    </span>
-                                  ) : null}
-                                  {status === 'at-risk' && (
-                                    <span className="text-sm text-amber-600 font-medium shrink-0">
-                                      剩{days}天
-                                    </span>
-                                  )}
-                                  {isCompleted && (
-                                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                                  )}
-                                </button>
+                                  {/* Subtask rows — indented */}
+                                  {subtasks.map(sub => {
+                                    const subStatus = sub.status === 'done' ? 'completed' as const
+                                      : sub.status === 'in-progress' ? 'on-track' as const
+                                      : sub.status === 'blocked' ? 'overdue' as const
+                                      : 'not-started' as const
+                                    const subCompleted = !!sub.completedAt || sub.status === 'done'
+                                    // Build a Task-like object so subtask opens in the same dialog
+                                    const subAsTask: Task = {
+                                      id: sub.id,
+                                      projectId: task.projectId,
+                                      milestoneId: task.milestoneId,
+                                      title: sub.title,
+                                      description: '',
+                                      assignee: sub.assignee,
+                                      status: sub.status,
+                                      priority: sub.priority,
+                                      durationWeeks: 1,
+                                      startDate: sub.startDate,
+                                      endDate: sub.endDate,
+                                      dependencies: [],
+                                      progress: sub.progress,
+                                      parentId: task.id,
+                                      completedAt: sub.completedAt,
+                                      completedBy: sub.completedBy,
+                                    }
+                                    return (
+                                      <button
+                                        key={sub.id}
+                                        onClick={() => openTaskDialog(subAsTask, project)}
+                                        className="w-full flex items-center gap-2 ml-6 pr-1 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm"
+                                      >
+                                        {getStatusDot(subStatus)}
+                                        <span className={cn('text-xs flex-1 min-w-0 truncate', subCompleted && 'text-muted-foreground')}>
+                                          {sub.title}
+                                        </span>
+                                        {isPM && sub.assignee && (
+                                          <span className="text-[10px] text-muted-foreground shrink-0 max-w-[50px] truncate">{sub.assignee}</span>
+                                        )}
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{sub.progress}%</Badge>
+                                        {subCompleted && <CheckCircle2 className="h-2.5 w-2.5 text-green-500 shrink-0" />}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
                               )
                             })}
                           </div>
@@ -1397,76 +1486,7 @@ export default function MyTasksPage() {
                         </div>
                       )}
 
-                      {/* Subtasks */}
-                      {!task.parentId && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="h-5 w-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30">
-                                <ListChecks className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                              </div>
-                              <span className="text-sm font-medium text-muted-foreground">子任務</span>
-                              {task.subtasks && task.subtasks.length > 0 && (
-                                <span className="text-xs text-muted-foreground">
-                                  {task.subtasks.filter(s => s.completedAt || s.status === 'done').length}/{task.subtasks.length}
-                                </span>
-                              )}
-                            </div>
-                            {!addingSubtask && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1 text-xs h-6 px-2"
-                                onClick={() => setAddingSubtask(true)}
-                              >
-                                <Plus className="h-3 w-3" /> 新增
-                              </Button>
-                            )}
-                          </div>
-                          {/* Add subtask form — shown at top when active */}
-                          {addingSubtask && (
-                            <div className="ml-7 space-y-2 p-3 rounded-lg border border-dashed border-border">
-                              <input
-                                type="text"
-                                placeholder="子任務標題"
-                                value={subtaskTitle}
-                                onChange={e => setSubtaskTitle(e.target.value)}
-                                className="w-full text-sm border rounded-lg px-2.5 py-1.5 bg-background"
-                                autoFocus
-                              />
-                              <input
-                                type="text"
-                                placeholder="負責人（選填，預設為父任務負責人）"
-                                value={subtaskAssignee}
-                                onChange={e => setSubtaskAssignee(e.target.value)}
-                                className="w-full text-sm border rounded-lg px-2.5 py-1.5 bg-background"
-                              />
-                              <div className="flex gap-2">
-                                <Button size="sm" className="gap-1 text-sm h-7" disabled={!subtaskTitle.trim()} onClick={handleAddSubtask}>
-                                  <Plus className="h-3 w-3" /> 新增
-                                </Button>
-                                <Button size="sm" variant="ghost" className="text-sm h-7" onClick={() => { setAddingSubtask(false); setSubtaskTitle(''); setSubtaskAssignee('') }}>
-                                  取消
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          {task.subtasks && task.subtasks.length > 0 && (
-                            <div className="space-y-1.5 ml-7">
-                              {task.subtasks.map(sub => (
-                                <div key={sub.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
-                                  {getStatusDot(sub.status === 'done' ? 'completed' : sub.status === 'in-progress' ? 'on-track' : sub.status === 'blocked' ? 'overdue' : 'not-started')}
-                                  <span className={cn('flex-1 truncate', sub.status === 'done' && 'text-muted-foreground')}>{sub.title}</span>
-                                  {sub.assignee && <span className="text-[11px] text-muted-foreground">{sub.assignee}</span>}
-                                  <Badge variant="outline" className="text-[10px] px-1">{sub.progress}%</Badge>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (!task.subtasks || task.subtasks.length === 0) && !!task.parentId && (
+                      {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
                           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
                             <Info className="h-5 w-5 text-muted-foreground" />

@@ -108,9 +108,10 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
 
   const hasFilters = statusFilter.size > 0 || assigneeFilter.size > 0
 
-  // Filter tasks
+  // Filter tasks (exclude subtasks — they display under their parent)
   const filteredTasks = useMemo(() => {
     return project.tasks.filter(task => {
+      if (task.parentId) return false
       const es = task.progress >= 100 ? 'done' : task.status
       if (statusFilter.size > 0 && !statusFilter.has(es as TaskStatus)) return false
       if (assigneeFilter.size > 0 && !assigneeFilter.has(task.assignee)) return false
@@ -206,7 +207,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
   const noActivityMilestoneIds = useMemo(() => {
     const ids = new Set<string>()
     for (const ms of project.milestones) {
-      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id && !t.parentId)
       if (isMilestoneNoActivity(ms.id, msTasks)) ids.add(ms.id)
     }
     return ids

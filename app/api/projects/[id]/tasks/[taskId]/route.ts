@@ -118,11 +118,31 @@ export async function PUT(
         }
       }
 
-      await prisma.task.update({
+      const updatedParent = await prisma.task.update({
         where: { id: task.parentId },
         data: parentUpdate,
       })
       await syncMilestoneStatus(milestoneId, id)
+
+      return NextResponse.json({
+        id: updated.id,
+        projectId: id,
+        milestoneId: updated.milestoneId,
+        title: updated.title,
+        description: updated.description,
+        assignee: updated.assignee,
+        status: updated.status,
+        priority: updated.priority,
+        startDate: updated.startDate.toISOString().slice(0, 10),
+        endDate: updated.endDate.toISOString().slice(0, 10),
+        durationWeeks: updated.durationWeeks,
+        progress: updated.progress,
+        parentId: updated.parentId || null,
+        parentProgress: updatedParent.progress,
+        parentStatus: updatedParent.status,
+        ...(updated.completedAt ? { completedAt: updated.completedAt.toISOString().slice(0, 10) } : {}),
+        ...(updated.completedBy ? { completedBy: updated.completedBy } : {}),
+      })
     }
 
     return NextResponse.json({

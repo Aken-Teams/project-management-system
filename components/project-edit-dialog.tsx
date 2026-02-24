@@ -579,7 +579,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     setTlMilestones(prev => arrayMove(prev, oldIdx, newIdx))
   }, [])
 
-  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationWeeks: number }) => {
+  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationWeeks: number; parentId?: string }) => {
     setTlTasks(prev => [...prev, task])
   }, [])
 
