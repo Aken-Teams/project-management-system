@@ -77,6 +77,15 @@ function dayDiff(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24))
 }
 
+/** Compute parent task progress as weighted average of subtask progress (by durationDays) */
+function computeParentProgress(subtasks: SubTask[]): number {
+  if (!subtasks || subtasks.length === 0) return -1 // -1 means no subtasks, use task's own progress
+  const totalDays = subtasks.reduce((sum, s) => sum + (s.durationDays || 1), 0)
+  if (totalDays === 0) return 0
+  const weightedSum = subtasks.reduce((sum, s) => sum + (s.progress || 0) * (s.durationDays || 1), 0)
+  return Math.round(weightedSum / totalDays)
+}
+
 function getStatusDot(status: ComputedTaskStatus) {
   const colors: Record<ComputedTaskStatus, string> = {
     completed: 'bg-green-500',
@@ -984,11 +993,6 @@ export default function MyTasksPage() {
                                   })()}
                                   {/* Subtask rows — indented */}
                                   {subtasks.map(sub => {
-                                    const subStatus = sub.status === 'done' ? 'completed' as const
-                                      : sub.status === 'in-progress' ? 'on-track' as const
-                                      : sub.status === 'blocked' ? 'overdue' as const
-                                      : 'not-started' as const
-                                    const subCompleted = !!sub.completedAt || sub.status === 'done'
                                     // Build a Task-like object so subtask opens in the same dialog
                                     const subAsTask: Task = {
                                       id: sub.id,
@@ -999,7 +1003,7 @@ export default function MyTasksPage() {
                                       assignee: sub.assignee,
                                       status: sub.status,
                                       priority: sub.priority,
-                                      durationDays: 1,
+                                      durationDays: sub.durationDays || 1,
                                       startDate: sub.startDate,
                                       endDate: sub.endDate,
                                       dependencies: [],
@@ -1008,6 +1012,8 @@ export default function MyTasksPage() {
                                       completedAt: sub.completedAt,
                                       completedBy: sub.completedBy,
                                     }
+                                    const subStatus = computeTaskStatus(subAsTask, project.taskLogs)
+                                    const subCompleted = !!sub.completedAt || sub.status === 'done'
                                     return (
                                       <button
                                         key={sub.id}
@@ -1049,6 +1055,7 @@ export default function MyTasksPage() {
         if (!open) setShowExtensionForm(false)
       }}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {!currentDialogTask && <DialogTitle className="sr-only">任務</DialogTitle>}
           {currentDialogTask && currentDialogProject && (() => {
             const task = currentDialogTask
             const project = currentDialogProject
