@@ -83,9 +83,22 @@ export function calculateTaskDates(
       }
       result.set(task.id, dates)
 
-      // Subtasks inherit parent's date range
-      for (const sub of tasks.filter(t => t.parentId === task.id)) {
-        result.set(sub.id, dates)
+      // Schedule subtasks sequentially within parent's date range
+      const subtasks = tasks.filter(t => t.parentId === task.id)
+      if (subtasks.length > 0) {
+        let subCurrent = new Date(taskStart)
+        for (const sub of subtasks) {
+          const subWeeks = Math.max(sub.durationWeeks || 1, 1)
+          const subStart = new Date(subCurrent)
+          const subEnd = new Date(subCurrent)
+          subEnd.setDate(subEnd.getDate() + subWeeks * 7 - 1)
+          result.set(sub.id, {
+            startDate: subStart.toISOString().split('T')[0],
+            endDate: subEnd.toISOString().split('T')[0],
+          })
+          subCurrent = new Date(subEnd)
+          subCurrent.setDate(subCurrent.getDate() + 1)
+        }
       }
 
       currentDate = new Date(taskEnd)

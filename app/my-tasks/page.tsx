@@ -899,47 +899,66 @@ export default function MyTasksPage() {
                                     </button>
                                   </div>
                                   {/* Inline add subtask form */}
-                                  {isAddingSub && (
-                                    <div className="ml-6 flex items-center gap-1.5 py-1 px-1">
-                                      <div className="h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0" />
-                                      <input
-                                        type="text"
-                                        placeholder="子任務名稱"
-                                        value={inlineSubtaskTitle}
-                                        onChange={e => setInlineSubtaskTitle(e.target.value)}
-                                        onKeyDown={e => {
-                                          if (e.key === 'Enter' && inlineSubtaskTitle.trim()) handleAddSubtaskInline(task, project)
-                                          if (e.key === 'Escape') setAddingSubtaskForId(null)
-                                        }}
-                                        className="flex-1 text-sm border rounded px-2 py-1 bg-background min-w-0"
-                                        autoFocus
-                                      />
-                                      <input
-                                        type="number"
-                                        min={1}
-                                        max={52}
-                                        value={inlineSubtaskWeeks}
-                                        onChange={e => setInlineSubtaskWeeks(Number(e.target.value) || 1)}
-                                        className="w-12 text-xs border rounded px-1.5 py-1 bg-background text-center"
-                                        title="週數"
-                                      />
-                                      <span className="text-sm text-muted-foreground shrink-0">週</span>
-                                      <Button
-                                        size="sm"
-                                        className="h-6 text-xs px-2"
-                                        disabled={!inlineSubtaskTitle.trim()}
-                                        onClick={() => handleAddSubtaskInline(task, project)}
-                                      >
-                                        新增
-                                      </Button>
-                                      <button
-                                        onClick={() => setAddingSubtaskForId(null)}
-                                        className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </div>
-                                  )}
+                                  {isAddingSub && (() => {
+                                    const usedWeeks = subtasks.reduce((sum, s) => sum + (s.durationWeeks || 1), 0)
+                                    const remainingWeeks = Math.max(0, task.durationWeeks - usedWeeks)
+                                    const canAdd = remainingWeeks > 0
+                                    const effectiveMax = Math.max(1, remainingWeeks)
+                                    return (
+                                      <div className="ml-6 py-1 px-1 space-y-1">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0" />
+                                          <input
+                                            type="text"
+                                            placeholder="子任務名稱"
+                                            value={inlineSubtaskTitle}
+                                            onChange={e => setInlineSubtaskTitle(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter' && inlineSubtaskTitle.trim() && canAdd) handleAddSubtaskInline(task, project)
+                                              if (e.key === 'Escape') setAddingSubtaskForId(null)
+                                            }}
+                                            className="flex-1 text-sm border rounded px-2 py-1 bg-background min-w-0"
+                                            autoFocus
+                                          />
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            max={effectiveMax}
+                                            value={Math.min(inlineSubtaskWeeks, effectiveMax)}
+                                            onChange={e => setInlineSubtaskWeeks(Math.min(Math.max(1, Number(e.target.value) || 1), effectiveMax))}
+                                            className="w-12 text-xs border rounded px-1.5 py-1 bg-background text-center"
+                                            title={`週數（剩餘 ${remainingWeeks} 週）`}
+                                            disabled={!canAdd}
+                                          />
+                                          <span className="text-sm text-muted-foreground shrink-0">週</span>
+                                          <Button
+                                            size="sm"
+                                            className="h-6 text-xs px-2"
+                                            disabled={!inlineSubtaskTitle.trim() || !canAdd}
+                                            onClick={() => handleAddSubtaskInline(task, project)}
+                                          >
+                                            新增
+                                          </Button>
+                                          <button
+                                            onClick={() => setAddingSubtaskForId(null)}
+                                            className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                        {!canAdd && (
+                                          <p className="ml-4 text-[11px] text-destructive">
+                                            已用完此任務的 {task.durationWeeks} 週配額，如需更多時間請提出延期申請
+                                          </p>
+                                        )}
+                                        {canAdd && (
+                                          <p className="ml-4 text-[11px] text-muted-foreground">
+                                            此任務共 {task.durationWeeks} 週，已分配 {usedWeeks} 週，剩餘 {remainingWeeks} 週
+                                          </p>
+                                        )}
+                                      </div>
+                                    )
+                                  })()}
                                   {/* Subtask rows — indented */}
                                   {subtasks.map(sub => {
                                     const subStatus = sub.status === 'done' ? 'completed' as const

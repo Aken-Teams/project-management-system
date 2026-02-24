@@ -579,17 +579,42 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     setTlMilestones(prev => arrayMove(prev, oldIdx, newIdx))
   }, [])
 
-  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationWeeks: number; parentId?: string }) => {
-    setTlTasks(prev => [...prev, task])
+  // Auto-sync parent durationWeeks = sum of children durationWeeks
+  const syncParentDurations = useCallback((tasks: typeof tlTasks) => {
+    const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!))
+    if (parentIds.size === 0) return tasks
+    let changed = false
+    const updated = tasks.map(t => {
+      if (!parentIds.has(t.id)) return t
+      const childSum = tasks
+        .filter(c => c.parentId === t.id)
+        .reduce((sum, c) => sum + Math.max(c.durationWeeks || 1, 1), 0)
+      if (childSum > 0 && t.durationWeeks !== childSum) {
+        changed = true
+        return { ...t, durationWeeks: childSum }
+      }
+      return t
+    })
+    return changed ? updated : tasks
   }, [])
+
+  const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationWeeks: number; parentId?: string }) => {
+    setTlTasks(prev => syncParentDurations([...prev, task]))
+  }, [syncParentDurations])
 
   const handleTlTaskRemove = useCallback((taskId: string) => {
-    setTlTasks(prev => prev.filter(t => t.id !== taskId))
-  }, [])
+    setTlTasks(prev => {
+      const remaining = prev.filter(t => t.id !== taskId && t.parentId !== taskId)
+      return syncParentDurations(remaining)
+    })
+  }, [syncParentDurations])
 
   const handleTlTaskUpdate = useCallback((taskId: string, field: string, value: string | number) => {
-    setTlTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
-  }, [])
+    setTlTasks(prev => {
+      const updated = prev.map(t => t.id === taskId ? { ...t, [field]: value } : t)
+      return syncParentDurations(updated)
+    })
+  }, [syncParentDurations])
 
   const handleTlTaskReorder = useCallback((oldIdx: number, newIdx: number) => {
     setTlTasks(prev => arrayMove(prev, oldIdx, newIdx))

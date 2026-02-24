@@ -269,15 +269,21 @@ function TaskRow({
         </button>
       </div>
 
-      {/* Duration */}
+      {/* Duration (read-only when parent has subtasks) */}
       <div className="flex justify-center">
-        <Input
-          type="number"
-          min={1}
-          value={task.durationWeeks || ''}
-          onChange={(e) => onUpdate(task.id, 'durationWeeks', Number(e.target.value) || 0)}
-          className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
-        />
+        {subtaskCount > 0 ? (
+          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務週數加總">
+            {task.durationWeeks || 0}
+          </span>
+        ) : (
+          <Input
+            type="number"
+            min={1}
+            value={task.durationWeeks || ''}
+            onChange={(e) => onUpdate(task.id, 'durationWeeks', Number(e.target.value) || 0)}
+            className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
+          />
+        )}
       </div>
 
       {/* Start date */}
@@ -487,11 +493,15 @@ function InlineTaskInput({
 // ─── SubtaskRow ─────────────────────────────────────────────
 function SubtaskRow({
   task,
+  startDate,
+  endDate,
   teamMembers,
   onRemove,
   onUpdate,
 }: {
   task: TimelineTask
+  startDate?: string
+  endDate?: string
   teamMembers: TimelineTeamMember[]
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
@@ -526,16 +536,27 @@ function SubtaskRow({
         />
       </div>
 
-      {/* Duration (hidden for subtasks, shares parent) */}
+      {/* Duration */}
       <div className="flex justify-center">
-        <span className="text-xs text-muted-foreground/40">—</span>
+        <Input
+          type="number"
+          min={1}
+          max={52}
+          value={task.durationWeeks || ''}
+          onChange={(e) => onUpdate(task.id, 'durationWeeks', Math.max(1, Number(e.target.value) || 1))}
+          className="h-7 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
       </div>
 
       {/* Start date */}
-      <div />
+      <div className="text-center text-sm text-muted-foreground">
+        {startDate || ''}
+      </div>
 
       {/* End date */}
-      <div />
+      <div className="text-center text-sm text-muted-foreground">
+        {endDate || ''}
+      </div>
 
       {/* Assignee */}
       <div>
@@ -600,6 +621,7 @@ function InlineSubtaskInput({
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
+  const [durationWeeks, setDurationWeeks] = useState(1)
 
   const handleAdd = () => {
     if (!title.trim()) return
@@ -609,12 +631,13 @@ function InlineSubtaskInput({
       title: title.trim(),
       assignee,
       priority,
-      durationWeeks: 0,
+      durationWeeks,
       parentId: parentTask.id,
     })
     setTitle('')
     setAssignee('')
     setPriority('medium')
+    setDurationWeeks(1)
   }
 
   const cyclePriority = () => {
@@ -657,8 +680,19 @@ function InlineSubtaskInput({
         />
       </div>
 
-      {/* Duration placeholder */}
-      <div />
+      {/* Duration */}
+      <div className="flex justify-center">
+        {title.trim() && (
+          <Input
+            type="number"
+            min={1}
+            max={52}
+            value={durationWeeks}
+            onChange={(e) => setDurationWeeks(Math.max(1, Number(e.target.value) || 1))}
+            className="h-7 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1 text-muted-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        )}
+      </div>
 
       {/* Start date placeholder */}
       <div />
@@ -882,6 +916,8 @@ export function TimelineTable({
                             <SubtaskRow
                               key={st.id}
                               task={st}
+                              startDate={taskDates.get(st.id)?.startDate}
+                              endDate={taskDates.get(st.id)?.endDate}
                               teamMembers={teamMembers}
                               onRemove={onTaskRemove}
                               onUpdate={onTaskUpdate}

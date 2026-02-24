@@ -109,6 +109,7 @@ export interface SubTask {
   startDate: string
   endDate: string
   priority: 'low' | 'medium' | 'high'
+  durationWeeks: number
   completedAt?: string
   completedBy?: string
 }

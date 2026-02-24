@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
           include: {
             dependsOn: true,
             children: {
-              select: { id: true, title: true, status: true, progress: true, assignee: true, startDate: true, endDate: true, priority: true, completedAt: true, completedBy: true },
+              select: { id: true, title: true, status: true, progress: true, assignee: true, startDate: true, endDate: true, priority: true, durationWeeks: true, completedAt: true, completedBy: true },
               orderBy: { sortOrder: 'asc' },
             },
           },
@@ -147,6 +147,7 @@ export async function GET(request: NextRequest) {
             startDate: (c.startDate as Date).toISOString().split('T')[0],
             endDate: (c.endDate as Date).toISOString().split('T')[0],
             priority: c.priority,
+            durationWeeks: c.durationWeeks as number,
             ...(c.completedAt ? { completedAt: (c.completedAt as Date).toISOString().split('T')[0] } : {}),
             ...(c.completedBy ? { completedBy: c.completedBy } : {}),
           })),
