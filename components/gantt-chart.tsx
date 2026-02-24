@@ -142,10 +142,10 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
     setHoverX(null)
   }, [])
 
-  // Group tasks by milestone
+  // Group parent tasks by milestone (subtasks rendered under their parent)
   const tasksByMilestone = milestones.map(m => ({
     milestone: m,
-    tasks: tasks.filter(t => t.milestoneId === m.id),
+    tasks: tasks.filter(t => t.milestoneId === m.id && !t.parentId),
   }))
 
   // Week grid count
@@ -396,9 +396,10 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                   const taskOverdue = isTaskOverdue(task)
                   const isCritical = showDependencies && nodeMap?.get(task.id)?.isOnCriticalPath
                   const node = showDependencies ? nodeMap?.get(task.id) : undefined
+                  const subtasks = tasks.filter(t => t.parentId === task.id)
                   return (
+                    <div key={task.id}>
                     <div
-                      key={task.id}
                       data-task-id={task.id}
                       className={cn(
                         'flex items-center border-b transition-colors cursor-pointer',
@@ -435,6 +436,11 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                             effectiveStatus(task) === 'done' && 'text-muted-foreground',
                             taskOverdue && 'text-red-600 dark:text-red-400',
                           )}>{task.title}</span>
+                          {subtasks.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                              {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
+                            </span>
+                          )}
                           {taskOverdue && (
                             <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                           )}
@@ -497,6 +503,60 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                       </div>
                         )
                       })()}
+                    </div>
+                    {/* Subtask rows — deeper indent */}
+                    {subtasks.map(sub => {
+                      const subDisplayStatus = overdueNotStartedTaskIds?.has(sub.id) ? 'overdue-not-started' : effectiveStatus(sub)
+                      const subColors = STATUS_COLORS[subDisplayStatus] || STATUS_COLORS.todo
+                      return (
+                        <div
+                          key={sub.id}
+                          data-task-id={sub.id}
+                          className={cn(
+                            'flex items-center border-b transition-colors cursor-pointer bg-muted/5 hover:bg-accent/50',
+                            selectedTaskId === sub.id && 'bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/20',
+                          )}
+                          onClick={(e) => handleTaskClick(sub, e)}
+                        >
+                          <div className="w-[260px] shrink-0 px-3 py-1 border-r pl-14">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-muted-foreground/30 text-xs select-none">└</span>
+                              <div
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: subColors.bg }}
+                              />
+                              <span className={cn(
+                                'text-sm truncate',
+                                effectiveStatus(sub) === 'done' && 'text-muted-foreground',
+                              )}>{sub.title}</span>
+                            </div>
+                            {sub.assignee && (
+                              <span className="text-xs text-muted-foreground ml-6">{sub.assignee}</span>
+                            )}
+                          </div>
+                          <div className="flex-1 relative h-10" data-timeline-area>
+                            <WeekGrid />
+                            <div
+                              className="absolute h-4 rounded-sm border"
+                              style={{
+                                ...barStyle(sub.startDate, sub.endDate),
+                                top: 12,
+                                backgroundColor: subColors.bg,
+                                borderColor: subColors.border,
+                              }}
+                            >
+                              {sub.progress > 0 && sub.progress < 100 && (
+                                <div
+                                  className="absolute inset-y-0 left-0 bg-white/30 rounded-l-sm"
+                                  style={{ width: `${sub.progress}%` }}
+                                />
+                              )}
+                            </div>
+                            <TodayLine />
+                          </div>
+                        </div>
+                      )
+                    })}
                     </div>
                   )
                 })}

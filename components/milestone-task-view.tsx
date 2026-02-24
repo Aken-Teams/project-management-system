@@ -455,7 +455,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
 
       {viewMode === 'gantt' ? (
         <GanttChart
-          tasks={filteredTasks}
+          tasks={project.tasks}
           milestones={project.milestones}
           baseline={project.baseline}
           startDate={project.startDate}
@@ -558,48 +558,104 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                             </div>
                             {tasks.map(task => {
                               const overdue = isTaskOverdue(task)
+                              const subtasks = project.tasks.filter(t => t.parentId === task.id)
                               return (
-                                <div
-                                  key={task.id}
-                                  onClick={() => handleTaskClick(task)}
-                                  className={cn(
-                                    'grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
-                                    overdue && 'bg-destructive/5',
-                                  )}
-                                >
-                                  {/* Title + overdue indicator */}
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    {overdue && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
-                                    <span className={cn(
-                                      'text-sm truncate',
-                                      effectiveStatus(task) === 'done' && 'text-muted-foreground',
-                                    )}>{task.title}</span>
+                                <div key={task.id}>
+                                  <div
+                                    onClick={() => handleTaskClick(task)}
+                                    className={cn(
+                                      'grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                      overdue && 'bg-destructive/5',
+                                    )}
+                                  >
+                                    {/* Title + overdue indicator */}
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      {overdue && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                                      <span className={cn(
+                                        'text-sm truncate',
+                                        effectiveStatus(task) === 'done' && 'text-muted-foreground',
+                                      )}>{task.title}</span>
+                                      {subtasks.length > 0 && (
+                                        <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                                          {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Status */}
+                                    <div>{getStatusBadge(displayStatus(task))}</div>
+                                    {/* Progress */}
+                                    <div className="flex items-center gap-1.5">
+                                      <Progress value={task.progress} className="h-1.5 flex-1" />
+                                      <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{task.progress}%</span>
+                                    </div>
+                                    {/* Priority */}
+                                    <div className="flex justify-center">{getPriorityBadge(task.priority)}</div>
+                                    {/* Assignee */}
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <Avatar className="h-6 w-6 shrink-0">
+                                        <AvatarFallback className={cn('text-[9px] text-white', getAvatarColor(task.assignee))}>
+                                          {task.assignee.split(' ').map(n => n[0]).join('')}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="text-sm truncate text-muted-foreground">{task.assignee}</span>
+                                    </div>
+                                    {/* Due date */}
+                                    <div className={cn(
+                                      'text-sm text-right',
+                                      overdue ? 'text-destructive font-medium' : 'text-muted-foreground',
+                                    )}>
+                                      {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                                    </div>
                                   </div>
-                                  {/* Status */}
-                                  <div>{getStatusBadge(displayStatus(task))}</div>
-                                  {/* Progress */}
-                                  <div className="flex items-center gap-1.5">
-                                    <Progress value={task.progress} className="h-1.5 flex-1" />
-                                    <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{task.progress}%</span>
-                                  </div>
-                                  {/* Priority */}
-                                  <div className="flex justify-center">{getPriorityBadge(task.priority)}</div>
-                                  {/* Assignee */}
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <Avatar className="h-6 w-6 shrink-0">
-                                      <AvatarFallback className={cn('text-[9px] text-white', getAvatarColor(task.assignee))}>
-                                        {task.assignee.split(' ').map(n => n[0]).join('')}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-sm truncate text-muted-foreground">{task.assignee}</span>
-                                  </div>
-                                  {/* Due date */}
-                                  <div className={cn(
-                                    'text-sm text-right',
-                                    overdue ? 'text-destructive font-medium' : 'text-muted-foreground',
-                                  )}>
-                                    {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
-                                  </div>
+                                  {/* Subtask rows — indented */}
+                                  {subtasks.map(sub => {
+                                    const subOverdue = isTaskOverdue(sub)
+                                    return (
+                                      <div
+                                        key={sub.id}
+                                        onClick={() => handleTaskClick(sub)}
+                                        className={cn(
+                                          'grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 items-center px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                          subOverdue && 'bg-destructive/5',
+                                        )}
+                                      >
+                                        <div className="flex items-center gap-1.5 min-w-0 pl-5">
+                                          <span className="text-muted-foreground/30 text-xs select-none">└</span>
+                                          {subOverdue && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
+                                          <span className={cn(
+                                            'text-sm truncate',
+                                            effectiveStatus(sub) === 'done' && 'text-muted-foreground',
+                                          )}>{sub.title}</span>
+                                        </div>
+                                        <div>{getStatusBadge(displayStatus(sub))}</div>
+                                        <div className="flex items-center gap-1.5">
+                                          <Progress value={sub.progress} className="h-1.5 flex-1" />
+                                          <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{sub.progress}%</span>
+                                        </div>
+                                        <div className="flex justify-center">{getPriorityBadge(sub.priority)}</div>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          {sub.assignee ? (
+                                            <>
+                                              <Avatar className="h-5 w-5 shrink-0">
+                                                <AvatarFallback className={cn('text-[8px] text-white', getAvatarColor(sub.assignee))}>
+                                                  {sub.assignee.split(' ').map(n => n[0]).join('')}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                              <span className="text-xs truncate text-muted-foreground">{sub.assignee}</span>
+                                            </>
+                                          ) : (
+                                            <span className="text-xs text-muted-foreground/50">—</span>
+                                          )}
+                                        </div>
+                                        <div className={cn(
+                                          'text-sm text-right',
+                                          subOverdue ? 'text-destructive font-medium' : 'text-muted-foreground',
+                                        )}>
+                                          {new Date(sub.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
                                 </div>
                               )
                             })}
