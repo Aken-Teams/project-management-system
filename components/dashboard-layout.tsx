@@ -33,6 +33,7 @@ import {
   PanelLeftOpen,
   Menu,
   X,
+  BookOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProjectStore } from '@/lib/project-store'
@@ -210,6 +211,39 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             return linkContent
           })}
+
+          {/* Divider + Guide */}
+          <div className="border-t border-border/50 my-2 !mt-3" />
+          {(() => {
+            const isGuideActive = pathname === '/guide'
+            const guideLink = (
+              <Link href="/guide" className="block">
+                <div
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    isGuideActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    collapsed && 'justify-center px-2'
+                  )}
+                >
+                  <BookOpen className="h-5 w-5 shrink-0" />
+                  {!collapsed && <span className="truncate">使用指南</span>}
+                </div>
+              </Link>
+            )
+            if (collapsed) {
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>{guideLink}</TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    <p>使用指南</p>
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
+            return guideLink
+          })()}
         </nav>
 
         {/* Collapse toggle */}

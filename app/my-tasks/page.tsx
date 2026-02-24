@@ -171,6 +171,7 @@ export default function MyTasksPage() {
   const [inlineSubtaskTitle, setInlineSubtaskTitle] = useState('')
   const [inlineSubtaskDays, setInlineSubtaskDays] = useState(1)
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+  const [collapsedMilestones, setCollapsedMilestones] = useState<Set<string>>(new Set())
   // PM project edit dialog
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
@@ -187,7 +188,16 @@ export default function MyTasksPage() {
     setLoading(true)
     fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
       .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => setApiProjects(data.projects ?? []))
+      .then(data => {
+        const projects = data.projects ?? []
+        setApiProjects(projects)
+        // Default: all milestones collapsed
+        const allMsIds = new Set<string>()
+        for (const p of projects) {
+          for (const m of p.milestones) allMsIds.add(m.id)
+        }
+        setCollapsedMilestones(allMsIds)
+      })
       .catch(() => setApiProjects([]))
       .finally(() => setLoading(false))
   }, [user])
@@ -905,11 +915,24 @@ export default function MyTasksPage() {
                       {milestoneGroups.map(mg => {
                         const milestone = project.milestones.find(m => m.id === mg.milestoneId)
                         const msPendingDelay = (project.pendingDelayMilestoneIds || []).includes(mg.milestoneId)
+                        const isMsCollapsed = collapsedMilestones.has(mg.milestoneId)
 
                         return (
                         <div key={mg.milestoneId} className="py-2 first:pt-0 last:pb-0">
                           {/* Milestone label */}
-                          <div className="flex items-center gap-2 mb-0.5">
+                          <div
+                            className="flex items-center gap-1.5 mb-0.5 cursor-pointer group/ms"
+                            onClick={() => setCollapsedMilestones(prev => {
+                              const next = new Set(prev)
+                              if (next.has(mg.milestoneId)) next.delete(mg.milestoneId)
+                              else next.add(mg.milestoneId)
+                              return next
+                            })}
+                          >
+                            <ChevronDown className={cn(
+                              'h-3 w-3 text-muted-foreground transition-transform shrink-0',
+                              isMsCollapsed && '-rotate-90',
+                            )} />
                             <span className="text-sm font-medium text-muted-foreground">{mg.milestoneName}</span>
                             {isPM && milestone ? (
                               <>
@@ -961,8 +984,15 @@ export default function MyTasksPage() {
                             )}
                           </div>
 
+                          {/* Collapsed milestone hint */}
+                          {isMsCollapsed && mg.tasks.length > 0 && (
+                            <div className="ml-5 text-[11px] text-muted-foreground py-0.5">
+                              {mg.tasks.filter(t => !!t.completedAt).length}/{mg.tasks.length} 個任務完成
+                            </div>
+                          )}
+
                           {/* Tasks + Subtasks — compact lines */}
-                          <div className="divide-y divide-border/40">
+                          {!isMsCollapsed && <div className="divide-y divide-border/40">
                             {mg.tasks.map(task => {
                               const status = computeTaskStatus(task, project.taskLogs)
                               const days = getDaysUntilDeadline(task)
@@ -1166,7 +1196,7 @@ export default function MyTasksPage() {
                                 </div>
                               )
                             })}
-                          </div>
+                          </div>}
                         </div>
                         )
                       })}
