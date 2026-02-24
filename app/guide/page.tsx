@@ -244,230 +244,332 @@ export default function GuidePage() {
           </CardHeader>
           <CardContent className="pt-0">
             <Accordion type="multiple">
-              {/* 1 */}
+              {/* 1 - Progress */}
               <AccordionItem value="faq-progress">
                 <AccordionTrigger className="text-sm">進度百分比是怎麼計算的？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>系統採用由下而上的四層進度計算：</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                      <span className="rounded-md bg-muted px-2 py-1">子任務</span>
-                      <span>→</span>
-                      <span className="rounded-md bg-muted px-2 py-1">父任務（加權平均）</span>
-                      <span>→</span>
-                      <span className="rounded-md bg-muted px-2 py-1">里程碑（平均）</span>
-                      <span>→</span>
-                      <span className="rounded-md bg-muted px-2 py-1">專案（平均）</span>
+                  <div className="space-y-3 text-sm">
+                    <p className="text-muted-foreground">由下而上四層彙整：</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2.5 py-1 text-xs font-medium">子任務</span>
+                      <span className="text-muted-foreground text-xs">→ 加權</span>
+                      <span className="rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 text-xs font-medium">父任務</span>
+                      <span className="text-muted-foreground text-xs">→ 平均</span>
+                      <span className="rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 text-xs font-medium">里程碑</span>
+                      <span className="text-muted-foreground text-xs">→ 平均</span>
+                      <span className="rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2.5 py-1 text-xs font-medium">專案</span>
                     </div>
-                    <ul className="list-disc ml-5 space-y-1 mt-2">
-                      <li>子任務進度：工作日誌覆蓋天數 / 任務工期天數</li>
-                      <li>父任務進度：子任務進度的加權平均（依工期天數加權）</li>
-                      <li>里程碑進度：所屬父任務（不含子任務）進度平均</li>
-                      <li>專案進度：所有里程碑的進度平均</li>
-                    </ul>
-                    <p className="text-xs text-muted-foreground">已完成的任務進度自動設為 100%。</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded border border-violet-200 dark:border-violet-800 px-2.5 py-1.5 bg-violet-50/50 dark:bg-violet-950/10">
+                        <span className="font-medium text-violet-700 dark:text-violet-400">子任務</span>
+                        <span className="text-muted-foreground ml-1">日誌天數 ÷ 工期</span>
+                      </div>
+                      <div className="rounded border border-blue-200 dark:border-blue-800 px-2.5 py-1.5 bg-blue-50/50 dark:bg-blue-950/10">
+                        <span className="font-medium text-blue-700 dark:text-blue-400">父任務</span>
+                        <span className="text-muted-foreground ml-1">依工期加權平均</span>
+                      </div>
+                      <div className="rounded border border-emerald-200 dark:border-emerald-800 px-2.5 py-1.5 bg-emerald-50/50 dark:bg-emerald-950/10">
+                        <span className="font-medium text-emerald-700 dark:text-emerald-400">里程碑</span>
+                        <span className="text-muted-foreground ml-1">父任務進度平均</span>
+                      </div>
+                      <div className="rounded border border-amber-200 dark:border-amber-800 px-2.5 py-1.5 bg-amber-50/50 dark:bg-amber-950/10">
+                        <span className="font-medium text-amber-700 dark:text-amber-400">專案</span>
+                        <span className="text-muted-foreground ml-1">里程碑進度平均</span>
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 2 */}
+              {/* 2 - Status */}
               <AccordionItem value="faq-status">
                 <AccordionTrigger className="text-sm">任務狀態燈號代表什麼？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />
-                        <div><strong>正常</strong> <span className="text-muted-foreground">— 進度符合預期</span></div>
+                  <div className="grid gap-2 sm:grid-cols-2 text-sm">
+                    <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />
+                      <span><strong>正常</strong> <span className="text-muted-foreground">— 進度符合預期</span></span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shrink-0" />
+                      <span><strong>注意</strong> <span className="text-muted-foreground">— 接近截止但落後</span></span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-red-500 shrink-0" />
+                      <span><strong>逾期</strong> <span className="text-muted-foreground">— 已超過結束日期</span></span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-green-500 shrink-0" />
+                      <span><strong>已完成</strong> <span className="text-muted-foreground">— 任務已標記完成</span></span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-orange-500 shrink-0" />
+                      <span><strong>逾期未開始</strong> <span className="text-muted-foreground">— 超過開始日</span></span>
+                    </div>
+                    <div className="flex items-center gap-2.5 rounded-md border px-3 py-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-gray-300 shrink-0" />
+                      <span><strong>未開始</strong> <span className="text-muted-foreground">— 尚未到開始日</span></span>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* 3 - Delay */}
+              <AccordionItem value="faq-delay">
+                <AccordionTrigger className="text-sm">如何申請延期？審核流程是什麼？</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center gap-1 shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold">1</span>
+                        <span className="w-px h-4 bg-border" />
                       </div>
-                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shrink-0" />
-                        <div><strong>注意</strong> <span className="text-muted-foreground">— 接近截止但落後</span></div>
+                      <div className="pt-0.5">
+                        <span className="font-medium">提交申請</span>
+                        <span className="text-muted-foreground ml-1">— 我的任務 → 任務卡片 → 申請延期</span>
                       </div>
-                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-red-500 shrink-0" />
-                        <div><strong>逾期</strong> <span className="text-muted-foreground">— 已超過結束日期</span></div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center gap-1 shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-bold">2</span>
+                        <span className="w-px h-4 bg-border" />
                       </div>
-                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-green-500 shrink-0" />
-                        <div><strong>已完成</strong> <span className="text-muted-foreground">— 任務已標記完成</span></div>
+                      <div className="pt-0.5">
+                        <span className="font-medium">填寫資訊</span>
+                        <span className="text-muted-foreground ml-1">— 新結束日期、延期原因、所需支援</span>
                       </div>
-                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-orange-500 shrink-0" />
-                        <div><strong>逾期未開始</strong> <span className="text-muted-foreground">— 超過開始日仍未動工</span></div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center gap-1 shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-xs font-bold">3</span>
+                        <span className="w-px h-4 bg-border" />
                       </div>
-                      <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-gray-300 shrink-0" />
-                        <div><strong>未開始</strong> <span className="text-muted-foreground">— 尚未到開始日期</span></div>
+                      <div className="pt-0.5">
+                        <span className="font-medium">PM / 主管審核</span>
+                        <span className="text-muted-foreground ml-1">— 在審核中心核准或駁回</span>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold">4</span>
+                      </div>
+                      <div className="pt-0.5">
+                        <span className="font-medium">自動調整</span>
+                        <span className="text-muted-foreground ml-1">— 核准後連動更新後續時程</span>
                       </div>
                     </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 3 */}
-              <AccordionItem value="faq-delay">
-                <AccordionTrigger className="text-sm">如何申請延期？審核流程是什麼？</AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p><strong>提交延期：</strong></p>
-                    <ol className="list-decimal ml-5 space-y-1">
-                      <li>進入「我的任務」，點擊要延期的任務卡片</li>
-                      <li>在任務詳情中點擊「申請延期」</li>
-                      <li>填寫新的結束日期、延期原因與所需支援</li>
-                      <li>提交後，PM / 主管會在「審核中心」看到此申請</li>
-                    </ol>
-                    <p className="mt-2"><strong>審核流程：</strong></p>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li>審核者可核准或駁回，並附上審核備註</li>
-                      <li>核准後系統自動更新里程碑日期，並<strong>連動調整</strong>後續里程碑與任務的時程</li>
-                      <li>PM 也可直接在里程碑旁點「提出延期」調整日期</li>
-                    </ul>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* 4 */}
+              {/* 4 - Subtask */}
               <AccordionItem value="faq-subtask">
                 <AccordionTrigger className="text-sm">子任務如何運作？天數配額是什麼？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li>在任務卡片中點擊「+」即可新增子任務</li>
-                      <li>子任務有獨立的起迄日期、進度與工作日誌</li>
-                      <li>子任務的天數總和不得超過父任務的工期天數（天數配額）</li>
-                      <li>父任務進度會依子任務工期天數加權自動計算</li>
-                      <li>子任務預設收合，點擊箭頭可展開查看</li>
-                    </ul>
-                    <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
-                      填寫父任務日誌時可點擊「帶入子任務紀錄」，選擇原始資料或 AI 彙整快速產生日誌
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-md border px-3 py-2 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
+                        <div className="font-medium text-blue-700 dark:text-blue-400 text-xs">新增方式</div>
+                        <div className="text-muted-foreground text-xs mt-0.5">任務卡片中點「+」</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2 bg-violet-50/50 dark:bg-violet-950/10 border-violet-200 dark:border-violet-800">
+                        <div className="font-medium text-violet-700 dark:text-violet-400 text-xs">獨立管理</div>
+                        <div className="text-muted-foreground text-xs mt-0.5">各有起迄、進度、日誌</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2 bg-amber-50/50 dark:bg-amber-950/10 border-amber-200 dark:border-amber-800">
+                        <div className="font-medium text-amber-700 dark:text-amber-400 text-xs">天數配額</div>
+                        <div className="text-muted-foreground text-xs mt-0.5">總天數 ≤ 父任務工期</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2 bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-800">
+                        <div className="font-medium text-emerald-700 dark:text-emerald-400 text-xs">進度計算</div>
+                        <div className="text-muted-foreground text-xs mt-0.5">依工期加權彙整至父任務</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
+                      父任務日誌可「帶入子任務紀錄」— 原始資料或 AI 彙整
                     </p>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 5 */}
+              {/* 5 - Auto status */}
               <AccordionItem value="faq-auto-status">
                 <AccordionTrigger className="text-sm">任務狀態會自動變更嗎？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>是的，系統會依據以下規則自動調整任務狀態：</p>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li>開始日期已到 + 無依賴（或依賴已完成）→ 自動「進行中」</li>
-                      <li>開始日期已到 + 依賴未完成 + 無工作紀錄 → 「受阻」</li>
-                      <li>開始日期已到 + 依賴未完成 + 有工作紀錄 → 維持「進行中」（視為前期準備）</li>
-                      <li>開始日期改到未來 + 進度為 0 → 回到「待辦」</li>
-                      <li>手動標記完成後，進度自動設為 100%</li>
-                    </ul>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-muted-foreground">系統依條件自動切換狀態：</p>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                        <span className="rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium shrink-0">進行中</span>
+                        <span className="text-muted-foreground">開始日已到 + 無阻礙依賴</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                        <span className="rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-1.5 py-0.5 font-medium shrink-0">受阻</span>
+                        <span className="text-muted-foreground">依賴未完成 + 無工作紀錄</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                        <span className="rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium shrink-0">進行中</span>
+                        <span className="text-muted-foreground">依賴未完成但有紀錄（前期準備）</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                        <span className="rounded bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 font-medium shrink-0">待辦</span>
+                        <span className="text-muted-foreground">開始日改到未來 + 進度 0%</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+                        <span className="rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium shrink-0">完成</span>
+                        <span className="text-muted-foreground">手動標記完成 → 進度自動 100%</span>
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 6 */}
+              {/* 6 - ARCI */}
               <AccordionItem value="faq-raci">
                 <AccordionTrigger className="text-sm">什麼是 ARCI？如何指派角色？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>ARCI 是責任分配矩陣，明確每個人在專案中的角色：</p>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li><strong>A（Accountable，當責）</strong>：最終負責人，通常一位，等同 PM</li>
-                      <li><strong>R（Responsible，負責）</strong>：實際執行工作的人</li>
-                      <li><strong>C（Consulted，諮詢）</strong>：提供意見與專業知識</li>
-                      <li><strong>I（Informed，知會）</strong>：需要被告知進展</li>
-                    </ul>
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-md border px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                        <span className="font-semibold text-amber-700 dark:text-amber-400">A 當責</span>
+                        <div className="text-xs text-muted-foreground mt-0.5">最終負責人，等同 PM</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                        <span className="font-semibold text-blue-700 dark:text-blue-400">R 負責</span>
+                        <div className="text-xs text-muted-foreground mt-0.5">實際執行工作的人</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2 bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800">
+                        <span className="font-semibold text-violet-700 dark:text-violet-400">C 諮詢</span>
+                        <div className="text-xs text-muted-foreground mt-0.5">提供專業意見</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2 bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
+                        <span className="font-semibold text-slate-700 dark:text-slate-400">I 知會</span>
+                        <div className="text-xs text-muted-foreground mt-0.5">需被告知進展</div>
+                      </div>
+                    </div>
                     <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
-                      在編輯專案的「團隊」頁籤中為成員選擇角色。新增成員時可透過搜尋自動帶入姓名、職稱與組織
+                      編輯專案「團隊」頁籤中指派，搜尋可自動帶入姓名、職稱與組織
                     </p>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 7 */}
+              {/* 7 - Create project */}
               <AccordionItem value="faq-create-project">
                 <AccordionTrigger className="text-sm">如何建立新專案？可以存草稿嗎？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>建立專案有兩種模式：</p>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li><strong>手動模式</strong>：逐步填寫專案資訊、團隊、里程碑、任務與風險</li>
-                      <li><strong>AI 輔助模式</strong>：以自然語言描述需求，AI 自動建議專案結構</li>
-                    </ul>
-                    <p className="mt-1">任何階段都可以點擊「儲存草稿」暫存目前的編輯狀態，下次進入新增專案頁面時可從草稿列表載入繼續編輯。</p>
-                    <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
-                      草稿會記錄建立模式（手動 / AI），每位使用者的草稿互相獨立
-                    </p>
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-md border px-3 py-2.5 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
+                        <div className="font-medium text-blue-700 dark:text-blue-400">手動模式</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">逐步填寫資訊、團隊、里程碑、任務與風險</div>
+                      </div>
+                      <div className="rounded-md border px-3 py-2.5 bg-violet-50/50 dark:bg-violet-950/10 border-violet-200 dark:border-violet-800">
+                        <div className="font-medium text-violet-700 dark:text-violet-400">AI 輔助模式</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">自然語言描述，AI 建議專案結構</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
+                      <span className="rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 font-medium">草稿</span>
+                      <span className="text-muted-foreground">任何階段可暫存，下次載入繼續編輯</span>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 8 */}
+              {/* 8 - Work log */}
               <AccordionItem value="faq-worklog">
                 <AccordionTrigger className="text-sm">工作日誌怎麼填寫？支援語音輸入嗎？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <ol className="list-decimal ml-5 space-y-1">
-                      <li>在「我的任務」點擊任務卡片開啟任務詳情</li>
-                      <li>選擇日誌日期（預設為今天），在文字框輸入工作內容</li>
-                      <li>點擊送出即完成紀錄</li>
-                    </ol>
-                    <p className="mt-1"><strong>進階功能：</strong></p>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li>支援<strong>語音輸入</strong>（麥克風圖示），自動辨識繁體中文</li>
-                      <li>有子任務時可點「帶入子任務紀錄」一鍵匯入（原始資料 / AI 彙整）</li>
-                      <li>已送出的日誌可事後<strong>編輯</strong>或<strong>刪除</strong></li>
-                    </ul>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center gap-2 text-xs flex-wrap">
+                      <span className="rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 font-medium">點擊任務卡片</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2 py-1 font-medium">選擇日期</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 font-medium">輸入內容</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 font-medium">送出</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="rounded-md border px-2.5 py-2 text-center">
+                        <div className="font-medium">語音輸入</div>
+                        <div className="text-muted-foreground mt-0.5">麥克風辨識中文</div>
+                      </div>
+                      <div className="rounded-md border px-2.5 py-2 text-center">
+                        <div className="font-medium">帶入紀錄</div>
+                        <div className="text-muted-foreground mt-0.5">子任務匯入 / AI 彙整</div>
+                      </div>
+                      <div className="rounded-md border px-2.5 py-2 text-center">
+                        <div className="font-medium">事後修改</div>
+                        <div className="text-muted-foreground mt-0.5">已送出可編輯刪除</div>
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 9 */}
+              {/* 9 - Gantt */}
               <AccordionItem value="faq-gantt">
                 <AccordionTrigger className="text-sm">甘特圖怎麼看？可以做什麼？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>甘特圖以時間軸方式呈現專案排程：</p>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li>里程碑顯示為區段，任務顯示為橫條</li>
-                      <li>任務顏色對應狀態（藍=進行中、綠=完成、紅=逾期、灰=待辦）</li>
-                      <li>可切換顯示<strong>任務依賴關係</strong>（連接線）</li>
-                      <li>可切換顯示<strong>基準線</strong>（金色線條表示原始排程，與實際排程對比）</li>
-                      <li>滑鼠停留在任務上可查看詳細日期</li>
-                    </ul>
-                    <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
-                      透過頂部下拉選單可切換不同專案的甘特圖
-                    </p>
+                  <div className="space-y-3 text-sm">
+                    <p className="text-muted-foreground">時間軸方式呈現排程，任務顏色對應狀態：</p>
+                    <div className="flex items-center gap-2 flex-wrap text-xs">
+                      <span className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 font-medium">
+                        <span className="h-2 w-5 rounded-sm bg-blue-500 inline-block" /> 進行中
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-0.5 font-medium">
+                        <span className="h-2 w-5 rounded-sm bg-green-500 inline-block" /> 完成
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-0.5 font-medium">
+                        <span className="h-2 w-5 rounded-sm bg-red-500 inline-block" /> 逾期
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 px-2 py-0.5 font-medium">
+                        <span className="h-2 w-5 rounded-sm bg-gray-400 inline-block" /> 待辦
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-md border px-2.5 py-2">
+                        <span className="font-medium">依賴關係</span>
+                        <span className="text-muted-foreground ml-1">連接線顯示</span>
+                      </div>
+                      <div className="rounded-md border px-2.5 py-2">
+                        <span className="font-medium text-amber-600 dark:text-amber-400">基準線</span>
+                        <span className="text-muted-foreground ml-1">金色對比原始排程</span>
+                      </div>
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 10 */}
+              {/* 10 - Roles */}
               <AccordionItem value="faq-roles" className="border-b-0">
                 <AccordionTrigger className="text-sm">三種系統角色有什麼差異？</AccordionTrigger>
                 <AccordionContent>
-                  <div className="space-y-2 text-sm leading-relaxed">
-                    <p>系統有三種登入角色，各自可使用的功能不同：</p>
-                    <div className="overflow-x-auto mt-1">
+                  <div className="space-y-2 text-sm">
+                    <div className="overflow-x-auto">
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr className="border-b">
                             <th className="text-left py-1.5 pr-2 font-medium">功能</th>
-                            <th className="text-center py-1.5 px-2 font-medium">PM</th>
-                            <th className="text-center py-1.5 px-2 font-medium">成員</th>
-                            <th className="text-center py-1.5 px-2 font-medium">主管</th>
+                            <th className="text-center py-1.5 px-2 font-medium text-amber-600 dark:text-amber-400">PM</th>
+                            <th className="text-center py-1.5 px-2 font-medium text-blue-600 dark:text-blue-400">成員</th>
+                            <th className="text-center py-1.5 px-2 font-medium text-violet-600 dark:text-violet-400">主管</th>
                           </tr>
                         </thead>
                         <tbody className="text-muted-foreground">
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">儀表板</td><td className="text-center">&#10003;</td><td className="text-center">—</td><td className="text-center">&#10003;</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">我的任務</td><td className="text-center">&#10003;</td><td className="text-center">&#10003;</td><td className="text-center">—</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">建立 / 編輯專案</td><td className="text-center">&#10003;</td><td className="text-center">—</td><td className="text-center">—</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">審核延期申請</td><td className="text-center">&#10003;</td><td className="text-center">—</td><td className="text-center">&#10003;</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">報告與 PDF 匯出</td><td className="text-center">&#10003;</td><td className="text-center">—</td><td className="text-center">&#10003;</td></tr>
-                          <tr><td className="py-1.5 pr-2">專案看板（瀏覽）</td><td className="text-center">&#10003;</td><td className="text-center">&#10003;</td><td className="text-center">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">儀表板</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">我的任務</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">建立 / 編輯專案</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center">—</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">審核延期</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">報告 / PDF</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr><td className="py-1.5 pr-2">專案看板</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td></tr>
                         </tbody>
                       </table>
                     </div>
-                    <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
-                      PM 在「我的任務」中會看到所有任務並進入管理模式；成員只看到指派給自己的任務
+                    <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
+                      PM 可管理所有任務；成員只看到指派給自己的任務
                     </p>
                   </div>
                 </AccordionContent>
