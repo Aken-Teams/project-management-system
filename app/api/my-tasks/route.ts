@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
       select: {
         id: true,
         name: true,
+        startDate: true,
         milestones: {
           orderBy: { sortOrder: 'asc' },
           select: { id: true, name: true, dueDate: true, status: true, progress: true, sortOrder: true },
@@ -112,6 +113,7 @@ export async function GET(request: NextRequest) {
       .map(p => ({
         id: p.id,
         name: p.name,
+        startDate: p.startDate.toISOString().split('T')[0],
         userRole: membershipRoleMap.get(p.id) || 'other',
         milestones: p.milestones.map(m => ({
           id: m.id,

@@ -62,6 +62,18 @@ import {
   Plus,
 } from 'lucide-react'
 
+/** Add one day to a YYYY-MM-DD string */
+function addOneDayStr(dateStr: string) {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().split('T')[0]
+}
+
+/** Compute day difference between two YYYY-MM-DD strings (b - a) */
+function dayDiff(a: string, b: string) {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24))
+}
+
 function getStatusDot(status: ComputedTaskStatus) {
   const colors: Record<ComputedTaskStatus, string> = {
     completed: 'bg-green-500',
@@ -92,6 +104,7 @@ interface MilestoneTaskGroup {
 interface MyTasksProject {
   id: string
   name: string
+  startDate?: string
   userRole?: string
   milestones: { id: string; name: string; dueDate: string; status: string; progress: number; sortOrder?: number }[]
   tasks: Task[]
@@ -122,9 +135,18 @@ export default function MyTasksPage() {
   const [editLogContent, setEditLogContent] = useState('')
   const [editLogDate, setEditLogDate] = useState('')
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
-  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
-  const [milestoneEditDate, setMilestoneEditDate] = useState('')
-  const [milestoneEditProjectId, setMilestoneEditProjectId] = useState('')
+  const [msDateDialogOpen, setMsDateDialogOpen] = useState(false)
+  const [msDateDialogData, setMsDateDialogData] = useState<{
+    milestoneId: string
+    milestoneName: string
+    projectId: string
+    projectName: string
+    currentStartDate: string
+    currentDueDate: string
+    nextMilestoneDueDate: string | null
+    nextMilestoneName: string | null
+    proposedDate: string
+  } | null>(null)
   const [addingSubtask, setAddingSubtask] = useState(false)
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [subtaskAssignee, setSubtaskAssignee] = useState('')
@@ -287,10 +309,14 @@ export default function MyTasksPage() {
   }, [isListening])
 
   // ── PM: Submit milestone date change as a delay request ──
-  const handleMilestoneDateChange = async (milestoneId: string, projectId: string, newDueDate: string) => {
-    const project = apiProjects.find(p => p.id === projectId)
-    const milestone = project?.milestones.find(m => m.id === milestoneId)
-    if (!milestone || !project || !user) return
+  const handleMilestoneDateChange = async () => {
+    if (!msDateDialogData || !user) return
+    const { milestoneId, milestoneName, projectId, currentDueDate, proposedDate } = msDateDialogData
+    if (proposedDate === currentDueDate) {
+      setMsDateDialogOpen(false)
+      setMsDateDialogData(null)
+      return
+    }
 
     try {
       const res = await fetch('/api/delay-requests', {
@@ -300,12 +326,12 @@ export default function MyTasksPage() {
           projectId,
           requesterId: user.id,
           type: 'date_change',
-          reason: `PM 調整里程碑「${milestone.name}」預定日期`,
+          reason: `PM 調整里程碑「${milestoneName}」預定日期：${currentDueDate} → ${proposedDate}`,
           canCatchUp: true,
           affectedMilestones: [{
             milestoneId,
-            originalDate: milestone.dueDate,
-            proposedDate: newDueDate,
+            originalDate: currentDueDate,
+            proposedDate,
           }],
         }),
       })
@@ -319,16 +345,15 @@ export default function MyTasksPage() {
           ? {
               ...p,
               pendingDelayMilestoneIds: [...(p.pendingDelayMilestoneIds || []), milestoneId],
-              pendingDelayProposedDates: { ...(p.pendingDelayProposedDates || {}), [milestoneId]: newDueDate },
+              pendingDelayProposedDates: { ...(p.pendingDelayProposedDates || {}), [milestoneId]: proposedDate },
             }
           : p
       ))
     } catch (err) {
-      alert(err instanceof Error ? err.message : '送出日期變更申請失敗')
+      alert(err instanceof Error ? err.message : '送出延期申請失敗')
     }
-    setEditingMilestoneId(null)
-    setMilestoneEditDate('')
-    setMilestoneEditProjectId('')
+    setMsDateDialogOpen(false)
+    setMsDateDialogData(null)
   }
 
   // ── Add subtask to a parent task ──
@@ -714,7 +739,6 @@ export default function MyTasksPage() {
                       {milestoneGroups.map(mg => {
                         const milestone = project.milestones.find(m => m.id === mg.milestoneId)
                         const msPendingDelay = (project.pendingDelayMilestoneIds || []).includes(mg.milestoneId)
-                        const isEditingThis = editingMilestoneId === mg.milestoneId && milestoneEditProjectId === project.id
 
                         return (
                         <div key={mg.milestoneId} className="py-2 first:pt-0 last:pb-0">
@@ -723,52 +747,41 @@ export default function MyTasksPage() {
                             <span className="text-sm font-medium text-muted-foreground">{mg.milestoneName}</span>
                             {isPM && milestone ? (
                               <>
-                                {isEditingThis ? (
-                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                    <input
-                                      type="date"
-                                      value={milestoneEditDate}
-                                      onChange={e => setMilestoneEditDate(e.target.value)}
-                                      className="h-6 text-[11px] border rounded px-1.5 bg-background"
-                                    />
-                                    <button
-                                      onClick={() => {
-                                        if (milestoneEditDate && milestoneEditDate !== milestone.dueDate) {
-                                          handleMilestoneDateChange(mg.milestoneId, project.id, milestoneEditDate)
-                                        } else {
-                                          setEditingMilestoneId(null)
-                                        }
-                                      }}
-                                      className="text-xs text-primary hover:underline"
-                                    >
-                                      送出
-                                    </button>
-                                    <button
-                                      onClick={() => setEditingMilestoneId(null)}
-                                      className="text-xs text-muted-foreground hover:underline"
-                                    >
-                                      取消
-                                    </button>
-                                  </div>
+                                <span className="text-[10px] font-mono text-muted-foreground">
+                                  {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                </span>
+                                {msPendingDelay ? (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950/20">
+                                    審核中
+                                  </Badge>
                                 ) : (
                                   <button
                                     onClick={e => {
                                       e.stopPropagation()
-                                      if (msPendingDelay) return
-                                      setEditingMilestoneId(mg.milestoneId)
-                                      setMilestoneEditDate(milestone.dueDate)
-                                      setMilestoneEditProjectId(project.id)
+                                      const sortedMs = [...project.milestones].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                                      const msIdx = sortedMs.findIndex(m => m.id === mg.milestoneId)
+                                      const msStartDate = msIdx > 0
+                                        ? addOneDayStr(sortedMs[msIdx - 1].dueDate)
+                                        : (project.startDate || sortedMs[0]?.dueDate || '')
+                                      const nextMs = msIdx >= 0 && msIdx < sortedMs.length - 1 ? sortedMs[msIdx + 1] : null
+                                      setMsDateDialogData({
+                                        milestoneId: mg.milestoneId,
+                                        milestoneName: mg.milestoneName,
+                                        projectId: project.id,
+                                        projectName: project.name,
+                                        currentStartDate: msStartDate,
+                                        currentDueDate: milestone.dueDate,
+                                        nextMilestoneDueDate: nextMs?.dueDate ?? null,
+                                        nextMilestoneName: nextMs?.name ?? null,
+                                        proposedDate: milestone.dueDate,
+                                      })
+                                      setMsDateDialogOpen(true)
                                     }}
-                                    className={cn(
-                                      'text-[10px] font-mono px-1 py-0.5 rounded border transition-colors',
-                                      msPendingDelay
-                                        ? 'border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950/20 cursor-default'
-                                        : 'border-border hover:border-primary/50 hover:bg-primary/5',
-                                    )}
-                                    title={msPendingDelay ? '日期變更審核中' : '點擊修改預定日期（需審核）'}
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-primary/70 hover:text-primary transition-colors group"
+                                    title="提出延期申請（需審核）"
                                   >
-                                    {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                    {msPendingDelay && ' (審核中)'}
+                                    <Pencil className="h-3 w-3" />
+                                    <span className="group-hover:underline">提出延期</span>
                                   </button>
                                 )}
                                 {milestone.progress > 0 && (
@@ -1516,6 +1529,128 @@ export default function MyTasksPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Milestone Date Change Dialog ── */}
+      <Dialog open={msDateDialogOpen} onOpenChange={open => { if (!open) { setMsDateDialogOpen(false); setMsDateDialogData(null) } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-primary" />
+              提出里程碑延期申請
+            </DialogTitle>
+            <DialogDescription>
+              調整里程碑預定完成日期，送出後需經主管審核才會生效。
+            </DialogDescription>
+          </DialogHeader>
+          {msDateDialogData && (() => {
+            const { milestoneName, projectName, currentStartDate, currentDueDate, proposedDate, nextMilestoneDueDate, nextMilestoneName } = msDateDialogData
+            const shift = dayDiff(currentDueDate, proposedDate)
+            const willAffectNext = nextMilestoneDueDate
+              ? new Date(proposedDate) >= new Date(nextMilestoneDueDate)
+              : false
+            const isNoChange = proposedDate === currentDueDate
+            const isEarlier = shift < 0
+
+            return (
+              <div className="space-y-4">
+                {/* Info section */}
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">專案</span>
+                    <span className="font-medium">{projectName}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">里程碑</span>
+                    <span className="font-medium">{milestoneName}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">目前區間</span>
+                    <span className="font-mono text-xs">{currentStartDate} ~ {currentDueDate}</span>
+                  </div>
+                </div>
+
+                {/* Date picker */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">新的預定完成日</Label>
+                  <input
+                    type="date"
+                    value={proposedDate}
+                    min={currentStartDate}
+                    onChange={e => setMsDateDialogData(prev => prev ? { ...prev, proposedDate: e.target.value } : prev)}
+                    className="w-full h-9 text-sm border rounded-md px-3 bg-background"
+                  />
+                </div>
+
+                {/* Shift info */}
+                {!isNoChange && (
+                  <div className={cn(
+                    'rounded-lg border p-3 space-y-1.5',
+                    isEarlier ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20'
+                  )}>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      {isEarlier ? (
+                        <ArrowLeft className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4 text-amber-600" />
+                      )}
+                      <span className={isEarlier ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}>
+                        {isEarlier ? `提前 ${Math.abs(shift)} 天` : `延後 ${shift} 天`}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {currentDueDate} <ArrowRight className="inline h-3 w-3 mx-0.5" /> {proposedDate}
+                    </div>
+                  </div>
+                )}
+
+                {/* Impact warning */}
+                {willAffectNext && !isNoChange && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20 p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-red-700 dark:text-red-400">將影響後續里程碑</p>
+                        <p className="text-xs text-red-600/80 dark:text-red-400/70">
+                          新的完成日已超過下一個里程碑「{nextMilestoneName}」的預定日（{nextMilestoneDueDate}），
+                          審核通過後系統將自動順延後續里程碑與任務日期。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!willAffectNext && !isNoChange && shift > 0 && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20 p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                      <p className="text-xs text-blue-600/80 dark:text-blue-400/70">
+                        此延期不會影響後續里程碑，僅調整本里程碑的預定完成日。
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setMsDateDialogOpen(false); setMsDateDialogData(null) }}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    disabled={isNoChange}
+                    onClick={handleMilestoneDateChange}
+                  >
+                    <Send className="h-4 w-4 mr-1.5" />
+                    送出延期申請
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
     </DashboardLayout>
   )
