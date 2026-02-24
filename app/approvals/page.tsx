@@ -40,6 +40,7 @@ interface DelayRequestItem {
   requestedBy: string
   requestedAt: string
   reason: string
+  type?: 'delay' | 'date_change'
   canCatchUp: boolean
   supportNeeded: string
   status: 'pending' | 'approved' | 'rejected'
@@ -161,7 +162,7 @@ export default function ApprovalsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">審批中心</h1>
-            <p className="text-sm text-muted-foreground mt-1">審核專案延遲申請</p>
+            <p className="text-sm text-muted-foreground mt-1">審核專案延遲申請與日期變更</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={pendingApprovals.length > 0 ? 'destructive' : 'secondary'} className="text-sm px-2.5 py-1">
@@ -191,6 +192,7 @@ export default function ApprovalsPage() {
                   <thead>
                     <tr className="bg-muted/50 text-sm text-muted-foreground">
                       <th className="text-left px-4 py-3 font-medium">專案</th>
+                      <th className="text-left px-4 py-3 font-medium">類型</th>
                       <th className="text-left px-4 py-3 font-medium">申請人</th>
                       <th className="text-left px-4 py-3 font-medium">申請時間</th>
                       <th className="text-center px-4 py-3 font-medium">影響里程碑</th>
@@ -213,6 +215,16 @@ export default function ApprovalsPage() {
                           <td className="px-4 py-3.5">
                             <div className="font-semibold text-base">{request.project.name}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">{request.project.projectCode}</div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <Badge variant="outline" className={cn(
+                              'text-xs',
+                              request.type === 'date_change'
+                                ? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400'
+                                : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400',
+                            )}>
+                              {request.type === 'date_change' ? '日期變更' : '延遲申請'}
+                            </Badge>
                           </td>
                           <td className="px-4 py-3.5 text-sm">{request.requestedBy}</td>
                           <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatDate(request.requestedAt)}</td>
@@ -309,10 +321,20 @@ export default function ApprovalsPage() {
               <>
                 <DialogHeader className="pb-2">
                   <DialogTitle className="text-xl">{request.project.name}</DialogTitle>
-                  <DialogDescription className="sr-only">延遲申請詳情</DialogDescription>
+                  <DialogDescription className="sr-only">
+                    {request.type === 'date_change' ? '日期變更申請詳情' : '延遲申請詳情'}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="flex items-center gap-2.5 flex-wrap pb-3">
                   <Badge variant="outline" className="font-mono text-xs px-2.5 py-0.5">{request.project.projectCode}</Badge>
+                  <Badge variant="outline" className={cn(
+                    'text-xs px-2.5 py-0.5',
+                    request.type === 'date_change'
+                      ? 'border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400'
+                      : 'border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400',
+                  )}>
+                    {request.type === 'date_change' ? '日期變更' : '延遲申請'}
+                  </Badge>
                   {isPending ? (
                     <Badge variant="secondary" className="bg-warning/15 text-warning border-warning/30 text-xs px-2.5 py-0.5">
                       <Clock className="h-3.5 w-3.5 mr-1" /> 待審核
@@ -341,10 +363,14 @@ export default function ApprovalsPage() {
                     </div>
                   </div>
 
-                  {/* Delay reason */}
+                  {/* Delay reason / Change reason */}
                   <div>
                     <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                      <AlertTriangle className="h-4 w-4 text-warning" /> 延遲原因
+                      {request.type === 'date_change' ? (
+                        <><Calendar className="h-4 w-4 text-blue-500" /> 變更原因</>
+                      ) : (
+                        <><AlertTriangle className="h-4 w-4 text-warning" /> 延遲原因</>
+                      )}
                     </h4>
                     <div className="bg-muted/50 border p-3 rounded-lg text-sm leading-relaxed">
                       {request.reason}
@@ -378,27 +404,29 @@ export default function ApprovalsPage() {
                     </div>
                   </div>
 
-                  {/* Can catch up + support needed */}
-                  <div className="grid grid-cols-2 gap-3 items-stretch">
-                    <div className="flex flex-col">
-                      <h4 className="text-sm font-semibold mb-2">能否追回</h4>
-                      <div className={cn(
-                        'flex items-center gap-1.5 p-3 rounded-lg border text-sm font-medium flex-1',
-                        request.canCatchUp
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300'
-                          : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300',
-                      )}>
-                        {request.canCatchUp ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
-                        {request.canCatchUp ? '可以追回' : '無法追回'}
+                  {/* Can catch up + support needed (hide for date_change type) */}
+                  {request.type !== 'date_change' && (
+                    <div className="grid grid-cols-2 gap-3 items-stretch">
+                      <div className="flex flex-col">
+                        <h4 className="text-sm font-semibold mb-2">能否追回</h4>
+                        <div className={cn(
+                          'flex items-center gap-1.5 p-3 rounded-lg border text-sm font-medium flex-1',
+                          request.canCatchUp
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300'
+                            : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300',
+                        )}>
+                          {request.canCatchUp ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                          {request.canCatchUp ? '可以追回' : '無法追回'}
+                        </div>
+                      </div>
+                      <div className="flex flex-col">
+                        <h4 className="text-sm font-semibold mb-2">需要支援</h4>
+                        <div className="p-3 rounded-lg border bg-muted/50 text-sm leading-relaxed flex-1">
+                          {request.supportNeeded || '無'}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex flex-col">
-                      <h4 className="text-sm font-semibold mb-2">需要支援</h4>
-                      <div className="p-3 rounded-lg border bg-muted/50 text-sm leading-relaxed flex-1">
-                        {request.supportNeeded || '無'}
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Review result (for already reviewed) */}
                   {!isPending && (

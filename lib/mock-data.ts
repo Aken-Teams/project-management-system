@@ -38,10 +38,13 @@ export interface DelayRequest {
   requestedBy: string
   requestedAt: string
   reason: string
+  type?: 'delay' | 'date_change'
   affectedMilestones: {
     milestoneId: string
     originalDate: string
     proposedDate: string
+    originalStartDate?: string
+    proposedStartDate?: string
   }[]
   canCatchUp: boolean
   supportNeeded: string
@@ -97,6 +100,19 @@ export interface Project {
   updatedAt: string
 }
 
+export interface SubTask {
+  id: string
+  title: string
+  status: TaskStatus
+  progress: number
+  assignee: string
+  startDate: string
+  endDate: string
+  priority: 'low' | 'medium' | 'high'
+  completedAt?: string
+  completedBy?: string
+}
+
 export interface Task {
   id: string
   projectId: string
@@ -113,6 +129,8 @@ export interface Task {
   progress: number
   completedAt?: string
   completedBy?: string
+  parentId?: string | null
+  subtasks?: SubTask[]
 }
 
 export interface TaskLog {

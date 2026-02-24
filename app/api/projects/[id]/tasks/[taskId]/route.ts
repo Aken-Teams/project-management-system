@@ -93,6 +93,38 @@ export async function PUT(
       }
     }
 
+    // ── Auto-sync parent task progress from children ──
+    if (task.parentId && (data.status !== undefined || data.progress !== undefined)) {
+      const siblings = await prisma.task.findMany({
+        where: { parentId: task.parentId },
+        select: { status: true, progress: true },
+      })
+      const avgProgress = Math.round(siblings.reduce((s, t) => s + t.progress, 0) / siblings.length)
+      const allDone = siblings.every(t => t.status === 'done')
+
+      const parentUpdate: Record<string, unknown> = { progress: avgProgress }
+      if (allDone) {
+        parentUpdate.status = 'done'
+        parentUpdate.completedAt = new Date()
+        parentUpdate.completedBy = 'system'
+        parentUpdate.progress = 100
+      } else {
+        // If parent was auto-completed but children are no longer all done, revert
+        const parent = await prisma.task.findUnique({ where: { id: task.parentId }, select: { status: true } })
+        if (parent?.status === 'done') {
+          parentUpdate.status = 'in_progress'
+          parentUpdate.completedAt = null
+          parentUpdate.completedBy = null
+        }
+      }
+
+      await prisma.task.update({
+        where: { id: task.parentId },
+        data: parentUpdate,
+      })
+      await syncMilestoneStatus(milestoneId, id)
+    }
+
     return NextResponse.json({
       id: updated.id,
       projectId: id,
@@ -106,6 +138,7 @@ export async function PUT(
       endDate: updated.endDate.toISOString().slice(0, 10),
       durationWeeks: updated.durationWeeks,
       progress: updated.progress,
+      parentId: updated.parentId || null,
       ...(updated.completedAt ? { completedAt: updated.completedAt.toISOString().slice(0, 10) } : {}),
       ...(updated.completedBy ? { completedBy: updated.completedBy } : {}),
     })

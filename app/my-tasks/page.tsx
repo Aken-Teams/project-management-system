@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
-import { type Task, type TaskLog } from '@/lib/mock-data'
+import { type Task, type TaskLog, type SubTask } from '@/lib/mock-data'
 import {
   computeTaskStatus,
   getStatusLabel,
@@ -59,6 +59,7 @@ import {
   Trash2,
   Check,
   X,
+  Plus,
 } from 'lucide-react'
 
 function getStatusDot(status: ComputedTaskStatus) {
@@ -91,7 +92,8 @@ interface MilestoneTaskGroup {
 interface MyTasksProject {
   id: string
   name: string
-  milestones: { id: string; name: string; dueDate: string; status: string; progress: number }[]
+  userRole?: string
+  milestones: { id: string; name: string; dueDate: string; status: string; progress: number; sortOrder?: number }[]
   tasks: Task[]
   taskLogs: TaskLog[]
   pendingDelayMilestoneIds?: string[]
@@ -120,6 +122,12 @@ export default function MyTasksPage() {
   const [editLogContent, setEditLogContent] = useState('')
   const [editLogDate, setEditLogDate] = useState('')
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null)
+  const [milestoneEditDate, setMilestoneEditDate] = useState('')
+  const [milestoneEditProjectId, setMilestoneEditProjectId] = useState('')
+  const [addingSubtask, setAddingSubtask] = useState(false)
+  const [subtaskTitle, setSubtaskTitle] = useState('')
+  const [subtaskAssignee, setSubtaskAssignee] = useState('')
   const recognitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -138,35 +146,53 @@ export default function MyTasksPage() {
   // Build grouped data: project → milestone groups → tasks
   const projectGroups = useMemo(() => {
     if (!user) return []
-    const result: { project: MyTasksProject; milestoneGroups: MilestoneTaskGroup[]; completedCount: number; totalCount: number }[] = []
+    const result: { project: MyTasksProject; milestoneGroups: MilestoneTaskGroup[]; completedCount: number; totalCount: number; isPM: boolean }[] = []
 
     apiProjects.forEach(p => {
-      const userTasks = p.tasks.filter(t => t.assignee === user.name)
-      if (userTasks.length === 0) return
+      const isPM = p.userRole === 'pm'
+      // PM sees all top-level tasks; members see only their assigned tasks
+      const visibleTasks = isPM
+        ? p.tasks.filter(t => !t.parentId)
+        : p.tasks.filter(t => t.assignee === user.name && !t.parentId)
+      if (visibleTasks.length === 0 && !isPM) return
+      // PM can see projects with milestones even if no tasks yet
+      if (visibleTasks.length === 0 && isPM && p.milestones.length === 0) return
 
       const milestoneMap = new Map<string, Task[]>()
-      userTasks.forEach(t => {
+      visibleTasks.forEach(t => {
         const arr = milestoneMap.get(t.milestoneId) || []
         arr.push(t)
         milestoneMap.set(t.milestoneId, arr)
       })
 
+      // For PM, include milestones even if they have no tasks
       const milestoneGroups: MilestoneTaskGroup[] = []
-      milestoneMap.forEach((tasks, milestoneId) => {
-        const milestone = p.milestones.find(m => m.id === milestoneId)
-        if (!milestone) return
-        milestoneGroups.push({
-          milestoneId,
-          milestoneName: milestone.name,
-          milestoneDueDate: milestone.dueDate,
-          tasks,
+      if (isPM) {
+        p.milestones.forEach(m => {
+          milestoneGroups.push({
+            milestoneId: m.id,
+            milestoneName: m.name,
+            milestoneDueDate: m.dueDate,
+            tasks: milestoneMap.get(m.id) || [],
+          })
         })
-      })
+      } else {
+        milestoneMap.forEach((tasks, milestoneId) => {
+          const milestone = p.milestones.find(m => m.id === milestoneId)
+          if (!milestone) return
+          milestoneGroups.push({
+            milestoneId,
+            milestoneName: milestone.name,
+            milestoneDueDate: milestone.dueDate,
+            tasks,
+          })
+        })
+      }
 
       milestoneGroups.sort((a, b) => new Date(a.milestoneDueDate).getTime() - new Date(b.milestoneDueDate).getTime())
 
-      const completedCount = userTasks.filter(t => !!t.completedAt).length
-      result.push({ project: p, milestoneGroups, completedCount, totalCount: userTasks.length })
+      const completedCount = visibleTasks.filter(t => !!t.completedAt).length
+      result.push({ project: p, milestoneGroups, completedCount, totalCount: visibleTasks.length, isPM })
     })
 
     return result
@@ -213,6 +239,9 @@ export default function MyTasksPage() {
     setAttachments([])
     setIsListening(false)
     setEditingLogId(null)
+    setAddingSubtask(false)
+    setSubtaskTitle('')
+    setSubtaskAssignee('')
     setDialogOpen(true)
   }
 
@@ -256,6 +285,97 @@ export default function MyTasksPage() {
     recognition.start()
     setIsListening(true)
   }, [isListening])
+
+  // ── PM: Submit milestone date change as a delay request ──
+  const handleMilestoneDateChange = async (milestoneId: string, projectId: string, newDueDate: string) => {
+    const project = apiProjects.find(p => p.id === projectId)
+    const milestone = project?.milestones.find(m => m.id === milestoneId)
+    if (!milestone || !project || !user) return
+
+    try {
+      const res = await fetch('/api/delay-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          requesterId: user.id,
+          type: 'date_change',
+          reason: `PM 調整里程碑「${milestone.name}」預定日期`,
+          canCatchUp: true,
+          affectedMilestones: [{
+            milestoneId,
+            originalDate: milestone.dueDate,
+            proposedDate: newDueDate,
+          }],
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '送出失敗')
+      }
+      // Optimistic update
+      setApiProjects(prev => prev.map(p =>
+        p.id === projectId
+          ? {
+              ...p,
+              pendingDelayMilestoneIds: [...(p.pendingDelayMilestoneIds || []), milestoneId],
+              pendingDelayProposedDates: { ...(p.pendingDelayProposedDates || {}), [milestoneId]: newDueDate },
+            }
+          : p
+      ))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '送出日期變更申請失敗')
+    }
+    setEditingMilestoneId(null)
+    setMilestoneEditDate('')
+    setMilestoneEditProjectId('')
+  }
+
+  // ── Add subtask to a parent task ──
+  const handleAddSubtask = async () => {
+    if (!dialogTask || !subtaskTitle.trim()) return
+    const { project, task } = dialogTask
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          milestoneId: task.milestoneId,
+          parentId: task.id,
+          title: subtaskTitle.trim(),
+          assignee: subtaskAssignee.trim() || task.assignee,
+          priority: 'medium',
+          startDate: task.startDate,
+          endDate: task.endDate,
+          durationWeeks: 1,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '新增子任務失敗')
+      }
+      const newSubtask = await res.json()
+      // Optimistic update
+      setApiProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? {
+              ...p,
+              tasks: p.tasks.map(t =>
+                t.id === task.id
+                  ? { ...t, subtasks: [...(t.subtasks || []), { ...newSubtask, status: newSubtask.status === 'in_progress' ? 'in-progress' : newSubtask.status }] }
+                  : t
+              ),
+            }
+          : p
+      ))
+      setSubtaskTitle('')
+      setSubtaskAssignee('')
+      setAddingSubtask(false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '新增子任務失敗')
+    }
+  }
 
   if (!user) return null
 
@@ -483,7 +603,12 @@ export default function MyTasksPage() {
         {/* Page Header */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
-          <p className="text-sm text-muted-foreground mt-1">{user.name} 的任務總覽</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {user.name} 的任務總覽
+            {projectGroups.some(g => g.isPM) && (
+              <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">PM 管理模式</span>
+            )}
+          </p>
         </div>
 
         {/* Stats Cards */}
@@ -562,7 +687,7 @@ export default function MyTasksPage() {
           </Card>
         ) : (
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredGroups.map(({ project, milestoneGroups, completedCount: pCompleted, totalCount: pTotal }) => {
+            {filteredGroups.map(({ project, milestoneGroups, completedCount: pCompleted, totalCount: pTotal, isPM }) => {
               const isCollapsed = collapsedProjects.has(project.id)
 
               return (
@@ -578,6 +703,7 @@ export default function MyTasksPage() {
                         isCollapsed && '-rotate-90',
                       )} />
                       {project.name}
+                      {isPM && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">PM</Badge>}
                     </CardTitle>
                     <span className="text-sm text-muted-foreground">{pCompleted}/{pTotal}</span>
                   </CardHeader>
@@ -585,14 +711,75 @@ export default function MyTasksPage() {
                   {!isCollapsed && (
                     <CardContent className="px-4 pb-3 pt-0 flex-1">
                       <div className="divide-y divide-border">
-                      {milestoneGroups.map(mg => (
+                      {milestoneGroups.map(mg => {
+                        const milestone = project.milestones.find(m => m.id === mg.milestoneId)
+                        const msPendingDelay = (project.pendingDelayMilestoneIds || []).includes(mg.milestoneId)
+                        const isEditingThis = editingMilestoneId === mg.milestoneId && milestoneEditProjectId === project.id
+
+                        return (
                         <div key={mg.milestoneId} className="py-2 first:pt-0 last:pb-0">
                           {/* Milestone label */}
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-sm font-medium text-muted-foreground">{mg.milestoneName}</span>
-                            <Badge variant="outline" className="text-[10px] font-mono px-1">
-                              {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                            </Badge>
+                            {isPM && milestone ? (
+                              <>
+                                {isEditingThis ? (
+                                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="date"
+                                      value={milestoneEditDate}
+                                      onChange={e => setMilestoneEditDate(e.target.value)}
+                                      className="h-6 text-[11px] border rounded px-1.5 bg-background"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        if (milestoneEditDate && milestoneEditDate !== milestone.dueDate) {
+                                          handleMilestoneDateChange(mg.milestoneId, project.id, milestoneEditDate)
+                                        } else {
+                                          setEditingMilestoneId(null)
+                                        }
+                                      }}
+                                      className="text-xs text-primary hover:underline"
+                                    >
+                                      送出
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingMilestoneId(null)}
+                                      className="text-xs text-muted-foreground hover:underline"
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      if (msPendingDelay) return
+                                      setEditingMilestoneId(mg.milestoneId)
+                                      setMilestoneEditDate(milestone.dueDate)
+                                      setMilestoneEditProjectId(project.id)
+                                    }}
+                                    className={cn(
+                                      'text-[10px] font-mono px-1 py-0.5 rounded border transition-colors',
+                                      msPendingDelay
+                                        ? 'border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950/20 cursor-default'
+                                        : 'border-border hover:border-primary/50 hover:bg-primary/5',
+                                    )}
+                                    title={msPendingDelay ? '日期變更審核中' : '點擊修改預定日期（需審核）'}
+                                  >
+                                    {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                    {msPendingDelay && ' (審核中)'}
+                                  </button>
+                                )}
+                                {milestone.progress > 0 && (
+                                  <span className="text-[10px] text-muted-foreground">{milestone.progress}%</span>
+                                )}
+                              </>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] font-mono px-1">
+                                {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                              </Badge>
+                            )}
                           </div>
 
                           {/* Tasks — compact lines */}
@@ -616,6 +803,12 @@ export default function MyTasksPage() {
                                   )}>
                                     {task.title}
                                   </span>
+                                  {/* PM view: show assignee */}
+                                  {isPM && task.assignee && (
+                                    <span className="text-[11px] text-muted-foreground shrink-0 max-w-[60px] truncate">
+                                      {task.assignee}
+                                    </span>
+                                  )}
                                   {taskPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? (
                                     <span className="text-sm text-amber-600 font-medium shrink-0">
                                       延期申請中
@@ -642,7 +835,8 @@ export default function MyTasksPage() {
                             })}
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                       </div>
                     </CardContent>
                   )}
@@ -1138,7 +1332,75 @@ export default function MyTasksPage() {
                         </div>
                       )}
 
-                      {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (
+                      {/* Subtasks */}
+                      {!task.parentId && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 rounded flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30">
+                              <ListChecks className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <span className="text-sm font-medium text-muted-foreground">子任務</span>
+                            {task.subtasks && task.subtasks.length > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                {task.subtasks.filter(s => s.completedAt || s.status === 'done').length}/{task.subtasks.length}
+                              </span>
+                            )}
+                          </div>
+                          {task.subtasks && task.subtasks.length > 0 && (
+                            <div className="space-y-1.5 ml-7">
+                              {task.subtasks.map(sub => (
+                                <div key={sub.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
+                                  {getStatusDot(sub.status === 'done' ? 'completed' : sub.status === 'in-progress' ? 'on-track' : sub.status === 'blocked' ? 'overdue' : 'not-started')}
+                                  <span className={cn('flex-1 truncate', sub.status === 'done' && 'text-muted-foreground')}>{sub.title}</span>
+                                  {sub.assignee && <span className="text-[11px] text-muted-foreground">{sub.assignee}</span>}
+                                  <Badge variant="outline" className="text-[10px] px-1">{sub.progress}%</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Add subtask form */}
+                          {addingSubtask ? (
+                            <div className="ml-7 space-y-2 p-3 rounded-lg border border-dashed border-border">
+                              <input
+                                type="text"
+                                placeholder="子任務標題"
+                                value={subtaskTitle}
+                                onChange={e => setSubtaskTitle(e.target.value)}
+                                className="w-full text-sm border rounded-lg px-2.5 py-1.5 bg-background"
+                                autoFocus
+                              />
+                              <input
+                                type="text"
+                                placeholder="負責人（選填，預設為父任務負責人）"
+                                value={subtaskAssignee}
+                                onChange={e => setSubtaskAssignee(e.target.value)}
+                                className="w-full text-sm border rounded-lg px-2.5 py-1.5 bg-background"
+                              />
+                              <div className="flex gap-2">
+                                <Button size="sm" className="gap-1 text-sm h-7" disabled={!subtaskTitle.trim()} onClick={handleAddSubtask}>
+                                  <Plus className="h-3 w-3" /> 新增
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-sm h-7" onClick={() => { setAddingSubtask(false); setSubtaskTitle(''); setSubtaskAssignee('') }}>
+                                  取消
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="ml-7">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-sm h-7"
+                                onClick={() => setAddingSubtask(true)}
+                              >
+                                <Plus className="h-3 w-3" /> 新增子任務
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {upstreamTasks.length === 0 && downstreamTasks.length === 0 && (!task.subtasks || task.subtasks.length === 0) && !!task.parentId && (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
                           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
                             <Info className="h-5 w-5 text-muted-foreground" />

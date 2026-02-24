@@ -203,6 +203,7 @@ interface MilestoneTaskDraft {
   assignee: string
   priority: 'low' | 'medium' | 'high'
   durationWeeks: number
+  parentId?: string
 }
 
 interface ProjectDraft {
@@ -723,22 +724,27 @@ export default function NewProjectPage() {
       }))
 
     // Map AI draft tasks with calculated dates
-    const validTasks = aiTasks
-      .filter(t => t.title.trim() && milestoneIdMap.has(t.milestoneId))
+    // Parent tasks first, then subtasks
+    const aiParentDrafts = aiTasks.filter(t => !t.parentId && t.title.trim() && milestoneIdMap.has(t.milestoneId))
+    const aiSubtaskDrafts = aiTasks.filter(t => t.parentId && t.title.trim())
+    const validTasks = [...aiParentDrafts, ...aiSubtaskDrafts]
       .map(t => {
         const msId = milestoneIdMap.get(t.milestoneId)!
         const ms = milestones.find(m => m.id === msId)
         const dates = aiTaskDates.get(t.id)
+        const parentDates = t.parentId ? aiTaskDates.get(t.parentId) : null
         return {
+          tempId: t.id,
           milestoneId: msId,
           title: t.title,
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
           durationWeeks: t.durationWeeks || 1,
-          startDate: dates?.startDate || aiEditableData.startDate,
-          endDate: dates?.endDate || ms?.dueDate || aiEditableData.endDate,
+          startDate: dates?.startDate || parentDates?.startDate || aiEditableData.startDate,
+          endDate: dates?.endDate || parentDates?.endDate || ms?.dueDate || aiEditableData.endDate,
           dependencies: [] as string[],
+          ...(t.parentId ? { parentTempId: t.parentId } : {}),
         }
       })
 
@@ -803,11 +809,15 @@ export default function NewProjectPage() {
       }))
 
     // Map draft tasks to real tasks with correct milestone IDs and calculated dates
-    const validTasks = manualTasks
-      .filter(t => t.title.trim() && milestoneIdMap.has(t.milestoneId))
+    // Parent tasks first, then subtasks, so parentId resolution works
+    const parentDrafts = manualTasks.filter(t => !t.parentId && t.title.trim() && milestoneIdMap.has(t.milestoneId))
+    const subtaskDrafts = manualTasks.filter(t => t.parentId && t.title.trim())
+    const validTasks = [...parentDrafts, ...subtaskDrafts]
       .map(t => {
         const msId = milestoneIdMap.get(t.milestoneId)!
         const dates = manualTaskDates.get(t.id)
+        // For subtasks, use parent dates as fallback
+        const parentDates = t.parentId ? manualTaskDates.get(t.parentId) : null
         // Fallback to milestone range if no calculated dates
         const ms = validMilestones.find(m => m.id === msId)
         const msIndex = validMilestones.indexOf(ms!)
@@ -816,14 +826,16 @@ export default function NewProjectPage() {
           ? new Date(new Date(prevMs.dueDate).getTime() + 86400000).toISOString().split('T')[0]
           : manualData.startDate
         return {
+          tempId: t.id,
           milestoneId: msId,
           title: t.title,
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
           durationWeeks: t.durationWeeks || 1,
-          startDate: dates?.startDate || fallbackStart,
-          endDate: dates?.endDate || ms?.dueDate || manualData.endDate,
+          startDate: dates?.startDate || parentDates?.startDate || fallbackStart,
+          endDate: dates?.endDate || parentDates?.endDate || ms?.dueDate || manualData.endDate,
+          ...(t.parentId ? { parentTempId: t.parentId } : {}),
         }
       })
 

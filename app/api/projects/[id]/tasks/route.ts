@@ -15,6 +15,7 @@ interface AddTaskBody {
   startDate: string
   endDate: string
   durationWeeks?: number
+  parentId?: string
 }
 
 export async function POST(
@@ -38,6 +39,21 @@ export async function POST(
     }
     if (!body.startDate || !body.endDate) {
       return NextResponse.json({ error: '起訖日期為必填' }, { status: 400 })
+    }
+
+    // Validate parentId if creating a subtask
+    if (body.parentId) {
+      const parentTask = await prisma.task.findFirst({
+        where: { id: body.parentId, projectId: id },
+      })
+      if (!parentTask) {
+        return NextResponse.json({ error: '找不到父任務' }, { status: 404 })
+      }
+      if (parentTask.parentId) {
+        return NextResponse.json({ error: '子任務不能再建立子任務' }, { status: 400 })
+      }
+      // Subtask inherits milestoneId from parent
+      body.milestoneId = parentTask.milestoneId
     }
 
     const milestone = await prisma.milestone.findFirst({
@@ -68,6 +84,7 @@ export async function POST(
         endDate: end,
         durationWeeks,
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        ...(body.parentId ? { parentId: body.parentId } : {}),
       },
     })
 
@@ -84,6 +101,7 @@ export async function POST(
       endDate: task.endDate.toISOString().slice(0, 10),
       durationWeeks: task.durationWeeks,
       progress: task.progress,
+      parentId: task.parentId || null,
       dependencies: [],
     }, { status: 201 })
   } catch (error) {

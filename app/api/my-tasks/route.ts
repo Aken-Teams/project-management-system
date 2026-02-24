@@ -33,12 +33,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Find projects where user is a team member
+    // Find projects where user is a team member (include role for PM detection)
     const memberships = await prisma.projectTeamMember.findMany({
       where: { userId: user.id },
-      select: { projectId: true },
+      select: { projectId: true, role: true },
     })
     const projectIds = memberships.map(m => m.projectId)
+    const membershipRoleMap = new Map(memberships.map(m => [m.projectId, m.role]))
 
     if (projectIds.length === 0) {
       return NextResponse.json({ user, projects: [] })
@@ -52,10 +53,16 @@ export async function GET(request: NextRequest) {
         name: true,
         milestones: {
           orderBy: { sortOrder: 'asc' },
-          select: { id: true, name: true, dueDate: true, status: true, progress: true },
+          select: { id: true, name: true, dueDate: true, status: true, progress: true, sortOrder: true },
         },
         tasks: {
-          include: { dependsOn: true },
+          include: {
+            dependsOn: true,
+            children: {
+              select: { id: true, title: true, status: true, progress: true, assignee: true, startDate: true, endDate: true, priority: true, completedAt: true, completedBy: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
           orderBy: { sortOrder: 'asc' },
         },
         taskLogs: {
@@ -82,9 +89,9 @@ export async function GET(request: NextRequest) {
       // 2. Compute task progress from task-log coverage
       await syncTaskProgressFromLogs(p.tasks, p.taskLogs)
 
-      // 3. Re-sync milestone statuses (now includes blocked)
+      // 3. Re-sync milestone statuses (exclude subtasks to prevent double-counting)
       for (const ms of p.milestones) {
-        const msTasks = p.tasks.filter(t => t.milestoneId === ms.id)
+        const msTasks = p.tasks.filter(t => t.milestoneId === ms.id && !t.parentId)
         if (msTasks.length === 0) continue
         const correctStatus = computeMilestoneStatus(msTasks)
         const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)
@@ -101,16 +108,18 @@ export async function GET(request: NextRequest) {
 
     // Transform to frontend format
     const feProjects = projects
-      .filter(p => p.tasks.length > 0)
+      .filter(p => p.tasks.length > 0 || membershipRoleMap.get(p.id) === 'pm')
       .map(p => ({
         id: p.id,
         name: p.name,
+        userRole: membershipRoleMap.get(p.id) || 'other',
         milestones: p.milestones.map(m => ({
           id: m.id,
           name: m.name,
           dueDate: m.dueDate.toISOString().split('T')[0],
           status: m.status === 'in_progress' ? 'in-progress' : m.status,
           progress: m.progress,
+          sortOrder: m.sortOrder,
         })),
         tasks: p.tasks.map(t => ({
           id: t.id,
@@ -126,6 +135,19 @@ export async function GET(request: NextRequest) {
           endDate: t.endDate.toISOString().split('T')[0],
           dependencies: (t.dependsOn || []).map(d => d.prerequisiteId),
           progress: t.progress,
+          parentId: t.parentId || null,
+          subtasks: ((t as Record<string, unknown>).children as Array<Record<string, unknown>> || []).map((c: Record<string, unknown>) => ({
+            id: c.id,
+            title: c.title,
+            status: c.status === 'in_progress' ? 'in-progress' : c.status,
+            progress: c.progress,
+            assignee: c.assignee,
+            startDate: (c.startDate as Date).toISOString().split('T')[0],
+            endDate: (c.endDate as Date).toISOString().split('T')[0],
+            priority: c.priority,
+            ...(c.completedAt ? { completedAt: (c.completedAt as Date).toISOString().split('T')[0] } : {}),
+            ...(c.completedBy ? { completedBy: c.completedBy } : {}),
+          })),
           ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
           ...(t.completedBy ? { completedBy: t.completedBy } : {}),
         })),

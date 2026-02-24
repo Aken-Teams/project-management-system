@@ -174,6 +174,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       id: t.id, milestoneId: t.milestoneId, title: t.title,
       assignee: t.assignee, priority: t.priority,
       durationWeeks: t.durationWeeks, startDate: t.startDate, endDate: t.endDate,
+      parentId: t.parentId ?? undefined,
     }))
   )
 
@@ -326,14 +327,23 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         body: JSON.stringify(ms),
       })
     }
-    // 5. Create new tasks (resolve draft milestone IDs)
+    // 5. Create new tasks (resolve draft milestone/parent IDs)
+    //    Parent tasks are ordered before subtasks in diff.tasksToAdd
+    const newTaskIdMap = new Map<string, string>()
     for (const task of diff.tasksToAdd) {
       const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
-      await fetch(`/api/projects/${project.id}/tasks`, {
+      const resolvedParentId = task.parentId
+        ? (newTaskIdMap.get(task.parentId) || task.parentId)
+        : undefined
+      const res = await fetch(`/api/projects/${project.id}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...task, milestoneId: resolvedMsId }),
+        body: JSON.stringify({ ...task, milestoneId: resolvedMsId, parentId: resolvedParentId }),
       })
+      if (res.ok) {
+        const created = await res.json()
+        newTaskIdMap.set(task.tempId, created.id)
+      }
     }
     // 6. Update existing tasks
     for (const task of diff.tasksToUpdate) {

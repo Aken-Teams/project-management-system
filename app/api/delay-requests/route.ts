@@ -9,10 +9,13 @@ interface CreateDelayRequestBody {
   reason: string
   canCatchUp: boolean
   supportNeeded?: string
+  type?: 'delay' | 'date_change'
   affectedMilestones: {
     milestoneId: string
     originalDate: string
     proposedDate: string
+    originalStartDate?: string
+    proposedStartDate?: string
   }[]
 }
 
@@ -61,12 +64,15 @@ export async function POST(request: NextRequest) {
           reason: body.reason.trim(),
           canCatchUp: body.canCatchUp ?? false,
           supportNeeded: body.supportNeeded?.trim() || '',
+          type: body.type || 'delay',
           status: 'pending',
           affectedMilestones: {
             create: body.affectedMilestones.map((am) => ({
               milestoneId: am.milestoneId,
               originalDate: new Date(am.originalDate),
               proposedDate: new Date(am.proposedDate),
+              ...(am.originalStartDate ? { originalStartDate: new Date(am.originalStartDate) } : {}),
+              ...(am.proposedStartDate ? { proposedStartDate: new Date(am.proposedStartDate) } : {}),
             })),
           },
         },
@@ -89,11 +95,14 @@ export async function POST(request: NextRequest) {
         reason: delayRequest.reason,
         canCatchUp: delayRequest.canCatchUp,
         supportNeeded: delayRequest.supportNeeded,
+        type: delayRequest.type,
         status: delayRequest.status,
         affectedMilestones: delayRequest.affectedMilestones.map((am) => ({
           milestoneId: am.milestoneId,
           originalDate: am.originalDate.toISOString().split('T')[0],
           proposedDate: am.proposedDate.toISOString().split('T')[0],
+          ...(am.originalStartDate ? { originalStartDate: am.originalStartDate.toISOString().split('T')[0] } : {}),
+          ...(am.proposedStartDate ? { proposedStartDate: am.proposedStartDate.toISOString().split('T')[0] } : {}),
         })),
       },
     })
@@ -163,12 +172,15 @@ export async function GET(request: NextRequest) {
       reason: dr.reason,
       canCatchUp: dr.canCatchUp,
       supportNeeded: dr.supportNeeded,
+      type: dr.type,
       status: dr.status,
       affectedMilestones: dr.affectedMilestones.map((am) => ({
         milestoneId: am.milestoneId,
         milestoneName: am.milestone.name,
         originalDate: am.originalDate.toISOString().split('T')[0],
         proposedDate: am.proposedDate.toISOString().split('T')[0],
+        ...(am.originalStartDate ? { originalStartDate: am.originalStartDate.toISOString().split('T')[0] } : {}),
+        ...(am.proposedStartDate ? { proposedStartDate: am.proposedStartDate.toISOString().split('T')[0] } : {}),
       })),
       ...(dr.reviewer ? { reviewedBy: dr.reviewer.name } : {}),
       ...(dr.reviewedAt ? { reviewedAt: dr.reviewedAt.toISOString() } : {}),

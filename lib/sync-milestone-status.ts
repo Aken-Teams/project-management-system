@@ -9,8 +9,9 @@ import { prisma } from '@/lib/db'
  *  - Progress = average of task progresses
  */
 export async function syncMilestoneStatus(milestoneId: string, projectId: string) {
+  // Exclude subtasks (parentId != null) to prevent double-counting
   const tasks = await prisma.task.findMany({
-    where: { milestoneId, projectId },
+    where: { milestoneId, projectId, parentId: null },
     select: { status: true, progress: true },
   })
 

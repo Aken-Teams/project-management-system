@@ -199,11 +199,17 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // 4. Create tasks
+      // 4. Create tasks (parent tasks first, then subtasks)
+      //    Track tempId → realId for resolving subtask parentId
+      const taskTempIdMap = new Map<string, string>()
       const tasks = []
       if (body.tasks?.length) {
-        for (let i = 0; i < body.tasks.length; i++) {
-          const t = body.tasks[i]
+        // Separate parent tasks and subtasks; create parents first
+        const parentTaskInputs = body.tasks.filter((t: Record<string, unknown>) => !t.parentId && !t.parentTempId)
+        const subtaskInputs = body.tasks.filter((t: Record<string, unknown>) => t.parentId || t.parentTempId)
+
+        let sortIdx = 0
+        for (const t of parentTaskInputs) {
           const dbMilestoneId = milestoneIdMap.get(t.milestoneId)
           if (!dbMilestoneId) continue
 
@@ -218,26 +224,59 @@ export async function POST(request: NextRequest) {
               durationWeeks: t.durationWeeks || 0,
               startDate: new Date(t.startDate),
               endDate: new Date(t.endDate),
-              sortOrder: i,
+              sortOrder: sortIdx++,
             },
           })
+          if (t.tempId) taskTempIdMap.set(t.tempId, task.id)
           tasks.push(task)
+        }
+
+        // Create subtasks with resolved parentId
+        for (const t of subtaskInputs) {
+          const resolvedParentId = t.parentTempId
+            ? taskTempIdMap.get(t.parentTempId as string)
+            : (t.parentId as string)
+          if (!resolvedParentId) continue
+
+          // Inherit milestoneId from parent
+          const parent = tasks.find(p => p.id === resolvedParentId)
+          const dbMilestoneId = parent?.milestoneId || milestoneIdMap.get(t.milestoneId)
+          if (!dbMilestoneId) continue
+
+          const task = await tx.task.create({
+            data: {
+              projectId: proj.id,
+              milestoneId: dbMilestoneId,
+              parentId: resolvedParentId,
+              title: t.title,
+              description: t.description || '',
+              assignee: t.assignee || '未指派',
+              priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
+              durationWeeks: t.durationWeeks || 0,
+              startDate: new Date(t.startDate),
+              endDate: new Date(t.endDate),
+              sortOrder: sortIdx++,
+            },
+          })
+          if (t.tempId) taskTempIdMap.set(t.tempId, task.id)
         }
       }
 
       // 5. Auto-create task dependencies based on sequential order
+      //    Only parent tasks participate in dependency chains (not subtasks)
       //    Within same milestone: task[i] → task[i+1]
       //    Between milestones: last task of milestone[n] → first task of milestone[n+1]
-      if (tasks.length > 1) {
-        const tasksByMilestone = new Map<string, typeof tasks>()
-        for (const task of tasks) {
+      const parentTasks = tasks.filter(t => !t.parentId)
+      if (parentTasks.length > 1) {
+        const tasksByMilestone = new Map<string, typeof parentTasks>()
+        for (const task of parentTasks) {
           const list = tasksByMilestone.get(task.milestoneId) || []
           list.push(task)
           tasksByMilestone.set(task.milestoneId, list)
         }
 
         const orderedMilestoneIds = milestones.map((m) => m.id)
-        let prevMilestoneLastTask: (typeof tasks)[number] | null = null
+        let prevMilestoneLastTask: (typeof parentTasks)[number] | null = null
 
         for (const msId of orderedMilestoneIds) {
           const msTasks = tasksByMilestone.get(msId)

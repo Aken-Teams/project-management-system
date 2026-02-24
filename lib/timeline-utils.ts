@@ -13,6 +13,7 @@ interface TaskInput {
   id: string
   milestoneId: string
   durationWeeks: number
+  parentId?: string | null
 }
 
 // ─── Milestone date calculation ──────────────────────────────
@@ -30,7 +31,7 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
 
   return milestones.map((milestone) => {
     const totalTaskWeeks = tasks
-      .filter(t => t.milestoneId === milestone.id)
+      .filter(t => t.milestoneId === milestone.id && !t.parentId)
       .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
 
     const effectiveWeeks = Math.max(milestone.durationWeeks || 0, totalTaskWeeks)
@@ -66,7 +67,8 @@ export function calculateTaskDates(
 
   for (const ms of milestones) {
     if (!ms.startDate) continue
-    const msTasks = tasks.filter(t => t.milestoneId === ms.id && t.durationWeeks > 0)
+    // Only schedule parent tasks sequentially; subtasks inherit parent dates
+    const msTasks = tasks.filter(t => t.milestoneId === ms.id && t.durationWeeks > 0 && !t.parentId)
     let currentDate = new Date(ms.startDate)
 
     for (const task of msTasks) {
@@ -75,10 +77,16 @@ export function calculateTaskDates(
       const taskEnd = new Date(currentDate)
       taskEnd.setDate(taskEnd.getDate() + daysToAdd)
 
-      result.set(task.id, {
+      const dates = {
         startDate: taskStart.toISOString().split('T')[0],
         endDate: taskEnd.toISOString().split('T')[0],
-      })
+      }
+      result.set(task.id, dates)
+
+      // Subtasks inherit parent's date range
+      for (const sub of tasks.filter(t => t.parentId === task.id)) {
+        result.set(sub.id, dates)
+      }
 
       currentDate = new Date(taskEnd)
       currentDate.setDate(currentDate.getDate() + 1)
@@ -98,7 +106,7 @@ export function autoExpandMilestones<T extends MilestoneInput>(
   let changed = false
   const updated = milestones.map((ms) => {
     const totalTaskWeeks = tasks
-      .filter(t => t.milestoneId === ms.id)
+      .filter(t => t.milestoneId === ms.id && !t.parentId)
       .reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
     // When tasks exist, keep durationWeeks in sync with task total
     // (both expand and shrink). When no tasks, leave duration as-is.
@@ -130,6 +138,7 @@ interface DbTask {
   durationWeeks: number
   startDate: string
   endDate: string
+  parentId?: string | null
 }
 
 export function dbToTimelineState(
@@ -141,7 +150,7 @@ export function dbToTimelineState(
   tasks: TimelineTask[]
 } {
   const milestones: TimelineMilestone[] = dbMilestones.map((ms, index) => {
-    const msTasks = dbTasks.filter(t => t.milestoneId === ms.id)
+    const msTasks = dbTasks.filter(t => t.milestoneId === ms.id && !t.parentId)
     const taskSumWeeks = msTasks.reduce((sum, t) => sum + (t.durationWeeks || 0), 0)
 
     let durationWeeks: number
@@ -171,6 +180,7 @@ export function dbToTimelineState(
     assignee: t.assignee,
     priority: t.priority as 'low' | 'medium' | 'high',
     durationWeeks: t.durationWeeks || 1,
+    ...(t.parentId ? { parentId: t.parentId } : {}),
   }))
 
   return { milestones, tasks }
@@ -191,6 +201,7 @@ export interface WorkItemsDiff {
     durationWeeks: number
     startDate: string
     endDate: string
+    parentId?: string
   }[]
   tasksToUpdate: {
     id: string
@@ -252,9 +263,10 @@ export function computeWorkItemsDiff(
     .filter(t => !currentTaskIds.has(t.id))
     .map(t => t.id)
 
-  // Tasks to add
-  const tasksToAdd = currentTasks
-    .filter(t => !origTaskIds.has(t.id))
+  // Tasks to add (parent tasks first, then subtasks — so parent IDs resolve correctly)
+  const newParentTasks = currentTasks.filter(t => !origTaskIds.has(t.id) && !t.parentId)
+  const newSubtasks = currentTasks.filter(t => !origTaskIds.has(t.id) && t.parentId)
+  const tasksToAdd = [...newParentTasks, ...newSubtasks]
     .map(t => {
       const dates = taskDates.get(t.id)
       return {
@@ -266,6 +278,7 @@ export function computeWorkItemsDiff(
         durationWeeks: t.durationWeeks,
         startDate: dates?.startDate || '',
         endDate: dates?.endDate || '',
+        ...(t.parentId ? { parentId: t.parentId } : {}),
       }
     })
 
