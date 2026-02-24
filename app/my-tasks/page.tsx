@@ -1113,7 +1113,7 @@ export default function MyTasksPage() {
                                             <span className="text-[10px] text-muted-foreground shrink-0 max-w-[50px] truncate">{sub.assignee}</span>
                                           )}
                                           <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{sub.progress}%</Badge>
-                                          {subCompleted && <CheckCircle2 className="h-2.5 w-2.5 text-green-500 shrink-0" />}
+                                          {subCompleted && <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />}
                                         </button>
                                         <button
                                           onClick={(e) => {
