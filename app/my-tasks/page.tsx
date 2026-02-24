@@ -63,7 +63,14 @@ import {
   X,
   Plus,
   Settings2,
+  Sparkles,
+  FileText,
 } from 'lucide-react'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 
 /** Add one day to a YYYY-MM-DD string */
 function addOneDayStr(dateStr: string) {
@@ -167,6 +174,8 @@ export default function MyTasksPage() {
   const [editProjectOpen, setEditProjectOpen] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
   const [editProjectLoading, setEditProjectLoading] = useState<string | null>(null)
+  const [importSubLogsOpen, setImportSubLogsOpen] = useState(false)
+  const [importSubLogsLoading, setImportSubLogsLoading] = useState(false)
   const recognitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -447,6 +456,82 @@ export default function MyTasksPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : '新增子任務失敗')
     }
+  }
+
+  // ── Delete subtask inline on card ──
+  const handleDeleteSubtask = async (subtaskId: string, parentTask: Task, project: MyTasksProject) => {
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${subtaskId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('刪除失敗')
+      setApiProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? {
+              ...p,
+              tasks: p.tasks.map(t =>
+                t.id === parentTask.id
+                  ? { ...t, subtasks: (t.subtasks || []).filter(s => s.id !== subtaskId) }
+                  : t
+              ),
+            }
+          : p
+      ))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '刪除子任務失敗')
+    }
+  }
+
+  /** Gather subtask log content for the current dialog task on the selected logDate */
+  const getSubtaskLogsContent = useCallback(() => {
+    if (!dialogTask) return null
+    const task = dialogTask.task
+    const project = dialogTask.project
+    const subtasks = task.subtasks || []
+    if (subtasks.length === 0) return null
+
+    const entries: { title: string; progress: number; content: string }[] = []
+    for (const sub of subtasks) {
+      // Find the most recent log for this subtask on or before logDate
+      const subLogs = project.taskLogs
+        .filter(l => l.taskId === sub.id)
+        .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
+      const latestLog = subLogs.find(l => l.logDate <= logDate) || subLogs[0]
+      if (latestLog) {
+        entries.push({ title: sub.title, progress: sub.progress, content: latestLog.content })
+      }
+    }
+    return entries.length > 0 ? entries : null
+  }, [dialogTask, logDate])
+
+  const handleImportSubLogsRaw = () => {
+    const entries = getSubtaskLogsContent()
+    if (!entries) return
+    const text = entries.map(e => `【${e.title}】(${e.progress}%)\n${e.content}`).join('\n\n')
+    setLogContent(prev => prev ? `${prev}\n\n${text}` : text)
+    setImportSubLogsOpen(false)
+  }
+
+  const handleImportSubLogsAI = async () => {
+    const entries = getSubtaskLogsContent()
+    if (!entries) return
+    setImportSubLogsLoading(true)
+    try {
+      const res = await fetch('/api/ai/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: entries.map(e => ({ title: e.title, progress: e.progress, content: e.content })),
+          taskTitle: dialogTask?.task.title || '',
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const { summary } = await res.json()
+      setLogContent(prev => prev ? `${prev}\n\n${summary}` : summary)
+    } catch {
+      // Fallback to raw if AI fails
+      handleImportSubLogsRaw()
+    }
+    setImportSubLogsLoading(false)
+    setImportSubLogsOpen(false)
   }
 
   if (!user) return null
@@ -788,7 +873,7 @@ export default function MyTasksPage() {
                         isCollapsed && '-rotate-90',
                       )} />
                       {project.name}
-                      {isPM && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">當責</Badge>}
+                      {isPM && <Badge variant="secondary" className="text-xs px-1.5 py-0.5">當責 A</Badge>}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">{pCompleted}/{pTotal}</span>
@@ -1015,21 +1100,34 @@ export default function MyTasksPage() {
                                     const subStatus = computeTaskStatus(subAsTask, project.taskLogs)
                                     const subCompleted = !!sub.completedAt || sub.status === 'done'
                                     return (
-                                      <button
-                                        key={sub.id}
-                                        onClick={() => openTaskDialog(subAsTask, project)}
-                                        className="w-full flex items-center gap-2 ml-6 pr-8 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm"
-                                      >
-                                        {getStatusDot(subStatus)}
-                                        <span className={cn('text-xs flex-1 min-w-0 truncate', subCompleted && 'text-muted-foreground')}>
-                                          {sub.title}
-                                        </span>
-                                        {isPM && sub.assignee && (
-                                          <span className="text-[10px] text-muted-foreground shrink-0 max-w-[50px] truncate">{sub.assignee}</span>
-                                        )}
-                                        <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{sub.progress}%</Badge>
-                                        {subCompleted && <CheckCircle2 className="h-2.5 w-2.5 text-green-500 shrink-0" />}
-                                      </button>
+                                      <div key={sub.id} className="group/sub flex items-center ml-6 pr-1">
+                                        <button
+                                          onClick={() => openTaskDialog(subAsTask, project)}
+                                          className="flex-1 flex items-center gap-2 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm min-w-0"
+                                        >
+                                          {getStatusDot(subStatus)}
+                                          <span className={cn('text-xs flex-1 min-w-0 truncate', subCompleted && 'text-muted-foreground')}>
+                                            {sub.title}
+                                          </span>
+                                          {isPM && sub.assignee && (
+                                            <span className="text-[10px] text-muted-foreground shrink-0 max-w-[50px] truncate">{sub.assignee}</span>
+                                          )}
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{sub.progress}%</Badge>
+                                          {subCompleted && <CheckCircle2 className="h-2.5 w-2.5 text-green-500 shrink-0" />}
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (confirm(`確定要刪除子任務「${sub.title}」嗎？`)) {
+                                              handleDeleteSubtask(sub.id, task, project)
+                                            }
+                                          }}
+                                          className="h-5 w-5 flex items-center justify-center text-muted-foreground/0 group-hover/sub:text-muted-foreground hover:!text-destructive transition-colors shrink-0"
+                                          title="刪除子任務"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
                                     )
                                   })}
                                 </div>
@@ -1224,6 +1322,42 @@ export default function MyTasksPage() {
                                 isListening && 'border-red-400 ring-2 ring-red-100 dark:ring-red-900/30',
                                 !isListening && 'border-muted-foreground/20 focus-within:border-primary/40 focus-within:bg-background'
                               )}>
+                                {/* Import subtask logs button — only for parent tasks with subtasks */}
+                                {(task.subtasks || []).length > 0 && (
+                                  <div className="flex justify-end px-3 pt-2">
+                                    <Popover open={importSubLogsOpen} onOpenChange={setImportSubLogsOpen}>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
+                                        >
+                                          <FileText className="h-3 w-3" />
+                                          帶入子任務紀錄
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent align="end" className="w-52 p-1.5">
+                                        <button
+                                          onClick={handleImportSubLogsRaw}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left"
+                                        >
+                                          <FileText className="h-4 w-4 text-muted-foreground" />
+                                          原始資料
+                                        </button>
+                                        <button
+                                          onClick={handleImportSubLogsAI}
+                                          disabled={importSubLogsLoading}
+                                          className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left disabled:opacity-50"
+                                        >
+                                          {importSubLogsLoading
+                                            ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                            : <Sparkles className="h-4 w-4 text-amber-500" />
+                                          }
+                                          AI 彙整
+                                        </button>
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+                                )}
                                 <Textarea
                                   placeholder="描述您今天做了什麼..."
                                   value={logContent}

@@ -158,8 +158,8 @@ export interface Risk {
 export type TeamRole = 'R' | 'A' | 'C' | 'I'
 
 export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
-  'R': '負責 (R)',
   'A': '當責 (A)',
+  'R': '負責 (R)',
   'C': '諮詢 (C)',
   'I': '知會 (I)',
 }
