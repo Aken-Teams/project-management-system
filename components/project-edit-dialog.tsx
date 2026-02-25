@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, TimerReset } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, TimerReset, CalendarClock, Send } from 'lucide-react'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -39,6 +39,8 @@ import {
   TEAM_ROLE_LABELS,
 } from '@/lib/mock-data'
 import { TeamMemberAutocomplete } from '@/components/team-member-autocomplete'
+import { useAuth } from '@/lib/auth-context'
+import { toast } from 'sonner'
 
 interface ProjectEditDialogProps {
   open: boolean
@@ -163,6 +165,19 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [resettingBaseline, setResettingBaseline] = useState(false)
   const [baselineResetDialogOpen, setBaselineResetDialogOpen] = useState(false)
 
+  // ─── Date change approval state ──────────────────────────
+  const { user } = useAuth()
+  const [dateChangeDialogOpen, setDateChangeDialogOpen] = useState(false)
+  const [dateChangeReason, setDateChangeReason] = useState('')
+  const [dateChangeSaving, setDateChangeSaving] = useState(false)
+  const [pendingSaveOptions, setPendingSaveOptions] = useState<{ resetBaseline?: boolean } | null>(null)
+  const [affectedMilestoneDates, setAffectedMilestoneDates] = useState<Array<{
+    milestoneId: string
+    milestoneName: string
+    originalDate: string
+    proposedDate: string
+  }>>([])
+
   // Snapshot of original data for diff on save
   const [origMilestones] = useState(() =>
     (project.milestones ?? []).map(m => ({ id: m.id, name: m.name, dueDate: m.dueDate }))
@@ -199,6 +214,29 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     return false
   }, [tlMilestones, tlTasks, origMilestones, origTasks, tlInit.milestones])
 
+  // Detect which existing milestones have date changes
+  const detectMilestoneDateChanges = useCallback(() => {
+    const changes: Array<{
+      milestoneId: string
+      milestoneName: string
+      originalDate: string
+      proposedDate: string
+    }> = []
+    for (const ms of recalcMilestones) {
+      const orig = origMilestones.find(o => o.id === ms.id)
+      if (!orig) continue // skip newly added milestones
+      if (ms.endDate && ms.endDate !== orig.dueDate) {
+        changes.push({
+          milestoneId: ms.id,
+          milestoneName: ms.name,
+          originalDate: orig.dueDate,
+          proposedDate: ms.endDate,
+        })
+      }
+    }
+    return changes
+  }, [recalcMilestones, origMilestones])
+
   // Auto-resize milestone duration to match task total (expand + shrink)
   useEffect(() => {
     const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks)
@@ -222,6 +260,75 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     (teamMembers ?? []).map(m => ({ id: m.id, name: m.name, role: m.role, responsibility: m.responsibility })),
     [teamMembers],
   )
+
+  // ─── Batch save work items (extracted for reuse) ───
+  type WorkItemsDiff = ReturnType<typeof computeWorkItemsDiff>
+
+  const executeBatchSave = async (diff: WorkItemsDiff) => {
+    // 1. Delete tasks first (milestone DELETE rejects if tasks exist)
+    for (const taskId of diff.tasksToDelete) {
+      await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
+    }
+    // 2. Delete milestones
+    for (const msId of diff.milestonesToDelete) {
+      await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
+    }
+    // 3. Create new milestones → collect real IDs
+    const newMsIdMap = new Map<string, string>()
+    for (const ms of diff.milestonesToAdd) {
+      const res = await fetch(`/api/projects/${project.id}/milestones`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ms),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
+        if (draftMs) newMsIdMap.set(draftMs.id, created.id)
+      }
+    }
+    // 4. Update existing milestones
+    for (const ms of diff.milestonesToUpdate) {
+      await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ms),
+      })
+    }
+    // 5. Create new tasks (resolve draft milestone/parent IDs)
+    const newTaskIdMap = new Map<string, string>()
+    for (const task of diff.tasksToAdd) {
+      const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
+      const resolvedParentId = task.parentId
+        ? (newTaskIdMap.get(task.parentId) || task.parentId)
+        : undefined
+      const res = await fetch(`/api/projects/${project.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...task, milestoneId: resolvedMsId, parentId: resolvedParentId }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        newTaskIdMap.set(task.tempId, created.id)
+      }
+    }
+    // 6. Update existing tasks
+    for (const task of diff.tasksToUpdate) {
+      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
+      })
+    }
+    // 7. Rebuild sequential task dependencies on ANY work item change
+    const hasAnyWorkItemChange =
+      diff.tasksToAdd.length > 0 || diff.tasksToDelete.length > 0 || diff.tasksToUpdate.length > 0 ||
+      diff.milestonesToAdd.length > 0 || diff.milestonesToDelete.length > 0 || diff.milestonesToUpdate.length > 0
+    if (hasAnyWorkItemChange) {
+      await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
+    }
+    return newMsIdMap
+  }
 
   // ─── Core validate + save logic (shared by Save and Reset Baseline) ───
   const validateAndSaveAll = async (options?: { resetBaseline?: boolean }): Promise<boolean> => {
@@ -290,79 +397,67 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     const autoObjective = smart?.specific
       ? `${smart.specific}${smart.measurable ? '，' + smart.measurable : ''}`
       : form.objective
-    await onSave({ ...form, objective: autoObjective })
 
     // ─── Batch save work items ──────────────────────────────
     const diff = computeWorkItemsDiff(origMilestones, origTasks, recalcMilestones, tlTasks, tlTaskDates)
 
-    // 1. Delete tasks first (milestone DELETE rejects if tasks exist)
-    for (const taskId of diff.tasksToDelete) {
-      await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
-    }
-    // 2. Delete milestones
-    for (const msId of diff.milestonesToDelete) {
-      await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
-    }
-    // 3. Create new milestones → collect real IDs
-    const newMsIdMap = new Map<string, string>()
-    for (const ms of diff.milestonesToAdd) {
-      const res = await fetch(`/api/projects/${project.id}/milestones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ms),
+    // ─── Detect milestone date changes → require approval ───
+    const dateChanges = detectMilestoneDateChanges()
+    const startDateChanged = form.startDate !== project.startDate
+
+    if (dateChanges.length > 0) {
+      // Save project metadata with ORIGINAL startDate to avoid inconsistency
+      // (the new startDate will be applied when the delay request is approved)
+      const saveForm = startDateChanged
+        ? { ...form, objective: autoObjective, startDate: project.startDate }
+        : { ...form, objective: autoObjective }
+      await onSave(saveForm)
+
+      // Strip dueDate from milestone updates (defer to approval)
+      const strippedMsUpdates = diff.milestonesToUpdate
+        .map(ms => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { dueDate, ...rest } = ms as typeof ms & { dueDate?: string }
+          return rest
+        })
+        .filter(ms => {
+          const { id, ...fields } = ms
+          return Object.keys(fields).length > 0
+        }) as WorkItemsDiff['milestonesToUpdate']
+
+      // Strip startDate/endDate from task updates (keep durationDays etc.)
+      const strippedTaskUpdates = diff.tasksToUpdate
+        .map(task => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { startDate, endDate, ...rest } = task as typeof task & { startDate?: string; endDate?: string }
+          return rest
+        })
+        .filter(task => {
+          const { id, ...fields } = task
+          return Object.keys(fields).length > 0
+        }) as WorkItemsDiff['tasksToUpdate']
+
+      // Save non-date changes immediately
+      await executeBatchSave({
+        ...diff,
+        milestonesToUpdate: strippedMsUpdates,
+        tasksToUpdate: strippedTaskUpdates,
       })
-      if (res.ok) {
-        const created = await res.json()
-        const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
-        if (draftMs) newMsIdMap.set(draftMs.id, created.id)
-      }
-    }
-    // 4. Update existing milestones
-    for (const ms of diff.milestonesToUpdate) {
-      await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ms),
-      })
-    }
-    // 5. Create new tasks (resolve draft milestone/parent IDs)
-    //    Parent tasks are ordered before subtasks in diff.tasksToAdd
-    const newTaskIdMap = new Map<string, string>()
-    for (const task of diff.tasksToAdd) {
-      const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
-      const resolvedParentId = task.parentId
-        ? (newTaskIdMap.get(task.parentId) || task.parentId)
-        : undefined
-      const res = await fetch(`/api/projects/${project.id}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...task, milestoneId: resolvedMsId, parentId: resolvedParentId }),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        newTaskIdMap.set(task.tempId, created.id)
-      }
-    }
-    // 6. Update existing tasks
-    for (const task of diff.tasksToUpdate) {
-      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(task),
-      })
+
+      // Open date change dialog for approval
+      setAffectedMilestoneDates(dateChanges)
+      setPendingSaveOptions(options ?? null)
+      setDateChangeDialogOpen(true)
+      return false // don't close edit dialog yet
     }
 
-    // 7. Rebuild sequential task dependencies on ANY work item change
-    //    (reorder, move between milestones, add, delete all affect the sequential chain)
-    const hasAnyWorkItemChange =
-      diff.tasksToAdd.length > 0 || diff.tasksToDelete.length > 0 || diff.tasksToUpdate.length > 0 ||
-      diff.milestonesToAdd.length > 0 || diff.milestonesToDelete.length > 0 || diff.milestonesToUpdate.length > 0
-    if (hasAnyWorkItemChange) {
-      await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
-    }
+    // No date changes: save project metadata normally
+    await onSave({ ...form, objective: autoObjective })
+
+    // ─── No date changes: proceed with normal full save ──
+    const newMsIdMap = await executeBatchSave(diff)
 
     // 8. Reset baseline if requested — send calculated dates directly
-    //    (avoids relying on DB milestone dates being in sync)
     if (options?.resetBaseline) {
       const baselineMilestones = recalcMilestones
         .filter(ms => ms.endDate)
@@ -396,6 +491,50 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       setError('儲存失敗，請稍後再試')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSubmitDateChange = async () => {
+    if (!user || affectedMilestoneDates.length === 0 || !dateChangeReason.trim()) return
+    setDateChangeSaving(true)
+    const startDateChanged = form.startDate !== project.startDate
+    try {
+      const res = await fetch('/api/delay-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          requesterId: user.id,
+          type: 'date_change',
+          reason: dateChangeReason.trim(),
+          canCatchUp: true,
+          affectedMilestones: affectedMilestoneDates.map((am, idx) => ({
+            milestoneId: am.milestoneId,
+            originalDate: am.originalDate,
+            proposedDate: am.proposedDate,
+            // Attach proposed startDate to first milestone entry
+            ...(idx === 0 && startDateChanged ? {
+              originalStartDate: project.startDate,
+              proposedStartDate: form.startDate,
+            } : {}),
+          })),
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '送出失敗')
+      }
+      setDateChangeDialogOpen(false)
+      setDateChangeReason('')
+      setAffectedMilestoneDates([])
+      setPendingSaveOptions(null)
+      await onWorkItemsChange?.()
+      onOpenChange(false)
+      toast.success('日期變更申請已送出審核')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '送出日期變更申請失敗')
+    } finally {
+      setDateChangeSaving(false)
     }
   }
 
@@ -1142,11 +1281,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onClick={async () => {
                 setResettingBaseline(true)
                 try {
-                  // Save all changes first, then reset baseline with fresh data
-                  if (await validateAndSaveAll({ resetBaseline: true })) {
+                  const success = await validateAndSaveAll({ resetBaseline: true })
+                  if (success) {
                     await onWorkItemsChange?.()
                     setBaselineResetDialogOpen(false)
                     onOpenChange(false)
+                  } else {
+                    // Date change dialog may have opened — close baseline dialog
+                    setBaselineResetDialogOpen(false)
                   }
                 } catch {
                   setError('儲存失敗，請稍後再試')
@@ -1158,6 +1300,95 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             >
               {resettingBaseline && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
               儲存並重設
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Date Change Approval Dialog */}
+      <Dialog open={dateChangeDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setDateChangeDialogOpen(false)
+          setDateChangeReason('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-amber-500" />
+              日期變更需要審核
+            </DialogTitle>
+            <DialogDescription>
+              以下里程碑的日期已變更，需提交審核申請。其他變更（名稱、負責人等）已儲存。
+            </DialogDescription>
+          </DialogHeader>
+
+          {form.startDate !== project.startDate && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 px-3 py-2 text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 shrink-0" />
+              專案開始日期：{project.startDate} → {form.startDate}（一併提交審核）
+            </div>
+          )}
+
+          <div className="rounded-lg border overflow-hidden">
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
+              <span>里程碑</span>
+              <span className="text-center">原預定日</span>
+              <span className="text-center">新預定日</span>
+              <span className="text-center">天數</span>
+            </div>
+            {affectedMilestoneDates.map((am) => {
+              const days = Math.ceil(
+                (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
+              )
+              return (
+                <div key={am.milestoneId} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 border-t text-sm">
+                  <span className="font-medium truncate">{am.milestoneName}</span>
+                  <span className="text-muted-foreground tabular-nums text-xs">{am.originalDate}</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium tabular-nums text-xs">{am.proposedDate}</span>
+                  <span className={`text-xs tabular-nums font-medium ${days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {days > 0 ? `+${days}` : days}天
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {pendingSaveOptions?.resetBaseline && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+              <TimerReset className="h-4 w-4 shrink-0" />
+              基線將在日期變更核准後自動重設
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-sm">
+              變更原因 <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              placeholder="說明日期變更的原因..."
+              value={dateChangeReason}
+              onChange={e => setDateChangeReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              onClick={handleSubmitDateChange}
+              disabled={dateChangeSaving || !dateChangeReason.trim()}
+              className="gap-1.5"
+            >
+              {dateChangeSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              提交審核
             </Button>
           </DialogFooter>
         </DialogContent>

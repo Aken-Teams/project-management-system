@@ -81,6 +81,15 @@ export async function PATCH(
           })
         }
 
+        // 2b. Update project startDate if a proposed start date was included
+        const proposedStart = delayRequest.affectedMilestones.find(am => am.proposedStartDate)
+        if (proposedStart?.proposedStartDate) {
+          await tx.project.update({
+            where: { id: delayRequest.projectId },
+            data: { startDate: proposedStart.proposedStartDate },
+          })
+        }
+
         // 3. Cascade: recalculate subsequent milestones & all task dates
         const project = await tx.project.findUnique({
           where: { id: delayRequest.projectId },
