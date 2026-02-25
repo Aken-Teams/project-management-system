@@ -25,10 +25,36 @@ export function buildDepGraph(project: Project): Map<string, DepNode> {
   const milestoneMap = new Map(project.milestones.map(m => [m.id, m]))
   const nodeMap = new Map<string, DepNode>()
 
-  for (const task of project.tasks) {
-    const prereqs = (task.dependencies || [])
+  // Only parent tasks participate in the dependency graph;
+  // subtasks are internal to their parent and don't form cross-task links.
+  // When a dependency chain passes through subtasks (stale DB data),
+  // we resolve through them to find the actual parent predecessor.
+  const parentTasks = project.tasks.filter(t => !t.parentId)
+
+  for (const task of parentTasks) {
+    const rawDeps = (task.dependencies || [])
       .map(id => taskMap.get(id))
       .filter(Boolean) as Task[]
+
+    // Resolve through subtasks to find parent predecessors
+    const prereqs: Task[] = []
+    const seen = new Set<string>()
+    const queue = [...rawDeps]
+    while (queue.length > 0) {
+      const dep = queue.shift()!
+      if (seen.has(dep.id)) continue
+      seen.add(dep.id)
+      if (!dep.parentId) {
+        prereqs.push(dep) // parent task — direct prerequisite
+      } else {
+        // subtask — follow its dependencies to find parent tasks behind it
+        const subDeps = (dep.dependencies || [])
+          .map(id => taskMap.get(id))
+          .filter(Boolean) as Task[]
+        queue.push(...subDeps)
+      }
+    }
+
     nodeMap.set(task.id, {
       task,
       milestone: milestoneMap.get(task.milestoneId),

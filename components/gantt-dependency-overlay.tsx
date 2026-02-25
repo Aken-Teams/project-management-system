@@ -72,17 +72,12 @@ export function GanttDependencyOverlay({
         const y = elRect.top - containerRect.top
         const height = elRect.height
 
-        // Early-complete: arrow connects at the actual bar end (completedAt)
-        const earlyComplete = showBaseline && task.completedAt &&
-          new Date(task.completedAt).getTime() < new Date(task.endDate).getTime()
-
         map.set(taskId, {
           y,
           height,
           leftPct: toPercent(task.startDate),
-          rightPct: toPercent(earlyComplete ? task.completedAt! : task.endDate),
-          // h-14 row: actual bar center at top:26 + h-4/2 = 34; h-10 row: top:12 + h-4/2 = 20
-          barCenterY: earlyComplete ? 34 : height / 2,
+          rightPct: toPercent(task.endDate),
+          barCenterY: height / 2,
         })
       })
 

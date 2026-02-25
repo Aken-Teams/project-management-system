@@ -43,9 +43,11 @@ export async function POST(
         },
       })
 
-      // 2. Group tasks by milestone (preserving sortOrder)
+      // 2. Group parent tasks by milestone (skip subtasks — they don't
+      //    participate in the sequential dependency chain)
       const tasksByMilestone = new Map<string, typeof project.tasks>()
       for (const task of project.tasks) {
+        if (task.parentId) continue // subtasks are internal to their parent
         const list = tasksByMilestone.get(task.milestoneId) || []
         list.push(task)
         tasksByMilestone.set(task.milestoneId, list)
