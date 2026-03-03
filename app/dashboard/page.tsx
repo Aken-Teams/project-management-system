@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier } from '@/lib/mock-data'
 import {
   TrendingUp,
   TrendingDown,
@@ -85,6 +85,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -95,6 +96,7 @@ export default function DashboardPage() {
         const params = new URLSearchParams()
         if (user.id) params.append('userId', user.id)
         else if (user.email) params.append('userEmail', user.email)
+        if (tierFilter) params.append('tier', tierFilter)
 
         const response = await fetch(`/api/dashboard?${params}`)
         if (!response.ok) {
@@ -113,7 +115,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboard()
-  }, [user])
+  }, [user, tierFilter])
 
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
@@ -173,14 +175,32 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold tracking-tight">儀表板</h1>
             <p className="text-sm text-muted-foreground mt-1">歡迎回來，{data.user.name}</p>
           </div>
-          {(data.user.role === 'pm' || data.user.role === 'executive') && pendingApprovals > 0 && (
-            <Link href="/approvals">
-              <Button size="sm" className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                <ClipboardCheck className="h-4 w-4" />
-                {pendingApprovals} 筆待審核
-              </Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Tier filter */}
+            <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
+              {[{ value: null as ProjectTier | null, label: '全部' }, ...Object.keys(PROJECT_TIER_LABELS).map(t => ({ value: t as ProjectTier | null, label: PROJECT_TIER_LABELS[t as ProjectTier] }))].map(item => (
+                <button
+                  key={item.label}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    tierFilter === item.value
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-foreground/70 hover:text-foreground hover:bg-muted'
+                  }`}
+                  onClick={() => setTierFilter(item.value)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            {(data.user.role === 'pm' || data.user.role === 'executive') && pendingApprovals > 0 && (
+              <Link href="/approvals">
+                <Button size="sm" className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  <ClipboardCheck className="h-4 w-4" />
+                  {pendingApprovals} 筆待審核
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards - Compact */}

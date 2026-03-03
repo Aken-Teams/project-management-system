@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
   try {
     const userId = request.nextUrl.searchParams.get('userId')
     const userEmail = request.nextUrl.searchParams.get('userEmail')
+    const tierFilter = request.nextUrl.searchParams.get('tier') // T1, T2, T3, CIP
 
     if (!userId && !userEmail) {
       return NextResponse.json(
@@ -115,7 +116,10 @@ export async function GET(request: NextRequest) {
 
     // ── Fetch all project data ──
     const projects = await prisma.project.findMany({
-      where: { id: { in: projectIds } },
+      where: {
+        id: { in: projectIds },
+        ...(tierFilter ? { projectTier: tierFilter as never } : {}),
+      },
       include: {
         milestones: {
           orderBy: { sortOrder: 'asc' },
