@@ -20,6 +20,7 @@ interface GanttChartProps {
   startDate: string
   endDate: string
   onTaskClick?: (task: Task) => void
+  onMilestoneClick?: (milestone: Milestone) => void
   expandedMilestoneIds?: Set<string>
   onExpandedMilestoneIdsChange?: (ids: Set<string>) => void
   showDependencies?: boolean
@@ -43,12 +44,14 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 // Plan bar colors (upper bar — planned schedule)
 const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 — neutral, clearly "plan"
 
-export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, onMilestoneClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
   const [taskTooltip, setTaskTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
+  const [msTooltip, setMsTooltip] = useState<{ x: number; y: number; milestone: Milestone; msTasks: Task[] } | null>(null)
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
 
   // Earliest log date per task (used as "actual start date")
   const earliestLogDateMap = useMemo(() => {
@@ -163,7 +166,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   // Week grid count
   const weekCount = Math.ceil(totalDays / 7)
 
-  // Helper: compute milestone bar span
+  // Helper: compute milestone bar span (planned)
   const getMilestoneBarRange = (ms: Milestone, msTasks: Task[]) => {
     if (msTasks.length === 0) return { start: ms.dueDate, end: ms.dueDate }
     const earliest = msTasks.reduce((min, t) =>
@@ -172,13 +175,26 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return { start: earliest, end: ms.dueDate }
   }
 
+  // Helper: compute milestone actual start (earliest actual start among its tasks)
+  const getMilestoneActualStart = useCallback((msTasks: Task[]) => {
+    let earliest: string | null = null
+    for (const t of msTasks) {
+      const actualStart = earliestLogDateMap.get(t.id)
+      if (actualStart && (!earliest || actualStart < earliest)) {
+        earliest = actualStart
+      }
+    }
+    return earliest
+  }, [earliestLogDateMap])
+
   const formatDate = (d: string) => {
     return new Date(d).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
   }
 
-  // Normalize: progress >= 100 should always be treated as 'done'
+  // Normalize: progress >= 100 → done, progress > 0 with todo → in-progress
   const effectiveStatus = (task: Task) => {
     if (task.progress >= 100) return 'done' as const
+    if (task.progress > 0 && task.status === 'todo') return 'in-progress' as const
     return task.status
   }
 
@@ -280,6 +296,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     'bg-muted/40 hover:bg-muted/60',
                   )}
                   onClick={() => toggleMs(milestone.id)}
+                  onMouseMove={(e) => {
+                    setMsTooltip({ x: e.clientX, y: e.clientY - 12, milestone, msTasks })
+                  }}
+                  onMouseLeave={() => setMsTooltip(null)}
                 >
                   <div className="w-[260px] shrink-0 px-3 py-2 border-r">
                     <div className="flex items-center gap-1.5">
@@ -293,7 +313,15 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
                         {msIndex + 1}
                       </div>
-                      <span className="text-sm font-semibold truncate">{milestone.name}</span>
+                      <span
+                        className="text-sm font-semibold truncate hover:underline"
+                        onClick={(e) => {
+                          if (onMilestoneClick) {
+                            e.stopPropagation()
+                            onMilestoneClick(milestone)
+                          }
+                        }}
+                      >{milestone.name}</span>
                       <Badge
                         className="text-[10px] px-1.5 py-0 shrink-0 text-white border-0"
                         style={{ backgroundColor: colors.bg }}
@@ -313,7 +341,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   </div>
                   <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')}>
                     <WeekGrid />
-                    {msTasks.length > 0 && showBaseline ? (
+                    {msTasks.length > 0 && showBaseline ? (() => {
+                      const msActualStart = getMilestoneActualStart(msTasks) || msBar.start
+                      return (
                       <>
                         {/* Plan bar (upper — dashed if done, solid otherwise) */}
                         <div
@@ -327,42 +357,66 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               : `1px solid ${PLAN_COLOR.border}`,
                           }}
                         />
-                        {/* Actual bar (lower — only progress fill, no background) */}
+                        {/* Actual bar (lower — uses actual start from task logs) */}
                         {milestone.progress > 0 && (
                           <div
                             className="absolute h-3.5 rounded-sm"
                             style={{
-                              left: barStyle(msBar.start, milestone.dueDate).left,
-                              width: `${(parseFloat(barStyle(msBar.start, milestone.dueDate).width) * Math.min(milestone.progress, 100)) / 100}%`,
+                              ...barStyle(msActualStart, milestone.dueDate),
+                              width: `${(parseFloat(barStyle(msActualStart, milestone.dueDate).width) * Math.min(milestone.progress, 100)) / 100}%`,
                               top: 24,
                               backgroundColor: colors.bg,
                             }}
                           />
                         )}
                       </>
-                    ) : msTasks.length > 0 ? (
-                      /* Single combined bar (OFF) — light bg + progress fill */
-                      <div
-                        className="absolute h-3.5 rounded-sm border"
-                        style={{
-                          ...barStyle(msBar.start, milestone.dueDate),
-                          top: 12,
-                          backgroundColor: `${colors.bg}30`,
-                          borderColor: `${colors.border}50`,
-                        }}
-                      >
-                        {milestone.progress > 0 && (
+                      )
+                    })() : msTasks.length > 0 ? (() => {
+                      const msActualStartNB = getMilestoneActualStart(msTasks) || msBar.start
+                      return milestone.progress >= 100 ? (
+                        /* Completed milestone — dashed plan bar + solid actual bar */
+                        <>
                           <div
-                            className="absolute inset-y-0 left-0 rounded-l-sm"
+                            className="absolute h-3.5 rounded-sm"
                             style={{
-                              width: `${Math.min(milestone.progress, 100)}%`,
-                              backgroundColor: colors.bg,
-                              borderRadius: milestone.progress >= 100 ? '0.125rem' : undefined,
+                              ...barStyle(msBar.start, milestone.dueDate),
+                              top: 12,
+                              backgroundColor: `${PLAN_COLOR.bg}80`,
+                              border: `1px dashed ${PLAN_COLOR.border}`,
                             }}
                           />
-                        )}
-                      </div>
-                    ) : null}
+                          <div
+                            className="absolute h-3.5 rounded-sm"
+                            style={{
+                              ...barStyle(msActualStartNB, milestone.dueDate),
+                              top: 12,
+                              backgroundColor: colors.bg,
+                            }}
+                          />
+                        </>
+                      ) : (
+                        /* In-progress milestone — light bg + actual progress fill from actual start */
+                        <div
+                          className="absolute h-3.5 rounded-sm border"
+                          style={{
+                            ...barStyle(msBar.start, milestone.dueDate),
+                            top: 12,
+                            backgroundColor: `${colors.bg}30`,
+                            borderColor: `${colors.border}50`,
+                          }}
+                        >
+                          {milestone.progress > 0 && (
+                            <div
+                              className="absolute inset-y-0 left-0 rounded-l-sm"
+                              style={{
+                                width: `${Math.min(milestone.progress, 100)}%`,
+                                backgroundColor: colors.bg,
+                              }}
+                            />
+                          )}
+                        </div>
+                      )
+                    })() : null}
                     <TodayLine />
                   </div>
                 </div>
@@ -403,6 +457,27 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     >
                       <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
                         <div className="flex items-center gap-1.5">
+                          {subtasks.length > 0 ? (
+                            <button
+                              className="shrink-0 p-0 hover:bg-muted rounded-sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExpandedTasks(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(task.id)) next.delete(task.id)
+                                  else next.add(task.id)
+                                  return next
+                                })
+                              }}
+                            >
+                              {expandedTasks.has(task.id)
+                                ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                              }
+                            </button>
+                          ) : (
+                            <div className="w-3.5 shrink-0" />
+                          )}
                           <div
                             className="w-2 h-2 rounded-full shrink-0"
                             style={{ backgroundColor: taskColors.bg }}
@@ -551,8 +626,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         <TodayLine />
                       </div>
                     </div>
-                    {/* Subtask rows — deeper indent */}
-                    {subtasks.map(sub => {
+                    {/* Subtask rows — deeper indent, collapsible */}
+                    {expandedTasks.has(task.id) && subtasks.map(sub => {
                       const subDisplayStatus = overdueNotStartedTaskIds?.has(sub.id) ? 'overdue-not-started' : effectiveStatus(sub)
                       const subColors = STATUS_COLORS[subDisplayStatus] || STATUS_COLORS.todo
                       return (
@@ -781,6 +856,72 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   )}
                 </div>
               )}
+            </div>
+          )
+        })()}
+
+        {/* Milestone hover tooltip */}
+        {msTooltip && (() => {
+          const ms = msTooltip.milestone
+          const msTks = msTooltip.msTasks
+          const doneCount = msTks.filter(t => effectiveStatus(t) === 'done').length
+          const msActualStartStr = getMilestoneActualStart(msTks)
+          const msActualStart = msActualStartStr ? new Date(msActualStartStr) : null
+          // Latest completion among tasks
+          const latestCompletion = msTks.reduce<Date | null>((latest, t) => {
+            if (!t.completedAt) return latest
+            const d = new Date(t.completedAt)
+            return !latest || d > latest ? d : latest
+          }, null)
+          const plannedEnd = new Date(ms.dueDate)
+          const diffDays = ms.progress >= 100 && latestCompletion
+            ? Math.round((plannedEnd.getTime() - latestCompletion.getTime()) / (1000 * 60 * 60 * 24))
+            : null
+          const fmtDate = (d: Date) => d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
+          // Earliest planned start among tasks
+          const earliestPlanned = msTks.length > 0
+            ? new Date(msTks.reduce((min, t) => new Date(t.startDate).getTime() < new Date(min).getTime() ? t.startDate : min, msTks[0].startDate))
+            : null
+          return (
+            <div
+              className="fixed pointer-events-none z-50 bg-popover border rounded-lg shadow-lg px-3.5 py-2.5 text-sm min-w-[220px]"
+              style={{
+                left: msTooltip.x,
+                top: msTooltip.y,
+                transform: 'translate(-50%, -100%)',
+              }}
+            >
+              <div className="font-medium mb-1.5 text-foreground">{ms.name}</div>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                <span className="text-muted-foreground">任務數</span>
+                <span>{doneCount}/{msTks.length} 完成</span>
+                {earliestPlanned && (
+                  <>
+                    <span className="text-muted-foreground">規劃期間</span>
+                    <span>{fmtDate(earliestPlanned)} ~ {fmtDate(plannedEnd)}</span>
+                  </>
+                )}
+                {(msActualStart || latestCompletion) && (
+                  <>
+                    <span className="text-muted-foreground">實際期間</span>
+                    <span>
+                      {msActualStart ? fmtDate(msActualStart) : '—'}
+                      {' ~ '}
+                      {latestCompletion ? fmtDate(latestCompletion) : '進行中'}
+                    </span>
+                  </>
+                )}
+                <span className="text-muted-foreground">完成度</span>
+                <span>{ms.progress}%</span>
+                {diffDays !== null && (
+                  <>
+                    <span className="text-muted-foreground">時程差異</span>
+                    <span className={diffDays > 0 ? 'text-emerald-600' : diffDays < 0 ? 'text-red-600' : ''}>
+                      {diffDays > 0 ? `提前 ${diffDays} 天` : diffDays < 0 ? `延後 ${Math.abs(diffDays)} 天` : '準時完成'}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           )
         })()}

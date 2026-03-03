@@ -11,8 +11,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
 import { TaskDetailSheet } from '@/components/task-detail-sheet'
+import { MilestoneDetailSheet } from '@/components/milestone-detail-sheet'
 import { buildDepGraph } from '@/lib/dependency-graph'
-import { type Project, type Task, type TaskStatus } from '@/lib/mock-data'
+import { type Project, type Task, type Milestone, type TaskStatus } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import {
   ChevronDown,
@@ -43,6 +44,8 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
   const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
+  const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null)
+  const [milestoneDetailOpen, setMilestoneDetailOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
   const [showDependencies, setShowDependencies] = useState(false)
@@ -123,6 +126,11 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
     setTaskDetailOpen(true)
   }
 
+  const handleMilestoneClick = (milestone: Milestone) => {
+    setSelectedMilestone(milestone)
+    setMilestoneDetailOpen(true)
+  }
+
   const getStatusBadge = (status: DisplayStatus) => {
     switch (status) {
       case 'done': return <Badge className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">已完成</Badge>
@@ -160,11 +168,13 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
       const hasLogs = project.taskLogs.some(tl => tl.taskId === task.id)
       if (!hasLogs) return 'overdue-not-started'
     }
+    if (task.progress > 0 && task.status === 'todo') return 'in-progress' as const
     return task.status
   }
   // Keep effectiveStatus for logic that only cares about raw status (overdue check etc.)
   const effectiveStatus = (task: Task) => {
     if (task.progress >= 100) return 'done' as const
+    if (task.progress > 0 && task.status === 'todo') return 'in-progress' as const
     return task.status
   }
 
@@ -420,6 +430,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
           startDate={project.startDate}
           endDate={project.endDate}
           onTaskClick={handleTaskClick}
+          onMilestoneClick={handleMilestoneClick}
           expandedMilestoneIds={ganttExpandedMs}
           onExpandedMilestoneIdsChange={setGanttExpandedMs}
           showDependencies={showDependencies}
@@ -655,6 +666,19 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
         }}
         onTaskUpdate={onTaskUpdate}
         readOnly={readOnly}
+      />
+
+      {/* Milestone Detail Sheet */}
+      <MilestoneDetailSheet
+        open={milestoneDetailOpen}
+        onOpenChange={setMilestoneDetailOpen}
+        milestone={selectedMilestone}
+        project={project}
+        onTaskClick={(task) => {
+          setMilestoneDetailOpen(false)
+          setSelectedTask(task)
+          setTaskDetailOpen(true)
+        }}
       />
 
     </div>
