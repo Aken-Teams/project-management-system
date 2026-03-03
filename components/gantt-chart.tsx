@@ -203,6 +203,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return today > new Date(task.endDate)
   }
 
+  // Time difference label for non-baseline mode (next to percentage)
+  const getTimeDiffLabel = (task: { endDate: string; completedAt?: string | null; progress: number; status: string }) => {
+    const plannedEnd = new Date(task.endDate)
+    if (task.completedAt && (task.progress >= 100 || task.status === 'done')) {
+      // Completed: compare actual completion vs planned end
+      const actualEnd = new Date(task.completedAt)
+      const diff = Math.round((plannedEnd.getTime() - actualEnd.getTime()) / (1000 * 60 * 60 * 24))
+      if (diff > 0) return { text: `提前${diff}天`, color: '#10b981' }
+      if (diff < 0) return { text: `延後${Math.abs(diff)}天`, color: '#ef4444' }
+      return { text: '準時', color: '#10b981' }
+    }
+    if (task.progress < 100 && task.status !== 'done' && today > plannedEnd) {
+      // In-progress & overdue
+      const overdueDays = Math.round((today.getTime() - plannedEnd.getTime()) / (1000 * 60 * 60 * 24))
+      if (overdueDays > 0) return { text: `逾期${overdueDays}天`, color: '#ef4444' }
+    }
+    return null
+  }
+
   const handleTaskClick = (task: Task, e: React.MouseEvent) => {
     e.stopPropagation()
     onTaskClick?.(task)
@@ -371,31 +390,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         )}
                       </>
                       )
-                    })() : msTasks.length > 0 ? (() => {
-                      const msActualStartNB = getMilestoneActualStart(msTasks) || msBar.start
-                      return milestone.progress >= 100 ? (
-                        /* Completed milestone — dashed plan bar + solid actual bar */
-                        <>
-                          <div
-                            className="absolute h-3.5 rounded-sm"
-                            style={{
-                              ...barStyle(msBar.start, milestone.dueDate),
-                              top: 12,
-                              backgroundColor: `${PLAN_COLOR.bg}80`,
-                              border: `1px dashed ${PLAN_COLOR.border}`,
-                            }}
-                          />
-                          <div
-                            className="absolute h-3.5 rounded-sm"
-                            style={{
-                              ...barStyle(msActualStartNB, milestone.dueDate),
-                              top: 12,
-                              backgroundColor: colors.bg,
-                            }}
-                          />
-                        </>
-                      ) : (
-                        /* In-progress milestone — light bg + actual progress fill from actual start */
+                    })() : msTasks.length > 0 ? (
+                      /* Non-baseline milestone: single bar with progress fill */
+                      <>
                         <div
                           className="absolute h-3.5 rounded-sm border"
                           style={{
@@ -411,12 +408,41 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               style={{
                                 width: `${Math.min(milestone.progress, 100)}%`,
                                 backgroundColor: colors.bg,
+                                borderRadius: milestone.progress >= 100 ? '0.125rem' : undefined,
                               }}
                             />
                           )}
                         </div>
-                      )
-                    })() : null}
+                        {/* Milestone percentage + time diff */}
+                        <span
+                          className="absolute text-[10px] font-medium whitespace-nowrap"
+                          style={{
+                            left: `calc(${parseFloat(barStyle(msBar.start, milestone.dueDate).left) + parseFloat(barStyle(msBar.start, milestone.dueDate).width)}% + 4px)`,
+                            top: 13,
+                          }}
+                        >
+                          <span className="text-muted-foreground">{milestone.progress}%</span>
+                          {(() => {
+                            // Milestone time diff: check if all tasks done
+                            const msDone = milestone.progress >= 100
+                            const latestCompletion = msTasks.reduce<string | null>((latest, t) => {
+                              if (!t.completedAt) return latest
+                              return !latest || t.completedAt > latest ? t.completedAt : latest
+                            }, null)
+                            if (msDone && latestCompletion) {
+                              const diff = getTimeDiffLabel({ endDate: milestone.dueDate, completedAt: latestCompletion, progress: 100, status: 'done' })
+                              return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
+                            }
+                            // In-progress milestone overdue
+                            if (!msDone && today > new Date(milestone.dueDate)) {
+                              const overdueDays = Math.round((today.getTime() - new Date(milestone.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+                              if (overdueDays > 0) return <span style={{ color: '#ef4444' }}>{' '}逾期{overdueDays}天</span>
+                            }
+                            return null
+                          })()}
+                        </span>
+                      </>
+                    ) : null}
                     <TodayLine />
                   </div>
                 </div>
@@ -555,40 +581,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               {task.progress}%
                             </span>
                           </>
-                        ) : effectiveStatus(task) === 'done' && task.completedAt ? (
-                          /* Completed task — dashed plan bar + solid actual bar to completedAt */
-                          <>
-                            <div
-                              className="absolute h-3.5 rounded-sm"
-                              style={{
-                                ...barStyle(task.startDate, task.endDate),
-                                top: 12,
-                                backgroundColor: `${PLAN_COLOR.bg}80`,
-                                border: `1px dashed ${PLAN_COLOR.border}`,
-                              }}
-                            />
-                            <div
-                              className="absolute h-3.5 rounded-sm"
-                              style={{
-                                ...barStyle(getActualStart(task.id, task.startDate), task.completedAt),
-                                top: 12,
-                                backgroundColor: taskColors.bg,
-                                ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
-                              }}
-                            />
-                            {/* Percentage label */}
-                            <span
-                              className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
-                              style={{
-                                left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
-                                top: 13,
-                              }}
-                            >
-                              {task.progress}%
-                            </span>
-                          </>
                         ) : (
-                          /* In-progress — light bg + progress fill */
+                          /* Non-baseline: simple single bar with progress fill */
                           <>
                             <div
                               className="absolute h-3.5 rounded-sm border"
@@ -611,15 +605,19 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 />
                               )}
                             </div>
-                            {/* Percentage label */}
+                            {/* Percentage label + time diff */}
                             <span
-                              className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                              className="absolute text-[10px] font-medium whitespace-nowrap"
                               style={{
                                 left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
                                 top: 13,
                               }}
                             >
-                              {task.progress}%
+                              <span className="text-muted-foreground">{task.progress}%</span>
+                              {(() => {
+                                const diff = getTimeDiffLabel(task)
+                                return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
+                              })()}
                             </span>
                           </>
                         )}
@@ -708,38 +706,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                   {sub.progress}%
                                 </span>
                               </>
-                            ) : effectiveStatus(sub) === 'done' && sub.completedAt ? (
-                              /* Completed subtask — dashed plan bar + solid actual bar to completedAt */
-                              <>
-                                <div
-                                  className="absolute h-3 rounded-sm"
-                                  style={{
-                                    ...barStyle(sub.startDate, sub.endDate),
-                                    top: 12,
-                                    backgroundColor: `${PLAN_COLOR.bg}80`,
-                                    border: `1px dashed ${PLAN_COLOR.border}`,
-                                  }}
-                                />
-                                <div
-                                  className="absolute h-3 rounded-sm"
-                                  style={{
-                                    ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt),
-                                    top: 12,
-                                    backgroundColor: subColors.bg,
-                                  }}
-                                />
-                                <span
-                                  className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
-                                  style={{
-                                    left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
-                                    top: 13,
-                                  }}
-                                >
-                                  {sub.progress}%
-                                </span>
-                              </>
                             ) : (
-                              /* In-progress subtask — light bg + progress fill */
+                              /* Non-baseline subtask: simple single bar with progress fill */
                               <>
                                 <div
                                   className="absolute h-3 rounded-sm border"
@@ -762,13 +730,17 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                   )}
                                 </div>
                                 <span
-                                  className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                                  className="absolute text-[10px] font-medium whitespace-nowrap"
                                   style={{
                                     left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
                                     top: 13,
                                   }}
                                 >
-                                  {sub.progress}%
+                                  <span className="text-muted-foreground">{sub.progress}%</span>
+                                  {(() => {
+                                    const diff = getTimeDiffLabel(sub)
+                                    return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
+                                  })()}
                                 </span>
                               </>
                             )}

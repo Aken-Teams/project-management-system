@@ -495,6 +495,14 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                           )}
                         </div>
                       </div>
+                      {!readOnly && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleMilestoneClick(milestone) }}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+                        >
+                          查看
+                        </button>
+                      )}
                     </div>
                   </CollapsibleTrigger>
 
