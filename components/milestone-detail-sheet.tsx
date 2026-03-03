@@ -15,7 +15,6 @@ import { type Task, type Milestone, type TaskLog, type Project } from '@/lib/moc
 import { cn } from '@/lib/utils'
 import {
   Calendar,
-  CheckCircle2,
   Clock,
   Flag,
   ListChecks,
@@ -144,6 +143,7 @@ export function MilestoneDetailSheet({
 
   const effectiveStatus = (task: Task) => {
     if (task.progress >= 100) return 'done' as const
+    if (task.progress > 0 && task.status === 'todo') return 'in-progress' as const
     return task.status
   }
 
@@ -274,22 +274,22 @@ export function MilestoneDetailSheet({
           {stats && (
             <div className="flex items-center gap-2 flex-wrap">
               {stats.inProgressCount > 0 && (
-                <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">
+                <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/50 transition-colors">
                   進行中 {stats.inProgressCount}
                 </Badge>
               )}
               {stats.doneCount > 0 && (
-                <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700">
+                <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700 dark:hover:bg-emerald-900/50 transition-colors">
                   已完成 {stats.doneCount}
                 </Badge>
               )}
               {stats.blockedCount > 0 && (
-                <Badge variant="destructive" className="text-xs">
+                <Badge className="text-xs bg-red-100 text-red-700 border-red-300 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/50 transition-colors">
                   受阻 {stats.blockedCount}
                 </Badge>
               )}
               {stats.todoCount > 0 && (
-                <Badge className="text-xs bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600">
+                <Badge className="text-xs bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
                   待辦 {stats.todoCount}
                 </Badge>
               )}
@@ -304,100 +304,124 @@ export function MilestoneDetailSheet({
                 此里程碑尚未有任務
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {msTasks.map(task => {
                   const subtasks = project.tasks.filter(t => t.parentId === task.id)
                   const overdue = isOverdue(task)
-                  const actualStartStr = earliestLogDateMap.get(task.id)
-                  const logCount = logCountMap.get(task.id) || 0
+                  const status = effectiveStatus(task)
+                  const actualEndDate = task.completedAt ? new Date(task.completedAt) : null
+                  const plannedEndDate = new Date(task.endDate)
+                  const timeDiff = status === 'done' && actualEndDate
+                    ? Math.round((plannedEndDate.getTime() - actualEndDate.getTime()) / (1000 * 60 * 60 * 24))
+                    : null
 
                   return (
                     <div key={task.id}>
                       <div
                         className={cn(
-                          'flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors',
+                          'p-2.5 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors',
                           overdue && 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20',
                         )}
                         onClick={() => onTaskClick?.(task)}
                       >
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className={cn(
-                              'text-sm font-medium truncate',
-                              effectiveStatus(task) === 'done' && 'text-muted-foreground line-through',
-                            )}>
-                              {task.title}
+                        {/* Row 1: Title + status + progress */}
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            'text-sm font-medium truncate flex-1 min-w-0',
+                            status === 'done' && 'text-muted-foreground',
+                          )}>
+                            {task.title}
+                          </span>
+                          {getStatusBadge(status)}
+                          {subtasks.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                              {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
                             </span>
-                            {getStatusBadge(effectiveStatus(task))}
-                            {subtasks.length > 0 && (
-                              <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
-                                {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            {task.assignee && (
-                              <div className="flex items-center gap-1">
-                                <Avatar className="h-4 w-4">
-                                  <AvatarFallback className={cn('text-[7px] text-white', assigneeColorMap.get(task.assignee) || AVATAR_COLORS[0])}>
-                                    {task.assignee.split(' ').map(n => n[0]).join('')}
-                                  </AvatarFallback>
-                                </Avatar>
-                                {task.assignee}
-                              </div>
-                            )}
-                            <span>{fmtDate(task.startDate)} ~ {fmtDate(task.endDate)}</span>
-                            {actualStartStr && (
-                              <span className="text-blue-600 dark:text-blue-400">
-                                實際開始 {fmtDate(actualStartStr)}
-                              </span>
-                            )}
-                            {logCount > 0 && (
-                              <span>{logCount} 筆紀錄</span>
-                            )}
+                          )}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="w-14">
+                              <Progress value={task.progress} className="h-1.5" />
+                            </div>
+                            <span className="text-xs font-medium tabular-nums w-8 text-right">{task.progress}%</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="w-16">
-                            <Progress value={task.progress} className="h-1.5" />
-                          </div>
-                          <span className="text-xs font-medium tabular-nums w-8 text-right">{task.progress}%</span>
+                        {/* Row 2: Assignee + dates + time indicator */}
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                          {task.assignee && (
+                            <div className="flex items-center gap-1 whitespace-nowrap">
+                              <Avatar className="h-4 w-4 shrink-0">
+                                <AvatarFallback className={cn('text-[7px] text-white', assigneeColorMap.get(task.assignee) || AVATAR_COLORS[0])}>
+                                  {task.assignee.split(' ').map(n => n[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              {task.assignee}
+                            </div>
+                          )}
+                          <span className="whitespace-nowrap">{fmtDate(task.startDate)} ~ {fmtDate(task.endDate)}</span>
+                          {/* Time difference indicator instead of full actual dates */}
+                          {timeDiff !== null ? (
+                            <span className={cn(
+                              'whitespace-nowrap font-medium',
+                              timeDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' :
+                              timeDiff < 0 ? 'text-red-600 dark:text-red-400' : '',
+                            )}>
+                              {timeDiff > 0 ? `提前${timeDiff}天` : timeDiff < 0 ? `延後${Math.abs(timeDiff)}天` : '準時'}
+                            </span>
+                          ) : overdue ? (
+                            <span className="whitespace-nowrap font-medium text-red-600 dark:text-red-400">
+                              逾期{Math.round((new Date().getTime() - plannedEndDate.getTime()) / (1000 * 60 * 60 * 24))}天
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
-                      {/* Subtasks */}
-                      {subtasks.map(sub => (
-                        <div
-                          key={sub.id}
-                          className={cn(
-                            'flex items-center gap-3 p-2 pl-8 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ml-3 border-l-2 border-muted',
-                            isOverdue(sub) && 'border-l-red-300',
-                          )}
-                          onClick={() => onTaskClick?.(sub)}
-                        >
-                          <div className="flex-1 min-w-0 space-y-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className={cn(
-                                'text-sm truncate',
-                                effectiveStatus(sub) === 'done' && 'text-muted-foreground line-through',
-                              )}>
-                                {sub.title}
-                              </span>
-                              {getStatusBadge(effectiveStatus(sub))}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {sub.assignee && <span>{sub.assignee}</span>}
-                              <span>{fmtDate(sub.endDate)}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <div className="w-12">
-                              <Progress value={sub.progress} className="h-1" />
-                            </div>
-                            <span className="text-[10px] font-medium tabular-nums w-7 text-right">{sub.progress}%</span>
-                          </div>
+                      {/* Subtasks — compact list */}
+                      {subtasks.length > 0 && (
+                        <div className="ml-4 mt-0.5 rounded-md border bg-muted/15 divide-y">
+                          {subtasks.map((sub) => {
+                            const subStatus = effectiveStatus(sub)
+                            const subOverdue = isOverdue(sub)
+                            return (
+                              <div
+                                key={sub.id}
+                                className={cn(
+                                  'flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors',
+                                  subOverdue && 'bg-red-50/30 dark:bg-red-950/10',
+                                )}
+                                onClick={(e) => { e.stopPropagation(); onTaskClick?.(sub) }}
+                              >
+                                <div
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
+                                  style={{
+                                    backgroundColor: subStatus === 'done' ? '#10b981'
+                                      : subStatus === 'in-progress' ? '#3b82f6'
+                                      : subStatus === 'blocked' ? '#ef4444'
+                                      : '#94a3b8',
+                                  }}
+                                />
+                                <span className={cn(
+                                  'text-sm truncate flex-1 min-w-0',
+                                  subStatus === 'done' && 'text-muted-foreground',
+                                )}>
+                                  {sub.title}
+                                </span>
+                                {sub.assignee && (
+                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap hidden sm:inline">{sub.assignee}</span>
+                                )}
+                                <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+                                  {new Date(sub.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <div className="w-8">
+                                    <Progress value={sub.progress} className="h-1" />
+                                  </div>
+                                  <span className="text-[10px] font-medium tabular-nums w-7 text-right">{sub.progress}%</span>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )
                 })}
