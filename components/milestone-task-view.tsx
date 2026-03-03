@@ -13,7 +13,6 @@ import { GanttChart } from '@/components/gantt-chart'
 import { TaskDetailSheet } from '@/components/task-detail-sheet'
 import { buildDepGraph } from '@/lib/dependency-graph'
 import { type Project, type Task, type TaskStatus } from '@/lib/mock-data'
-import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 import {
   ChevronDown,
@@ -30,9 +29,6 @@ import {
   ChevronsUpDown,
   BarChart3,
   Settings2,
-  Play,
-  CheckCircle2,
-  Loader2,
 } from 'lucide-react'
 
 interface MilestoneTaskViewProps {
@@ -42,8 +38,7 @@ interface MilestoneTaskViewProps {
 }
 
 export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: MilestoneTaskViewProps) {
-  const { user } = useAuth()
-  const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list')
+  const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
   const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -52,29 +47,6 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
   const [showDependencies, setShowDependencies] = useState(false)
   const [showBaseline, setShowBaseline] = useState(true)
-  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
-
-  // Quick task status update
-  const handleQuickUpdate = async (task: Task, newStatus: 'in_progress' | 'done', e: React.MouseEvent) => {
-    e.stopPropagation()
-    setUpdatingTaskId(task.id)
-    try {
-      const body: Record<string, unknown> = { status: newStatus }
-      if (newStatus === 'done') {
-        body.progress = 100
-        body.completedBy = user?.name ?? ''
-      }
-      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      onTaskUpdate?.()
-    } finally {
-      setUpdatingTaskId(null)
-    }
-  }
-
   // Compute dependency graph (only when toggle is on)
   const nodeMap = useMemo(() => {
     if (!showDependencies) return undefined
@@ -524,7 +496,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                               <span className="text-center">優先</span>
                               <span>負責人</span>
                               <span className="text-right">截止日</span>
-                              {!readOnly && <span className="text-center">操作</span>}
+                              {!readOnly && <span className="text-center">查看</span>}
                             </div>
                             {tasks.map(task => {
                               const overdue = isTaskOverdue(task)
@@ -576,30 +548,15 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                                     )}>
                                       {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                     </div>
-                                    {/* Quick actions */}
+                                    {/* View detail */}
                                     {!readOnly && (
                                     <div className="flex justify-center">
-                                      {updatingTaskId === task.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                      ) : effectiveStatus(task) === 'done' ? (
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                      ) : task.status === 'in-progress' ? (
-                                        <button
-                                          onClick={(e) => handleQuickUpdate(task, 'done', e)}
-                                          className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900"
-                                        >
-                                          <CheckCircle2 className="h-3 w-3" />
-                                          完成
-                                        </button>
-                                      ) : (
-                                        <button
-                                          onClick={(e) => handleQuickUpdate(task, 'in_progress', e)}
-                                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors dark:bg-blue-950 dark:text-blue-400 dark:hover:bg-blue-900"
-                                        >
-                                          <Play className="h-3 w-3" />
-                                          開始
-                                        </button>
-                                      )}
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleTaskClick(task) }}
+                                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+                                      >
+                                        詳細
+                                      </button>
                                     </div>
                                     )}
                                   </div>
@@ -649,30 +606,15 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                                         )}>
                                           {new Date(sub.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                         </div>
-                                        {/* Quick actions */}
+                                        {/* View detail */}
                                         {!readOnly && (
                                         <div className="flex justify-center">
-                                          {updatingTaskId === sub.id ? (
-                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                          ) : effectiveStatus(sub) === 'done' ? (
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                          ) : sub.status === 'in-progress' ? (
-                                            <button
-                                              onClick={(e) => handleQuickUpdate(sub, 'done', e)}
-                                              className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900"
-                                            >
-                                              <CheckCircle2 className="h-3 w-3" />
-                                              完成
-                                            </button>
-                                          ) : (
-                                            <button
-                                              onClick={(e) => handleQuickUpdate(sub, 'in_progress', e)}
-                                              className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors dark:bg-blue-950 dark:text-blue-400 dark:hover:bg-blue-900"
-                                            >
-                                              <Play className="h-3 w-3" />
-                                              開始
-                                            </button>
-                                          )}
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); handleTaskClick(sub) }}
+                                            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+                                          >
+                                            詳細
+                                          </button>
                                         </div>
                                         )}
                                       </div>
@@ -703,6 +645,8 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
         onSelectTask={(t) => {
           setSelectedTask(t)
         }}
+        onTaskUpdate={onTaskUpdate}
+        readOnly={readOnly}
       />
 
     </div>

@@ -113,6 +113,19 @@ export function dbProjectToFrontend(
       completedBy: string | null
       parentId: string | null
       dependsOn: { prerequisiteId: string }[]
+      children: {
+        id: string
+        title: string
+        assignee: string
+        status: string
+        priority: string
+        startDate: Date
+        endDate: Date
+        durationDays: number
+        progress: number
+        completedAt: Date | null
+        completedBy: string | null
+      }[]
     }[]
     risks: {
       id: string
@@ -219,6 +232,21 @@ export function dbProjectToFrontend(
     ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
     ...(t.completedBy ? { completedBy: t.completedBy } : {}),
     ...(t.parentId ? { parentId: t.parentId } : {}),
+    ...(t.children && t.children.length > 0 ? {
+      subtasks: t.children.map((c) => ({
+        id: c.id,
+        title: c.title,
+        status: c.status === 'in_progress' ? ('in-progress' as const) : (c.status as 'todo' | 'done' | 'blocked'),
+        progress: c.progress,
+        assignee: c.assignee,
+        startDate: c.startDate.toISOString().split('T')[0],
+        endDate: c.endDate.toISOString().split('T')[0],
+        priority: c.priority as 'low' | 'medium' | 'high',
+        durationDays: c.durationDays,
+        ...(c.completedAt ? { completedAt: c.completedAt.toISOString().split('T')[0] } : {}),
+        ...(c.completedBy ? { completedBy: c.completedBy } : {}),
+      })),
+    } : {}),
   }))
 
   const feRisks = proj.risks.map((r) => ({
@@ -351,7 +379,7 @@ export const projectFullInclude = {
   milestones: { orderBy: { sortOrder: 'asc' as const } },
   baselines: true,
   tasks: {
-    include: { dependsOn: true },
+    include: { dependsOn: true, children: true },
     orderBy: { sortOrder: 'asc' as const },
   },
   risks: true,
