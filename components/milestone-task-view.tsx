@@ -8,19 +8,12 @@ import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
 import { TaskDetailSheet } from '@/components/task-detail-sheet'
 import { buildDepGraph } from '@/lib/dependency-graph'
 import { type Project, type Task, type TaskStatus } from '@/lib/mock-data'
+import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 import {
   ChevronDown,
@@ -35,17 +28,21 @@ import {
   X,
   ChevronsDownUp,
   ChevronsUpDown,
-  TimerReset,
-  Loader2,
+  BarChart3,
   Settings2,
+  Play,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 
 interface MilestoneTaskViewProps {
   project: Project
-  onBaselineReset?: () => void
+  onTaskUpdate?: () => void
+  readOnly?: boolean
 }
 
-export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskViewProps) {
+export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: MilestoneTaskViewProps) {
+  const { user } = useAuth()
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
   const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(new Set())
@@ -54,23 +51,29 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set())
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
   const [showDependencies, setShowDependencies] = useState(false)
-  const [showBaseline, setShowBaseline] = useState(false)
-  const [resettingBaseline, setResettingBaseline] = useState(false)
-  const [baselineDialogOpen, setBaselineDialogOpen] = useState(false)
+  const [showBaseline, setShowBaseline] = useState(true)
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
 
-  // Check if any milestone date differs from baseline (delay, moved earlier, or any change)
-  const hasBaselineMismatch = useMemo(() => {
-    if (!project.baseline?.length) return false
-    // Any milestone where dueDate ≠ baseline dueDate
-    const anyDiff = project.milestones.some(ms => {
-      const bl = project.baseline.find(b => b.id === ms.id)
-      return bl && ms.dueDate !== bl.dueDate
-    })
-    if (anyDiff) return true
-    // Milestone count changed (added or removed)
-    if (project.milestones.length !== project.baseline.length) return true
-    return false
-  }, [project.milestones, project.baseline])
+  // Quick task status update
+  const handleQuickUpdate = async (task: Task, newStatus: 'in_progress' | 'done', e: React.MouseEvent) => {
+    e.stopPropagation()
+    setUpdatingTaskId(task.id)
+    try {
+      const body: Record<string, unknown> = { status: newStatus }
+      if (newStatus === 'done') {
+        body.progress = 100
+        body.completedBy = user?.name ?? ''
+      }
+      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      onTaskUpdate?.()
+    } finally {
+      setUpdatingTaskId(null)
+    }
+  }
 
   // Compute dependency graph (only when toggle is on)
   const nodeMap = useMemo(() => {
@@ -390,24 +393,12 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                   </label>
                   <label className="flex items-center gap-2.5 cursor-pointer">
                     <Checkbox checked={showBaseline} onCheckedChange={(v) => setShowBaseline(!!v)} />
-                    <TimerReset className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-sm">基線顯示</span>
+                    <BarChart3 className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm">Plan / Actual</span>
                   </label>
                 </div>
               </PopoverContent>
             </Popover>
-          )}
-          {hasBaselineMismatch && onBaselineReset && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-sm gap-1.5 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-900"
-              disabled={resettingBaseline}
-              onClick={() => setBaselineDialogOpen(true)}
-            >
-              {resettingBaseline ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TimerReset className="h-3.5 w-3.5" />}
-              重設基線
-            </Button>
           )}
           {(() => {
             const currentExpanded = viewMode === 'list' ? expandedMilestones : ganttExpandedMs
@@ -443,21 +434,10 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
         </div>
       </div>
 
-      {/* Baseline mismatch banner — visible in both list & Gantt views */}
-      {hasBaselineMismatch && onBaselineReset && (
-        <div className="flex items-center rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-4 py-2.5">
-          <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
-            <TimerReset className="h-4 w-4 shrink-0" />
-            <span>里程碑日期與基線不一致，建議重設基線以反映最新時程</span>
-          </div>
-        </div>
-      )}
-
       {viewMode === 'gantt' ? (
         <GanttChart
           tasks={project.tasks}
           milestones={project.milestones}
-          baseline={project.baseline}
           startDate={project.startDate}
           endDate={project.endDate}
           onTaskClick={handleTaskClick}
@@ -474,11 +454,6 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
         <div className="space-y-3">
           {project.milestones.map((milestone, index) => {
             const tasks = tasksByMilestone.get(milestone.id) || []
-            const baselineMs = project.baseline.find(b => b.id === milestone.id)
-            const isDelayed = baselineMs && milestone.dueDate > baselineMs.dueDate
-            const delayDays = baselineMs
-              ? Math.ceil((new Date(milestone.dueDate).getTime() - new Date(baselineMs.dueDate).getTime()) / (1000 * 60 * 60 * 24))
-              : 0
             const isExpanded = expandedMilestones.has(milestone.id)
             const doneTasks = tasks.filter(t => t.status === 'done').length
             const overdueTasks = tasks.filter(t => isTaskOverdue(t)).length
@@ -490,7 +465,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                 open={isExpanded}
                 onOpenChange={() => toggleMilestone(milestone.id)}
               >
-                <Card className={cn(isDelayed && 'border-warning/50')}>
+                <Card>
                   <CollapsibleTrigger asChild>
                     <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors">
                       <ChevronDown className={cn(
@@ -504,12 +479,6 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                         <div className="flex items-center gap-2">
                           <h4 className="font-medium text-sm">{milestone.name}</h4>
                           {getStatusBadgeLarge(milestone.status)}
-                          {isDelayed && (
-                            <Badge variant="secondary" className="bg-warning text-warning-foreground text-sm">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              +{delayDays}天
-                            </Badge>
-                          )}
                           {noActivity && (
                             <Badge variant="secondary" className="bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700 text-sm">
                               <AlertTriangle className="h-3 w-3 mr-1" />
@@ -548,13 +517,14 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                         ) : (
                           <div className="divide-y">
                             {/* Table header */}
-                            <div className="grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                            <div className={`grid ${readOnly ? 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px]' : 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px_60px]'} gap-3 px-3 py-2 text-sm font-medium text-muted-foreground uppercase tracking-wider`}>
                               <span>任務</span>
                               <span>狀態</span>
                               <span>進度</span>
                               <span className="text-center">優先</span>
                               <span>負責人</span>
                               <span className="text-right">截止日</span>
+                              {!readOnly && <span className="text-center">操作</span>}
                             </div>
                             {tasks.map(task => {
                               const overdue = isTaskOverdue(task)
@@ -564,7 +534,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                   <div
                                     onClick={() => handleTaskClick(task)}
                                     className={cn(
-                                      'grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                      `grid ${readOnly ? 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px]' : 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px_60px]'} gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm`,
                                       overdue && 'bg-destructive/5',
                                     )}
                                   >
@@ -606,6 +576,32 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                     )}>
                                       {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                     </div>
+                                    {/* Quick actions */}
+                                    {!readOnly && (
+                                    <div className="flex justify-center">
+                                      {updatingTaskId === task.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                      ) : effectiveStatus(task) === 'done' ? (
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                      ) : task.status === 'in-progress' ? (
+                                        <button
+                                          onClick={(e) => handleQuickUpdate(task, 'done', e)}
+                                          className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900"
+                                        >
+                                          <CheckCircle2 className="h-3 w-3" />
+                                          完成
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={(e) => handleQuickUpdate(task, 'in_progress', e)}
+                                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors dark:bg-blue-950 dark:text-blue-400 dark:hover:bg-blue-900"
+                                        >
+                                          <Play className="h-3 w-3" />
+                                          開始
+                                        </button>
+                                      )}
+                                    </div>
+                                    )}
                                   </div>
                                   {/* Subtask rows — indented */}
                                   {subtasks.map(sub => {
@@ -615,7 +611,7 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                         key={sub.id}
                                         onClick={() => handleTaskClick(sub)}
                                         className={cn(
-                                          'grid grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px] gap-3 items-center px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm',
+                                          `grid ${readOnly ? 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px]' : 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px_60px]'} gap-3 items-center px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm`,
                                           subOverdue && 'bg-destructive/5',
                                         )}
                                       >
@@ -653,6 +649,32 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
                                         )}>
                                           {new Date(sub.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
                                         </div>
+                                        {/* Quick actions */}
+                                        {!readOnly && (
+                                        <div className="flex justify-center">
+                                          {updatingTaskId === sub.id ? (
+                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                          ) : effectiveStatus(sub) === 'done' ? (
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                          ) : sub.status === 'in-progress' ? (
+                                            <button
+                                              onClick={(e) => handleQuickUpdate(sub, 'done', e)}
+                                              className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:bg-emerald-950 dark:text-emerald-400 dark:hover:bg-emerald-900"
+                                            >
+                                              <CheckCircle2 className="h-3 w-3" />
+                                              完成
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={(e) => handleQuickUpdate(sub, 'in_progress', e)}
+                                              className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors dark:bg-blue-950 dark:text-blue-400 dark:hover:bg-blue-900"
+                                            >
+                                              <Play className="h-3 w-3" />
+                                              開始
+                                            </button>
+                                          )}
+                                        </div>
+                                        )}
                                       </div>
                                     )
                                   })}
@@ -683,40 +705,6 @@ export function MilestoneTaskView({ project, onBaselineReset }: MilestoneTaskVie
         }}
       />
 
-      {/* Reset Baseline Dialog */}
-      <Dialog open={baselineDialogOpen} onOpenChange={setBaselineDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>重設里程碑基線</DialogTitle>
-            <DialogDescription>
-              將目前的里程碑日期設為新的基線。原本的基線紀錄會被覆蓋，延遲標示將會清除。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBaselineDialogOpen(false)} disabled={resettingBaseline}>
-              取消
-            </Button>
-            <Button
-              disabled={resettingBaseline}
-              onClick={async () => {
-                setResettingBaseline(true)
-                try {
-                  const res = await fetch(`/api/projects/${project.id}/reset-baseline`, { method: 'POST' })
-                  if (res.ok) {
-                    setBaselineDialogOpen(false)
-                    onBaselineReset?.()
-                  }
-                } finally {
-                  setResettingBaseline(false)
-                }
-              }}
-            >
-              {resettingBaseline && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-              確認重設
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

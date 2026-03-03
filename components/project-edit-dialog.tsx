@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, TimerReset, CalendarClock, Send } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send } from 'lucide-react'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -162,15 +162,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [tlMilestones, setTlMilestones] = useState(tlInit.milestones)
   const [tlTasks, setTlTasks] = useState(tlInit.tasks)
   const [workItemError, setWorkItemError] = useState('')
-  const [resettingBaseline, setResettingBaseline] = useState(false)
-  const [baselineResetDialogOpen, setBaselineResetDialogOpen] = useState(false)
-
   // ─── Date change approval state ──────────────────────────
   const { user } = useAuth()
   const [dateChangeDialogOpen, setDateChangeDialogOpen] = useState(false)
   const [dateChangeReason, setDateChangeReason] = useState('')
   const [dateChangeSaving, setDateChangeSaving] = useState(false)
-  const [pendingSaveOptions, setPendingSaveOptions] = useState<{ resetBaseline?: boolean } | null>(null)
   const [affectedMilestoneDates, setAffectedMilestoneDates] = useState<Array<{
     milestoneId: string
     milestoneName: string
@@ -196,24 +192,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const tlTaskDates = calculateTaskDates(tlTasks, recalcMilestones)
 
   // Detect if milestones or tasks changed (for showing reset baseline prompt)
-  const hasWorkItemChanges = useMemo(() => {
-    if (tlMilestones.length !== origMilestones.length) return true
-    for (let i = 0; i < tlMilestones.length; i++) {
-      const curr = tlMilestones[i]
-      const orig = origMilestones[i]
-      if (!orig || curr.id !== orig.id || curr.name !== orig.name || curr.durationDays !== tlInit.milestones[i]?.durationDays) return true
-    }
-    if (tlTasks.length !== origTasks.length) return true
-    for (const curr of tlTasks) {
-      const orig = origTasks.find(o => o.id === curr.id)
-      if (!orig) return true
-      if (curr.milestoneId !== orig.milestoneId || curr.title !== orig.title ||
-          curr.assignee !== orig.assignee || curr.priority !== orig.priority ||
-          curr.durationDays !== orig.durationDays) return true
-    }
-    return false
-  }, [tlMilestones, tlTasks, origMilestones, origTasks, tlInit.milestones])
-
   // Detect which existing milestones have date changes
   const detectMilestoneDateChanges = useCallback(() => {
     const changes: Array<{
@@ -330,8 +308,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     return newMsIdMap
   }
 
-  // ─── Core validate + save logic (shared by Save and Reset Baseline) ───
-  const validateAndSaveAll = async (options?: { resetBaseline?: boolean }): Promise<boolean> => {
+  // ─── Core validate + save logic ───
+  const validateAndSaveAll = async (): Promise<boolean> => {
     // Validation matching the creation form
     if (!form.name.trim()) {
       setError('專案名稱不可為空')
@@ -446,7 +424,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
       // Open date change dialog for approval
       setAffectedMilestoneDates(dateChanges)
-      setPendingSaveOptions(options ?? null)
       setDateChangeDialogOpen(true)
       return false // don't close edit dialog yet
     }
@@ -455,27 +432,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     await onSave({ ...form, objective: autoObjective })
 
     // ─── No date changes: proceed with normal full save ──
-    const newMsIdMap = await executeBatchSave(diff)
-
-    // 8. Reset baseline if requested — send calculated dates directly
-    if (options?.resetBaseline) {
-      const baselineMilestones = recalcMilestones
-        .filter(ms => ms.endDate)
-        .map(ms => ({
-          id: newMsIdMap.get(ms.id) || ms.id,
-          name: ms.name,
-          dueDate: ms.endDate!,
-        }))
-      const res = await fetch(`/api/projects/${project.id}/reset-baseline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ milestones: baselineMilestones }),
-      })
-      if (!res.ok) {
-        setError('重設基線失敗')
-        return false
-      }
-    }
+    await executeBatchSave(diff)
 
     return true
   }
@@ -1207,26 +1164,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               </div>
             </div>
 
-            {/* Reset Baseline — only shown when work items have changed, sticky at top */}
-            {hasWorkItemChanges && (project.milestones?.length ?? 0) > 0 && (
-              <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-3 py-2 shadow-sm">
-                <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
-                  <TimerReset className="h-4 w-4 shrink-0" />
-                  <span>里程碑或任務已變更，建議儲存並重設基線</span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-sm gap-1.5 border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-400 dark:hover:bg-amber-900 shrink-0 ml-3"
-                  disabled={resettingBaseline}
-                  onClick={() => setBaselineResetDialogOpen(true)}
-                >
-                  {resettingBaseline ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TimerReset className="h-3.5 w-3.5" />}
-                  儲存並重設基線
-                </Button>
-              </div>
-            )}
-
             <TimelineTable
               milestones={recalcMilestones}
               tasks={tlTasks}
@@ -1262,48 +1199,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           </Button>
         </DialogFooter>
       </DialogContent>
-
-      {/* Reset Baseline Confirmation Dialog */}
-      <Dialog open={baselineResetDialogOpen} onOpenChange={setBaselineResetDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>儲存變更並重設基線</DialogTitle>
-            <DialogDescription>
-              將先儲存目前的所有變更，再以更新後的里程碑日期設為新的基線。原本的基線紀錄會被覆蓋，延遲標示將會清除。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBaselineResetDialogOpen(false)} disabled={resettingBaseline}>
-              取消
-            </Button>
-            <Button
-              disabled={resettingBaseline}
-              onClick={async () => {
-                setResettingBaseline(true)
-                try {
-                  const success = await validateAndSaveAll({ resetBaseline: true })
-                  if (success) {
-                    await onWorkItemsChange?.()
-                    setBaselineResetDialogOpen(false)
-                    onOpenChange(false)
-                  } else {
-                    // Date change dialog may have opened — close baseline dialog
-                    setBaselineResetDialogOpen(false)
-                  }
-                } catch {
-                  setError('儲存失敗，請稍後再試')
-                  setBaselineResetDialogOpen(false)
-                } finally {
-                  setResettingBaseline(false)
-                }
-              }}
-            >
-              {resettingBaseline && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-              儲存並重設
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Date Change Approval Dialog */}
       <Dialog open={dateChangeDialogOpen} onOpenChange={(open) => {
@@ -1353,13 +1248,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               )
             })}
           </div>
-
-          {pendingSaveOptions?.resetBaseline && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-              <TimerReset className="h-4 w-4 shrink-0" />
-              基線將在日期變更核准後自動重設
-            </div>
-          )}
 
           <div className="space-y-1.5">
             <Label className="text-sm">

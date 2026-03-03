@@ -1,30 +1,18 @@
 'use client'
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect } from 'react'
 import { use } from 'react'
-import { useRouter } from 'next/navigation'
-import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MilestoneTaskView } from '@/components/milestone-task-view'
-import { useAuth } from '@/lib/auth-context'
+import { ProjectRiskTab } from '@/components/project-risk-tab'
+import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
 import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
-import { Input } from '@/components/ui/input'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  ArrowLeft,
   Calendar,
   DollarSign,
   Users,
@@ -45,124 +33,45 @@ import {
   Milestone,
   HelpCircle,
   Loader2,
-  Pencil,
-  Trash2,
-  Share2,
-  Copy,
-  Check,
+  Link2Off,
 } from 'lucide-react'
-import Link from 'next/link'
-import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
-import { ProjectDeleteDialog } from '@/components/project-delete-dialog'
-import { ProjectRiskTab } from '@/components/project-risk-tab'
-import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
 
-// --- Main page ---
-
-interface ProjectPageProps {
-  params: Promise<{ id: string }>
-}
-
-export default function ProjectPage({ params }: ProjectPageProps) {
-  const { id } = use(params)
-  const router = useRouter()
-  const { user } = useAuth()
+export default function SharePage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params)
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
-  const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [shareDialogOpen, setShareDialogOpen] = useState(false)
-  const [shareToken, setShareToken] = useState<string | null>(null)
-  const [shareLoading, setShareLoading] = useState(false)
-  const [shareCopied, setShareCopied] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    fetch(`/api/projects/${id}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled) {
-          setProject(data)
-          setLoading(false)
-        }
+    fetch(`/api/share/${token}`)
+      .then(res => {
+        if (!res.ok) throw new Error(res.status === 404 ? '分享連結無效' : res.status === 410 ? '分享連結已過期' : '讀取失敗')
+        return res.json()
       })
-      .catch(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [id])
-
-  const handleSaveProject = async (data: ProjectEditData) => {
-    const res = await fetch(`/api/projects/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || '更新失敗')
-    }
-    const updated = await res.json()
-    setProject(updated)
-  }
-
-  const handleDeleteProject = async () => {
-    const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || '刪除失敗')
-    }
-    router.push('/projects')
-  }
-
-  const handleShare = async () => {
-    if (!user || !project) return
-    setShareLoading(true)
-    try {
-      const res = await fetch(`/api/projects/${id}/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      })
-      if (res.ok) {
-        const { token } = await res.json()
-        setShareToken(token)
-        setShareDialogOpen(true)
-      }
-    } finally {
-      setShareLoading(false)
-    }
-  }
-
-  const copyShareLink = () => {
-    if (!shareToken) return
-    const url = `${window.location.origin}/share/${shareToken}`
-    navigator.clipboard.writeText(url)
-    setShareCopied(true)
-    setTimeout(() => setShareCopied(false), 2000)
-  }
+      .then(data => setProject(data))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [token])
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-          <p className="text-muted-foreground">載入專案資料中...</p>
-        </div>
-      </DashboardLayout>
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
     )
   }
 
-  if (!project) {
+  if (error || !project) {
     return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center py-12">
-          <h2 className="text-2xl font-bold mb-2">找不到專案</h2>
-          <p className="text-muted-foreground mb-4">此專案不存在或已被刪除</p>
-          <Button onClick={() => router.push('/projects')}>返回專案列表</Button>
-        </div>
-      </DashboardLayout>
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <Card className="max-w-md w-full mx-4">
+          <CardContent className="pt-6 text-center">
+            <Link2Off className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-lg font-semibold mb-2">無法存取</h2>
+            <p className="text-muted-foreground">{error || '找不到此分享連結'}</p>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -190,27 +99,21 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
   }
 
-  const budgetUtilization = Math.round((project.budgetUsed / project.budget) * 100)
+  const budgetUtilization = project.budget > 0 ? Math.round((project.budgetUsed / project.budget) * 100) : 0
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
   const openRisks = project.risks.filter(r => r.status === 'open')
 
   return (
-    <DashboardLayout>
-      <div className="space-y-5">
-        {/* Header - Compact */}
-        <div>
-          <Link href="/projects">
-            <Button variant="ghost" size="sm" className="gap-2 mb-3 -ml-2">
-              <ArrowLeft className="h-4 w-4" />
-              返回專案列表
-            </Button>
-          </Link>
-
+    <div className="min-h-screen bg-muted/30">
+      {/* Header */}
+      <div className="bg-card border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
+                <Badge variant="outline" className="text-xs">唯讀</Badge>
                 <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
                 <Badge variant="outline" className="text-sm">
                   <Tag className="h-3 w-3 mr-1" />
@@ -224,24 +127,13 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </Badge>
               </div>
               <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleShare} disabled={shareLoading}>
-                {shareLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
-                分享
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-primary border-primary/30 hover:bg-primary/10 hover:text-primary" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-3.5 w-3.5" />
-                編輯
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-destructive border-destructive/30 hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
-                刪除
-              </Button>
+              {project.objective && (
+                <p className="text-muted-foreground mt-1">{project.objective}</p>
+              )}
             </div>
           </div>
 
-          {/* Pending delay alert - inline */}
+          {/* Pending delay alert */}
           {pendingDelays.length > 0 && (
             <div className="mt-3 p-3 rounded-lg border border-warning/50 bg-warning/10 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
@@ -249,8 +141,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Stats Bar - Horizontal compact */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+        {/* Stats Bar */}
         <div className="flex items-center gap-0 rounded-lg border bg-card divide-x overflow-hidden">
           <div className="flex-1 px-4 py-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
@@ -274,7 +168,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <div className="text-sm text-muted-foreground">剩餘 {daysLeft} 天</div>
           </div>
 
-          {user?.role !== 'member' && (
+          {project.budget > 0 && (
             <div className="flex-1 px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                 <DollarSign className="h-3.5 w-3.5" />
@@ -306,7 +200,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           </div>
         </div>
 
-        {/* Tabs - Prominent with icons */}
+        {/* Tabs */}
         <Tabs defaultValue="overview" className="space-y-4">
           <div className="border-b">
             <TabsList className="h-auto p-0 bg-transparent gap-0">
@@ -481,23 +375,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             </div>
           </TabsContent>
 
-          {/* Work Items Tab (Milestones + Tasks unified view) */}
+          {/* Work Items Tab */}
           <TabsContent value="work-items" className="mt-0">
             <MilestoneTaskView
               project={project}
-              onTaskUpdate={async () => {
-                const res = await fetch(`/api/projects/${id}`)
-                if (res.ok) setProject(await res.json())
-              }}
+              readOnly
             />
           </TabsContent>
 
-          {/* Updates Tab — Auto-generated weekly summaries */}
+          {/* Updates Tab */}
           <TabsContent value="updates" className="mt-0">
             <WeeklyActivitySummary project={project} />
           </TabsContent>
 
-          {/* Risks Tab — Static risks from project creation */}
+          {/* Risks Tab */}
           <TabsContent value="risks" className="mt-0">
             <ProjectRiskTab project={project} />
           </TabsContent>
@@ -590,67 +481,13 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               )}
             </div>
           </TabsContent>
-
-          {/* Dependencies Tab */}
         </Tabs>
+
+        {/* Footer */}
+        <div className="text-center text-sm text-muted-foreground py-4 border-t">
+          此為唯讀分享頁面
+        </div>
       </div>
-
-      {/* Edit / Delete Dialogs */}
-      {editOpen && (
-        <ProjectEditDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          project={project}
-          onSave={handleSaveProject}
-          onTeamChange={async () => {
-            const res = await fetch(`/api/projects/${id}`)
-            if (res.ok) setProject(await res.json())
-          }}
-          onRiskChange={async () => {
-            const res = await fetch(`/api/projects/${id}`)
-            if (res.ok) setProject(await res.json())
-          }}
-          onWorkItemsChange={async () => {
-            const res = await fetch(`/api/projects/${id}`)
-            if (res.ok) setProject(await res.json())
-          }}
-        />
-      )}
-      <ProjectDeleteDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        project={project}
-        onConfirm={handleDeleteProject}
-      />
-
-      {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 className="h-4 w-4" />
-              分享專案
-            </DialogTitle>
-            <DialogDescription>
-              任何擁有此連結的人都可以檢視專案（唯讀）
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={shareToken ? `${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareToken}` : ''}
-              className="text-sm"
-            />
-            <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={copyShareLink}>
-              {shareCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {shareCopied ? '已複製' : '複製'}
-            </Button>
-          </div>
-          <DialogFooter className="sm:justify-start">
-            <p className="text-xs text-muted-foreground">連結不會過期，可隨時分享給需要查看進度的人</p>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </DashboardLayout>
+    </div>
   )
 }

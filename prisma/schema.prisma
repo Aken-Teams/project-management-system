@@ -130,6 +130,7 @@ model User {
   taskLogs            TaskLog[]
   notifications       Notification[]
   drafts              ProjectDraft[]
+  shareLinks          ShareLink[]
 
   @@map("users")
 }
@@ -178,6 +179,7 @@ model Project {
   delayRequests   DelayRequest[]
   taskLogs        TaskLog[]
   notifications   Notification[]
+  shareLinks      ShareLink[]
 
   @@index([startDate, endDate])
   @@map("projects")
@@ -436,6 +438,22 @@ model ProjectDraft {
 
   @@index([userId])
   @@map("project_drafts")
+}
+
+model ShareLink {
+  id          String   @id @default(cuid())
+  projectId   String   @map("project_id")
+  token       String   @unique
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  expiresAt   DateTime? @map("expires_at")
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id])
+
+  @@index([projectId])
+  @@index([token])
+  @@map("share_links")
 }
 
 model ProjectCodeSequence {

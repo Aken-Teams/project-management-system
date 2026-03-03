@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useCallback, useMemo } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { type Task, type Milestone } from '@/lib/mock-data'
@@ -17,7 +17,6 @@ import {
 interface GanttChartProps {
   tasks?: Task[]
   milestones?: Milestone[]
-  baseline?: Milestone[]
   startDate: string
   endDate: string
   onTaskClick?: (task: Task) => void
@@ -40,9 +39,10 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
   'todo': { bg: '#94a3b8', border: '#64748b' },
 }
 
-const BASELINE_COLOR = { bg: '#fde68a', border: '#f59e0b' } // amber-200/500 — clearly visible
+// Plan bar colors (upper bar — planned schedule)
+const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 — neutral, clearly "plan"
 
-export function GanttChart({ tasks = [], milestones = [], baseline = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
@@ -61,19 +61,11 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
     setExpandedMs(next)
   }, [expandedMs, setExpandedMs])
 
-  // Build baseline lookup
-  const baselineMap = useMemo(() => {
-    const map = new Map<string, Milestone>()
-    baseline.forEach(b => map.set(b.id, b))
-    return map
-  }, [baseline])
-
   // Auto-detect date range from actual data
   const allDates = [
     ...tasks.map(t => new Date(t.startDate).getTime()),
     ...tasks.map(t => new Date(t.endDate).getTime()),
     ...milestones.map(m => new Date(m.dueDate).getTime()),
-    ...baseline.map(b => new Date(b.dueDate).getTime()),
     new Date(startDate).getTime(),
     new Date(endDate).getTime(),
   ]
@@ -158,32 +150,6 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
       new Date(t.startDate).getTime() < new Date(min).getTime() ? t.startDate : min
     , msTasks[0].startDate)
     return { start: earliest, end: ms.dueDate }
-  }
-
-  const isDelayed = (ms: Milestone) => {
-    const bl = baselineMap.get(ms.id)
-    if (!bl) return false
-    return new Date(ms.dueDate).getTime() > new Date(bl.dueDate).getTime()
-  }
-
-  // Baseline date differs from current (delayed OR early)
-  const isBaselineChanged = (ms: Milestone) => {
-    const bl = baselineMap.get(ms.id)
-    if (!bl) return false
-    return new Date(ms.dueDate).getTime() !== new Date(bl.dueDate).getTime()
-  }
-
-  const getDelayDays = (ms: Milestone) => {
-    const bl = baselineMap.get(ms.id)
-    if (!bl) return 0
-    const diff = new Date(ms.dueDate).getTime() - new Date(bl.dueDate).getTime()
-    return Math.round(diff / (1000 * 60 * 60 * 24))
-  }
-
-  // Task completed before its planned end date
-  const isEarlyComplete = (task: Task) => {
-    if (!task.completedAt) return false
-    return new Date(task.completedAt).getTime() < new Date(task.endDate).getTime()
   }
 
   const formatDate = (d: string) => {
@@ -282,10 +248,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
           {/* Milestones (collapsible) */}
           {tasksByMilestone.map(({ milestone, tasks: msTasks }, msIndex) => {
             const expanded = expandedMs.has(milestone.id)
-            const delayed = isDelayed(milestone)
-            const delayDays = getDelayDays(milestone)
             const msBar = getMilestoneBarRange(milestone, msTasks)
-            const blMs = baselineMap.get(milestone.id)
             const colors = STATUS_COLORS[milestone.status] || STATUS_COLORS.todo
 
             return (
@@ -294,9 +257,7 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                 <div
                   className={cn(
                     'flex items-center border-b cursor-pointer transition-colors',
-                    delayed
-                      ? 'bg-red-50/80 hover:bg-red-50 dark:bg-red-950/20 dark:hover:bg-red-950/30'
-                      : 'bg-muted/40 hover:bg-muted/60',
+                    'bg-muted/40 hover:bg-muted/60',
                   )}
                   onClick={() => toggleMs(milestone.id)}
                 >
@@ -319,12 +280,6 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                       >
                         {milestone.progress}%
                       </Badge>
-                      {delayed && (
-                        <span className="flex items-center gap-0.5 text-sm text-red-600 dark:text-red-400 shrink-0">
-                          <AlertTriangle className="h-3 w-3" />
-                          +{delayDays}天
-                        </span>
-                      )}
                       {noActivityMilestoneIds?.has(milestone.id) && (
                         <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
                           <AlertTriangle className="h-3 w-3 mr-0.5" />
@@ -334,59 +289,60 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                     </div>
                     <div className="text-sm text-muted-foreground ml-[38px] mt-0.5">
                       到期：{formatDate(milestone.dueDate)}
-                      {blMs && delayed && (
-                        <span className="text-red-500 ml-1">
-                          (原定 {formatDate(blMs.dueDate)})
-                        </span>
-                      )}
-                      {showBaseline && blMs && !delayed && isBaselineChanged(milestone) && (
-                        <span className="text-emerald-600 ml-1">
-                          (原定 {formatDate(blMs.dueDate)}，提前)
-                        </span>
-                      )}
                     </div>
                   </div>
-                  {(() => {
-                    const showMsBaseline = showBaseline && blMs && isBaselineChanged(milestone) && msTasks.length > 0
-                    return (
-                  <div className={cn('flex-1 relative', showMsBaseline ? 'h-14' : 'h-10')}>
+                  <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')}>
                     <WeekGrid />
-                    {/* Baseline bar (ghost) */}
-                    {showMsBaseline && (
+                    {msTasks.length > 0 && showBaseline ? (
+                      <>
+                        {/* Plan bar (upper — full planned range) */}
+                        <div
+                          className="absolute h-3.5 rounded-sm border"
+                          style={{
+                            ...barStyle(msBar.start, milestone.dueDate),
+                            top: 4,
+                            backgroundColor: PLAN_COLOR.bg,
+                            borderColor: PLAN_COLOR.border,
+                          }}
+                        />
+                        {/* Actual bar (lower — only progress fill, no background) */}
+                        {milestone.progress > 0 && (
+                          <div
+                            className="absolute h-3.5 rounded-sm"
+                            style={{
+                              left: barStyle(msBar.start, milestone.dueDate).left,
+                              width: `${(parseFloat(barStyle(msBar.start, milestone.dueDate).width) * Math.min(milestone.progress, 100)) / 100}%`,
+                              top: 24,
+                              backgroundColor: colors.bg,
+                            }}
+                          />
+                        )}
+                      </>
+                    ) : msTasks.length > 0 ? (
+                      /* Single combined bar (OFF) — light bg + progress fill */
                       <div
-                        className="absolute h-4 rounded-sm border opacity-80"
-                        style={{
-                          ...barStyle(msBar.start, blMs!.dueDate),
-                          top: 4,
-                          backgroundColor: BASELINE_COLOR.bg,
-                          borderColor: BASELINE_COLOR.border,
-                        }}
-                      />
-                    )}
-                    {/* Actual milestone bar */}
-                    {msTasks.length > 0 && (
-                      <div
-                        className="absolute h-4 rounded-sm border"
+                        className="absolute h-3.5 rounded-sm border"
                         style={{
                           ...barStyle(msBar.start, milestone.dueDate),
-                          top: showMsBaseline ? 26 : 12,
-                          backgroundColor: colors.bg,
-                          borderColor: colors.border,
-                          opacity: 0.7,
+                          top: 12,
+                          backgroundColor: `${colors.bg}30`,
+                          borderColor: `${colors.border}50`,
                         }}
                       >
-                        {milestone.progress > 0 && milestone.progress < 100 && (
+                        {milestone.progress > 0 && (
                           <div
-                            className="absolute inset-y-0 left-0 bg-white/30 rounded-l-sm"
-                            style={{ width: `${milestone.progress}%` }}
+                            className="absolute inset-y-0 left-0 rounded-l-sm"
+                            style={{
+                              width: `${Math.min(milestone.progress, 100)}%`,
+                              backgroundColor: colors.bg,
+                              borderRadius: milestone.progress >= 100 ? '0.125rem' : undefined,
+                            }}
                           />
                         )}
                       </div>
-                    )}
+                    ) : null}
                     <TodayLine />
                   </div>
-                    )
-                  })()}
                 </div>
 
                 {/* Expanded task rows — lighter background for clear distinction */}
@@ -452,57 +408,62 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                           {task.assignee && (
                             <span className="text-sm text-muted-foreground">{task.assignee}</span>
                           )}
-                          {showBaseline && isEarlyComplete(task) && (() => {
-                            const earlyDays = Math.round(
-                              (new Date(task.endDate).getTime() - new Date(task.completedAt!).getTime()) / (1000 * 60 * 60 * 24)
-                            )
-                            return (
-                              <span className="text-sm text-emerald-600 dark:text-emerald-400 shrink-0">
-                                提前 {earlyDays} 天
-                              </span>
-                            )
-                          })()}
                         </div>
                       </div>
-                      {(() => {
-                        const earlyComplete = showBaseline && isEarlyComplete(task)
-                        return (
-                      <div className={cn('flex-1 relative', earlyComplete ? 'h-14' : 'h-10')} data-timeline-area>
+                      <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')} data-timeline-area>
                         <WeekGrid />
-                        {/* Early-complete baseline ghost: original planned range */}
-                        {earlyComplete && (
+                        {showBaseline ? (
+                          <>
+                            {/* Plan bar (upper — full planned range) */}
+                            <div
+                              className="absolute h-3.5 rounded-sm border"
+                              style={{
+                                ...barStyle(task.startDate, task.endDate),
+                                top: 4,
+                                backgroundColor: PLAN_COLOR.bg,
+                                borderColor: PLAN_COLOR.border,
+                              }}
+                            />
+                            {/* Actual bar (lower — only progress fill, no background) */}
+                            {task.progress > 0 && (
+                              <div
+                                className="absolute h-3.5 rounded-sm"
+                                style={{
+                                  left: barStyle(task.startDate, task.endDate).left,
+                                  width: `${(parseFloat(barStyle(task.startDate, task.endDate).width) * Math.min(task.progress, 100)) / 100}%`,
+                                  top: 24,
+                                  backgroundColor: taskColors.bg,
+                                  ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
+                                }}
+                              />
+                            )}
+                          </>
+                        ) : (
+                          /* Single combined bar (OFF) — light bg + progress fill */
                           <div
-                            className="absolute h-4 rounded-sm border opacity-80"
+                            className="absolute h-3.5 rounded-sm border"
                             style={{
                               ...barStyle(task.startDate, task.endDate),
-                              top: 4,
-                              backgroundColor: BASELINE_COLOR.bg,
-                              borderColor: BASELINE_COLOR.border,
+                              top: 12,
+                              backgroundColor: `${taskColors.bg}30`,
+                              borderColor: isCritical ? '#64748b' : `${taskColors.border}50`,
+                              ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                             }}
-                          />
+                          >
+                            {task.progress > 0 && (
+                              <div
+                                className="absolute inset-y-0 left-0 rounded-l-sm"
+                                style={{
+                                  width: `${Math.min(task.progress, 100)}%`,
+                                  backgroundColor: taskColors.bg,
+                                  borderRadius: task.progress >= 100 ? '0.125rem' : undefined,
+                                }}
+                              />
+                            )}
+                          </div>
                         )}
-                        {/* Actual task bar */}
-                        <div
-                          className="absolute h-4 rounded-sm border"
-                          style={{
-                            ...barStyle(task.startDate, earlyComplete ? task.completedAt! : task.endDate),
-                            top: earlyComplete ? 26 : 12,
-                            backgroundColor: taskColors.bg,
-                            borderColor: isCritical ? '#64748b' : taskColors.border,
-                            ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
-                          }}
-                        >
-                          {task.progress > 0 && task.progress < 100 && (
-                            <div
-                              className="absolute inset-y-0 left-0 bg-white/30 rounded-l-sm"
-                              style={{ width: `${task.progress}%` }}
-                            />
-                          )}
-                        </div>
                         <TodayLine />
                       </div>
-                        )
-                      })()}
                     </div>
                     {/* Subtask rows — deeper indent */}
                     {subtasks.map(sub => {
@@ -534,24 +495,56 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
                               <span className="text-xs text-muted-foreground ml-6">{sub.assignee}</span>
                             )}
                           </div>
-                          <div className="flex-1 relative h-10" data-timeline-area>
+                          <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')} data-timeline-area>
                             <WeekGrid />
-                            <div
-                              className="absolute h-4 rounded-sm border"
-                              style={{
-                                ...barStyle(sub.startDate, sub.endDate),
-                                top: 12,
-                                backgroundColor: subColors.bg,
-                                borderColor: subColors.border,
-                              }}
-                            >
-                              {sub.progress > 0 && sub.progress < 100 && (
+                            {showBaseline ? (
+                              <>
+                                {/* Plan bar (upper) */}
                                 <div
-                                  className="absolute inset-y-0 left-0 bg-white/30 rounded-l-sm"
-                                  style={{ width: `${sub.progress}%` }}
+                                  className="absolute h-3 rounded-sm border"
+                                  style={{
+                                    ...barStyle(sub.startDate, sub.endDate),
+                                    top: 5,
+                                    backgroundColor: PLAN_COLOR.bg,
+                                    borderColor: PLAN_COLOR.border,
+                                  }}
                                 />
-                              )}
-                            </div>
+                                {/* Actual bar (lower — only progress fill) */}
+                                {sub.progress > 0 && (
+                                  <div
+                                    className="absolute h-3 rounded-sm"
+                                    style={{
+                                      left: barStyle(sub.startDate, sub.endDate).left,
+                                      width: `${(parseFloat(barStyle(sub.startDate, sub.endDate).width) * Math.min(sub.progress, 100)) / 100}%`,
+                                      top: 24,
+                                      backgroundColor: subColors.bg,
+                                    }}
+                                  />
+                                )}
+                              </>
+                            ) : (
+                              /* Single combined bar (OFF) */
+                              <div
+                                className="absolute h-3 rounded-sm border"
+                                style={{
+                                  ...barStyle(sub.startDate, sub.endDate),
+                                  top: 12,
+                                  backgroundColor: `${subColors.bg}30`,
+                                  borderColor: `${subColors.border}50`,
+                                }}
+                              >
+                                {sub.progress > 0 && (
+                                  <div
+                                    className="absolute inset-y-0 left-0 rounded-l-sm"
+                                    style={{
+                                      width: `${Math.min(sub.progress, 100)}%`,
+                                      backgroundColor: subColors.bg,
+                                      borderRadius: sub.progress >= 100 ? '0.125rem' : undefined,
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            )}
                             <TodayLine />
                           </div>
                         </div>
@@ -634,8 +627,12 @@ export function GanttChart({ tasks = [], milestones = [], baseline = [], startDa
             <>
               <span className="text-muted-foreground">|</span>
               <div className="flex items-center gap-1.5">
-                <div className="w-3.5 h-2 rounded-sm border opacity-80" style={{ backgroundColor: BASELINE_COLOR.bg, borderColor: BASELINE_COLOR.border }} />
-                <span>基線計畫</span>
+                <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: PLAN_COLOR.bg, borderColor: PLAN_COLOR.border }} />
+                <span>Plan</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                <span>Actual</span>
               </div>
             </>
           )}
