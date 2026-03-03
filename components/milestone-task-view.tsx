@@ -94,6 +94,13 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
     })
   }, [project.tasks, statusFilter, assigneeFilter])
 
+  // For Gantt chart: filtered parent tasks + their subtasks
+  const ganttFilteredTasks = useMemo(() => {
+    if (!hasFilters) return project.tasks
+    const parentIds = new Set(filteredTasks.map(t => t.id))
+    return project.tasks.filter(t => parentIds.has(t.id) || (t.parentId && parentIds.has(t.parentId)))
+  }, [project.tasks, filteredTasks, hasFilters])
+
   const tasksByMilestone = useMemo(() => {
     const map = new Map<string, Task[]>()
     project.milestones.forEach(m => {
@@ -408,7 +415,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
 
       {viewMode === 'gantt' ? (
         <GanttChart
-          tasks={project.tasks}
+          tasks={ganttFilteredTasks}
           milestones={project.milestones}
           startDate={project.startDate}
           endDate={project.endDate}
@@ -421,6 +428,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
           selectedTaskId={selectedTask?.id ?? null}
           noActivityMilestoneIds={noActivityMilestoneIds}
           overdueNotStartedTaskIds={overdueNotStartedTaskIds}
+          taskLogs={project.taskLogs}
         />
       ) : (
         <div className="space-y-3">

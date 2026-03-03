@@ -49,8 +49,10 @@ export async function PUT(
     if (body.status !== undefined) {
       data.status = body.status as TaskStatus
       if (body.status === 'done') {
-        // Auto-set completedAt when marking done
-        if (!task.completedAt) {
+        // Use provided completedAt or auto-set when marking done
+        if (body.completedAt) {
+          data.completedAt = new Date(body.completedAt)
+        } else if (!task.completedAt) {
           data.completedAt = new Date()
         }
         if (body.completedBy) {

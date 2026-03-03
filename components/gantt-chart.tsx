@@ -1,9 +1,9 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { type Task, type Milestone } from '@/lib/mock-data'
+import { type Task, type Milestone, type TaskLog } from '@/lib/mock-data'
 import { type DepNode } from '@/lib/dependency-graph'
 import { GanttDependencyOverlay } from '@/components/gantt-dependency-overlay'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,7 @@ interface GanttChartProps {
   onTaskHover?: (task: Task | null) => void
   noActivityMilestoneIds?: Set<string>
   overdueNotStartedTaskIds?: Set<string>
+  taskLogs?: TaskLog[]
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
@@ -42,12 +43,29 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 // Plan bar colors (upper bar — planned schedule)
 const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 — neutral, clearly "plan"
 
-export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
-  const [depTooltip, setDepTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
+  const [taskTooltip, setTaskTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
+
+  // Earliest log date per task (used as "actual start date")
+  const earliestLogDateMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const log of taskLogs) {
+      const existing = map.get(log.taskId)
+      if (!existing || log.logDate < existing) {
+        map.set(log.taskId, log.logDate)
+      }
+    }
+    return map
+  }, [taskLogs])
+
+  // Helper: get actual start date (earliest log) or fall back to planned startDate
+  const getActualStart = useCallback((taskId: string, plannedStart: string) => {
+    return earliestLogDateMap.get(taskId) || plannedStart
+  }, [earliestLogDateMap])
 
   // Use controlled state if provided, otherwise internal
   const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(new Set())
@@ -61,11 +79,13 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     setExpandedMs(next)
   }, [expandedMs, setExpandedMs])
 
-  // Auto-detect date range from actual data
+  // Auto-detect date range from actual data (including actual start/end dates)
   const allDates = [
     ...tasks.map(t => new Date(t.startDate).getTime()),
     ...tasks.map(t => new Date(t.endDate).getTime()),
+    ...tasks.filter(t => t.completedAt).map(t => new Date(t.completedAt!).getTime()),
     ...milestones.map(m => new Date(m.dueDate).getTime()),
+    ...[...earliestLogDateMap.values()].map(d => new Date(d).getTime()),
     new Date(startDate).getTime(),
     new Date(endDate).getTime(),
   ]
@@ -187,7 +207,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
   return (
     <div className="space-y-3">
-      <Card className="overflow-x-auto">
+      <Card className="overflow-x-auto scrollbar-thin">
         <div
           ref={timelineRef}
           className="min-w-[900px] relative select-none"
@@ -295,14 +315,16 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     <WeekGrid />
                     {msTasks.length > 0 && showBaseline ? (
                       <>
-                        {/* Plan bar (upper — full planned range) */}
+                        {/* Plan bar (upper — dashed if done, solid otherwise) */}
                         <div
-                          className="absolute h-3.5 rounded-sm border"
+                          className="absolute h-3.5 rounded-sm"
                           style={{
                             ...barStyle(msBar.start, milestone.dueDate),
                             top: 4,
-                            backgroundColor: PLAN_COLOR.bg,
-                            borderColor: PLAN_COLOR.border,
+                            backgroundColor: milestone.progress >= 100 ? `${PLAN_COLOR.bg}80` : PLAN_COLOR.bg,
+                            border: milestone.progress >= 100
+                              ? `1px dashed ${PLAN_COLOR.border}`
+                              : `1px solid ${PLAN_COLOR.border}`,
                           }}
                         />
                         {/* Actual bar (lower — only progress fill, no background) */}
@@ -371,14 +393,12 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         onTaskHover?.(task)
                       }}
                       onMouseMove={(e) => {
-                        if (showDependencies && node) {
-                          setDepTooltip({ x: e.clientX, y: e.clientY - 12, task })
-                        }
+                        setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task })
                       }}
                       onMouseLeave={() => {
                         setHoveredTaskId(null)
                         onTaskHover?.(null)
-                        setDepTooltip(null)
+                        setTaskTooltip(null)
                       }}
                     >
                       <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
@@ -414,53 +434,119 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         <WeekGrid />
                         {showBaseline ? (
                           <>
-                            {/* Plan bar (upper — full planned range) */}
+                            {/* Plan bar (upper — dashed for completed, solid for in-progress) */}
                             <div
-                              className="absolute h-3.5 rounded-sm border"
+                              className="absolute h-3.5 rounded-sm"
                               style={{
                                 ...barStyle(task.startDate, task.endDate),
                                 top: 4,
-                                backgroundColor: PLAN_COLOR.bg,
-                                borderColor: PLAN_COLOR.border,
+                                backgroundColor: effectiveStatus(task) === 'done' ? `${PLAN_COLOR.bg}80` : PLAN_COLOR.bg,
+                                border: effectiveStatus(task) === 'done'
+                                  ? `1px dashed ${PLAN_COLOR.border}`
+                                  : `1px solid ${PLAN_COLOR.border}`,
                               }}
                             />
-                            {/* Actual bar (lower — only progress fill, no background) */}
-                            {task.progress > 0 && (
+                            {/* Actual bar (lower — uses actual start date from earliest log) */}
+                            {effectiveStatus(task) === 'done' && task.completedAt ? (
                               <div
                                 className="absolute h-3.5 rounded-sm"
                                 style={{
-                                  left: barStyle(task.startDate, task.endDate).left,
-                                  width: `${(parseFloat(barStyle(task.startDate, task.endDate).width) * Math.min(task.progress, 100)) / 100}%`,
+                                  ...barStyle(getActualStart(task.id, task.startDate), task.completedAt),
                                   top: 24,
                                   backgroundColor: taskColors.bg,
                                   ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                                 }}
                               />
-                            )}
-                          </>
-                        ) : (
-                          /* Single combined bar (OFF) — light bg + progress fill */
-                          <div
-                            className="absolute h-3.5 rounded-sm border"
-                            style={{
-                              ...barStyle(task.startDate, task.endDate),
-                              top: 12,
-                              backgroundColor: `${taskColors.bg}30`,
-                              borderColor: isCritical ? '#64748b' : `${taskColors.border}50`,
-                              ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
-                            }}
-                          >
-                            {task.progress > 0 && (
+                            ) : task.progress > 0 ? (
                               <div
-                                className="absolute inset-y-0 left-0 rounded-l-sm"
+                                className="absolute h-3.5 rounded-sm"
                                 style={{
-                                  width: `${Math.min(task.progress, 100)}%`,
+                                  ...barStyle(getActualStart(task.id, task.startDate), task.endDate),
+                                  width: `${(parseFloat(barStyle(getActualStart(task.id, task.startDate), task.endDate).width) * Math.min(task.progress, 100)) / 100}%`,
+                                  top: 24,
                                   backgroundColor: taskColors.bg,
-                                  borderRadius: task.progress >= 100 ? '0.125rem' : undefined,
+                                  ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                                 }}
                               />
-                            )}
-                          </div>
+                            ) : null}
+                            {/* Percentage label */}
+                            <span
+                              className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                              style={{
+                                left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
+                                top: 5,
+                              }}
+                            >
+                              {task.progress}%
+                            </span>
+                          </>
+                        ) : effectiveStatus(task) === 'done' && task.completedAt ? (
+                          /* Completed task — dashed plan bar + solid actual bar to completedAt */
+                          <>
+                            <div
+                              className="absolute h-3.5 rounded-sm"
+                              style={{
+                                ...barStyle(task.startDate, task.endDate),
+                                top: 12,
+                                backgroundColor: `${PLAN_COLOR.bg}80`,
+                                border: `1px dashed ${PLAN_COLOR.border}`,
+                              }}
+                            />
+                            <div
+                              className="absolute h-3.5 rounded-sm"
+                              style={{
+                                ...barStyle(getActualStart(task.id, task.startDate), task.completedAt),
+                                top: 12,
+                                backgroundColor: taskColors.bg,
+                                ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
+                              }}
+                            />
+                            {/* Percentage label */}
+                            <span
+                              className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                              style={{
+                                left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
+                                top: 13,
+                              }}
+                            >
+                              {task.progress}%
+                            </span>
+                          </>
+                        ) : (
+                          /* In-progress — light bg + progress fill */
+                          <>
+                            <div
+                              className="absolute h-3.5 rounded-sm border"
+                              style={{
+                                ...barStyle(task.startDate, task.endDate),
+                                top: 12,
+                                backgroundColor: `${taskColors.bg}30`,
+                                borderColor: isCritical ? '#64748b' : `${taskColors.border}50`,
+                                ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
+                              }}
+                            >
+                              {task.progress > 0 && (
+                                <div
+                                  className="absolute inset-y-0 left-0 rounded-l-sm"
+                                  style={{
+                                    width: `${Math.min(task.progress, 100)}%`,
+                                    backgroundColor: taskColors.bg,
+                                    borderRadius: task.progress >= 100 ? '0.125rem' : undefined,
+                                  }}
+                                />
+                              )}
+                            </div>
+                            {/* Percentage label */}
+                            <span
+                              className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                              style={{
+                                left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
+                                top: 13,
+                              }}
+                            >
+                              {task.progress}%
+                            </span>
+                          </>
                         )}
                         <TodayLine />
                       </div>
@@ -478,6 +564,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             selectedTaskId === sub.id && 'bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/20',
                           )}
                           onClick={(e) => handleTaskClick(sub, e)}
+                          onMouseMove={(e) => {
+                            setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task: sub })
+                          }}
+                          onMouseLeave={() => setTaskTooltip(null)}
                         >
                           <div className="w-[260px] shrink-0 px-3 py-1 border-r pl-14">
                             <div className="flex items-center gap-1.5">
@@ -499,51 +589,113 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             <WeekGrid />
                             {showBaseline ? (
                               <>
-                                {/* Plan bar (upper) */}
+                                {/* Plan bar (upper — dashed for completed, solid for in-progress) */}
                                 <div
-                                  className="absolute h-3 rounded-sm border"
+                                  className="absolute h-3 rounded-sm"
                                   style={{
                                     ...barStyle(sub.startDate, sub.endDate),
                                     top: 5,
-                                    backgroundColor: PLAN_COLOR.bg,
-                                    borderColor: PLAN_COLOR.border,
+                                    backgroundColor: effectiveStatus(sub) === 'done' ? `${PLAN_COLOR.bg}80` : PLAN_COLOR.bg,
+                                    border: effectiveStatus(sub) === 'done'
+                                      ? `1px dashed ${PLAN_COLOR.border}`
+                                      : `1px solid ${PLAN_COLOR.border}`,
                                   }}
                                 />
-                                {/* Actual bar (lower — only progress fill) */}
-                                {sub.progress > 0 && (
+                                {/* Actual bar (lower — uses actual start date from earliest log) */}
+                                {effectiveStatus(sub) === 'done' && sub.completedAt ? (
                                   <div
                                     className="absolute h-3 rounded-sm"
                                     style={{
-                                      left: barStyle(sub.startDate, sub.endDate).left,
-                                      width: `${(parseFloat(barStyle(sub.startDate, sub.endDate).width) * Math.min(sub.progress, 100)) / 100}%`,
+                                      ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt),
                                       top: 24,
                                       backgroundColor: subColors.bg,
                                     }}
                                   />
-                                )}
-                              </>
-                            ) : (
-                              /* Single combined bar (OFF) */
-                              <div
-                                className="absolute h-3 rounded-sm border"
-                                style={{
-                                  ...barStyle(sub.startDate, sub.endDate),
-                                  top: 12,
-                                  backgroundColor: `${subColors.bg}30`,
-                                  borderColor: `${subColors.border}50`,
-                                }}
-                              >
-                                {sub.progress > 0 && (
+                                ) : sub.progress > 0 ? (
                                   <div
-                                    className="absolute inset-y-0 left-0 rounded-l-sm"
+                                    className="absolute h-3 rounded-sm"
                                     style={{
-                                      width: `${Math.min(sub.progress, 100)}%`,
+                                      ...barStyle(getActualStart(sub.id, sub.startDate), sub.endDate),
+                                      width: `${(parseFloat(barStyle(getActualStart(sub.id, sub.startDate), sub.endDate).width) * Math.min(sub.progress, 100)) / 100}%`,
+                                      top: 24,
                                       backgroundColor: subColors.bg,
-                                      borderRadius: sub.progress >= 100 ? '0.125rem' : undefined,
                                     }}
                                   />
-                                )}
-                              </div>
+                                ) : null}
+                                {/* Percentage label */}
+                                <span
+                                  className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                                  style={{
+                                    left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
+                                    top: 5,
+                                  }}
+                                >
+                                  {sub.progress}%
+                                </span>
+                              </>
+                            ) : effectiveStatus(sub) === 'done' && sub.completedAt ? (
+                              /* Completed subtask — dashed plan bar + solid actual bar to completedAt */
+                              <>
+                                <div
+                                  className="absolute h-3 rounded-sm"
+                                  style={{
+                                    ...barStyle(sub.startDate, sub.endDate),
+                                    top: 12,
+                                    backgroundColor: `${PLAN_COLOR.bg}80`,
+                                    border: `1px dashed ${PLAN_COLOR.border}`,
+                                  }}
+                                />
+                                <div
+                                  className="absolute h-3 rounded-sm"
+                                  style={{
+                                    ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt),
+                                    top: 12,
+                                    backgroundColor: subColors.bg,
+                                  }}
+                                />
+                                <span
+                                  className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                                  style={{
+                                    left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
+                                    top: 13,
+                                  }}
+                                >
+                                  {sub.progress}%
+                                </span>
+                              </>
+                            ) : (
+                              /* In-progress subtask — light bg + progress fill */
+                              <>
+                                <div
+                                  className="absolute h-3 rounded-sm border"
+                                  style={{
+                                    ...barStyle(sub.startDate, sub.endDate),
+                                    top: 12,
+                                    backgroundColor: `${subColors.bg}30`,
+                                    borderColor: `${subColors.border}50`,
+                                  }}
+                                >
+                                  {sub.progress > 0 && (
+                                    <div
+                                      className="absolute inset-y-0 left-0 rounded-l-sm"
+                                      style={{
+                                        width: `${Math.min(sub.progress, 100)}%`,
+                                        backgroundColor: subColors.bg,
+                                        borderRadius: sub.progress >= 100 ? '0.125rem' : undefined,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                                <span
+                                  className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                                  style={{
+                                    left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
+                                    top: 13,
+                                  }}
+                                >
+                                  {sub.progress}%
+                                </span>
+                              </>
                             )}
                             <TodayLine />
                           </div>
@@ -567,31 +719,66 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           })}
         </div>
 
-        {/* Dependency hover tooltip */}
-        {showDependencies && depTooltip && nodeMap && (() => {
-          const node = nodeMap.get(depTooltip.task.id)
-          if (!node) return null
-          const prereqCount = node.prerequisites.length
-          const depCount = node.dependents.length
-          if (prereqCount === 0 && depCount === 0) return null
+        {/* Task hover tooltip */}
+        {taskTooltip && (() => {
+          const t = taskTooltip.task
+          const isDone = effectiveStatus(t) === 'done'
+          const plannedStart = new Date(t.startDate)
+          const plannedEnd = new Date(t.endDate)
+          const actualStartStr = earliestLogDateMap.get(t.id)
+          const actualStart = actualStartStr ? new Date(actualStartStr) : null
+          const actualEnd = t.completedAt ? new Date(t.completedAt) : null
+          const diffDays = actualEnd
+            ? Math.round((plannedEnd.getTime() - actualEnd.getTime()) / (1000 * 60 * 60 * 24))
+            : null
+          const fmtDate = (d: Date) => d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
+          const node = nodeMap?.get(t.id)
           return (
             <div
-              className="fixed pointer-events-none z-50 bg-popover border rounded-lg shadow-lg px-3 py-2 text-sm"
+              className="fixed pointer-events-none z-50 bg-popover border rounded-lg shadow-lg px-3.5 py-2.5 text-sm min-w-[220px]"
               style={{
-                left: depTooltip.x,
-                top: depTooltip.y,
+                left: taskTooltip.x,
+                top: taskTooltip.y,
                 transform: 'translate(-50%, -100%)',
               }}
             >
-              <div className="flex items-center gap-3 whitespace-nowrap">
-                <span className="text-muted-foreground">前置任務 <strong className="text-foreground">{prereqCount}</strong> 個</span>
-                <span className="text-muted-foreground/40">/</span>
-                <span className="text-muted-foreground">後續任務 <strong className="text-foreground">{depCount}</strong> 個</span>
+              <div className="font-medium mb-1.5 text-foreground">{t.title}</div>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                <span className="text-muted-foreground">負責人</span>
+                <span>{t.assignee || '—'}</span>
+                <span className="text-muted-foreground">規劃期間</span>
+                <span>{fmtDate(plannedStart)} ~ {fmtDate(plannedEnd)}</span>
+                {(actualStart || actualEnd) && (
+                  <>
+                    <span className="text-muted-foreground">實際期間</span>
+                    <span>
+                      {actualStart ? fmtDate(actualStart) : '—'}
+                      {' ~ '}
+                      {actualEnd ? fmtDate(actualEnd) : '進行中'}
+                    </span>
+                  </>
+                )}
+                <span className="text-muted-foreground">完成度</span>
+                <span>{t.progress}%</span>
+                {diffDays !== null && (
+                  <>
+                    <span className="text-muted-foreground">時程差異</span>
+                    <span className={diffDays > 0 ? 'text-emerald-600' : diffDays < 0 ? 'text-red-600' : ''}>
+                      {diffDays > 0 ? `提前 ${diffDays} 天` : diffDays < 0 ? `延後 ${Math.abs(diffDays)} 天` : '準時完成'}
+                    </span>
+                  </>
+                )}
               </div>
-              {node.isOnCriticalPath && (
-                <div className="text-amber-600 dark:text-amber-400 text-sm mt-0.5 flex items-center gap-1">
-                  <Route className="h-3 w-3" />
-                  關鍵路徑
+              {showDependencies && node && (node.prerequisites.length > 0 || node.dependents.length > 0) && (
+                <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t text-xs text-muted-foreground">
+                  <span>前置 <strong className="text-foreground">{node.prerequisites.length}</strong></span>
+                  <span>後續 <strong className="text-foreground">{node.dependents.length}</strong></span>
+                  {node.isOnCriticalPath && (
+                    <span className="text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                      <Route className="h-3 w-3" />
+                      關鍵路徑
+                    </span>
+                  )}
                 </div>
               )}
             </div>

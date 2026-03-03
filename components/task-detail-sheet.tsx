@@ -110,6 +110,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [editProgress, setEditProgress] = useState<number>(0)
   const [savingProgress, setSavingProgress] = useState(false)
 
+  // Completion date
+  const [completedDate, setCompletedDate] = useState(() => new Date().toISOString().split('T')[0])
+
   // Log submission
   const [logContent, setLogContent] = useState('')
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
@@ -129,6 +132,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [editLogDate, setEditLogDate] = useState('')
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
 
+  // Completion confirmation step
+  const [showCompleteDateStep, setShowCompleteDateStep] = useState(false)
+
   // Subtask log import
   const [importSubLogsOpen, setImportSubLogsOpen] = useState(false)
   const [importSubLogsLoading, setImportSubLogsLoading] = useState(false)
@@ -147,7 +153,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     if (open && task) {
       setLogContent('')
       setLogDate(new Date().toISOString().split('T')[0])
+      setCompletedDate(new Date().toISOString().split('T')[0])
       setShowActions(false)
+      setShowCompleteDateStep(false)
       setShowExtensionForm(false)
       setExtensionReason('')
       setExtensionDate('')
@@ -169,6 +177,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       if (editProgress >= 100) {
         body.status = 'done'
         body.completedBy = user?.name ?? ''
+        body.completedAt = completedDate
       } else if (editProgress > 0 && task.status === 'todo') {
         body.status = 'in_progress'
       }
@@ -364,7 +373,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'done', progress: 100, completedBy: user.name }),
+        body: JSON.stringify({ status: 'done', progress: 100, completedBy: user.name, completedAt: completedDate }),
       })
       if (!res.ok) throw new Error()
       onTaskUpdate?.()
@@ -436,6 +445,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   if (!task) return null
 
   const isCompleted = !!task.completedAt
+  const hasSubtasks = (task.subtasks || []).length > 0
   const computedStatus = computeTaskStatus(task, project.taskLogs)
   const days = getDaysUntilDeadline(task)
   const isOverdue = !isCompleted && new Date() > new Date(task.endDate)
@@ -576,10 +586,17 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </Badge>
               )}
             </div>
-            {readOnly || isCompleted ? (
-              <div className="flex items-center gap-3">
-                <Progress value={task.progress} className="h-2 flex-1" />
-                <span className="text-sm font-medium tabular-nums">{task.progress}%</span>
+            {readOnly || isCompleted || hasSubtasks ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <Progress value={task.progress} className="h-2 flex-1" />
+                  <span className="text-sm font-medium tabular-nums">{task.progress}%</span>
+                </div>
+                {hasSubtasks && !readOnly && !isCompleted && (
+                  <p className="text-xs text-muted-foreground">
+                    進度由子任務自動計算
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -592,17 +609,29 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     className="flex-1"
                   />
                   <span className="text-sm font-bold tabular-nums w-[40px] text-right">{editProgress}%</span>
+                  {hasProgressChange && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 shrink-0"
+                      onClick={handleSaveProgress}
+                      disabled={savingProgress}
+                    >
+                      {savingProgress ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    </Button>
+                  )}
                 </div>
-                {hasProgressChange && (
-                  <Button
-                    size="sm"
-                    className="w-full gap-1.5"
-                    onClick={handleSaveProgress}
-                    disabled={savingProgress}
-                  >
-                    {savingProgress ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    {editProgress >= 100 ? '標記為完成' : '更新進度'}
-                  </Button>
+                {hasProgressChange && editProgress >= 100 && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">完成日期</span>
+                    <input
+                      type="date"
+                      value={completedDate}
+                      onChange={e => setCompletedDate(e.target.value)}
+                      className="text-sm border rounded-lg px-2.5 py-1.5 bg-background"
+                    />
+                  </div>
                 )}
               </div>
             )}
@@ -791,6 +820,56 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     </>
                   ) : (
                     /* Step 2: Action buttons */
+                    showCompleteDateStep ? (
+                      /* Step 2b: Completion date confirmation */
+                      <div className="space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                        <div className="flex items-center gap-2 text-sm text-primary">
+                          <CircleCheck className="h-4 w-4 shrink-0" />
+                          <span>選擇完成日期</span>
+                        </div>
+
+                        <div className="p-4 rounded-xl border bg-muted/30 space-y-3">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm font-medium">完成日期</span>
+                          </div>
+                          <input
+                            type="date"
+                            value={completedDate}
+                            onChange={e => setCompletedDate(e.target.value)}
+                            className="w-full text-sm border rounded-lg px-3 py-2 bg-background"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            預設為今天，您也可以選擇實際完成的日期
+                          </p>
+                        </div>
+
+                        {editProgress < 100 && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-700 dark:text-amber-400">
+                              目前進度為 <span className="font-semibold">{editProgress}%</span>，標記完成後將自動更新為 100%
+                            </p>
+                          </div>
+                        )}
+
+                        <Button
+                          className="w-full gap-1.5"
+                          onClick={handleCompleteTask}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          確認完成
+                        </Button>
+
+                        <button
+                          className="text-sm text-muted-foreground hover:text-foreground w-full text-center py-1 transition-colors"
+                          onClick={() => setShowCompleteDateStep(false)}
+                        >
+                          <ArrowLeft className="h-3 w-3 inline mr-1" />
+                          返回
+                        </button>
+                      </div>
+                    ) : (
                     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
                       <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                         <CheckCircle2 className="h-4 w-4 shrink-0" />
@@ -798,16 +877,26 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
-                        <button
-                          className="group flex items-center gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all text-left"
-                          onClick={handleCompleteTask}
-                        >
-                          <CircleCheck className="h-5 w-5 shrink-0 text-primary" />
-                          <div>
-                            <p className="text-sm font-medium">標記完成</p>
-                            <p className="text-[11px] text-muted-foreground">已完成所有工作</p>
+                        {hasSubtasks ? (
+                          <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 text-left opacity-60">
+                            <CircleCheck className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm font-medium text-muted-foreground">標記完成</p>
+                              <p className="text-[11px] text-muted-foreground">需完成所有子任務</p>
+                            </div>
                           </div>
-                        </button>
+                        ) : (
+                          <button
+                            className="group flex items-center gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all text-left"
+                            onClick={() => setShowCompleteDateStep(true)}
+                          >
+                            <CircleCheck className="h-5 w-5 shrink-0 text-primary" />
+                            <div>
+                              <p className="text-sm font-medium">標記完成</p>
+                              <p className="text-[11px] text-muted-foreground">已完成所有工作</p>
+                            </div>
+                          </button>
+                        )}
 
                         {(computedStatus === 'at-risk' || computedStatus === 'overdue' || computedStatus === 'overdue-not-started') ? (
                           hasPendingDelay ? (
@@ -855,6 +944,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         返回繼續填寫
                       </button>
                     </div>
+                    )
                   )}
                 </div>
               </TabsContent>
@@ -1362,8 +1452,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
             </div>
           )}
 
-          {/* Bottom bar: undo for completed tasks */}
-          {!readOnly && isCompleted && (
+          {/* Bottom bar: undo for completed tasks (not for parent tasks with subtasks) */}
+          {!readOnly && isCompleted && !hasSubtasks && (
             <div className="px-6 py-3 border-t flex items-center bg-muted/20 shrink-0">
               <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={handleUncompleteTask}>
                 <Undo2 className="h-3.5 w-3.5" />
