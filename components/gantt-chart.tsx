@@ -48,6 +48,8 @@ const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 �
 
 export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, onMilestoneClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, expandedTaskIds, onExpandedTaskIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
@@ -294,7 +296,52 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
   return (
     <div className="space-y-3">
-      <Card className="overflow-x-auto scrollbar-thin">
+      <Card className="overflow-hidden">
+        {/* Fixed Header — synced with body horizontal scroll */}
+        <div ref={headerRef} className="overflow-hidden border-b">
+          <div style={{ minWidth: Math.max(900, 260 + weekCells.length * 32) }}>
+            <div className="flex">
+              <div className="w-[260px] shrink-0 border-r bg-muted flex flex-col justify-center px-3">
+                <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex">
+                  {months.map((month, i) => (
+                    <div
+                      key={i}
+                      style={{ width: `${(month.days / totalDays) * 100}%` }}
+                      className="text-center py-1.5 text-sm font-medium border-r last:border-r-0 bg-muted"
+                    >
+                      {month.name}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex border-t">
+                  {weekCells.map((week, i) => (
+                    <div
+                      key={i}
+                      style={{ width: `${(week.days / totalDays) * 100}%` }}
+                      className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-card overflow-hidden whitespace-nowrap"
+                    >
+                      {week.days >= 5 ? week.label : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable Body */}
+        <div
+          ref={bodyRef}
+          className="overflow-auto scrollbar-thin max-h-[70vh]"
+          onScroll={() => {
+            if (bodyRef.current && headerRef.current) {
+              headerRef.current.scrollLeft = bodyRef.current.scrollLeft
+            }
+          }}
+        >
         <div
           ref={timelineRef}
           className="relative select-none"
@@ -304,50 +351,17 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
         >
           {/* Hover crosshair line */}
           {hoverX !== null && (
-            <>
+            <div
+              className="absolute top-0 bottom-0 w-px bg-foreground/20 pointer-events-none z-30"
+              style={{ left: hoverX }}
+            >
               <div
-                className="absolute top-0 bottom-0 w-px bg-foreground/20 pointer-events-none z-30"
-                style={{ left: hoverX }}
-              />
-              <div
-                className="absolute top-1 pointer-events-none z-30 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap"
-                style={{ left: hoverX + 6 }}
+                className="absolute top-1 left-1.5 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap"
               >
                 {hoverDate}
               </div>
-            </>
+            </div>
           )}
-
-          {/* Timeline Header */}
-          <div className="flex sticky top-0 bg-card z-20 border-b">
-            <div className="w-[260px] shrink-0 border-r bg-muted/30 flex flex-col justify-center px-3">
-              <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
-            </div>
-            <div className="flex-1">
-              <div className="flex">
-                {months.map((month, i) => (
-                  <div
-                    key={i}
-                    style={{ width: `${(month.days / totalDays) * 100}%` }}
-                    className="text-center py-1.5 text-sm font-medium border-r last:border-r-0 bg-muted/30"
-                  >
-                    {month.name}
-                  </div>
-                ))}
-              </div>
-              <div className="flex border-t">
-                {weekCells.map((week, i) => (
-                  <div
-                    key={i}
-                    style={{ width: `${(week.days / totalDays) * 100}%` }}
-                    className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-muted/15 overflow-hidden whitespace-nowrap"
-                  >
-                    {week.days >= 5 ? week.label : ''}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
 
           {/* Dependency overlay */}
           {showDependencies && nodeMap && (
@@ -380,7 +394,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   )}
                 >
                   <div
-                    className="w-[260px] shrink-0 px-3 py-2 border-r cursor-pointer hover:bg-muted/60 transition-colors"
+                    className="w-[260px] shrink-0 px-3 py-2 border-r cursor-pointer hover:bg-muted transition-colors sticky left-0 z-10 bg-card"
                     onClick={() => msTasks.length > 0 && toggleMs(milestone.id)}
                   >
                     <div className="flex items-center gap-1.5">
@@ -549,8 +563,11 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     >
                       <div
                         className={cn(
-                          'w-[260px] shrink-0 px-3 py-1.5 border-r pl-10 transition-colors',
-                          subtasks.length > 0 ? 'cursor-pointer hover:bg-accent/50' : '',
+                          'w-[260px] shrink-0 px-3 py-1.5 border-r pl-10 transition-colors sticky left-0 z-10',
+                          selectedTaskId === task.id
+                            ? 'bg-amber-50 dark:bg-amber-950'
+                            : ti % 2 === 0 ? 'bg-card' : 'bg-muted',
+                          subtasks.length > 0 ? 'cursor-pointer hover:bg-accent' : '',
                         )}
                         onClick={() => {
                           if (subtasks.length > 0) {
@@ -721,7 +738,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             selectedTaskId === sub.id && 'bg-amber-50/60 dark:bg-amber-950/20',
                           )}
                         >
-                          <div className="w-[260px] shrink-0 px-3 py-1 border-r pl-14">
+                          <div className={cn(
+                            'w-[260px] shrink-0 px-3 py-1 border-r pl-14 sticky left-0 z-10',
+                            selectedTaskId === sub.id ? 'bg-amber-50 dark:bg-amber-950' : 'bg-card',
+                          )}>
                             <div className="flex items-center gap-1.5">
                               <span className="text-muted-foreground/30 text-xs select-none">└</span>
                               <div
@@ -849,7 +869,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
                 {expanded && msTasks.length === 0 && (
                   <div className="flex items-center border-b bg-card">
-                    <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
+                    <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10 sticky left-0 z-10 bg-card">
                       <span className="text-sm text-muted-foreground italic">無任務</span>
                     </div>
                     <div className="flex-1 h-10" />
@@ -858,6 +878,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
               </div>
             )
           })}
+        </div>
         </div>
 
         {/* Task hover tooltip */}
