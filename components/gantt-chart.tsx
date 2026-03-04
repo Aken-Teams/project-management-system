@@ -50,6 +50,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   const timelineRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const xScrollRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
@@ -335,7 +336,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
         {/* Scrollable Body */}
         <div
           ref={bodyRef}
-          className="overflow-auto scrollbar-thin max-h-[70vh]"
+          className="overflow-y-auto overflow-x-hidden scrollbar-thin max-h-[70vh]"
           onScroll={() => {
             if (bodyRef.current && headerRef.current) {
               headerRef.current.scrollLeft = bodyRef.current.scrollLeft
@@ -1013,6 +1014,23 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             </div>
           )
         })()}
+
+        {/* Horizontal scrollbar — only under timeline area */}
+        <div className="flex border-t">
+          <div className="w-[260px] shrink-0" />
+          <div
+            ref={xScrollRef}
+            className="flex-1 overflow-x-auto scrollbar-thin"
+            onScroll={() => {
+              if (xScrollRef.current) {
+                if (bodyRef.current) bodyRef.current.scrollLeft = xScrollRef.current.scrollLeft
+                if (headerRef.current) headerRef.current.scrollLeft = xScrollRef.current.scrollLeft
+              }
+            }}
+          >
+            <div style={{ width: Math.max(640, weekCells.length * 32), height: 1 }} />
+          </div>
+        </div>
       </Card>
 
       {/* Legend */}
