@@ -42,6 +42,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
   const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(new Set())
+  const [ganttExpandedTasks, setGanttExpandedTasks] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null)
@@ -413,11 +414,26 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                 size="sm"
                 className="h-7 text-sm gap-1.5"
                 onClick={() => {
-                  const next = allExpanded ? new Set<string>() : new Set(project.milestones.map(m => m.id))
-                  if (viewMode === 'list') {
-                    setExpandedMilestones(next)
+                  if (allExpanded) {
+                    // Collapse all
+                    if (viewMode === 'list') {
+                      setExpandedMilestones(new Set())
+                    } else {
+                      setGanttExpandedMs(new Set())
+                      setGanttExpandedTasks(new Set())
+                    }
                   } else {
-                    setGanttExpandedMs(next)
+                    // Expand all milestones + all parent tasks with subtasks
+                    const allMs = new Set(project.milestones.map(m => m.id))
+                    if (viewMode === 'list') {
+                      setExpandedMilestones(allMs)
+                    } else {
+                      setGanttExpandedMs(allMs)
+                      const parentTaskIds = new Set(
+                        project.tasks.filter(t => !t.parentId && project.tasks.some(s => s.parentId === t.id)).map(t => t.id)
+                      )
+                      setGanttExpandedTasks(parentTaskIds)
+                    }
                   }
                 }}
               >
@@ -448,6 +464,8 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
           onMilestoneClick={handleMilestoneClick}
           expandedMilestoneIds={ganttExpandedMs}
           onExpandedMilestoneIdsChange={setGanttExpandedMs}
+          expandedTaskIds={ganttExpandedTasks}
+          onExpandedTaskIdsChange={setGanttExpandedTasks}
           showDependencies={showDependencies}
           showBaseline={showBaseline}
           nodeMap={nodeMap}

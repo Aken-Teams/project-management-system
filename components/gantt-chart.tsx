@@ -23,6 +23,8 @@ interface GanttChartProps {
   onMilestoneClick?: (milestone: Milestone) => void
   expandedMilestoneIds?: Set<string>
   onExpandedMilestoneIdsChange?: (ids: Set<string>) => void
+  expandedTaskIds?: Set<string>
+  onExpandedTaskIdsChange?: (ids: Set<string>) => void
   showDependencies?: boolean
   showBaseline?: boolean
   nodeMap?: Map<string, DepNode>
@@ -44,14 +46,16 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 // Plan bar colors (upper bar — planned schedule)
 const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 — neutral, clearly "plan"
 
-export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, onMilestoneClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
+export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, onMilestoneClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, expandedTaskIds, onExpandedTaskIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
   const [hoverX, setHoverX] = useState<number | null>(null)
   const [hoverDate, setHoverDate] = useState<string>('')
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
   const [taskTooltip, setTaskTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
   const [msTooltip, setMsTooltip] = useState<{ x: number; y: number; milestone: Milestone; msTasks: Task[] } | null>(null)
-  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+  const [internalExpandedTasks, setInternalExpandedTasks] = useState<Set<string>>(new Set())
+  const expandedTasks = expandedTaskIds ?? internalExpandedTasks
+  const setExpandedTasks = onExpandedTaskIdsChange ?? setInternalExpandedTasks
 
   // Earliest log date per task (used as "actual start date")
   const earliestLogDateMap = useMemo(() => {
@@ -213,16 +217,26 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return PLAN_COLOR // gray — not started
   }
 
-  // Generate week cells for timeline sub-header
+  // ISO week number helper
+  const getISOWeek = (date: Date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  }
+
+  // Generate week cells for timeline sub-header (ISO W1–W52, Monday–Sunday)
   const weekCells = useMemo(() => {
     const cells: { label: string; days: number }[] = []
     const d = new Date(rangeStart)
     let acc = 0
     while (acc < totalDays) {
       const dow = d.getDay()
+      // Days until next Monday (= end of this ISO week + 1)
       const toNextMonday = dow === 1 ? 7 : dow === 0 ? 1 : 8 - dow
       const days = Math.min(toNextMonday, totalDays - acc)
-      cells.push({ label: `${d.getDate()}`, days })
+      const wn = getISOWeek(d)
+      cells.push({ label: `W${wn}`, days })
       acc += days
       d.setDate(d.getDate() + days)
     }
@@ -363,7 +377,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     'flex items-center border-b cursor-pointer transition-colors',
                     'bg-muted/40 hover:bg-muted/60',
                   )}
-                  onClick={() => toggleMs(milestone.id)}
+                  onClick={() => onMilestoneClick?.(milestone)}
                   onMouseMove={(e) => {
                     setMsTooltip({ x: e.clientX, y: e.clientY - 12, milestone, msTasks })
                   }}
@@ -372,24 +386,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   <div className="w-[260px] shrink-0 px-3 py-2 border-r">
                     <div className="flex items-center gap-1.5">
                       {msTasks.length > 0 ? (
-                        expanded
-                          ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <button
+                          className="shrink-0 p-0 hover:bg-muted rounded-sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleMs(milestone.id)
+                          }}
+                        >
+                          {expanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          }
+                        </button>
                       ) : (
                         <div className="w-4 shrink-0" />
                       )}
                       <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
                         {msIndex + 1}
                       </div>
-                      <span
-                        className="text-sm font-semibold truncate hover:underline"
-                        onClick={(e) => {
-                          if (onMilestoneClick) {
-                            e.stopPropagation()
-                            onMilestoneClick(milestone)
-                          }
-                        }}
-                      >{milestone.name}</span>
+                      <span className="text-sm font-semibold truncate">{milestone.name}</span>
                       <Badge
                         className="text-[10px] px-1.5 py-0 shrink-0 text-white border-0"
                         style={{ backgroundColor: colors.bg }}
