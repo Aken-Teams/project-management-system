@@ -265,6 +265,31 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <Select value={weekFilter || '__all__'} onValueChange={v => { setWeekFilter(v === '__all__' ? '' : v); setPage(0) }}>
+            <SelectTrigger className="h-8 text-sm w-[130px] gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部週別</SelectItem>
+              {availableWeeks.map(w => (
+                <SelectItem key={w.weekNum} value={String(w.weekNum)}>W{w.weekNum}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {weekFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => { setWeekFilter(''); setPage(0) }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5">
           <CalendarRange className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <Input
             type="date"
@@ -285,31 +310,6 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               size="sm"
               className="h-7 w-7 p-0"
               onClick={() => { setDateFrom(''); setDateTo(''); setPage(0) }}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <Select value={weekFilter || '__all__'} onValueChange={v => { setWeekFilter(v === '__all__' ? '' : v); setPage(0) }}>
-            <SelectTrigger className="h-8 text-sm w-[110px] gap-1">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部週別</SelectItem>
-              {availableWeeks.map(w => (
-                <SelectItem key={w.weekNum} value={String(w.weekNum)}>W{w.weekNum}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {weekFilter && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => { setWeekFilter(''); setPage(0) }}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
