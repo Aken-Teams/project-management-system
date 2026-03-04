@@ -197,6 +197,38 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return new Date(d).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
   }
 
+  // Plan bar colors: visually indicate how reality compares to the plan
+  const getPlanBarColors = (planEnd: string, progress: number, completedAt?: string | null) => {
+    const isDone = progress >= 100
+    const plannedEnd = new Date(planEnd)
+    if (isDone && completedAt) {
+      return new Date(completedAt) > plannedEnd
+        ? { bg: '#fee2e2', border: '#fca5a5' }   // red — completed late
+        : { bg: '#dcfce7', border: '#86efac' }   // green — on time / early
+    }
+    if (isDone) return { bg: '#dcfce7', border: '#86efac' }
+    if (progress > 0 && today > plannedEnd) return { bg: '#ffedd5', border: '#fdba74' } // orange — overdue in-progress
+    if (progress > 0) return { bg: '#dbeafe', border: '#93c5fd' }  // blue — on track
+    if (today > plannedEnd) return { bg: '#ffedd5', border: '#fdba74' } // orange — overdue not started
+    return PLAN_COLOR // gray — not started
+  }
+
+  // Generate week cells for timeline sub-header
+  const weekCells = useMemo(() => {
+    const cells: { label: string; days: number }[] = []
+    const d = new Date(rangeStart)
+    let acc = 0
+    while (acc < totalDays) {
+      const dow = d.getDay()
+      const toNextMonday = dow === 1 ? 7 : dow === 0 ? 1 : 8 - dow
+      const days = Math.min(toNextMonday, totalDays - acc)
+      cells.push({ label: `${d.getDate()}`, days })
+      acc += days
+      d.setDate(d.getDate() + days)
+    }
+    return cells
+  }, [rangeStart, totalDays])
+
   // Normalize: progress >= 100 → done, progress > 0 with todo → in-progress
   const effectiveStatus = (task: Task) => {
     if (task.progress >= 100) return 'done' as const
@@ -273,7 +305,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
           {/* Timeline Header */}
           <div className="flex sticky top-0 bg-card z-20 border-b">
-            <div className="w-[260px] shrink-0 px-3 py-2 border-r bg-muted/30">
+            <div className="w-[260px] shrink-0 border-r bg-muted/30 flex flex-col justify-center px-3">
               <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
             </div>
             <div className="flex-1">
@@ -285,6 +317,17 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     className="text-center py-1.5 text-sm font-medium border-r last:border-r-0 bg-muted/30"
                   >
                     {month.name}
+                  </div>
+                ))}
+              </div>
+              <div className="flex border-t">
+                {weekCells.map((week, i) => (
+                  <div
+                    key={i}
+                    style={{ width: `${(week.days / totalDays) * 100}%` }}
+                    className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-muted/15"
+                  >
+                    {week.days >= 3 ? week.label : ''}
                   </div>
                 ))}
               </div>
@@ -368,18 +411,23 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     <WeekGrid />
                     {msTasks.length > 0 && showBaseline ? (() => {
                       const msActualStart = getMilestoneActualStart(msTasks) || msBar.start
+                      const msCompletedAt = milestone.progress >= 100
+                        ? msTasks.reduce<string | null>((latest, t) => t.completedAt && (!latest || t.completedAt > latest) ? t.completedAt : latest, null)
+                        : null
+                      const msPlanColors = getPlanBarColors(milestone.dueDate, milestone.progress, msCompletedAt)
+                      const msDone = milestone.progress >= 100
                       return (
                       <>
-                        {/* Plan bar (upper — dashed if done, solid otherwise) */}
+                        {/* Plan bar (upper — colored by timing status) */}
                         <div
                           className="absolute h-3.5 rounded-sm"
                           style={{
                             ...barStyle(msBar.start, milestone.dueDate),
                             top: 4,
-                            backgroundColor: milestone.progress >= 100 ? `${PLAN_COLOR.bg}80` : PLAN_COLOR.bg,
-                            border: milestone.progress >= 100
-                              ? `1px dashed ${PLAN_COLOR.border}`
-                              : `1px solid ${PLAN_COLOR.border}`,
+                            backgroundColor: msPlanColors.bg,
+                            border: msDone
+                              ? `1px dashed ${msPlanColors.border}`
+                              : `1px solid ${msPlanColors.border}`,
                           }}
                         />
                         {/* Actual bar (lower — extends to today for in-progress, to latest completion for done) */}
@@ -540,22 +588,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       </div>
                       <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')} data-timeline-area>
                         <WeekGrid />
-                        {showBaseline ? (
+                        {showBaseline ? (() => {
+                          const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt)
+                          const taskIsDone = effectiveStatus(task) === 'done'
+                          return (
                           <>
-                            {/* Plan bar (upper — dashed for completed, solid for in-progress) */}
+                            {/* Plan bar (upper — colored by timing status) */}
                             <div
                               className="absolute h-3.5 rounded-sm"
                               style={{
                                 ...barStyle(task.startDate, task.endDate),
                                 top: 4,
-                                backgroundColor: effectiveStatus(task) === 'done' ? `${PLAN_COLOR.bg}80` : PLAN_COLOR.bg,
-                                border: effectiveStatus(task) === 'done'
-                                  ? `1px dashed ${PLAN_COLOR.border}`
-                                  : `1px solid ${PLAN_COLOR.border}`,
+                                backgroundColor: taskPlanColors.bg,
+                                border: taskIsDone
+                                  ? `1px dashed ${taskPlanColors.border}`
+                                  : `1px solid ${taskPlanColors.border}`,
                               }}
                             />
                             {/* Actual bar (lower — uses actual start date from earliest log) */}
-                            {effectiveStatus(task) === 'done' && task.completedAt ? (
+                            {taskIsDone && task.completedAt ? (
                               <div
                                 className="absolute h-3.5 rounded-sm"
                                 style={{
@@ -576,18 +627,23 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 }}
                               />
                             ) : null}
-                            {/* Percentage label */}
+                            {/* Percentage + time diff label */}
                             <span
-                              className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                              className="absolute text-[10px] font-medium whitespace-nowrap"
                               style={{
                                 left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
                                 top: 5,
                               }}
                             >
-                              {task.progress}%
+                              <span className="text-muted-foreground">{task.progress}%</span>
+                              {(() => {
+                                const diff = getTimeDiffLabel(task)
+                                return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
+                              })()}
                             </span>
                           </>
-                        ) : (
+                          )
+                        })() : (
                           /* Non-baseline: simple single bar with progress fill */
                           <>
                             <div
@@ -666,22 +722,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           </div>
                           <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')} data-timeline-area>
                             <WeekGrid />
-                            {showBaseline ? (
+                            {showBaseline ? (() => {
+                              const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt)
+                              const subIsDone = effectiveStatus(sub) === 'done'
+                              return (
                               <>
-                                {/* Plan bar (upper — dashed for completed, solid for in-progress) */}
+                                {/* Plan bar (upper — colored by timing status) */}
                                 <div
                                   className="absolute h-3 rounded-sm"
                                   style={{
                                     ...barStyle(sub.startDate, sub.endDate),
                                     top: 5,
-                                    backgroundColor: effectiveStatus(sub) === 'done' ? `${PLAN_COLOR.bg}80` : PLAN_COLOR.bg,
-                                    border: effectiveStatus(sub) === 'done'
-                                      ? `1px dashed ${PLAN_COLOR.border}`
-                                      : `1px solid ${PLAN_COLOR.border}`,
+                                    backgroundColor: subPlanColors.bg,
+                                    border: subIsDone
+                                      ? `1px dashed ${subPlanColors.border}`
+                                      : `1px solid ${subPlanColors.border}`,
                                   }}
                                 />
                                 {/* Actual bar (lower — uses actual start date from earliest log) */}
-                                {effectiveStatus(sub) === 'done' && sub.completedAt ? (
+                                {subIsDone && sub.completedAt ? (
                                   <div
                                     className="absolute h-3 rounded-sm"
                                     style={{
@@ -700,18 +759,23 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                     }}
                                   />
                                 ) : null}
-                                {/* Percentage label */}
+                                {/* Percentage + time diff label */}
                                 <span
-                                  className="absolute text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                                  className="absolute text-[10px] font-medium whitespace-nowrap"
                                   style={{
                                     left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
                                     top: 5,
                                   }}
                                 >
-                                  {sub.progress}%
+                                  <span className="text-muted-foreground">{sub.progress}%</span>
+                                  {(() => {
+                                    const diff = getTimeDiffLabel(sub)
+                                    return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
+                                  })()}
                                 </span>
                               </>
-                            ) : (
+                              )
+                            })() : (
                               /* Non-baseline subtask: simple single bar with progress fill */
                               <>
                                 <div
