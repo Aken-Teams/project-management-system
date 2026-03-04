@@ -339,9 +339,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   <div
                     key={i}
                     style={{ width: `${(week.days / totalDays) * 100}%` }}
-                    className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-muted/15"
+                    className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-muted/15 overflow-hidden"
                   >
-                    {week.days >= 3 ? week.label : ''}
+                    {week.days >= 4 ? week.label : ''}
                   </div>
                 ))}
               </div>

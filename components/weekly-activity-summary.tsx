@@ -1052,34 +1052,28 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                     {isDelayExpanded && (
                     <div className="divide-y">
                       {filteredDelayRequests.map(dr => (
-                        <div key={dr.id} className="px-4 py-3 space-y-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="outline" className={
-                              dr.status === 'pending' ? 'border-warning text-warning text-[10px]' :
-                              dr.status === 'approved' ? 'border-success text-success text-[10px]' :
-                              'border-destructive text-destructive text-[10px]'
-                            }>
+                        <div key={dr.id} className="px-4 py-2 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={`text-[10px] shrink-0 ${
+                              dr.status === 'pending' ? 'border-warning text-warning' :
+                              dr.status === 'approved' ? 'border-success text-success' :
+                              'border-destructive text-destructive'
+                            }`}>
                               {dr.status === 'pending' ? '待審核' : dr.status === 'approved' ? '已核准' : '已駁回'}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">{dr.requestedBy} · {fmtDate(dr.requestedAt)}</span>
-                            {dr.type === 'date_change' && (
-                              <Badge variant="secondary" className="text-[10px]">日期變更</Badge>
-                            )}
+                            <span className="text-sm text-foreground/80">{dr.reason}</span>
                           </div>
-                          <p className="text-sm text-foreground/80">{dr.reason}</p>
-                          <div className="space-y-1">
-                            {dr.affectedMilestones.map((am, ai) => (
-                              <div key={ai} className="flex items-center gap-2 text-xs bg-muted/30 rounded px-2.5 py-1.5">
-                                <span className="font-medium">{am.milestoneName}</span>
-                                <span className="text-muted-foreground">{fmtDate(am.originalDate)}</span>
-                                <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                                <span className="text-orange-600 dark:text-orange-400 font-medium">{fmtDate(am.proposedDate)}</span>
-                                <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:text-orange-400 ml-auto">
-                                  {am.delayDays >= 0 ? '+' : ''}{am.delayDays}天
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
+                          {dr.affectedMilestones.map((am, ai) => (
+                            <div key={ai} className="flex items-center gap-2 text-xs pl-1">
+                              <span className="font-medium truncate">{am.milestoneName}</span>
+                              <span className="text-muted-foreground ml-auto shrink-0">{fmtDate(am.originalDate)}</span>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <span className="text-orange-600 dark:text-orange-400 font-medium shrink-0">{fmtDate(am.proposedDate)}</span>
+                              <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:text-orange-400 shrink-0">
+                                {am.delayDays >= 0 ? '+' : ''}{am.delayDays}天
+                              </Badge>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
