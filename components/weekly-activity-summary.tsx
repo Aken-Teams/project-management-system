@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import {
   Calendar,
   CalendarRange,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileDown,
@@ -128,7 +130,10 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [selectedWeekMonday, setSelectedWeekMonday] = useState<string | null>(null)
+  const [weekFilter, setWeekFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'matrix' | 'summary'>('summary')
+  const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
+  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set())
 
   // Report dialog state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -153,14 +158,21 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     return [...members].sort()
   }, [allWeeks])
 
-  // Date-only filtered weeks for matrix (no member/search filter)
+  // Available week numbers for filter dropdown
+  const availableWeeks = useMemo(() => {
+    const weeks = allWeeks.map(w => ({ weekMonday: w.weekMonday, weekNum: getISOWeekNumber(w.weekMonday) }))
+    return [...new Map(weeks.map(w => [w.weekNum, w])).values()].sort((a, b) => a.weekNum - b.weekNum)
+  }, [allWeeks])
+
+  // Date + week filtered weeks for matrix (no member/search filter)
   const matrixWeeks = useMemo(() => {
     return allWeeks.filter(week => {
       if (dateFrom && getWeekSunday(week.weekMonday) < dateFrom) return false
       if (dateTo && week.weekMonday > dateTo) return false
+      if (weekFilter && getISOWeekNumber(week.weekMonday) !== Number(weekFilter)) return false
       return true
     })
-  }, [allWeeks, dateFrom, dateTo])
+  }, [allWeeks, dateFrom, dateTo, weekFilter])
 
   const projectMembers = useMemo(() => [...new Set(project.team)].sort(), [project.team])
 
@@ -279,16 +291,32 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
           )}
         </div>
 
+        <div className="flex items-center gap-1.5">
+          <Select value={weekFilter || '__all__'} onValueChange={v => { setWeekFilter(v === '__all__' ? '' : v); setPage(0) }}>
+            <SelectTrigger className="h-8 text-sm w-[110px] gap-1">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部週別</SelectItem>
+              {availableWeeks.map(w => (
+                <SelectItem key={w.weekNum} value={String(w.weekNum)}>W{w.weekNum}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {weekFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => { setWeekFilter(''); setPage(0) }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+
         <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
-          <Button
-            variant={viewMode === 'matrix' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-7 text-xs gap-1 px-2.5"
-            onClick={() => { setViewMode('matrix'); setPage(0) }}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            監控矩陣
-          </Button>
           <Button
             variant={viewMode === 'summary' ? 'default' : 'ghost'}
             size="sm"
@@ -297,6 +325,15 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
           >
             <FileText className="h-3.5 w-3.5" />
             週報彙整
+          </Button>
+          <Button
+            variant={viewMode === 'matrix' ? 'default' : 'ghost'}
+            size="sm"
+            className="h-7 text-xs gap-1 px-2.5"
+            onClick={() => { setViewMode('matrix'); setPage(0) }}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            監控矩陣
           </Button>
         </div>
 
@@ -735,36 +772,59 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               )
             }
 
-            // Group by milestone → task
+            // Build parent-child map
+            const subtaskOf = new Map<string, string>()
+            project.tasks.forEach(t => { if (t.parentId) subtaskOf.set(t.id, t.parentId) })
+
+            // Group by milestone → task (with subtask nesting)
+            type SubEntry = { taskId: string; taskName: string; completed?: { completedBy: string; completedAt: string }; logs: typeof filteredLogs }
             type TaskEntry = {
               taskId: string; taskName: string
               completed?: { completedBy: string; completedAt: string }
               logs: typeof filteredLogs
+              subtasks: SubEntry[]
             }
             const milestoneMap = new Map<string, TaskEntry[]>()
             const getMs = (msName: string) => {
               if (!milestoneMap.has(msName)) milestoneMap.set(msName, [])
               return milestoneMap.get(msName)!
             }
-            const getTask = (list: TaskEntry[], taskId: string, taskName: string) => {
-              let t = list.find(e => e.taskId === taskId)
-              if (!t) { t = { taskId, taskName, logs: [] }; list.push(t) }
+            const findOrAdd = (list: TaskEntry[], id: string, name: string) => {
+              let t = list.find(e => e.taskId === id)
+              if (!t) { t = { taskId: id, taskName: name, logs: [], subtasks: [] }; list.push(t) }
               return t
+            }
+            const findOrAddSub = (task: TaskEntry, id: string, name: string) => {
+              let s = task.subtasks.find(e => e.taskId === id)
+              if (!s) { s = { taskId: id, taskName: name, logs: [] }; task.subtasks.push(s) }
+              return s
             }
 
             filteredLogs.forEach(log => {
-              const tasks = getMs(log.milestoneName)
-              const t = getTask(tasks, log.taskId, log.taskName)
-              t.logs.push(log)
+              const parentId = subtaskOf.get(log.taskId)
+              if (parentId) {
+                const parentTask = project.tasks.find(t => t.id === parentId)
+                const tasks = getMs(log.milestoneName)
+                const parent = findOrAdd(tasks, parentId, parentTask?.title || parentId)
+                const sub = findOrAddSub(parent, log.taskId, log.taskName)
+                sub.logs.push(log)
+              } else {
+                const tasks = getMs(log.milestoneName)
+                const t = findOrAdd(tasks, log.taskId, log.taskName)
+                t.logs.push(log)
+              }
             })
             filteredCompleted.forEach(ct => {
               const tasks = getMs(ct.milestoneName)
-              const t = getTask(tasks, ct.taskId, ct.taskName)
+              const t = findOrAdd(tasks, ct.taskId, ct.taskName)
               t.completed = { completedBy: ct.completedBy, completedAt: ct.completedAt }
             })
 
-            // Sort logs within each task by date
-            milestoneMap.forEach(tasks => tasks.forEach(t => t.logs.sort((a, b) => a.logDate.localeCompare(b.logDate))))
+            // Sort logs
+            milestoneMap.forEach(tasks => tasks.forEach(t => {
+              t.logs.sort((a, b) => a.logDate.localeCompare(b.logDate))
+              t.subtasks.forEach(s => s.logs.sort((a, b) => a.logDate.localeCompare(b.logDate)))
+            }))
 
             const fmtDate = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
             const isEmpty = filteredLogs.length === 0 && filteredCompleted.length === 0
@@ -785,57 +845,119 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                   <p className="text-sm text-muted-foreground text-center py-4">此週無紀錄</p>
                 ) : (
                   <div className="divide-y">
-                    {Array.from(milestoneMap.entries()).map(([msName, tasks]) => (
-                      <div key={msName}>
-                        {/* Milestone header */}
-                        <div className="px-4 py-1.5 bg-muted/20 border-b">
-                          <span className="text-xs font-medium text-muted-foreground">{msName || '未分類'}</span>
-                        </div>
-                        {/* Tasks under this milestone */}
-                        <div className="divide-y">
-                          {tasks.map(task => (
-                            <div key={task.taskId} className="flex">
-                              {/* Left: task name + status */}
-                              <div className="w-[180px] shrink-0 px-4 py-2.5 border-r bg-muted/5">
-                                <div className="flex items-center gap-1.5">
-                                  {task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
-                                  <span className={`text-sm font-medium truncate ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
-                                </div>
-                                {task.completed && (
-                                  <span className="text-[11px] text-muted-foreground">{fmtDate(task.completed.completedAt)} 完成</span>
-                                )}
-                              </div>
-                              {/* Right: log entries */}
-                              <div className="flex-1 min-w-0 divide-y divide-dashed">
-                                {task.logs.length === 0 && task.completed && (
-                                  <div className="px-3 py-2.5 text-xs text-muted-foreground">
-                                    {task.completed.completedBy}
-                                  </div>
-                                )}
-                                {task.logs.map(log => (
-                                  <div key={log.logId} className="px-3 py-2">
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                      <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
-                                      <span className="text-xs text-muted-foreground">{log.author}</span>
-                                    </div>
-                                    <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
-                                    {log.nextPlans && log.nextPlans.length > 0 && (
-                                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                                        {log.nextPlans.map((plan, pi) => (
-                                          <span key={pi} className="text-xs text-primary/60">
-                                            → {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
-                                          </span>
+                    {Array.from(milestoneMap.entries()).map(([msName, tasks]) => {
+                      const msKey = `${week.weekMonday}-${msName}`
+                      const isMsCollapsed = collapsedMs.has(msKey)
+                      return (
+                        <div key={msName}>
+                          {/* Milestone header — collapsible */}
+                          <button
+                            onClick={() => setCollapsedMs(prev => { const s = new Set(prev); s.has(msKey) ? s.delete(msKey) : s.add(msKey); return s })}
+                            className="w-full px-4 py-2 bg-primary/5 border-b flex items-center gap-1.5 hover:bg-primary/10 transition-colors text-left"
+                          >
+                            <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isMsCollapsed ? '-rotate-90' : ''}`} />
+                            <span className="text-sm font-semibold text-foreground/70">{msName || '未分類'}</span>
+                            <span className="text-xs text-muted-foreground/50 ml-auto">{tasks.length} 項任務</span>
+                          </button>
+                          {/* Tasks under this milestone */}
+                          {!isMsCollapsed && (
+                            <div className="divide-y">
+                              {tasks.map(task => {
+                                const hasSubtasks = task.subtasks.length > 0
+                                const taskKey = `${week.weekMonday}-${task.taskId}`
+                                const isTaskCollapsed = collapsedTasks.has(taskKey)
+                                return (
+                                  <div key={task.taskId}>
+                                    <div className="flex">
+                                      {/* Left: task name + status */}
+                                      <div className="w-[180px] shrink-0 px-4 py-2.5 border-r bg-muted/5">
+                                        <div className="flex items-center gap-1.5">
+                                          {hasSubtasks && (
+                                            <button
+                                              onClick={() => setCollapsedTasks(prev => { const s = new Set(prev); s.has(taskKey) ? s.delete(taskKey) : s.add(taskKey); return s })}
+                                              className="shrink-0 -ml-1"
+                                            >
+                                              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${isTaskCollapsed ? '-rotate-90' : ''}`} />
+                                            </button>
+                                          )}
+                                          {task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
+                                          <span className={`text-sm font-medium truncate ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
+                                        </div>
+                                        {task.completed && (
+                                          <span className="text-[11px] text-muted-foreground">{fmtDate(task.completed.completedAt)} 完成</span>
+                                        )}
+                                      </div>
+                                      {/* Right: log entries + nextPlans on far right */}
+                                      <div className="flex-1 min-w-0 divide-y divide-dashed">
+                                        {task.logs.length === 0 && task.completed && (
+                                          <div className="px-3 py-2.5 text-xs text-muted-foreground">
+                                            {task.completed.completedBy}
+                                          </div>
+                                        )}
+                                        {task.logs.map(log => (
+                                          <div key={log.logId} className="px-3 py-2 flex gap-3">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="flex items-center gap-2 mb-0.5">
+                                                <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
+                                                <span className="text-xs text-muted-foreground">{log.author}</span>
+                                              </div>
+                                              <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
+                                            </div>
+                                            {log.nextPlans && log.nextPlans.length > 0 && (
+                                              <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
+                                                <span className="text-[10px] text-muted-foreground/50 font-medium">預計後續</span>
+                                                {log.nextPlans.map((plan, pi) => (
+                                                  <span key={pi} className="text-xs text-primary/60">
+                                                    {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
                                         ))}
                                       </div>
-                                    )}
+                                    </div>
+                                    {/* Subtask entries (collapsible) */}
+                                    {hasSubtasks && !isTaskCollapsed && task.subtasks.map(sub => (
+                                      <div key={sub.taskId} className="flex border-t">
+                                        <div className="w-[180px] shrink-0 pl-8 pr-4 py-2 border-r bg-muted/5">
+                                          <div className="flex items-center gap-1.5">
+                                            {sub.completed && <CheckCircle2 className="h-3 w-3 text-success shrink-0" />}
+                                            <span className="text-xs font-medium truncate text-muted-foreground">{sub.taskName}</span>
+                                          </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0 divide-y divide-dashed">
+                                          {sub.logs.map(log => (
+                                            <div key={log.logId} className="px-3 py-2 flex gap-3">
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                  <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
+                                                  <span className="text-xs text-muted-foreground">{log.author}</span>
+                                                </div>
+                                                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
+                                              </div>
+                                              {log.nextPlans && log.nextPlans.length > 0 && (
+                                                <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
+                                                  {log.nextPlans.map((plan, pi) => (
+                                                    <span key={pi} className="text-xs text-primary/60">
+                                                      {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
+                                )
+                              })}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </Card>
