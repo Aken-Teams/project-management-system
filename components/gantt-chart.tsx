@@ -694,8 +694,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                   <div
                                     className="absolute h-3 rounded-sm"
                                     style={{
-                                      ...barStyle(getActualStart(sub.id, sub.startDate), sub.endDate),
-                                      width: `${(parseFloat(barStyle(getActualStart(sub.id, sub.startDate), sub.endDate).width) * Math.min(sub.progress, 100)) / 100}%`,
+                                      ...barStyle(getActualStart(sub.id, sub.startDate), todayStr),
                                       top: 24,
                                       backgroundColor: subColors.bg,
                                     }}
