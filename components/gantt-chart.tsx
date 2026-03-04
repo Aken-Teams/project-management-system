@@ -297,7 +297,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
       <Card className="overflow-x-auto scrollbar-thin">
         <div
           ref={timelineRef}
-          className="min-w-[900px] relative select-none"
+          className="relative select-none"
+          style={{ minWidth: Math.max(900, 260 + weekCells.length * 32) }}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
@@ -339,9 +340,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   <div
                     key={i}
                     style={{ width: `${(week.days / totalDays) * 100}%` }}
-                    className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-muted/15 overflow-hidden"
+                    className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-muted/15 overflow-hidden whitespace-nowrap"
                   >
-                    {week.days >= 4 ? week.label : ''}
+                    {week.days >= 5 ? week.label : ''}
                   </div>
                 ))}
               </div>
