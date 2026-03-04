@@ -134,6 +134,11 @@ export interface Task {
   subtasks?: SubTask[]
 }
 
+export interface NextPlanItem {
+  date?: string
+  content: string
+}
+
 export interface TaskLog {
   id: string
   taskId: string
@@ -141,8 +146,7 @@ export interface TaskLog {
   author: string
   logDate: string
   content: string
-  nextPlan?: string
-  nextPlanDate?: string
+  nextPlans?: NextPlanItem[]
   createdAt: string
 }
 

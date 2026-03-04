@@ -295,9 +295,8 @@ model TaskLog {
   authorId  String   @map("author_id")
   logDate   DateTime @map("log_date")
   content   String
-  nextPlan     String?   @map("next_plan")
-  nextPlanDate DateTime? @map("next_plan_date")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  nextPlans String? @map("next_plans") // JSON: [{date?: string, content: string}]
+  createdAt DateTime @default(now()) @map("created_at")
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

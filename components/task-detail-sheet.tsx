@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { type Project, type Task, type TaskLog, type TaskStatus } from '@/lib/mock-data'
+import { type Project, type Task, type TaskLog, type TaskStatus, type NextPlanItem } from '@/lib/mock-data'
 import { type DepNode, computeImpact } from '@/lib/dependency-graph'
 import { computeTaskStatus, getStatusLabel, getStatusColor, getDaysUntilDeadline, type ComputedTaskStatus } from '@/lib/task-utils'
 import { useAuth } from '@/lib/auth-context'
@@ -115,9 +115,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
   // Log submission
   const [logContent, setLogContent] = useState('')
-  const [logNextPlan, setLogNextPlan] = useState('')
-  const [logNextPlanDate, setLogNextPlanDate] = useState('')
+  const [logNextPlans, setLogNextPlans] = useState<NextPlanItem[]>([{ content: '', date: '' }])
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [existingLogId, setExistingLogId] = useState<string | null>(null)
   const [showActions, setShowActions] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [attachments, setAttachments] = useState<string[]>([])
@@ -131,8 +131,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   // Log editing
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [editLogContent, setEditLogContent] = useState('')
-  const [editLogNextPlan, setEditLogNextPlan] = useState('')
-  const [editLogNextPlanDate, setEditLogNextPlanDate] = useState('')
+  const [editLogNextPlans, setEditLogNextPlans] = useState<NextPlanItem[]>([])
   const [editLogDate, setEditLogDate] = useState('')
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
 
@@ -162,8 +161,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   useEffect(() => {
     if (open && task) {
       setLogContent('')
-      setLogNextPlan('')
-      setLogNextPlanDate('')
+      setLogNextPlans([{ content: '', date: '' }])
       setLogDate(new Date().toISOString().split('T')[0])
       setCompletedDate(new Date().toISOString().split('T')[0])
       setShowActions(false)
@@ -178,6 +176,22 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       setOptimisticCompleted(null)
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefill from existing log when logDate matches
+  useEffect(() => {
+    if (!task || !open) return
+    const logs = project.taskLogs.filter(l => l.taskId === task.id)
+    const existing = logs.find(l => l.logDate === logDate)
+    if (existing) {
+      setExistingLogId(existing.id)
+      setLogContent(existing.content)
+      setLogNextPlans(existing.nextPlans?.length ? [...existing.nextPlans] : [{ content: '', date: '' }])
+    } else {
+      setExistingLogId(null)
+      setLogContent('')
+      setLogNextPlans([{ content: '', date: '' }])
+    }
+  }, [logDate, task?.id, open, project.taskLogs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasProgressChange = task ? editProgress !== task.progress : false
 
@@ -305,7 +319,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     setImportSubLogsOpen(false)
   }
 
-  // ── Log submission ──
+  // ── Log submission (create or update) ──
   const handleSubmitLog = async () => {
     if (!task || !logContent.trim() || !user) return
 
@@ -313,28 +327,44 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       ? `${logContent.trim()}\n\n附件：${attachments.join('、')}`
       : logContent.trim()
 
+    const validPlans = logNextPlans.filter(p => p.content.trim())
+
     try {
-      const res = await fetch(`/api/projects/${project.id}/task-logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: task.id,
-          userId: user.id,
-          logDate,
-          content,
-          ...(logNextPlan.trim() ? { nextPlan: logNextPlan.trim() } : {}),
-          ...(logNextPlanDate ? { nextPlanDate: logNextPlanDate } : {}),
-        }),
-      })
-      if (!res.ok) throw new Error()
+      if (existingLogId) {
+        // Update existing log for this date
+        const res = await fetch(`/api/projects/${project.id}/task-logs/${existingLogId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content,
+            logDate,
+            nextPlans: validPlans.length > 0 ? validPlans : null,
+          }),
+        })
+        if (!res.ok) throw new Error()
+      } else {
+        // Create new log
+        const res = await fetch(`/api/projects/${project.id}/task-logs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskId: task.id,
+            userId: user.id,
+            logDate,
+            content,
+            ...(validPlans.length > 0 ? { nextPlans: validPlans } : {}),
+          }),
+        })
+        if (!res.ok) throw new Error()
+      }
       onTaskUpdate?.()
     } catch {
       // fail silently
     }
 
     setLogContent('')
-    setLogNextPlan('')
-    setLogNextPlanDate('')
+    setLogNextPlans([{ content: '', date: '' }])
+    setExistingLogId(null)
     setAttachments([])
     setShowActions(true)
   }
@@ -343,16 +373,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const handleStartEditLog = (log: TaskLog) => {
     setEditingLogId(log.id)
     setEditLogContent(log.content)
-    setEditLogNextPlan(log.nextPlan || '')
-    setEditLogNextPlanDate(log.nextPlanDate || '')
+    setEditLogNextPlans(log.nextPlans?.length ? [...log.nextPlans] : [{ content: '', date: '' }])
     setEditLogDate(log.logDate)
   }
 
   const handleCancelEditLog = () => {
     setEditingLogId(null)
     setEditLogContent('')
-    setEditLogNextPlan('')
-    setEditLogNextPlanDate('')
+    setEditLogNextPlans([])
     setEditLogDate('')
   }
 
@@ -362,7 +390,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       const res = await fetch(`/api/projects/${log.projectId}/task-logs/${log.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editLogContent.trim(), logDate: editLogDate, nextPlan: editLogNextPlan.trim() || null, nextPlanDate: editLogNextPlanDate || null }),
+        body: JSON.stringify({ content: editLogContent.trim(), logDate: editLogDate, nextPlans: editLogNextPlans.filter(p => p.content.trim()) }),
       })
       if (!res.ok) throw new Error()
       onTaskUpdate?.()
@@ -659,6 +687,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     <input
                       type="date"
                       value={completedDate}
+                      min={(() => {
+                        const earliestLog = taskLogs.length > 0
+                          ? taskLogs.reduce((min, l) => l.logDate < min ? l.logDate : min, taskLogs[0].logDate)
+                          : null
+                        return earliestLog || task.startDate
+                      })()}
                       onChange={e => setCompletedDate(e.target.value)}
                       className="text-sm border rounded-lg px-2.5 py-1.5 bg-background"
                     />
@@ -718,7 +752,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                   ) : !showActions ? (
                     /* Step 1: Input form */
                     <>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-sm text-muted-foreground">填寫日期</span>
                         <input
@@ -727,6 +761,11 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           onChange={e => setLogDate(e.target.value)}
                           className="text-sm border rounded-lg px-2.5 py-1.5 bg-background"
                         />
+                        {existingLogId && (
+                          <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                            此日期已有紀錄，將更新該筆資料
+                          </span>
+                        )}
                       </div>
 
                       <div className={cn(
@@ -828,15 +867,6 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                               <Paperclip className="h-4 w-4" />
                             </button>
                           </div>
-                          <Button
-                            size="sm"
-                            className="gap-1.5 rounded-lg shadow-sm h-7 px-3 text-sm"
-                            disabled={!logContent.trim()}
-                            onClick={handleSubmitLog}
-                          >
-                            <Send className="h-3 w-3" />
-                            提交
-                          </Button>
                         </div>
                       </div>
 
@@ -844,35 +874,68 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileSelect(e, 'image')} />
                       <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFileSelect(e, 'file')} />
 
-                      {/* Next plan (optional, independent block) */}
-                      <div className="rounded-lg border border-dashed border-border/60 p-3 space-y-2.5">
+                      {/* Next plans (optional, multiple items) */}
+                      <div className="rounded-lg border border-dashed border-border p-3 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="text-xs font-medium text-muted-foreground">預計後續工作</span>
                             <span className="text-[10px] text-muted-foreground/50">選填</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Calendar className="h-3 w-3 text-muted-foreground" />
-                            <input
-                              type="date"
-                              value={logNextPlanDate}
-                              onChange={e => setLogNextPlanDate(e.target.value)}
-                              className="h-6 text-xs border rounded px-1.5 bg-background text-muted-foreground"
-                              placeholder="預計日期"
-                            />
-                          </div>
                         </div>
-                        <Textarea
-                          placeholder="預計什麼時間要做什麼事項..."
-                          className="min-h-[80px] text-sm resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-                          value={logNextPlan}
-                          onChange={e => setLogNextPlan(e.target.value)}
-                        />
+                        <div className="space-y-2">
+                          {logNextPlans.map((item, idx) => (
+                            <div key={idx} className="flex gap-2 items-start">
+                              <div className="flex-1 space-y-1.5">
+                                <input
+                                  type="date"
+                                  value={item.date || ''}
+                                  min={(() => {
+                                    const d = new Date(logDate)
+                                    d.setDate(d.getDate() + 1)
+                                    return d.toISOString().split('T')[0]
+                                  })()}
+                                  onChange={e => {
+                                    const updated = [...logNextPlans]
+                                    updated[idx] = { ...updated[idx], date: e.target.value }
+                                    setLogNextPlans(updated)
+                                  }}
+                                  className="h-7 text-xs border rounded px-2 bg-background text-muted-foreground w-full"
+                                />
+                                <Textarea
+                                  placeholder="預計要做什麼事項..."
+                                  className="min-h-[60px] text-sm resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+                                  value={item.content}
+                                  onChange={e => {
+                                    const updated = [...logNextPlans]
+                                    updated[idx] = { ...updated[idx], content: e.target.value }
+                                    setLogNextPlans(updated)
+                                  }}
+                                />
+                              </div>
+                              {logNextPlans.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="mt-1 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                                  onClick={() => setLogNextPlans(logNextPlans.filter((_, i) => i !== idx))}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+                          onClick={() => setLogNextPlans([...logNextPlans, { content: '', date: '' }])}
+                        >
+                          <span className="text-sm leading-none">+</span> 新增一筆
+                        </button>
                       </div>
 
-                      {/* Skip button */}
-                      <div className="flex justify-end">
+                      {/* Submit + Skip */}
+                      <div className="flex items-center justify-between">
                         <Button
                           size="sm"
                           variant="secondary"
@@ -882,36 +945,63 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           跳過，直接操作
                           <ArrowRight className="h-3 w-3" />
                         </Button>
+                        <Button
+                          size="sm"
+                          className="gap-1.5 rounded-lg shadow-sm px-4 text-sm"
+                          disabled={!logContent.trim()}
+                          onClick={handleSubmitLog}
+                        >
+                          {existingLogId ? (
+                            <><Save className="h-3.5 w-3.5" />更新</>
+                          ) : (
+                            <><Send className="h-3.5 w-3.5" />提交</>
+                          )}
+                        </Button>
                       </div>
                     </>
                   ) : (
                     /* Step 2: Action buttons */
                     showCompleteDateStep ? (
                       /* Step 2b: Completion date confirmation */
-                      <div className="space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
-                        <div className="flex items-center gap-2 text-sm text-primary">
-                          <CircleCheck className="h-4 w-4 shrink-0" />
-                          <span>選擇完成日期</span>
+                      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-3 duration-300">
+                        {/* Header */}
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">標記任務完成</p>
+                            <p className="text-xs text-muted-foreground">請選擇實際完成日期</p>
+                          </div>
                         </div>
 
-                        <div className="p-4 rounded-xl border bg-muted/30 space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <span className="text-sm font-medium">完成日期</span>
-                          </div>
+                        {/* Date picker */}
+                        <div className="space-y-2">
+                          <Label className="text-sm text-muted-foreground flex items-center gap-1.5">
+                            <Calendar className="h-3.5 w-3.5" />
+                            完成日期
+                          </Label>
                           <input
                             type="date"
                             value={completedDate}
+                            min={(() => {
+                              // Must be after actual start date (earliest log date)
+                              const earliestLog = taskLogs.length > 0
+                                ? taskLogs.reduce((min, l) => l.logDate < min ? l.logDate : min, taskLogs[0].logDate)
+                                : null
+                              return earliestLog || task.startDate
+                            })()}
                             onChange={e => setCompletedDate(e.target.value)}
-                            className="w-full text-sm border rounded-lg px-3 py-2 bg-background"
+                            className="w-full text-sm border rounded-lg px-3 py-2.5 bg-background"
                           />
-                          <p className="text-xs text-muted-foreground">
-                            預設為今天，您也可以選擇實際完成的日期
+                          <p className="text-[11px] text-muted-foreground">
+                            預設為今天，不可早於實際開始日期
                           </p>
                         </div>
 
+                        {/* Progress warning */}
                         {editProgress < 100 && (
-                          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+                          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
                             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                             <p className="text-sm text-amber-700 dark:text-amber-400">
                               目前進度為 <span className="font-semibold">{editProgress}%</span>，標記完成後將自動更新為 100%
@@ -919,21 +1009,24 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           </div>
                         )}
 
-                        <Button
-                          className="w-full gap-1.5"
-                          onClick={handleCompleteTask}
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                          確認完成
-                        </Button>
-
-                        <button
-                          className="text-sm text-muted-foreground hover:text-foreground w-full text-center py-1 transition-colors"
-                          onClick={() => setShowCompleteDateStep(false)}
-                        >
-                          <ArrowLeft className="h-3 w-3 inline mr-1" />
-                          返回
-                        </button>
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            className="flex-1 gap-1.5"
+                            onClick={() => setShowCompleteDateStep(false)}
+                          >
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            返回
+                          </Button>
+                          <Button
+                            className="flex-1 gap-1.5"
+                            onClick={handleCompleteTask}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            確認完成
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
@@ -1071,26 +1164,61 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                   className="text-sm min-h-[60px] resize-none"
                                   placeholder="工作內容"
                                 />
-                                <div className="rounded-md border border-dashed border-border/60 p-2.5 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                      <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className="text-xs font-medium text-muted-foreground">後續計畫</span>
-                                      <span className="text-[10px] text-muted-foreground/50">選填</span>
-                                    </div>
-                                    <input
-                                      type="date"
-                                      value={editLogNextPlanDate}
-                                      onChange={e => setEditLogNextPlanDate(e.target.value)}
-                                      className="h-6 text-xs border rounded px-1.5 bg-background text-muted-foreground"
-                                    />
+                                <div className="rounded-md border border-dashed border-border p-2.5 space-y-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground">後續計畫</span>
+                                    <span className="text-[10px] text-muted-foreground/50">選填</span>
                                   </div>
-                                  <Textarea
-                                    value={editLogNextPlan}
-                                    onChange={e => setEditLogNextPlan(e.target.value)}
-                                    className="text-sm min-h-[60px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-                                    placeholder="預計什麼時間要做什麼事項..."
-                                  />
+                                  <div className="space-y-2">
+                                    {editLogNextPlans.map((item, idx) => (
+                                      <div key={idx} className="flex gap-2 items-start">
+                                        <div className="flex-1 space-y-1">
+                                          <input
+                                            type="date"
+                                            value={item.date || ''}
+                                            min={(() => {
+                                              const d = new Date(editLogDate)
+                                              d.setDate(d.getDate() + 1)
+                                              return d.toISOString().split('T')[0]
+                                            })()}
+                                            onChange={e => {
+                                              const updated = [...editLogNextPlans]
+                                              updated[idx] = { ...updated[idx], date: e.target.value }
+                                              setEditLogNextPlans(updated)
+                                            }}
+                                            className="h-6 text-xs border rounded px-1.5 bg-background text-muted-foreground w-full"
+                                          />
+                                          <Textarea
+                                            value={item.content}
+                                            onChange={e => {
+                                              const updated = [...editLogNextPlans]
+                                              updated[idx] = { ...updated[idx], content: e.target.value }
+                                              setEditLogNextPlans(updated)
+                                            }}
+                                            className="text-sm min-h-[48px] resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
+                                            placeholder="預計要做什麼事項..."
+                                          />
+                                        </div>
+                                        {editLogNextPlans.length > 1 && (
+                                          <button
+                                            type="button"
+                                            className="mt-1 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                                            onClick={() => setEditLogNextPlans(editLogNextPlans.filter((_, i) => i !== idx))}
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
+                                    onClick={() => setEditLogNextPlans([...editLogNextPlans, { content: '', date: '' }])}
+                                  >
+                                    <span className="text-sm leading-none">+</span> 新增一筆
+                                  </button>
                                 </div>
                                 <div className="flex items-center gap-1.5 justify-end">
                                   <Button
@@ -1145,18 +1273,22 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                   </div>
                                 </div>
                                 <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.content}</p>
-                                {log.nextPlan && (
-                                  <div className="mt-1.5 pl-3 border-l-2 border-primary/20">
-                                    <div className="flex items-center gap-1 mb-0.5">
+                                {log.nextPlans && log.nextPlans.length > 0 && (
+                                  <div className="mt-1.5 pl-3 border-l-2 border-primary/20 space-y-1.5">
+                                    <div className="flex items-center gap-1">
                                       <CalendarClock className="h-3 w-3 text-primary/60" />
                                       <span className="text-[11px] text-primary/60 font-medium">後續計畫</span>
-                                      {log.nextPlanDate && (
-                                        <span className="text-[11px] text-primary/40 tabular-nums">
-                                          {new Date(log.nextPlanDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                        </span>
-                                      )}
                                     </div>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.nextPlan}</p>
+                                    {log.nextPlans.map((plan, pi) => (
+                                      <div key={pi} className="text-sm text-muted-foreground">
+                                        {plan.date && (
+                                          <span className="text-[11px] text-primary/50 tabular-nums mr-1.5">
+                                            {new Date(plan.date).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                          </span>
+                                        )}
+                                        <span className="whitespace-pre-line leading-relaxed">{plan.content}</span>
+                                      </div>
+                                    ))}
                                   </div>
                                 )}
                               </div>

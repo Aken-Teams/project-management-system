@@ -132,6 +132,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
   // Today line
   const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   const todayPct = ((today.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24) / totalDays) * 100
   const showToday = todayPct >= 0 && todayPct <= 100
 
@@ -381,13 +382,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               : `1px solid ${PLAN_COLOR.border}`,
                           }}
                         />
-                        {/* Actual bar (lower — uses actual start from task logs) */}
+                        {/* Actual bar (lower — extends to today for in-progress, to latest completion for done) */}
                         {milestone.progress > 0 && (
                           <div
                             className="absolute h-3.5 rounded-sm"
                             style={{
-                              ...barStyle(msActualStart, milestone.dueDate),
-                              width: `${(parseFloat(barStyle(msActualStart, milestone.dueDate).width) * Math.min(milestone.progress, 100)) / 100}%`,
+                              ...barStyle(msActualStart, milestone.progress >= 100
+                                ? (msTasks.reduce<string>((latest, t) => t.completedAt && t.completedAt > latest ? t.completedAt : latest, msActualStart) || todayStr)
+                                : todayStr),
                               top: 24,
                               backgroundColor: colors.bg,
                             }}
@@ -567,8 +569,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               <div
                                 className="absolute h-3.5 rounded-sm"
                                 style={{
-                                  ...barStyle(getActualStart(task.id, task.startDate), task.endDate),
-                                  width: `${(parseFloat(barStyle(getActualStart(task.id, task.startDate), task.endDate).width) * Math.min(task.progress, 100)) / 100}%`,
+                                  ...barStyle(getActualStart(task.id, task.startDate), todayStr),
                                   top: 24,
                                   backgroundColor: taskColors.bg,
                                   ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),

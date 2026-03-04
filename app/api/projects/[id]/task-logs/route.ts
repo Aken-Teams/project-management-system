@@ -11,8 +11,7 @@ interface AddTaskLogBody {
   userId: string
   logDate: string
   content: string
-  nextPlan?: string
-  nextPlanDate?: string
+  nextPlans?: { date?: string; content: string }[]
 }
 
 export async function POST(
@@ -42,6 +41,9 @@ export async function POST(
       return NextResponse.json({ error: '找不到使用者' }, { status: 404 })
     }
 
+    // Filter out empty next plan items
+    const validPlans = body.nextPlans?.filter(p => p.content.trim()) || []
+
     const log = await prisma.taskLog.create({
       data: {
         taskId: body.taskId,
@@ -49,8 +51,7 @@ export async function POST(
         authorId: user.id,
         logDate: new Date(body.logDate),
         content: body.content.trim(),
-        ...(body.nextPlan?.trim() ? { nextPlan: body.nextPlan.trim() } : {}),
-        ...(body.nextPlanDate ? { nextPlanDate: new Date(body.nextPlanDate) } : {}),
+        ...(validPlans.length > 0 ? { nextPlans: JSON.stringify(validPlans) } : {}),
       },
       include: { author: true },
     })
@@ -70,8 +71,7 @@ export async function POST(
       author: log.author.name,
       logDate: log.logDate.toISOString().split('T')[0],
       content: log.content,
-      ...(log.nextPlan ? { nextPlan: log.nextPlan } : {}),
-      ...(log.nextPlanDate ? { nextPlanDate: log.nextPlanDate.toISOString().split('T')[0] } : {}),
+      ...(log.nextPlans ? { nextPlans: JSON.parse(log.nextPlans) } : {}),
       createdAt: log.createdAt.toISOString(),
     }, { status: 201 })
   } catch (error) {

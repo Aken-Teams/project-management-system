@@ -26,8 +26,7 @@ async function syncAfterLogChange(taskId: string, projectId: string) {
 interface UpdateTaskLogBody {
   logDate?: string
   content?: string
-  nextPlan?: string | null
-  nextPlanDate?: string | null
+  nextPlans?: { date?: string; content: string }[] | null
 }
 
 export async function PUT(
@@ -54,11 +53,9 @@ export async function PUT(
     if (body.logDate !== undefined) {
       data.logDate = new Date(body.logDate)
     }
-    if (body.nextPlan !== undefined) {
-      data.nextPlan = body.nextPlan?.trim() || null
-    }
-    if (body.nextPlanDate !== undefined) {
-      data.nextPlanDate = body.nextPlanDate ? new Date(body.nextPlanDate) : null
+    if (body.nextPlans !== undefined) {
+      const validPlans = body.nextPlans?.filter(p => p.content.trim()) || []
+      data.nextPlans = validPlans.length > 0 ? JSON.stringify(validPlans) : null
     }
 
     if (Object.keys(data).length === 0) {
@@ -83,8 +80,7 @@ export async function PUT(
       author: updated.author.name,
       logDate: updated.logDate.toISOString().split('T')[0],
       content: updated.content,
-      ...(updated.nextPlan ? { nextPlan: updated.nextPlan } : {}),
-      ...(updated.nextPlanDate ? { nextPlanDate: updated.nextPlanDate.toISOString().split('T')[0] } : {}),
+      ...(updated.nextPlans ? { nextPlans: JSON.parse(updated.nextPlans) } : {}),
       createdAt: updated.createdAt.toISOString(),
     })
   } catch (error) {
