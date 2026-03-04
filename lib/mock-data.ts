@@ -141,6 +141,8 @@ export interface TaskLog {
   author: string
   logDate: string
   content: string
+  nextPlan?: string
+  nextPlanDate?: string
   createdAt: string
 }
 

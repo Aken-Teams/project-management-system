@@ -11,6 +11,8 @@ interface AddTaskLogBody {
   userId: string
   logDate: string
   content: string
+  nextPlan?: string
+  nextPlanDate?: string
 }
 
 export async function POST(
@@ -47,6 +49,8 @@ export async function POST(
         authorId: user.id,
         logDate: new Date(body.logDate),
         content: body.content.trim(),
+        ...(body.nextPlan?.trim() ? { nextPlan: body.nextPlan.trim() } : {}),
+        ...(body.nextPlanDate ? { nextPlanDate: new Date(body.nextPlanDate) } : {}),
       },
       include: { author: true },
     })
@@ -66,6 +70,8 @@ export async function POST(
       author: log.author.name,
       logDate: log.logDate.toISOString().split('T')[0],
       content: log.content,
+      ...(log.nextPlan ? { nextPlan: log.nextPlan } : {}),
+      ...(log.nextPlanDate ? { nextPlanDate: log.nextPlanDate.toISOString().split('T')[0] } : {}),
       createdAt: log.createdAt.toISOString(),
     }, { status: 201 })
   } catch (error) {

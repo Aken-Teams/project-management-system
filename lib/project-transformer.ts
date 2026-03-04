@@ -321,6 +321,8 @@ export function dbProjectToFrontend(
     author: tl.author.name,
     logDate: tl.logDate.toISOString().split('T')[0],
     content: tl.content,
+    ...(tl.nextPlan ? { nextPlan: tl.nextPlan } : {}),
+    ...(tl.nextPlanDate ? { nextPlanDate: tl.nextPlanDate.toISOString().split('T')[0] } : {}),
     createdAt: tl.createdAt.toISOString(),
   }))
 
