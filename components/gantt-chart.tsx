@@ -374,30 +374,22 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                 {/* Milestone row — stronger background to distinguish from tasks */}
                 <div
                   className={cn(
-                    'flex items-center border-b cursor-pointer transition-colors',
-                    'bg-muted/40 hover:bg-muted/60',
+                    'flex items-center border-b transition-colors',
+                    'bg-muted/40',
                   )}
-                  onClick={() => onMilestoneClick?.(milestone)}
-                  onMouseMove={(e) => {
-                    setMsTooltip({ x: e.clientX, y: e.clientY - 12, milestone, msTasks })
-                  }}
-                  onMouseLeave={() => setMsTooltip(null)}
                 >
-                  <div className="w-[260px] shrink-0 px-3 py-2 border-r">
+                  <div
+                    className="w-[260px] shrink-0 px-3 py-2 border-r cursor-pointer hover:bg-muted/60 transition-colors"
+                    onClick={() => msTasks.length > 0 && toggleMs(milestone.id)}
+                  >
                     <div className="flex items-center gap-1.5">
                       {msTasks.length > 0 ? (
-                        <button
-                          className="shrink-0 p-0 hover:bg-muted rounded-sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleMs(milestone.id)
-                          }}
-                        >
+                        <span className="shrink-0">
                           {expanded
                             ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                             : <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           }
-                        </button>
+                        </span>
                       ) : (
                         <div className="w-4 shrink-0" />
                       )}
@@ -422,7 +414,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       到期：{formatDate(milestone.dueDate)}
                     </div>
                   </div>
-                  <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')}>
+                  <div
+                    className={cn('flex-1 relative cursor-pointer hover:bg-muted/40 transition-colors', showBaseline ? 'h-14' : 'h-10')}
+                    onClick={() => onMilestoneClick?.(milestone)}
+                    onMouseMove={(e) => {
+                      setMsTooltip({ x: e.clientX, y: e.clientY - 12, milestone, msTasks })
+                    }}
+                    onMouseLeave={() => setMsTooltip(null)}
+                  >
                     <WeekGrid />
                     {msTasks.length > 0 && showBaseline ? (() => {
                       const msActualStart = getMilestoneActualStart(msTasks) || msBar.start
@@ -530,20 +529,16 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     <div
                       data-task-id={task.id}
                       className={cn(
-                        'flex items-center border-b transition-colors cursor-pointer',
+                        'flex items-center border-b transition-colors',
                         selectedTaskId === task.id
-                          ? 'bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/20'
+                          ? 'bg-amber-50/60 dark:bg-amber-950/20'
                           : ti % 2 === 0
-                            ? 'bg-card hover:bg-accent/50'
-                            : 'bg-muted/5 hover:bg-accent/50',
+                            ? 'bg-card'
+                            : 'bg-muted/5',
                       )}
-                      onClick={(e) => handleTaskClick(task, e)}
                       onMouseEnter={() => {
                         setHoveredTaskId(task.id)
                         onTaskHover?.(task)
-                      }}
-                      onMouseMove={(e) => {
-                        setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task })
                       }}
                       onMouseLeave={() => {
                         setHoveredTaskId(null)
@@ -551,26 +546,30 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         setTaskTooltip(null)
                       }}
                     >
-                      <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10">
+                      <div
+                        className={cn(
+                          'w-[260px] shrink-0 px-3 py-1.5 border-r pl-10 transition-colors',
+                          subtasks.length > 0 ? 'cursor-pointer hover:bg-accent/50' : '',
+                        )}
+                        onClick={() => {
+                          if (subtasks.length > 0) {
+                            setExpandedTasks(prev => {
+                              const next = new Set(prev)
+                              if (next.has(task.id)) next.delete(task.id)
+                              else next.add(task.id)
+                              return next
+                            })
+                          }
+                        }}
+                      >
                         <div className="flex items-center gap-1.5">
                           {subtasks.length > 0 ? (
-                            <button
-                              className="shrink-0 p-0 hover:bg-muted rounded-sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setExpandedTasks(prev => {
-                                  const next = new Set(prev)
-                                  if (next.has(task.id)) next.delete(task.id)
-                                  else next.add(task.id)
-                                  return next
-                                })
-                              }}
-                            >
+                            <span className="shrink-0">
                               {expandedTasks.has(task.id)
                                 ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                                 : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                               }
-                            </button>
+                            </span>
                           ) : (
                             <div className="w-3.5 shrink-0" />
                           )}
@@ -601,7 +600,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           )}
                         </div>
                       </div>
-                      <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')} data-timeline-area>
+                      <div
+                        className={cn('flex-1 relative cursor-pointer hover:bg-accent/50 transition-colors', showBaseline ? 'h-14' : 'h-10')}
+                        data-timeline-area
+                        onClick={(e) => handleTaskClick(task, e)}
+                        onMouseMove={(e) => {
+                          setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task })
+                        }}
+                      >
                         <WeekGrid />
                         {showBaseline ? (() => {
                           const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt)
@@ -710,14 +716,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           key={sub.id}
                           data-task-id={sub.id}
                           className={cn(
-                            'flex items-center border-b transition-colors cursor-pointer bg-muted/5 hover:bg-accent/50',
-                            selectedTaskId === sub.id && 'bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-950/20',
+                            'flex items-center border-b transition-colors bg-muted/5',
+                            selectedTaskId === sub.id && 'bg-amber-50/60 dark:bg-amber-950/20',
                           )}
-                          onClick={(e) => handleTaskClick(sub, e)}
-                          onMouseMove={(e) => {
-                            setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task: sub })
-                          }}
-                          onMouseLeave={() => setTaskTooltip(null)}
                         >
                           <div className="w-[260px] shrink-0 px-3 py-1 border-r pl-14">
                             <div className="flex items-center gap-1.5">
@@ -735,7 +736,15 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               <span className="text-xs text-muted-foreground ml-6">{sub.assignee}</span>
                             )}
                           </div>
-                          <div className={cn('flex-1 relative', showBaseline ? 'h-14' : 'h-10')} data-timeline-area>
+                          <div
+                            className={cn('flex-1 relative cursor-pointer hover:bg-accent/50 transition-colors', showBaseline ? 'h-14' : 'h-10')}
+                            data-timeline-area
+                            onClick={(e) => handleTaskClick(sub, e)}
+                            onMouseMove={(e) => {
+                              setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task: sub })
+                            }}
+                            onMouseLeave={() => setTaskTooltip(null)}
+                          >
                             <WeekGrid />
                             {showBaseline ? (() => {
                               const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt)

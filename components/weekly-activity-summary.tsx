@@ -777,7 +777,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
             project.tasks.forEach(t => { if (t.parentId) subtaskOf.set(t.id, t.parentId) })
 
             // Group by milestone → task (with subtask nesting)
-            type SubEntry = { taskId: string; taskName: string; completed?: { completedBy: string; completedAt: string }; logs: typeof filteredLogs }
+            type SubEntry = { taskId: string; taskName: string; assignee?: string; completed?: { completedBy: string; completedAt: string }; logs: typeof filteredLogs }
             type TaskEntry = {
               taskId: string; taskName: string; assignee?: string
               completed?: { completedBy: string; completedAt: string }
@@ -795,9 +795,10 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               if (assignee && !t.assignee) t.assignee = assignee
               return t
             }
-            const findOrAddSub = (task: TaskEntry, id: string, name: string) => {
+            const findOrAddSub = (task: TaskEntry, id: string, name: string, assignee?: string) => {
               let s = task.subtasks.find(e => e.taskId === id)
-              if (!s) { s = { taskId: id, taskName: name, logs: [] }; task.subtasks.push(s) }
+              if (!s) { s = { taskId: id, taskName: name, assignee, logs: [] }; task.subtasks.push(s) }
+              if (assignee && !s.assignee) s.assignee = assignee
               return s
             }
 
@@ -805,9 +806,10 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               const parentId = subtaskOf.get(log.taskId)
               if (parentId) {
                 const parentTask = project.tasks.find(t => t.id === parentId)
+                const subTask = project.tasks.find(t => t.id === log.taskId)
                 const tasks = getMs(log.milestoneName)
                 const parent = findOrAdd(tasks, parentId, parentTask?.title || parentId, parentTask?.assignee)
-                const sub = findOrAddSub(parent, log.taskId, log.taskName)
+                const sub = findOrAddSub(parent, log.taskId, log.taskName, subTask?.assignee)
                 sub.logs.push(log)
               } else {
                 const taskData = project.tasks.find(t => t.id === log.taskId)
@@ -874,7 +876,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                     <div className="flex">
                                       {/* Left: task name + status */}
                                       <div className="w-[180px] shrink-0 px-4 py-2.5 border-r bg-muted/5">
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-start gap-1.5">
                                           {hasSubtasks && (
                                             <button
                                               onClick={() => setCollapsedTasks(prev => { const s = new Set(prev); s.has(taskKey) ? s.delete(taskKey) : s.add(taskKey); return s })}
@@ -884,7 +886,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                             </button>
                                           )}
                                           {task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
-                                          <span className={`text-sm font-medium truncate ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
+                                          <span className={`text-sm font-medium break-words ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                           {task.assignee && (
@@ -928,11 +930,18 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                     {/* Subtask entries (collapsible) */}
                                     {hasSubtasks && !isTaskCollapsed && task.subtasks.map(sub => (
                                       <div key={sub.taskId} className="flex border-t">
-                                        <div className="w-[180px] shrink-0 pl-8 pr-4 py-2 border-r bg-muted/5">
-                                          <div className="flex items-center gap-1.5">
+                                        <div className="w-[180px] shrink-0 pl-4 pr-4 py-2 border-r bg-muted/5">
+                                          <div className="flex items-start gap-1.5">
+                                            {/* L-shaped connector */}
+                                            <span className="inline-block w-4 h-4 border-l-2 border-b-2 border-muted-foreground/30 rounded-bl-sm -mt-2 shrink-0" />
                                             {sub.completed && <CheckCircle2 className="h-3 w-3 text-success shrink-0" />}
-                                            <span className="text-xs font-medium truncate text-muted-foreground">{sub.taskName}</span>
+                                            <span className="text-xs font-medium break-words text-muted-foreground">{sub.taskName}</span>
                                           </div>
+                                          {sub.assignee && (
+                                            <div className="flex items-center gap-1.5 mt-0.5 pl-[22px]">
+                                              <span className="text-[11px] text-muted-foreground">{sub.assignee}</span>
+                                            </div>
+                                          )}
                                         </div>
                                         <div className="flex-1 min-w-0 divide-y divide-dashed">
                                           {sub.logs.map(log => (
@@ -940,7 +949,6 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                               <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">
                                                   <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
-                                                  <span className="text-xs text-muted-foreground">{log.author}</span>
                                                 </div>
                                                 <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
                                               </div>
