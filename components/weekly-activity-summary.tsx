@@ -779,7 +779,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
             // Group by milestone → task (with subtask nesting)
             type SubEntry = { taskId: string; taskName: string; completed?: { completedBy: string; completedAt: string }; logs: typeof filteredLogs }
             type TaskEntry = {
-              taskId: string; taskName: string
+              taskId: string; taskName: string; assignee?: string
               completed?: { completedBy: string; completedAt: string }
               logs: typeof filteredLogs
               subtasks: SubEntry[]
@@ -789,9 +789,10 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               if (!milestoneMap.has(msName)) milestoneMap.set(msName, [])
               return milestoneMap.get(msName)!
             }
-            const findOrAdd = (list: TaskEntry[], id: string, name: string) => {
+            const findOrAdd = (list: TaskEntry[], id: string, name: string, assignee?: string) => {
               let t = list.find(e => e.taskId === id)
-              if (!t) { t = { taskId: id, taskName: name, logs: [], subtasks: [] }; list.push(t) }
+              if (!t) { t = { taskId: id, taskName: name, assignee, logs: [], subtasks: [] }; list.push(t) }
+              if (assignee && !t.assignee) t.assignee = assignee
               return t
             }
             const findOrAddSub = (task: TaskEntry, id: string, name: string) => {
@@ -805,18 +806,20 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               if (parentId) {
                 const parentTask = project.tasks.find(t => t.id === parentId)
                 const tasks = getMs(log.milestoneName)
-                const parent = findOrAdd(tasks, parentId, parentTask?.title || parentId)
+                const parent = findOrAdd(tasks, parentId, parentTask?.title || parentId, parentTask?.assignee)
                 const sub = findOrAddSub(parent, log.taskId, log.taskName)
                 sub.logs.push(log)
               } else {
+                const taskData = project.tasks.find(t => t.id === log.taskId)
                 const tasks = getMs(log.milestoneName)
-                const t = findOrAdd(tasks, log.taskId, log.taskName)
+                const t = findOrAdd(tasks, log.taskId, log.taskName, taskData?.assignee)
                 t.logs.push(log)
               }
             })
             filteredCompleted.forEach(ct => {
               const tasks = getMs(ct.milestoneName)
-              const t = findOrAdd(tasks, ct.taskId, ct.taskName)
+              const taskData = project.tasks.find(tk => tk.id === ct.taskId)
+              const t = findOrAdd(tasks, ct.taskId, ct.taskName, taskData?.assignee)
               t.completed = { completedBy: ct.completedBy, completedAt: ct.completedAt }
             })
 
@@ -883,23 +886,28 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                           {task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
                                           <span className={`text-sm font-medium truncate ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
                                         </div>
-                                        {task.completed && (
-                                          <span className="text-[11px] text-muted-foreground">{fmtDate(task.completed.completedAt)} 完成</span>
-                                        )}
+                                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                          {task.assignee && (
+                                            <span className="text-[11px] text-muted-foreground">{task.assignee}</span>
+                                          )}
+                                          {task.assignee && task.completed && (
+                                            <span className="text-[11px] text-muted-foreground/30">|</span>
+                                          )}
+                                          {task.completed && (
+                                            <span className="text-[11px] text-success/70">{fmtDate(task.completed.completedAt)} 完成</span>
+                                          )}
+                                        </div>
                                       </div>
                                       {/* Right: log entries + nextPlans on far right */}
                                       <div className="flex-1 min-w-0 divide-y divide-dashed">
-                                        {task.logs.length === 0 && task.completed && (
-                                          <div className="px-3 py-2.5 text-xs text-muted-foreground">
-                                            {task.completed.completedBy}
-                                          </div>
+                                        {task.logs.length === 0 && (
+                                          <div className="px-3 py-2.5 text-xs text-muted-foreground italic">—</div>
                                         )}
                                         {task.logs.map(log => (
                                           <div key={log.logId} className="px-3 py-2 flex gap-3">
                                             <div className="flex-1 min-w-0">
                                               <div className="flex items-center gap-2 mb-0.5">
                                                 <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
-                                                <span className="text-xs text-muted-foreground">{log.author}</span>
                                               </div>
                                               <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
                                             </div>
