@@ -396,7 +396,7 @@ export default function ApprovalsPage() {
                               </div>
                             </div>
                             <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-xs shrink-0">
-                              +{delayDays} 天
+                              {delayDays >= 0 ? '+' : ''}{delayDays} 天
                             </Badge>
                           </div>
                         )

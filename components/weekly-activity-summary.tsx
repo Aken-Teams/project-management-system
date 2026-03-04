@@ -33,6 +33,8 @@ import {
   Loader2,
   Search,
   Sparkles,
+  TimerReset,
+  ArrowRight,
   User,
   X,
 } from 'lucide-react'
@@ -63,10 +65,21 @@ function getWeekSunday(mondayStr: string): string {
   return d.toISOString().split('T')[0]
 }
 
+interface WeekDelayRequest {
+  id: string
+  requestedBy: string
+  requestedAt: string
+  reason: string
+  type?: 'delay' | 'date_change'
+  status: 'pending' | 'approved' | 'rejected'
+  affectedMilestones: { milestoneName: string; originalDate: string; proposedDate: string; delayDays: number }[]
+}
+
 interface WeekActivity {
   weekMonday: string
   completedTasks: { taskId: string; taskName: string; completedBy: string; completedAt: string; milestoneName: string }[]
   logs: { logId: string; taskId: string; taskName: string; milestoneName: string; author: string; content: string; logDate: string; nextPlans?: { date?: string; content: string }[] }[]
+  delayRequests: WeekDelayRequest[]
   activeMembers: Set<string>
 }
 
@@ -75,7 +88,7 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
 
   const getOrCreate = (weekMonday: string): WeekActivity => {
     if (!weekMap.has(weekMonday)) {
-      weekMap.set(weekMonday, { weekMonday, completedTasks: [], logs: [], activeMembers: new Set() })
+      weekMap.set(weekMonday, { weekMonday, completedTasks: [], logs: [], delayRequests: [], activeMembers: new Set() })
     }
     return weekMap.get(weekMonday)!
   }
@@ -115,6 +128,25 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     week.activeMembers.add(log.author)
   })
 
+  // Delay requests
+  project.delayRequests?.forEach(dr => {
+    const monday = getWeekMonday(dr.requestedAt)
+    const week = getOrCreate(monday)
+    week.delayRequests.push({
+      id: dr.id,
+      requestedBy: dr.requestedBy,
+      requestedAt: dr.requestedAt,
+      reason: dr.reason,
+      type: dr.type,
+      status: dr.status,
+      affectedMilestones: dr.affectedMilestones.map(am => {
+        const ms = project.milestones.find(m => m.id === am.milestoneId)
+        const days = Math.ceil((new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24))
+        return { milestoneName: ms?.name || am.milestoneId, originalDate: am.originalDate, proposedDate: am.proposedDate, delayDays: days }
+      }),
+    })
+  })
+
   return Array.from(weekMap.values()).sort((a, b) => b.weekMonday.localeCompare(a.weekMonday))
 }
 
@@ -132,8 +164,10 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const [selectedWeekMonday, setSelectedWeekMonday] = useState<string | null>(null)
   const [weekFilter, setWeekFilter] = useState<string>('')
   const [viewMode, setViewMode] = useState<'matrix' | 'summary'>('summary')
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set())
   const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set())
+  const [expandedDelays, setExpandedDelays] = useState<Set<string>>(new Set())
 
   // Report dialog state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -543,7 +577,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               : `，共 ${allWeeks.length} 週活動`
           })()}
         </p>
-        {missingUpdateMembers.length > 0 && (
+        {viewMode === 'matrix' && missingUpdateMembers.length > 0 && (
           <p className="text-sm text-warning flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" />
             {missingUpdateMembers.join('、')} 7 天內未更新
@@ -825,18 +859,43 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               t.completed = { completedBy: ct.completedBy, completedAt: ct.completedAt }
             })
 
-            // Sort logs
+            // Sort milestones by project order, sort logs by date
+            const msOrder = new Map(project.milestones.map((m, i) => [m.name, i]))
+            const sortedMilestoneEntries = Array.from(milestoneMap.entries()).sort((a, b) => {
+              const ia = msOrder.get(a[0]) ?? 999
+              const ib = msOrder.get(b[0]) ?? 999
+              return ia - ib
+            })
             milestoneMap.forEach(tasks => tasks.forEach(t => {
               t.logs.sort((a, b) => a.logDate.localeCompare(b.logDate))
               t.subtasks.forEach(s => s.logs.sort((a, b) => a.logDate.localeCompare(b.logDate)))
             }))
 
+            // Filter delay requests
+            let filteredDelayRequests = week.delayRequests
+            if (selectedMember) {
+              filteredDelayRequests = filteredDelayRequests.filter(dr => dr.requestedBy === selectedMember)
+            }
+            if (searchQuery.trim()) {
+              const q = searchQuery.trim().toLowerCase()
+              filteredDelayRequests = filteredDelayRequests.filter(dr =>
+                dr.reason.toLowerCase().includes(q) || dr.requestedBy.toLowerCase().includes(q) ||
+                dr.affectedMilestones.some(am => am.milestoneName.toLowerCase().includes(q))
+              )
+            }
+
             const fmtDate = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
-            const isEmpty = filteredLogs.length === 0 && filteredCompleted.length === 0
+            const isEmpty = filteredLogs.length === 0 && filteredCompleted.length === 0 && filteredDelayRequests.length === 0
+
+            const isWeekCollapsed = collapsedWeeks.has(week.weekMonday)
 
             return (
               <Card key={week.weekMonday}>
-                <div className="px-4 py-2.5 border-b bg-muted/30 flex items-center gap-2">
+                <div
+                  className="px-4 py-2.5 border-b bg-muted/30 flex items-center gap-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setCollapsedWeeks(prev => { const s = new Set(prev); s.has(week.weekMonday) ? s.delete(week.weekMonday) : s.add(week.weekMonday); return s })}
+                >
+                  <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isWeekCollapsed ? '-rotate-90' : ''}`} />
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="font-medium text-sm">W{weekNum}：{mondayLabel} ~ {sundayLabel}</span>
                   <span className="text-xs text-muted-foreground ml-auto">
@@ -846,11 +905,11 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                   </span>
                 </div>
 
-                {isEmpty ? (
+                {isWeekCollapsed ? null : isEmpty ? (
                   <p className="text-sm text-muted-foreground text-center py-4">此週無紀錄</p>
                 ) : (
                   <div className="divide-y">
-                    {Array.from(milestoneMap.entries()).map(([msName, tasks]) => {
+                    {sortedMilestoneEntries.map(([msName, tasks]) => {
                       const msKey = `${week.weekMonday}-${msName}`
                       const isMsCollapsed = collapsedMs.has(msKey)
                       return (
@@ -875,15 +934,13 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                   <div key={task.taskId}>
                                     <div className="flex">
                                       {/* Left: task name + status */}
-                                      <div className="w-[180px] shrink-0 px-4 py-2.5 border-r bg-muted/5">
+                                      <div
+                                        className={`w-[180px] shrink-0 px-4 py-2.5 border-r bg-muted/5 ${hasSubtasks ? 'cursor-pointer hover:bg-muted/20 transition-colors' : ''}`}
+                                        onClick={() => hasSubtasks && setCollapsedTasks(prev => { const s = new Set(prev); s.has(taskKey) ? s.delete(taskKey) : s.add(taskKey); return s })}
+                                      >
                                         <div className="flex items-start gap-1.5">
                                           {hasSubtasks && (
-                                            <button
-                                              onClick={() => setCollapsedTasks(prev => { const s = new Set(prev); s.has(taskKey) ? s.delete(taskKey) : s.add(taskKey); return s })}
-                                              className="shrink-0 -ml-1"
-                                            >
-                                              <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${isTaskCollapsed ? '-rotate-90' : ''}`} />
-                                            </button>
+                                            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 mt-0.5 -ml-1 ${isTaskCollapsed ? '-rotate-90' : ''}`} />
                                           )}
                                           {task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
                                           <span className={`text-sm font-medium break-words ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
@@ -976,6 +1033,60 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                     })}
                   </div>
                 )}
+
+                {/* Delay Requests — collapsed by default */}
+                {!isWeekCollapsed && filteredDelayRequests.length > 0 && (() => {
+                  const delayKey = week.weekMonday
+                  const isDelayExpanded = expandedDelays.has(delayKey)
+                  return (
+                  <div className="border-t">
+                    <div
+                      className="px-4 py-2 bg-orange-50/50 dark:bg-orange-950/10 flex items-center gap-1.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors"
+                      onClick={() => setExpandedDelays(prev => { const s = new Set(prev); s.has(delayKey) ? s.delete(delayKey) : s.add(delayKey); return s })}
+                    >
+                      <ChevronDown className={`h-3.5 w-3.5 text-orange-500 transition-transform ${isDelayExpanded ? '' : '-rotate-90'}`} />
+                      <TimerReset className="h-3.5 w-3.5 text-orange-500" />
+                      <span className="text-sm font-semibold text-orange-700 dark:text-orange-400">延遲 / 日期變更申請</span>
+                      <span className="text-xs text-orange-500/60 ml-auto">{filteredDelayRequests.length} 筆</span>
+                    </div>
+                    {isDelayExpanded && (
+                    <div className="divide-y">
+                      {filteredDelayRequests.map(dr => (
+                        <div key={dr.id} className="px-4 py-3 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className={
+                              dr.status === 'pending' ? 'border-warning text-warning text-[10px]' :
+                              dr.status === 'approved' ? 'border-success text-success text-[10px]' :
+                              'border-destructive text-destructive text-[10px]'
+                            }>
+                              {dr.status === 'pending' ? '待審核' : dr.status === 'approved' ? '已核准' : '已駁回'}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{dr.requestedBy} · {fmtDate(dr.requestedAt)}</span>
+                            {dr.type === 'date_change' && (
+                              <Badge variant="secondary" className="text-[10px]">日期變更</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-foreground/80">{dr.reason}</p>
+                          <div className="space-y-1">
+                            {dr.affectedMilestones.map((am, ai) => (
+                              <div key={ai} className="flex items-center gap-2 text-xs bg-muted/30 rounded px-2.5 py-1.5">
+                                <span className="font-medium">{am.milestoneName}</span>
+                                <span className="text-muted-foreground">{fmtDate(am.originalDate)}</span>
+                                <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="text-orange-600 dark:text-orange-400 font-medium">{fmtDate(am.proposedDate)}</span>
+                                <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:text-orange-400 ml-auto">
+                                  {am.delayDays >= 0 ? '+' : ''}{am.delayDays}天
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    )}
+                  </div>
+                  )
+                })()}
               </Card>
             )
           })}

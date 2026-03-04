@@ -559,7 +559,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                                   <span className="text-warning font-medium">
                                     {new Date(am.proposedDate).toLocaleDateString('zh-TW')}
                                   </span>
-                                  <Badge variant="outline" className="text-sm">+{days}天</Badge>
+                                  <Badge variant="outline" className="text-sm">{days >= 0 ? '+' : ''}{days}天</Badge>
                                 </div>
                               </div>
                             )
