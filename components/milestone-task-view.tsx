@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,21 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
   const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set())
   const [showDependencies, setShowDependencies] = useState(false)
   const [showBaseline, setShowBaseline] = useState(true)
+  // Sync selectedTask / selectedMilestone when project data refreshes (e.g. after onTaskUpdate)
+  useEffect(() => {
+    if (selectedTask) {
+      const updated = project.tasks.find(t => t.id === selectedTask.id)
+      if (updated) setSelectedTask(updated)
+    }
+  }, [project.tasks]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (selectedMilestone) {
+      const updated = project.milestones.find(m => m.id === selectedMilestone.id)
+      if (updated) setSelectedMilestone(updated)
+    }
+  }, [project.milestones]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Compute dependency graph (only when toggle is on)
   const nodeMap = useMemo(() => {
     if (!showDependencies) return undefined
@@ -687,6 +702,8 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
           setSelectedTask(task)
           setTaskDetailOpen(true)
         }}
+        onTaskUpdate={onTaskUpdate}
+        readOnly={readOnly}
       />
 
     </div>

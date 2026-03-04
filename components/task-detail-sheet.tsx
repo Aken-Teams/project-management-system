@@ -135,6 +135,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   // Completion confirmation step
   const [showCompleteDateStep, setShowCompleteDateStep] = useState(false)
 
+  // Optimistic completion state: null = use task prop, true/false = override
+  const [optimisticCompleted, setOptimisticCompleted] = useState<boolean | null>(null)
+
   // Subtask log import
   const [importSubLogsOpen, setImportSubLogsOpen] = useState(false)
   const [importSubLogsLoading, setImportSubLogsLoading] = useState(false)
@@ -145,7 +148,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
   // Sync editProgress when task changes
   useEffect(() => {
-    if (task) setEditProgress(task.progress)
+    if (task) {
+      setEditProgress(task.progress)
+      setOptimisticCompleted(null) // reset optimistic override when real data arrives
+    }
   }, [task])
 
   // Reset state when opening a new task
@@ -163,6 +169,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       setIsListening(false)
       setAttachments([])
       setEditingLogId(null)
+      setOptimisticCompleted(null)
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -376,6 +383,11 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
         body: JSON.stringify({ status: 'done', progress: 100, completedBy: user.name, completedAt: completedDate }),
       })
       if (!res.ok) throw new Error()
+      // Optimistic: immediately show completed state
+      setOptimisticCompleted(true)
+      setEditProgress(100)
+      setShowCompleteDateStep(false)
+      setShowActions(false)
       onTaskUpdate?.()
     } catch {
       // ignore
@@ -391,6 +403,11 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
         body: JSON.stringify({ status: 'in_progress', progress: 0 }),
       })
       if (!res.ok) throw new Error()
+      // Optimistic: immediately show non-completed state with progress UI
+      setOptimisticCompleted(false)
+      setEditProgress(0)
+      setShowActions(false)
+      setShowCompleteDateStep(false)
       onTaskUpdate?.()
     } catch {
       // ignore
@@ -444,7 +461,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
   if (!task) return null
 
-  const isCompleted = !!task.completedAt
+  const isCompleted = optimisticCompleted !== null ? optimisticCompleted : !!task.completedAt
   const hasSubtasks = (task.subtasks || []).length > 0
   const computedStatus = computeTaskStatus(task, project.taskLogs)
   const days = getDaysUntilDeadline(task)
@@ -663,18 +680,26 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
               <TabsContent value="log" className="flex-1 overflow-y-auto px-6 mt-0">
                 <div className="py-4 space-y-4">
                   {isCompleted ? (
-                    <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-100 dark:bg-green-950/20 dark:border-green-900">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
-                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-100 dark:bg-green-950/20 dark:border-green-900">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-700 dark:text-green-400">此任務已完成</p>
+                          {(task.completedAt || optimisticCompleted) && (
+                            <p className="text-sm text-green-600/70 dark:text-green-400/70 mt-0.5">
+                              完成於 {new Date(task.completedAt || completedDate).toLocaleDateString('zh-TW')}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-green-700 dark:text-green-400">此任務已完成</p>
-                        {task.completedAt && (
-                          <p className="text-sm text-green-600/70 dark:text-green-400/70 mt-0.5">
-                            完成於 {new Date(task.completedAt).toLocaleDateString('zh-TW')}
-                          </p>
-                        )}
-                      </div>
+                      {!readOnly && !hasSubtasks && (
+                        <Button size="sm" variant="outline" className="gap-1.5 text-muted-foreground" onClick={handleUncompleteTask}>
+                          <Undo2 className="h-3.5 w-3.5" />
+                          取消完成
+                        </Button>
+                      )}
                     </div>
                   ) : !showActions ? (
                     /* Step 1: Input form */
@@ -1452,15 +1477,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
             </div>
           )}
 
-          {/* Bottom bar: undo for completed tasks (not for parent tasks with subtasks) */}
-          {!readOnly && isCompleted && !hasSubtasks && (
-            <div className="px-6 py-3 border-t flex items-center bg-muted/20 shrink-0">
-              <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={handleUncompleteTask}>
-                <Undo2 className="h-3.5 w-3.5" />
-                取消完成
-              </Button>
-            </div>
-          )}
+
         </SheetContent>
       </Sheet>
 

@@ -1,8 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Sheet,
@@ -12,15 +15,20 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet'
 import { type Task, type Milestone, type TaskLog, type Project } from '@/lib/mock-data'
+import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 import {
+  ArrowLeft,
   Calendar,
+  CalendarClock,
   Clock,
   Flag,
   ListChecks,
+  Send,
   TrendingDown,
   TrendingUp,
   Minus,
+  Undo2,
 } from 'lucide-react'
 
 interface MilestoneDetailSheetProps {
@@ -29,6 +37,8 @@ interface MilestoneDetailSheetProps {
   milestone: Milestone | null
   project: Project
   onTaskClick?: (task: Task) => void
+  onTaskUpdate?: () => void
+  readOnly?: boolean
 }
 
 const AVATAR_COLORS = [
@@ -43,7 +53,17 @@ export function MilestoneDetailSheet({
   milestone,
   project,
   onTaskClick,
+  onTaskUpdate,
+  readOnly,
 }: MilestoneDetailSheetProps) {
+  const { user } = useAuth()
+
+  // Extension/delay request state
+  const [showExtensionForm, setShowExtensionForm] = useState(false)
+  const [extensionReason, setExtensionReason] = useState('')
+  const [extensionDate, setExtensionDate] = useState('')
+  const [extensionSupport, setExtensionSupport] = useState('')
+  const [submittingExtension, setSubmittingExtension] = useState(false)
   // Tasks belonging to this milestone (parent tasks only)
   const msTasks = useMemo(() => {
     if (!milestone) return []
@@ -136,6 +156,75 @@ export function MilestoneDetailSheet({
     }
   }, [milestone, msTasks, allMsTasks, earliestLogDateMap])
 
+  // Check pending delay for this milestone
+  const hasPendingDelay = useMemo(() => {
+    if (!milestone) return false
+    return (project as Record<string, unknown>).pendingDelayMilestoneIds
+      ? ((project as Record<string, unknown>).pendingDelayMilestoneIds as string[]).includes(milestone.id)
+      : project.delayRequests?.some(dr =>
+          dr.status === 'pending' &&
+          dr.affectedMilestones?.some(am => am.milestoneId === milestone.id)
+        ) ?? false
+  }, [milestone, project])
+
+  // Is milestone overdue?
+  const isMilestoneOverdue = useMemo(() => {
+    if (!milestone || milestone.progress >= 100) return false
+    return new Date() > new Date(milestone.dueDate)
+  }, [milestone])
+
+  // Handler: undo completion for a task
+  const handleUncompleteTask = async (task: Task) => {
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'in_progress', progress: 0 }),
+      })
+      if (!res.ok) throw new Error()
+      onTaskUpdate?.()
+    } catch {
+      // ignore
+    }
+  }
+
+  // Handler: submit delay request for this milestone
+  const handleSubmitExtension = async () => {
+    if (!milestone || !user) return
+    setSubmittingExtension(true)
+    try {
+      const res = await fetch('/api/delay-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          requesterId: user.id,
+          reason: extensionReason.trim(),
+          canCatchUp: false,
+          supportNeeded: extensionSupport.trim() || '',
+          affectedMilestones: [{
+            milestoneId: milestone.id,
+            originalDate: milestone.dueDate,
+            proposedDate: extensionDate || milestone.dueDate,
+          }],
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '送出失敗')
+      }
+      setShowExtensionForm(false)
+      setExtensionReason('')
+      setExtensionDate('')
+      setExtensionSupport('')
+      onTaskUpdate?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '送出延期申請失敗')
+    } finally {
+      setSubmittingExtension(false)
+    }
+  }
+
   if (!milestone) return null
 
   const fmtDate = (d: string) =>
@@ -175,7 +264,7 @@ export function MilestoneDetailSheet({
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="pb-4 border-b">
           <div className="flex items-center gap-2">
-            <SheetTitle className="text-lg">{milestone.name}</SheetTitle>
+            <SheetTitle className="text-lg flex-1 min-w-0">{milestone.name}</SheetTitle>
             {getMsStatusBadge(milestone.status)}
           </div>
           <SheetDescription className="sr-only">里程碑詳情</SheetDescription>
@@ -270,7 +359,7 @@ export function MilestoneDetailSheet({
             </div>
           )}
 
-          {/* Status breakdown */}
+          {/* Status breakdown + delay request button */}
           {stats && (
             <div className="flex items-center gap-2 flex-wrap">
               {stats.inProgressCount > 0 && (
@@ -293,6 +382,91 @@ export function MilestoneDetailSheet({
                   待辦 {stats.todoCount}
                 </Badge>
               )}
+              {/* Delay request button */}
+              {!readOnly && isMilestoneOverdue && milestone.progress < 100 && !hasPendingDelay && !showExtensionForm && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto gap-1 text-xs h-6 px-2 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-950/30"
+                  onClick={() => setShowExtensionForm(true)}
+                >
+                  <CalendarClock className="h-3 w-3" />
+                  提出延期
+                </Button>
+              )}
+              {!readOnly && hasPendingDelay && (
+                <Badge className="ml-auto text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 gap-1">
+                  <Clock className="h-3 w-3" />
+                  延期審核中
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Extension form (shown when "提出延期" button clicked) */}
+          {!readOnly && showExtensionForm && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/10 p-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">
+                  <CalendarClock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <span className="text-sm font-medium">申請延期</span>
+              </div>
+              <div>
+                <Label className="text-sm text-muted-foreground">延遲原因 <span className="text-red-500">*</span></Label>
+                <Textarea
+                  placeholder="說明延遲的原因..."
+                  value={extensionReason}
+                  onChange={e => setExtensionReason(e.target.value)}
+                  rows={2}
+                  className="text-sm mt-1.5 rounded-lg"
+                />
+              </div>
+              <div>
+                <Label className="text-sm text-muted-foreground">建議新日期</Label>
+                <input
+                  type="date"
+                  value={extensionDate}
+                  onChange={e => setExtensionDate(e.target.value)}
+                  min={milestone.dueDate}
+                  className="w-full text-sm border rounded-lg px-2.5 py-1.5 mt-1.5 bg-background"
+                />
+              </div>
+              <div>
+                <Label className="text-sm text-muted-foreground">需要協助</Label>
+                <Textarea
+                  placeholder="選填，說明是否需要額外資源或支援..."
+                  value={extensionSupport}
+                  onChange={e => setExtensionSupport(e.target.value)}
+                  rows={2}
+                  className="text-sm mt-1.5 rounded-lg"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 rounded-lg"
+                  onClick={() => {
+                    setShowExtensionForm(false)
+                    setExtensionReason('')
+                    setExtensionDate('')
+                    setExtensionSupport('')
+                  }}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  取消
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 flex-1 rounded-lg shadow-sm"
+                  disabled={!extensionReason.trim() || submittingExtension}
+                  onClick={handleSubmitExtension}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  送出延期申請
+                </Button>
+              </div>
             </div>
           )}
 
@@ -372,6 +546,16 @@ export function MilestoneDetailSheet({
                               逾期{Math.round((new Date().getTime() - plannedEndDate.getTime()) / (1000 * 60 * 60 * 24))}天
                             </span>
                           ) : null}
+                          {/* Undo completion for completed tasks (no subtasks) */}
+                          {!readOnly && status === 'done' && subtasks.length === 0 && (
+                            <button
+                              className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              onClick={(e) => { e.stopPropagation(); handleUncompleteTask(task) }}
+                            >
+                              <Undo2 className="h-3 w-3" />
+                              取消完成
+                            </button>
+                          )}
                         </div>
                       </div>
 
