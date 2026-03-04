@@ -175,17 +175,22 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return { start: earliest, end: ms.dueDate }
   }
 
+  // Helper: get actual start for a single task (earliest log date, or completedAt as fallback)
+  const getTaskActualStart = useCallback((t: Task): string | null => {
+    return earliestLogDateMap.get(t.id) || t.completedAt || null
+  }, [earliestLogDateMap])
+
   // Helper: compute milestone actual start (earliest actual start among its tasks)
   const getMilestoneActualStart = useCallback((msTasks: Task[]) => {
     let earliest: string | null = null
     for (const t of msTasks) {
-      const actualStart = earliestLogDateMap.get(t.id)
+      const actualStart = getTaskActualStart(t)
       if (actualStart && (!earliest || actualStart < earliest)) {
         earliest = actualStart
       }
     }
     return earliest
-  }, [earliestLogDateMap])
+  }, [getTaskActualStart])
 
   const formatDate = (d: string) => {
     return new Date(d).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
@@ -772,7 +777,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           const isDone = effectiveStatus(t) === 'done'
           const plannedStart = new Date(t.startDate)
           const plannedEnd = new Date(t.endDate)
-          const actualStartStr = earliestLogDateMap.get(t.id)
+          const actualStartStr = getTaskActualStart(t)
           const actualStart = actualStartStr ? new Date(actualStartStr) : null
           const actualEnd = t.completedAt ? new Date(t.completedAt) : null
           const diffDays = actualEnd
@@ -839,12 +844,13 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           const doneCount = msTks.filter(t => effectiveStatus(t) === 'done').length
           const msActualStartStr = getMilestoneActualStart(msTks)
           const msActualStart = msActualStartStr ? new Date(msActualStartStr) : null
-          // Latest completion among tasks
-          const latestCompletion = msTks.reduce<Date | null>((latest, t) => {
+          // Latest completion among tasks (only meaningful when ALL tasks are done)
+          const allTasksDone = msTks.length > 0 && msTks.every(t => t.completedAt)
+          const latestCompletion = allTasksDone ? msTks.reduce<Date | null>((latest, t) => {
             if (!t.completedAt) return latest
             const d = new Date(t.completedAt)
             return !latest || d > latest ? d : latest
-          }, null)
+          }, null) : null
           const plannedEnd = new Date(ms.dueDate)
           const diffDays = ms.progress >= 100 && latestCompletion
             ? Math.round((plannedEnd.getTime() - latestCompletion.getTime()) / (1000 * 60 * 60 * 24))

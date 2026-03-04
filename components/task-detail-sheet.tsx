@@ -910,6 +910,19 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                               <p className="text-[11px] text-muted-foreground">需完成所有子任務</p>
                             </div>
                           </div>
+                        ) : taskLogs.length === 0 ? (
+                          <button
+                            className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 text-left opacity-60 cursor-not-allowed"
+                            onClick={() => {
+                              setShowActions(false)
+                            }}
+                          >
+                            <CircleCheck className="h-5 w-5 shrink-0 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm font-medium text-muted-foreground">標記完成</p>
+                              <p className="text-[11px] text-amber-600 dark:text-amber-400">請先填寫至少一筆紀錄</p>
+                            </div>
+                          </button>
                         ) : (
                           <button
                             className="group flex items-center gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all text-left"

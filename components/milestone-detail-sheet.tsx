@@ -116,20 +116,23 @@ export function MilestoneDetailSheet({
     const blockedCount = msTasks.filter(t => t.status === 'blocked').length
     const todoCount = msTasks.filter(t => t.status === 'todo' && t.progress === 0).length
 
-    // Actual start: earliest log date among all tasks in this milestone
+    // Actual start: earliest log date among all tasks (fallback to completedAt for tasks with no logs)
     let actualStart: string | null = null
     for (const t of allMsTasks) {
-      const logDate = earliestLogDateMap.get(t.id)
-      if (logDate && (!actualStart || logDate < actualStart)) {
-        actualStart = logDate
+      const taskStart = earliestLogDateMap.get(t.id) || t.completedAt || null
+      if (taskStart && (!actualStart || taskStart < actualStart)) {
+        actualStart = taskStart
       }
     }
 
-    // Actual end: latest completedAt among parent tasks
+    // Actual end: latest completedAt among parent tasks (only when ALL tasks are done)
     let actualEnd: string | null = null
-    for (const t of msTasks) {
-      if (t.completedAt && (!actualEnd || t.completedAt > actualEnd)) {
-        actualEnd = t.completedAt
+    const allTasksDone = msTasks.length > 0 && msTasks.every(t => t.completedAt)
+    if (allTasksDone) {
+      for (const t of msTasks) {
+        if (t.completedAt && (!actualEnd || t.completedAt > actualEnd)) {
+          actualEnd = t.completedAt
+        }
       }
     }
 
