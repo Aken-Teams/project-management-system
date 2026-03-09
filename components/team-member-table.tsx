@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { createPortal } from 'react-dom'
 import { Plus, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -85,7 +84,6 @@ function NameAutocompleteInput({
   const [isSearching, setIsSearching] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const excludeRef = useRef(excludeEmails)
   excludeRef.current = excludeEmails
@@ -102,7 +100,7 @@ function NameAutocompleteInput({
     setShowDropdown(true)
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/users/search?q=${encodeURIComponent(query.trim())}&limit=6`)
+        const res = await fetch(`/api/ad-users/search?q=${encodeURIComponent(query.trim())}&limit=6`)
         if (res.ok) {
           const data: SearchResult[] = await res.json()
           const ex = excludeRef.current
@@ -129,11 +127,7 @@ function NameAutocompleteInput({
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node
-      if (
-        wrapperRef.current && !wrapperRef.current.contains(target) &&
-        (!dropdownRef.current || !dropdownRef.current.contains(target))
-      ) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setShowDropdown(false)
       }
     }
@@ -189,9 +183,8 @@ function NameAutocompleteInput({
         className={className}
       />
 
-      {showDropdown && value.trim() && createPortal(
+      {showDropdown && value.trim() && (
         <div
-          ref={dropdownRef}
           className="fixed z-50 rounded-md border bg-popover shadow-md overflow-hidden"
           style={{ top: dropdownPos.top, left: dropdownPos.left, width: Math.max(dropdownPos.width, 260) }}
         >
@@ -206,10 +199,8 @@ function NameAutocompleteInput({
                   idx === highlightIdx ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50'
                 }`}
                 onMouseEnter={() => setHighlightIdx(idx)}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  selectUser(user)
-                }}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectUser(user)}
               >
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
                   {user.name.charAt(0)}
@@ -217,9 +208,7 @@ function NameAutocompleteInput({
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{user.name}</div>
                   <div className="truncate text-sm text-muted-foreground">
-                    {user.email}
-                    {user.jobTitle && ` · ${user.jobTitle}`}
-                    {user.organization && ` · ${user.organization}`}
+                    {user.organization && `· ${user.organization}`}
                   </div>
                 </div>
               </button>
@@ -229,8 +218,7 @@ function NameAutocompleteInput({
               找不到匹配的使用者，按 Enter 手動新增
             </div>
           )}
-        </div>,
-        document.body,
+        </div>
       )}
     </div>
   )
@@ -261,11 +249,19 @@ function MemberRow({
           value={member.name}
           excludeEmails={excludeEmails}
           onChange={(val) => onUpdate(member.id, 'name', val)}
-          onSelect={(user) => {
+          onSelect={async (user) => {
             onUpdate(member.id, 'name', user.name)
             onUpdate(member.id, 'jobTitle', user.jobTitle || '')
             onUpdate(member.id, 'organization', user.organization || '')
-            onUpdate(member.id, 'email', user.email)
+            // Fetch email in background
+            try {
+              const res = await fetch(`/api/ad-users/${encodeURIComponent(user.id)}`)
+              if (res.ok) {
+                const detail = await res.json()
+                onUpdate(member.id, 'email', detail.email || '')
+                if (detail.organization) onUpdate(member.id, 'organization', detail.organization)
+              }
+            } catch { /* keep empty */ }
           }}
           className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5 min-w-0"
         />
@@ -385,10 +381,22 @@ function InlineMemberInput({
           excludeEmails={excludeEmails}
           onChange={(val) => { setName(val); setJobTitle(''); setOrganization(''); setEmail('') }}
           onSelect={(user) => {
-            setName(user.name)
-            setJobTitle(user.jobTitle || '')
-            setOrganization(user.organization || '')
-            setEmail(user.email)
+            // Immediately add the member to the table
+            onAdd({
+              id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name: user.name,
+              role,
+              jobTitle: user.jobTitle || undefined,
+              responsibility: responsibility.trim(),
+              organization: user.organization || undefined,
+              email: undefined,
+            })
+            setName('')
+            setRole('R')
+            setJobTitle('')
+            setResponsibility('')
+            setOrganization('')
+            setEmail('')
           }}
           onKeyDown={handleKeyDown}
           placeholder="+ 新增成員..."

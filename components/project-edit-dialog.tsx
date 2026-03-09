@@ -176,7 +176,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // Snapshot of original data for diff on save
   const [origMilestones] = useState(() =>
-    (project.milestones ?? []).map(m => ({ id: m.id, name: m.name, dueDate: m.dueDate }))
+    (project.milestones ?? []).map(m => ({ id: m.id, name: m.name, dueDate: m.dueDate ? m.dueDate.split('T')[0] : m.dueDate }))
   )
   const [origTasks] = useState(() =>
     (project.tasks ?? []).map(t => ({
@@ -508,14 +508,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // ─── Team member API calls ────────────────────────────────
 
-  const handleAddMember = useCallback(async (user: { name: string; email?: string }, role: string, jobTitle: string, organization: string, responsibility: string) => {
+  const handleAddMember = useCallback(async (user: { name: string; email?: string; adId?: string }, role: string, jobTitle: string, organization: string, responsibility: string) => {
     setTeamError('')
     setTeamLoading('adding')
     try {
       const res = await fetch(`/api/projects/${project.id}/team`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: user.name, email: user.email, role, jobTitle, organization, responsibility }),
+        body: JSON.stringify({ name: user.name, email: user.email, adId: user.adId, role, jobTitle, organization, responsibility }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -715,7 +715,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent
+        className="sm:max-w-4xl max-h-[90vh] flex flex-col"
+      >
         <DialogHeader className="shrink-0">
           <DialogTitle>編輯專案</DialogTitle>
           <DialogDescription>
@@ -1293,7 +1295,7 @@ function TeamMemberAddRow({
   loading,
 }: {
   existingEmails: Set<string>
-  onAdd: (user: { name: string; email?: string }, role: string, jobTitle: string, organization: string, responsibility: string) => void
+  onAdd: (user: { name: string; email?: string; adId?: string }, role: string, jobTitle: string, organization: string, responsibility: string) => void
   loading: boolean
 }) {
   const [name, setName] = useState('')
@@ -1305,7 +1307,7 @@ function TeamMemberAddRow({
 
   const handleAdd = () => {
     if (!name.trim()) return
-    onAdd({ name: name.trim(), email: email || undefined }, role, jobTitle.trim(), organization.trim(), responsibility.trim())
+    onAdd({ name: name.trim(), email: email || undefined, adId: undefined }, role, jobTitle.trim(), organization.trim(), responsibility.trim())
     setName('')
     setEmail('')
     setJobTitle('')
@@ -1328,11 +1330,15 @@ function TeamMemberAddRow({
         <TeamMemberAutocomplete
           value={name}
           onChange={(val: string) => { setName(val); setEmail(''); setJobTitle(''); setOrganization('') }}
-          onSelect={(user: { name: string; email: string; jobTitle?: string; organization: string }) => {
-            setName(user.name)
-            setEmail(user.email)
-            setJobTitle(user.jobTitle || '')
-            setOrganization(user.organization || '')
+          onSelect={(user: { id?: string; name: string; email: string; jobTitle?: string; organization: string }) => {
+            // Immediately add the member (pass adId = AD username for stable DB identity)
+            onAdd({ name: user.name, email: user.email || undefined, adId: user.id }, role, user.jobTitle || '', user.organization || '', responsibility.trim())
+            setName('')
+            setEmail('')
+            setJobTitle('')
+            setOrganization('')
+            setRole('R')
+            setResponsibility('')
           }}
           onKeyDown={handleKeyDown}
           excludeEmails={existingEmails}

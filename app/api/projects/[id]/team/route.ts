@@ -11,6 +11,7 @@ interface AddMemberBody {
   userId?: string
   name?: string
   email?: string
+  adId?: string   // AD username — used to generate stable placeholder email
   role: string
   jobTitle?: string
   organization?: string
@@ -47,7 +48,23 @@ export async function POST(
     }
 
     if (!userId) {
-      return NextResponse.json({ error: '找不到該使用者' }, { status: 400 })
+      // Auto-create user from AD / external system so they can be added to projects
+      const autoEmail = body.email && body.email.includes('@')
+        ? body.email
+        : body.adId
+          ? `${body.adId}@ad.panjit.local`
+          : `_ad_.${(body.name ?? 'user').replace(/\s+/g, '.').toLowerCase()}@ad.panjit.local`
+      const upserted = await prisma.user.upsert({
+        where: { email: autoEmail },
+        update: {},
+        create: {
+          name: body.name ?? '',
+          email: autoEmail,
+          jobTitle: body.jobTitle?.trim() ?? '',
+          organization: body.organization?.trim() ?? '',
+        },
+      })
+      userId = upserted.id
     }
 
     // Check not already a member
