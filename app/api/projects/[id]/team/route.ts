@@ -3,6 +3,23 @@ import { prisma } from '@/lib/db'
 import { toDbEnum } from '@/lib/enum-mappers'
 import type { TeamRole as DbTeamRole } from '@prisma/client'
 
+const AD_URL = process.env.AD_URL!
+const AD_API = process.env.AD_API!
+
+async function fetchAdEmail(adId: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${AD_URL}/api/v1/ldap/users/${encodeURIComponent(adId)}`,
+      { headers: { 'X-API-Key': AD_API } }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.user?.mail || null
+  } catch {
+    return null
+  }
+}
+
 type RouteContext = { params: Promise<{ id: string }> }
 
 // ─── POST /api/projects/[id]/team — Add member to project ────
@@ -49,11 +66,14 @@ export async function POST(
 
     if (!userId) {
       // Auto-create user from AD / external system so they can be added to projects
-      const autoEmail = body.email && body.email.includes('@')
-        ? body.email
-        : body.adId
+      let resolvedEmail = body.email && body.email.includes('@') ? body.email : null
+      if (!resolvedEmail && body.adId) {
+        resolvedEmail = await fetchAdEmail(body.adId)
+      }
+      const autoEmail = resolvedEmail
+        ?? (body.adId
           ? `${body.adId}@ad.panjit.local`
-          : `_ad_.${(body.name ?? 'user').replace(/\s+/g, '.').toLowerCase()}@ad.panjit.local`
+          : `_ad_.${(body.name ?? 'user').replace(/\s+/g, '.').toLowerCase()}@ad.panjit.local`)
       const upserted = await prisma.user.upsert({
         where: { email: autoEmail },
         update: {},
