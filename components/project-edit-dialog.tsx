@@ -1231,22 +1231,24 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           )}
 
           <div className="rounded-lg border overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
               <span>里程碑</span>
-              <span className="text-center">原預定日</span>
-              <span className="text-center">新預定日</span>
-              <span className="text-center">天數</span>
+              <span>日期變更</span>
+              <span className="text-right">天數</span>
             </div>
             {affectedMilestoneDates.map((am) => {
               const days = Math.ceil(
                 (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
               )
               return (
-                <div key={am.milestoneId} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 border-t text-sm">
+                <div key={am.milestoneId} className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center px-3 py-2 border-t text-sm">
                   <span className="font-medium truncate">{am.milestoneName}</span>
-                  <span className="text-muted-foreground tabular-nums text-xs">{am.originalDate}</span>
-                  <span className="text-amber-600 dark:text-amber-400 font-medium tabular-nums text-xs">{am.proposedDate}</span>
-                  <span className={`text-xs tabular-nums font-medium ${days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                  <div className="flex items-center gap-1.5 tabular-nums text-xs whitespace-nowrap">
+                    <span className="text-muted-foreground line-through">{am.originalDate}</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">{am.proposedDate}</span>
+                  </div>
+                  <span className={`text-xs tabular-nums font-medium text-right ${days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                     {days > 0 ? `+${days}` : days}天
                   </span>
                 </div>
