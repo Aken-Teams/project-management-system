@@ -174,10 +174,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     proposedDate: string
   }>>([])
 
-  // Snapshot of original data for diff on save
-  const [origMilestones] = useState(() =>
-    (project.milestones ?? []).map(m => ({ id: m.id, name: m.name, dueDate: m.dueDate ? m.dueDate.split('T')[0] : m.dueDate }))
-  )
+  // Snapshot of original data for diff on save.
+  // Use calculated endDates (not raw DB dueDate) so that stale DB values
+  // (e.g. after a project startDate change was approved) don't cause false positives.
+  const [origMilestones] = useState(() => {
+    const initRecalc = calculateMilestoneDates(tlInit.milestones, project.startDate, tlInit.tasks)
+    return initRecalc.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.endDate || '' }))
+  })
   const [origTasks] = useState(() =>
     (project.tasks ?? []).map(t => ({
       id: t.id, milestoneId: t.milestoneId, title: t.title,
