@@ -60,8 +60,8 @@ export async function GET(request: NextRequest) {
       .map(m => ({
         id: m.username,
         name: m.displayName,
-        email: '',          // fetched on demand via /api/ad-users/[username]
-        jobTitle: '',       // not available from AD
+        email: '',
+        jobTitle: '',
         organization: m.dept,
       }))
 

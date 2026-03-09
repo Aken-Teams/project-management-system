@@ -249,19 +249,11 @@ function MemberRow({
           value={member.name}
           excludeEmails={excludeEmails}
           onChange={(val) => onUpdate(member.id, 'name', val)}
-          onSelect={async (user) => {
+          onSelect={(user) => {
             onUpdate(member.id, 'name', user.name)
             onUpdate(member.id, 'jobTitle', user.jobTitle || '')
             onUpdate(member.id, 'organization', user.organization || '')
-            // Fetch email in background
-            try {
-              const res = await fetch(`/api/ad-users/${encodeURIComponent(user.id)}`)
-              if (res.ok) {
-                const detail = await res.json()
-                onUpdate(member.id, 'email', detail.email || '')
-                if (detail.organization) onUpdate(member.id, 'organization', detail.organization)
-              }
-            } catch { /* keep empty */ }
+            onUpdate(member.id, 'email', user.email || '')
           }}
           className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5 min-w-0"
         />
@@ -389,7 +381,7 @@ function InlineMemberInput({
               jobTitle: user.jobTitle || undefined,
               responsibility: responsibility.trim(),
               organization: user.organization || undefined,
-              email: undefined,
+              email: user.email || undefined,
             })
             setName('')
             setRole('R')
