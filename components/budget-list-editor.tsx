@@ -70,6 +70,7 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
   const { toast } = useToast()
   const [parsing, setParsing] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const update = (index: number, field: keyof BudgetItem, value: string | number | null) => {
@@ -218,6 +219,32 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
           <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={addRow}>
             <Plus className="h-3 w-3 mr-1" />新增
           </Button>
+          {hasItems && (
+            confirmClear ? (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-destructive">確定清空？</span>
+                <Button
+                  type="button" variant="destructive" size="sm" className="h-7 text-xs px-2"
+                  onClick={() => { onChange([]); setConfirmClear(false) }}
+                >
+                  確定
+                </Button>
+                <Button
+                  type="button" variant="ghost" size="sm" className="h-7 text-xs px-2"
+                  onClick={() => setConfirmClear(false)}
+                >
+                  取消
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button" variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive"
+                onClick={() => setConfirmClear(true)}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />清空
+              </Button>
+            )
+          )}
         </div>
       </div>
 

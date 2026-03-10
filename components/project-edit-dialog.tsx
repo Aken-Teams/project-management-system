@@ -923,16 +923,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-roi">投資報酬 (ROI)</Label>
-              <Textarea
-                id="edit-roi"
-                value={form.roi}
-                onChange={e => update('roi', e.target.value)}
-                rows={2}
-              />
-            </div>
-
-            <div className="space-y-1.5">
               <Label htmlFor="edit-benefits">預期效益</Label>
               <Textarea
                 id="edit-benefits"

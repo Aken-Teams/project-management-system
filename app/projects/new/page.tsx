@@ -1468,16 +1468,6 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="ai-roi">投資報酬 (ROI)</Label>
-                    <Textarea
-                      id="ai-roi"
-                      value={aiEditableData.roi}
-                      onChange={(e) => setAiEditableData({ ...aiEditableData, roi: e.target.value })}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
                     <Label htmlFor="ai-expected-benefits">預期效益</Label>
                     <Textarea
                       id="ai-expected-benefits"
@@ -1995,17 +1985,6 @@ export default function NewProjectPage() {
                       value={manualData.scope}
                       onChange={(e) => setManualData({ ...manualData, scope: e.target.value })}
                       rows={3}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="roi">投資報酬 (ROI)</Label>
-                    <Textarea
-                      id="roi"
-                      placeholder="描述預期的投資報酬"
-                      value={manualData.roi}
-                      onChange={(e) => setManualData({ ...manualData, roi: e.target.value })}
-                      rows={2}
                     />
                   </div>
 

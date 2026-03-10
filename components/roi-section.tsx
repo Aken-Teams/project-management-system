@@ -280,8 +280,6 @@ export function RoiSection({
         )}
       </div>
 
-      {/* ─── ROI text from DB ─── */}
-      {roiText && <p className="text-sm text-muted-foreground mb-3">{roiText}</p>}
 
       {/* ══════════ EDIT MODE ══════════ */}
       {editing && (

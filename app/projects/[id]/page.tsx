@@ -365,7 +365,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4 mt-0">
-            <div className="grid gap-4 lg:grid-cols-5">
+            <div className="grid gap-4 lg:grid-cols-5 items-start">
               {/* Project Info - Left 3 cols */}
               <Card className="lg:col-span-3">
                 <CardHeader className="pb-3">
@@ -397,6 +397,15 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       </div>
                       <p className="text-sm">{project.scope}</p>
                     </div>
+                    {project.expectedBenefits && (
+                      <div className="py-3">
+                        <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <TrendingUp className="h-3 w-3" />
+                          預期效益
+                        </div>
+                        <p className="text-sm">{project.expectedBenefits}</p>
+                      </div>
+                    )}
                     <div className="py-3 last:pb-0">
                       <RoiSection
                         projectId={id}
@@ -489,7 +498,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       團隊成員
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).map(member => {
+                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).slice().sort((a, b) => (a.role === 'A' ? -1 : b.role === 'A' ? 1 : 0)).map(member => {
                         const roleLabel = TEAM_ROLE_LABELS[member.role as TeamRole] || member.role
                         const isAccountable = member.role === 'A'
                         return (
