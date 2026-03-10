@@ -229,45 +229,94 @@ export default function AdminNotificationsPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">通知訊息範本</CardTitle>
-                  <CardDescription className="text-xs">輸入 <code className="bg-muted px-1 rounded">{'{{'}</code> 可自動補全變數</CardDescription>
+                  <CardDescription className="text-xs">輸入 <code className="bg-muted px-1 rounded">{'{{'}</code> 可自動補全以下變數</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Missing upload */}
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded">週報未上傳時（站內通知 + Email）</p>
+                <CardContent className="space-y-4">
+                  {/* Variable reference — shown once */}
+                  <div className="flex flex-wrap gap-1.5 rounded-md border border-dashed bg-muted/20 px-3 py-2">
+                    <span className="self-center text-xs text-muted-foreground mr-1">可用變數：</span>
+                    {NOTIF_VARIABLES.map(v => (
+                      <span key={v.name} className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 font-mono">
+                        {`{{${v.name}}}`}
+                        <span className="text-blue-500 font-sans ml-0.5">= {v.label}</span>
+                      </span>
+                    ))}
+                  </div>
 
-                    {/* In-app notification */}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Bell className="h-3 w-3" />
-                      <span>站內通知</span>
+                  {/* 站內通知 section */}
+                  <div className="rounded-lg border border-amber-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border-b border-amber-200">
+                      <Bell className="h-3.5 w-3.5 text-amber-600" />
+                      <span className="text-xs font-medium text-amber-700">站內通知</span>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">通知標題</Label>
-                      <Input
-                        value={settings['notification.template.weekly_upload_missing.title']}
-                        onChange={e => set('notification.template.weekly_upload_missing.title', e.target.value)}
-                        className="h-9 text-sm"
-                        onFocus={() => { setPreviewType('missing'); setPreviewChannel('app') }}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">通知內容</Label>
-                      <TemplateTextarea
-                        value={settings['notification.template.weekly_upload_missing.message']}
-                        onChange={v => set('notification.template.weekly_upload_missing.message', v)}
-                        variables={NOTIF_VARIABLES}
-                        rows={2}
-                        showPreview={false}
-                        onFocus={() => { setPreviewType('missing'); setPreviewChannel('app') }}
-                      />
-                    </div>
-
-                    {/* Email notification */}
-                    <div className="border-t pt-3 space-y-3">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Mail className="h-3 w-3" />
-                        <span>Email 通知</span>
+                    <div className="p-4 space-y-4">
+                      {/* 未上傳 */}
+                      <div className="space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                          週報未上傳時
+                        </p>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">通知標題</Label>
+                          <Input
+                            value={settings['notification.template.weekly_upload_missing.title']}
+                            onChange={e => set('notification.template.weekly_upload_missing.title', e.target.value)}
+                            className="h-9 text-sm"
+                            onFocus={() => { setPreviewType('missing'); setPreviewChannel('app') }}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">通知內容</Label>
+                          <TemplateTextarea
+                            value={settings['notification.template.weekly_upload_missing.message']}
+                            onChange={v => set('notification.template.weekly_upload_missing.message', v)}
+                            variables={NOTIF_VARIABLES}
+                            rows={2}
+                            showPreview={false}
+                            showVariableChips={false}
+                            onFocus={() => { setPreviewType('missing'); setPreviewChannel('app') }}
+                          />
+                        </div>
                       </div>
+                      {/* 已上傳 */}
+                      <div className="border-t pt-3 space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                          週報已上傳時
+                        </p>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">通知標題</Label>
+                          <Input
+                            value={settings['notification.template.weekly_report_ready.title']}
+                            onChange={e => set('notification.template.weekly_report_ready.title', e.target.value)}
+                            className="h-9 text-sm"
+                            onFocus={() => { setPreviewType('ready'); setPreviewChannel('app') }}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">通知內容</Label>
+                          <TemplateTextarea
+                            value={settings['notification.template.weekly_report_ready.message']}
+                            onChange={v => set('notification.template.weekly_report_ready.message', v)}
+                            variables={NOTIF_VARIABLES}
+                            rows={2}
+                            showPreview={false}
+                            showVariableChips={false}
+                            onFocus={() => { setPreviewType('ready'); setPreviewChannel('app') }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email 通知 section */}
+                  <div className="rounded-lg border border-blue-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border-b border-blue-200">
+                      <Mail className="h-3.5 w-3.5 text-blue-600" />
+                      <span className="text-xs font-medium text-blue-700">Email 通知</span>
+                      <span className="ml-auto text-xs text-blue-400">僅「週報未上傳時」發送</span>
+                    </div>
+                    <div className="p-4 space-y-3">
                       <div className="space-y-1.5">
                         <Label className="text-xs">信件主旨</Label>
                         <TemplateTextarea
@@ -276,6 +325,7 @@ export default function AdminNotificationsPage() {
                           variables={NOTIF_VARIABLES}
                           singleLine
                           showPreview={false}
+                          showVariableChips={false}
                           onFocus={() => { setPreviewType('missing'); setPreviewChannel('email') }}
                         />
                       </div>
@@ -287,34 +337,10 @@ export default function AdminNotificationsPage() {
                           variables={NOTIF_VARIABLES}
                           rows={4}
                           showPreview={false}
+                          showVariableChips={false}
                           onFocus={() => { setPreviewType('missing'); setPreviewChannel('email') }}
                         />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Report ready */}
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded">週報已上傳時（僅站內通知）</p>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">通知標題</Label>
-                      <Input
-                        value={settings['notification.template.weekly_report_ready.title']}
-                        onChange={e => set('notification.template.weekly_report_ready.title', e.target.value)}
-                        className="h-9 text-sm"
-                        onFocus={() => { setPreviewType('ready'); setPreviewChannel('app') }}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">通知內容</Label>
-                      <TemplateTextarea
-                        value={settings['notification.template.weekly_report_ready.message']}
-                        onChange={v => set('notification.template.weekly_report_ready.message', v)}
-                        variables={NOTIF_VARIABLES}
-                        rows={2}
-                        showPreview={false}
-                        onFocus={() => { setPreviewType('ready'); setPreviewChannel('app') }}
-                      />
                     </div>
                   </div>
                 </CardContent>

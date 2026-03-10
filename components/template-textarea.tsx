@@ -18,6 +18,7 @@ interface TemplateTextareaProps {
   className?: string
   singleLine?: boolean
   showPreview?: boolean
+  showVariableChips?: boolean
   onFocus?: () => void
 }
 
@@ -79,6 +80,7 @@ export function TemplateTextarea({
   className,
   singleLine = false,
   showPreview = true,
+  showVariableChips = true,
   onFocus,
 }: TemplateTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -289,19 +291,21 @@ export function TemplateTextarea({
   return (
     <div className={cn('space-y-2', className)}>
       {/* Variable chips */}
-      <div className="flex flex-wrap gap-1">
-        {variables.map(v => (
-          <button
-            key={v.name}
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors font-mono"
-            onClick={() => insertAtCursor(v.name)}
-          >
-            {`{{${v.name}}}`}
-            <span className="text-blue-500 font-sans ml-0.5">= {v.label}</span>
-          </button>
-        ))}
-      </div>
+      {showVariableChips && (
+        <div className="flex flex-wrap gap-1">
+          {variables.map(v => (
+            <button
+              key={v.name}
+              type="button"
+              className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors font-mono"
+              onClick={() => insertAtCursor(v.name)}
+            >
+              {`{{${v.name}}}`}
+              <span className="text-blue-500 font-sans ml-0.5">= {v.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {singleLine ? (
         /* Single-line: same backdrop overlay technique as textarea */
