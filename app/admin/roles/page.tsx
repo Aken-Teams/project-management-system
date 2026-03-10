@@ -1,8 +1,8 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
-import { CheckCircle2, XCircle, Info } from 'lucide-react'
+import { CheckCircle2, XCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PermissionRow {
@@ -14,11 +14,22 @@ interface PermissionRow {
   admin: boolean
 }
 
-const PERMISSIONS: { category: string; rows: PermissionRow[] }[] = [
+const CAT_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-400' },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-400' },
+  violet:  { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-400' },
+  red:     { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-400' },
+  amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-400' },
+  teal:    { bg: 'bg-teal-50',    text: 'text-teal-700',    border: 'border-teal-400' },
+  slate:   { bg: 'bg-slate-100',  text: 'text-slate-600',   border: 'border-slate-400' },
+}
+
+const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] = [
   {
     category: '專案',
+    color: 'blue',
     rows: [
-      { label: '查看所有專案', description: '可瀏覽所有專案的基本資訊', member: false, executive: true, pm: true, admin: true },
+      { label: '查看所有專案', description: '可瀏覽所有專案的基本資訊', member: false, executive: true, pm: 'project', admin: true },
       { label: '查看負責專案', description: '只能查看自己被指派的專案', member: true, executive: false, pm: false, admin: false },
       { label: '建立專案', description: '新增新的專案', member: false, executive: false, pm: true, admin: true },
       { label: '編輯專案', description: '修改專案基本資訊、目標、範圍', member: false, executive: false, pm: 'project', admin: true },
@@ -27,6 +38,7 @@ const PERMISSIONS: { category: string; rows: PermissionRow[] }[] = [
   },
   {
     category: '預算',
+    color: 'emerald',
     rows: [
       { label: '查看預算', description: '查看專案預算與設備清單', member: false, executive: true, pm: true, admin: true },
       { label: '編輯預算', description: '新增/修改設備清單與費用', member: false, executive: false, pm: 'project', admin: true },
@@ -34,12 +46,14 @@ const PERMISSIONS: { category: string; rows: PermissionRow[] }[] = [
   },
   {
     category: '團隊',
+    color: 'violet',
     rows: [
       { label: '管理團隊成員', description: '新增/移除團隊成員、設定 RACI 角色', member: false, executive: false, pm: 'project', admin: true },
     ],
   },
   {
     category: '風險與延期',
+    color: 'red',
     rows: [
       { label: '管理風險', description: '新增/編輯/關閉風險項目', member: false, executive: false, pm: 'project', admin: true },
       { label: '提交延期申請', description: '提交里程碑延期或調整申請', member: false, executive: false, pm: 'project', admin: true },
@@ -48,6 +62,7 @@ const PERMISSIONS: { category: string; rows: PermissionRow[] }[] = [
   },
   {
     category: '報告',
+    color: 'amber',
     rows: [
       { label: '匯出報告', description: '產生並下載 PDF 報告', member: false, executive: true, pm: true, admin: true },
       { label: '寄送報告郵件', description: '以 Email 發送週報給指定收件人', member: false, executive: true, pm: true, admin: true },
@@ -55,12 +70,14 @@ const PERMISSIONS: { category: string; rows: PermissionRow[] }[] = [
   },
   {
     category: '甘特圖',
+    color: 'teal',
     rows: [
       { label: '查看甘特圖', description: '瀏覽時程甘特圖', member: true, executive: true, pm: true, admin: true },
     ],
   },
   {
     category: '後台管理',
+    color: 'slate',
     rows: [
       { label: '存取管理後台', description: '進入後台管理頁面', member: false, executive: false, pm: false, admin: true },
       { label: '管理使用者', description: '修改使用者角色與部門', member: false, executive: false, pm: false, admin: true },
@@ -83,7 +100,7 @@ function PermCell({ value }: { value: boolean | 'project' }) {
   if (value === 'project') {
     return (
       <div className="flex items-center justify-center" title="僅限負責的專案">
-        <CheckCircle2 className="h-5 w-5 text-orange-500" />
+        <CheckCircle2 className="h-4 w-4 text-orange-500" />
       </div>
     )
   }
@@ -102,6 +119,13 @@ function PermCell({ value }: { value: boolean | 'project' }) {
 }
 
 export default function AdminRolesPage() {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const toggle = (cat: string) => setCollapsed(prev => {
+    const next = new Set(prev)
+    next.has(cat) ? next.delete(cat) : next.add(cat)
+    return next
+  })
+
   return (
     <div className="space-y-6">
       <div>
@@ -124,8 +148,7 @@ export default function AdminRolesPage() {
       </div>
 
       {/* Note */}
-      <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5">
-        <Info className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
+      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5">
         <span>
           <span className="inline-flex items-center gap-1 mr-1"><CheckCircle2 className="h-4 w-4 text-orange-500 inline" /> 橙色</span>表示「僅限負責的專案」，專案經理只對自己建立或被指派的專案擁有此權限。
         </span>
@@ -152,12 +175,25 @@ export default function AdminRolesPage() {
               <tbody>
                 {PERMISSIONS.map(section => (
                   <React.Fragment key={section.category}>
-                    <tr className="bg-muted/20">
-                      <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        {section.category}
+                    <tr
+                      className="cursor-pointer select-none"
+                      onClick={() => toggle(section.category)}
+                    >
+                      <td colSpan={6} className={cn(
+                        'border-l-4 pl-3 pr-4 py-2.5 text-xs font-bold uppercase tracking-widest',
+                        CAT_STYLES[section.color].bg,
+                        CAT_STYLES[section.color].text,
+                        CAT_STYLES[section.color].border,
+                      )}>
+                        <span className="flex items-center gap-1.5">
+                          {collapsed.has(section.category)
+                            ? <ChevronRight className="h-3.5 w-3.5" />
+                            : <ChevronDown className="h-3.5 w-3.5" />}
+                          {section.category}
+                        </span>
                       </td>
                     </tr>
-                    {section.rows.map(row => (
+                    {!collapsed.has(section.category) && section.rows.map(row => (
                       <tr key={row.label} className="border-b last:border-0 hover:bg-muted/10">
                         <td className="px-4 py-2.5 font-medium">{row.label}</td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">{row.description}</td>
