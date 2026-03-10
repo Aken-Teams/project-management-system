@@ -21,6 +21,19 @@ interface TemplateTextareaProps {
   onFocus?: () => void
 }
 
+// For the syntax-highlight backdrop: only text color, no padding/border on spans
+// (layout-altering inline styles would break text alignment with the textarea)
+function renderHighlightedBackdrop(text: string): React.ReactNode[] {
+  const parts = text.split(/({{[^}]*}})/g)
+  return parts.map((part, i) => {
+    if (/^{{[^}]*}}$/.test(part)) {
+      return <span key={i} style={{ color: '#2563eb', fontWeight: 600 }}>{part}</span>
+    }
+    return <span key={i}>{part}</span>
+  })
+}
+
+// For the side preview panel (decorative styling OK since not overlaid on textarea)
 function renderHighlighted(text: string): React.ReactNode[] {
   const parts = text.split(/({{[^}]*}})/g)
   return parts.map((part, i) => {
@@ -71,6 +84,7 @@ export function TemplateTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const backdropRef = useRef<HTMLDivElement>(null)
 
   const [showAC, setShowAC] = useState(false)
   const [acQuery, setAcQuery] = useState('')
@@ -81,6 +95,13 @@ export function TemplateTextarea({
   const filteredVars = variables.filter(v =>
     v.name.toLowerCase().includes(acQuery.toLowerCase()) || v.label.includes(acQuery)
   )
+
+  // Sync backdrop scroll position with textarea
+  const syncScroll = useCallback(() => {
+    if (backdropRef.current && textareaRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop
+    }
+  }, [])
 
   const checkAutocomplete = useCallback((val: string, cursorPos: number) => {
     const textBefore = val.substring(0, cursorPos)
@@ -158,7 +179,6 @@ export function TemplateTextarea({
   // ── Preview panel (shared) ──────────────────────────────────────────────────
   const previewPanel = (
     <div className="rounded-md border border-dashed bg-muted/20 flex flex-col h-full">
-      {/* Tab header */}
       <div className="flex border-b shrink-0">
         <button
           type="button"
@@ -167,9 +187,7 @@ export function TemplateTextarea({
             previewMode === 'highlight' ? 'bg-background border-r font-medium' : 'text-muted-foreground hover:text-foreground'
           )}
           onClick={() => setPreviewMode('highlight')}
-        >
-          帶色顯示
-        </button>
+        >帶色顯示</button>
         <button
           type="button"
           className={cn(
@@ -177,11 +195,8 @@ export function TemplateTextarea({
             previewMode === 'sample' ? 'bg-background border-r font-medium' : 'text-muted-foreground hover:text-foreground'
           )}
           onClick={() => setPreviewMode('sample')}
-        >
-          預覽效果
-        </button>
+        >預覽效果</button>
       </div>
-      {/* Content */}
       <div className="px-3 py-2 text-sm leading-relaxed flex-1 overflow-auto">
         {value
           ? previewMode === 'highlight'
@@ -194,28 +209,80 @@ export function TemplateTextarea({
   )
 
   // ── Autocomplete dropdown ──────────────────────────────────────────────────
+  // w-max lets the dropdown size to content; all spans use shrink-0/whitespace-nowrap to prevent wrapping
   const autocompleteDropdown = showAC && filteredVars.length > 0 && (
     <div
       ref={dropdownRef}
-      className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover shadow-md text-popover-foreground"
+      className="absolute left-0 top-full z-50 mt-1 w-max rounded-md border bg-popover shadow-md text-popover-foreground"
     >
-      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">↑↓ 選擇，Tab 插入</div>
+      <div className="px-3 pt-2 pb-1 text-xs text-muted-foreground">↑↓ 選擇，Tab 插入</div>
       {filteredVars.map((v, i) => (
         <button
           key={v.name}
           type="button"
           className={cn(
-            'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer',
+            'flex w-full items-center gap-4 rounded-sm px-3 py-1.5 text-xs cursor-pointer',
             i === acIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
           )}
           onMouseDown={e => { e.preventDefault(); insertVariable(v) }}
           onMouseEnter={() => setAcIndex(i)}
         >
-          <span className="font-mono text-blue-600 text-xs">{`{{${v.name}}}`}</span>
-          <span className="text-muted-foreground">{v.label}</span>
-          <span className="ml-auto text-muted-foreground text-xs shrink-0">{v.sample}</span>
+          <span className="font-mono text-blue-600 shrink-0 whitespace-nowrap">{`{{${v.name}}}`}</span>
+          <span className="text-muted-foreground shrink-0 whitespace-nowrap">{v.label}</span>
+          <span className="text-muted-foreground shrink-0 whitespace-nowrap opacity-60">{v.sample}</span>
         </button>
       ))}
+    </div>
+  )
+
+  // ── Highlighted textarea (backdrop overlay for syntax coloring) ────────────
+  // Backdrop sits behind the textarea with identical padding/font/line-height.
+  // Textarea text is transparent; only the caret is visible.
+  // The backdrop renders colored variable spans that show through.
+  const highlightedTextarea = (
+    <div className="relative">
+      {/* Syntax-highlight backdrop — must match textarea padding/font exactly */}
+      <div
+        ref={backdropRef}
+        aria-hidden="true"
+        className="absolute inset-[1px] rounded-md overflow-hidden pointer-events-none px-3 py-2 text-sm bg-background"
+        style={{
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'break-word',
+          wordBreak: 'break-word',
+          lineHeight: '1.25rem',  // matches text-sm default line-height
+          fontFamily: 'inherit',
+        }}
+      >
+        {value
+          ? renderHighlightedBackdrop(value)
+          : placeholder
+            ? <span className="text-muted-foreground/50">{placeholder}</span>
+            : null
+        }
+        {/* Trailing newline prevents last line from collapsing in the backdrop */}
+        {'\n'}
+      </div>
+
+      {/* Actual textarea — transparent text so backdrop colors show through */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onFocus={onFocus}
+        onScroll={syncScroll}
+        rows={rows}
+        spellCheck={false}
+        className="relative flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+        style={{
+          color: 'transparent',
+          caretColor: 'var(--foreground, #0f172a)',
+          lineHeight: '1.25rem',
+        }}
+      />
+      {autocompleteDropdown}
     </div>
   )
 
@@ -237,9 +304,25 @@ export function TemplateTextarea({
       </div>
 
       {singleLine ? (
-        /* Single-line: input above, preview below */
+        /* Single-line: same backdrop overlay technique as textarea */
         <>
           <div className="relative">
+            {/* Syntax-highlight backdrop — single line, no wrapping */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-[1px] rounded-md overflow-hidden pointer-events-none px-3 bg-background flex items-center"
+              style={{ fontFamily: 'inherit' }}
+            >
+              <span className="text-sm whitespace-nowrap" style={{ lineHeight: '1.25rem' }}>
+                {value
+                  ? renderHighlightedBackdrop(value)
+                  : placeholder
+                    ? <span className="text-muted-foreground/50">{placeholder}</span>
+                    : null
+                }
+              </span>
+            </div>
+            {/* Input — transparent text, visible caret */}
             <input
               ref={inputRef}
               value={value}
@@ -247,47 +330,22 @@ export function TemplateTextarea({
               onClick={handleClick}
               onKeyDown={handleKeyDown}
               onFocus={onFocus}
-              placeholder={placeholder}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              spellCheck={false}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              style={{ color: 'transparent', caretColor: 'var(--foreground, #0f172a)' }}
             />
             {autocompleteDropdown}
           </div>
           {showPreview && previewPanel}
         </>
       ) : (
-        /* Multi-line: textarea (full width or left half with preview) */
         showPreview ? (
           <div className="grid grid-cols-2 gap-3">
-            <div className="relative">
-              <textarea
-                ref={textareaRef}
-                value={value}
-                onChange={handleChange}
-                onClick={handleClick}
-                onKeyDown={handleKeyDown}
-                onFocus={onFocus}
-                placeholder={placeholder}
-                rows={rows}
-                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-              />
-              {autocompleteDropdown}
-            </div>
+            {highlightedTextarea}
             <div style={{ minHeight: `${rows * 1.5 + 1}rem` }}>{previewPanel}</div>
           </div>
         ) : (
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={handleChange}
-              onClick={handleClick}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              rows={rows}
-              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-            />
-            {autocompleteDropdown}
-          </div>
+          highlightedTextarea
         )
       )}
     </div>

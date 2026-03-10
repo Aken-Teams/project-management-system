@@ -38,6 +38,8 @@ export async function POST(request: NextRequest) {
     const settingKeys = [
       'notification.template.weekly_upload_missing.title',
       'notification.template.weekly_upload_missing.message',
+      'notification.template.weekly_upload_missing.email_subject',
+      'notification.template.weekly_upload_missing.email_body',
       'notification.template.weekly_report_ready.title',
       'notification.template.weekly_report_ready.message',
     ]
@@ -50,6 +52,8 @@ export async function POST(request: NextRequest) {
 
     const missingTitle = settings['notification.template.weekly_upload_missing.title'] ?? '週報尚未上傳'
     const missingMsg = settings['notification.template.weekly_upload_missing.message'] ?? '【{{projectName}}】本週進度尚未更新，請盡快上傳週報。'
+    const missingEmailSubject = settings['notification.template.weekly_upload_missing.email_subject'] ?? '【週報提醒】{{projectName}} 本週（{{weekOf}}）尚未上傳'
+    const missingEmailBody = settings['notification.template.weekly_upload_missing.email_body'] ?? '{{pmName}} 您好，\n\n【{{projectName}}】本週（{{weekOf}}）的進度週報尚未上傳，請盡快完成上傳。\n\n謝謝'
     const readyTitle = settings['notification.template.weekly_report_ready.title'] ?? '週報已產生'
     const readyMsg = settings['notification.template.weekly_report_ready.message'] ?? '【{{projectName}}】本週週報已產生，請至更新紀錄確認。'
 
@@ -102,8 +106,8 @@ export async function POST(request: NextRequest) {
               headers: { 'Content-Type': 'application/json', 'X-API-Key': AD_API },
               body: JSON.stringify({
                 to: [project.owner.email],
-                subject: replaceVars(missingTitle, vars),
-                body: replaceVars(missingMsg, vars),
+                subject: replaceVars(missingEmailSubject, vars),
+                body: replaceVars(missingEmailBody, vars),
               }),
             })
           } catch (e) {

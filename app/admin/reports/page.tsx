@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
@@ -21,14 +21,13 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ value: String(i), l
 
 const SETTING_KEYS = [
   'report.schedule.dayOfWeek', 'report.schedule.hour',
-  'report.email.subject', 'report.email.body', 'report.email.recipients',
+  'report.email.subject', 'report.email.body',
 ]
 const DEFAULTS = {
   'report.schedule.dayOfWeek': '5',
   'report.schedule.hour': '8',
   'report.email.subject': '{{date}} 專案週報 - {{reportCount}} 個專案',
   'report.email.body': '您好，\n\n附件為本週（{{date}}）的專案進度週報，共 {{reportCount}} 個專案。\n\n如有疑問，請聯繫各專案負責人。\n\n謝謝',
-  'report.email.recipients': '',
 }
 const REPORT_VARIABLES: VariableDef[] = [
   { name: 'date', label: '日期', sample: '2026-03-14' },
@@ -203,25 +202,6 @@ export default function AdminReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Recipients */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">收件人設定</CardTitle>
-                  <CardDescription className="text-xs">
-                    輸入收件人 Email（逗號分隔），系統另會自動寄送給所有主管角色用戶
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={settings['report.email.recipients']}
-                    onChange={e => set('report.email.recipients', e.target.value)}
-                    rows={2}
-                    className="text-sm resize-none"
-                    placeholder="email1@example.com, email2@example.com"
-                  />
-                </CardContent>
-              </Card>
-
               {/* Email template */}
               <Card>
                 <CardHeader className="pb-3">
@@ -267,7 +247,7 @@ export default function AdminReportsPage() {
                 body={previewBody}
                 recipients={settings['report.email.recipients'] ?? ''}
               />
-              <p className="text-xs text-muted-foreground text-center">以上為模擬預覽，實際郵件以儲存值為準</p>
+              <p className="text-xs text-muted-foreground text-center">以上為模擬預覽，實際郵件以實際結果為準</p>
             </div>
           </div>
         </TabsContent>
