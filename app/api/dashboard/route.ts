@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
           green: 0,
           yellow: 0,
           red: 0,
-          avgProgress: 0,
+          tierCounts: { T1: 0, T2: 0, T3: 0, CIP: 0 },
           totalBudget: 0,
           totalBudgetUsed: 0,
           budgetUtilization: 0,
@@ -172,9 +172,12 @@ export async function GET(request: NextRequest) {
       green: projectsWithProgress.filter(p => p.actualStatus === 'green').length,
       yellow: projectsWithProgress.filter(p => p.actualStatus === 'yellow').length,
       red: projectsWithProgress.filter(p => p.actualStatus === 'red').length,
-      avgProgress: projectsWithProgress.length > 0
-        ? Math.round(projectsWithProgress.reduce((acc, p) => acc + p.actualProgress, 0) / projectsWithProgress.length)
-        : 0,
+      tierCounts: {
+        T1: projectsWithProgress.filter(p => p.projectTier === 'T1').length,
+        T2: projectsWithProgress.filter(p => p.projectTier === 'T2').length,
+        T3: projectsWithProgress.filter(p => p.projectTier === 'T3').length,
+        CIP: projectsWithProgress.filter(p => p.projectTier === 'CIP').length,
+      },
       totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budget, 0),
       totalBudgetUsed: projectsWithProgress.reduce((acc, p) => acc + p.budgetUsed, 0),
       budgetUtilization: 0,

@@ -37,7 +37,7 @@ interface DashboardData {
     green: number
     yellow: number
     red: number
-    avgProgress: number
+    tierCounts: { T1: number; T2: number; T3: number; CIP: number }
     totalBudget: number
     totalBudgetUsed: number
     budgetUtilization: number
@@ -219,12 +219,18 @@ export default function DashboardPage() {
           </Card>
 
           <Card className="p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-muted-foreground">平均進度</span>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">專案層級</span>
+              <FolderKanban className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="text-2xl font-bold">{stats.avgProgress}%</div>
-            <Progress value={stats.avgProgress} className="mt-1.5 h-1.5" />
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              {(['T1', 'T2', 'T3', 'CIP'] as const).map(tier => (
+                <div key={tier} className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{tier}</span>
+                  <span className="text-sm font-bold">{stats.tierCounts[tier]}</span>
+                </div>
+              ))}
+            </div>
           </Card>
 
           {data.user.role !== 'member' ? (
