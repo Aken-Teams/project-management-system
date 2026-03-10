@@ -206,9 +206,19 @@ export default function AdminReportsPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">郵件範本</CardTitle>
-                  <CardDescription className="text-xs">輸入 <code className="bg-muted px-1 rounded">{'{{'}</code> 可自動補全變數</CardDescription>
+                  <CardDescription className="text-xs">輸入 <code className="bg-muted px-1 rounded">{'{{'}</code> 可自動補全以下變數</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-5">
+                <CardContent className="space-y-4">
+                  {/* Variable reference — shown once */}
+                  <div className="flex flex-wrap gap-1.5 rounded-md border border-dashed bg-muted/20 px-3 py-2">
+                    <span className="self-center text-xs text-muted-foreground mr-1">可用變數：</span>
+                    {REPORT_VARIABLES.map(v => (
+                      <span key={v.name} className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 font-mono">
+                        {`{{${v.name}}}`}
+                        <span className="text-blue-500 font-sans ml-0.5">= {v.label}</span>
+                      </span>
+                    ))}
+                  </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">郵件主旨</Label>
                     <TemplateTextarea
@@ -218,6 +228,7 @@ export default function AdminReportsPage() {
                       placeholder="郵件主旨"
                       singleLine
                       showPreview={false}
+                      showVariableChips={false}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -226,9 +237,10 @@ export default function AdminReportsPage() {
                       value={settings['report.email.body']}
                       onChange={v => set('report.email.body', v)}
                       variables={REPORT_VARIABLES}
-                      rows={6}
+                      rows={9}
                       placeholder="郵件內文"
                       showPreview={false}
+                      showVariableChips={false}
                     />
                   </div>
                 </CardContent>

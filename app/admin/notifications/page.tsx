@@ -335,7 +335,7 @@ export default function AdminNotificationsPage() {
                           value={settings['notification.template.weekly_upload_missing.email_body']}
                           onChange={v => set('notification.template.weekly_upload_missing.email_body', v)}
                           variables={NOTIF_VARIABLES}
-                          rows={4}
+                          rows={7}
                           showPreview={false}
                           showVariableChips={false}
                           onFocus={() => { setPreviewType('missing'); setPreviewChannel('email') }}
