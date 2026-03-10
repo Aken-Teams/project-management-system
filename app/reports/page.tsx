@@ -528,39 +528,66 @@ export default function ReportsPage() {
       container = null
       styleEl = null
 
-      // Step 4: Build multi-page landscape A4 PDF
+      // Step 4: Build multi-page landscape A4 PDF with margins and smart page breaks
       const { jsPDF } = await import('jspdf')
-      const A4_W = 841.89  // pts, landscape
+      const A4_W = 841.89   // pts, landscape
       const A4_H = 595.28
+      const MARGIN = 30     // ~11mm margin on all sides
+      const imgW = A4_W - 2 * MARGIN
+      const imgH_avail = A4_H - 2 * MARGIN
+
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
 
-      const totalImgH = (A4_W / canvas.width) * canvas.height
-      let pageTop = 0
-      let firstPage = true
+      // pt per canvas pixel
+      const ptPerPx = imgW / canvas.width
+      const pxPerPage = imgH_avail / ptPerPx
 
-      while (pageTop < totalImgH) {
+      // Scan pixel rows to find the lightest (whitest) row near a target cut point,
+      // so we avoid slicing through text or card borders.
+      const findCutRow = (nearPx: number): number => {
+        const range = Math.min(100, Math.floor(pxPerPage * 0.07))
+        const start = Math.max(0, Math.round(nearPx) - range)
+        const end = Math.min(canvas.height - 1, Math.round(nearPx) + range)
+        const ctx = canvas.getContext('2d')!
+        const data = ctx.getImageData(0, start, canvas.width, end - start + 1).data
+        const step = Math.max(1, Math.floor(canvas.width / 120))
+        let bestRow = Math.round(nearPx)
+        let bestAvg = -1
+        for (let row = 0; row <= end - start; row++) {
+          let sum = 0, cnt = 0
+          for (let col = 0; col < canvas.width; col += step) {
+            const i = (row * canvas.width + col) * 4
+            sum += (data[i] + data[i + 1] + data[i + 2]) / 3
+            cnt++
+          }
+          if (sum / cnt > bestAvg) { bestAvg = sum / cnt; bestRow = start + row }
+        }
+        return bestRow
+      }
+
+      let srcY = 0
+      let firstPage = true
+      while (srcY < canvas.height) {
         if (!firstPage) pdf.addPage()
         firstPage = false
 
-        const sliceRenderH = Math.min(A4_H, totalImgH - pageTop)
-        const srcY = Math.round((pageTop / totalImgH) * canvas.height)
-        const srcH = Math.ceil((sliceRenderH / totalImgH) * canvas.height)
+        const idealEnd = srcY + pxPerPage
+        const cutY = idealEnd >= canvas.height ? canvas.height : findCutRow(idealEnd)
+        const sliceH = Math.max(1, cutY - srcY)
 
         const slice = document.createElement('canvas')
         slice.width = canvas.width
-        slice.height = srcH
-        slice.getContext('2d')!.drawImage(canvas, 0, -srcY)
+        slice.height = sliceH
+        slice.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
 
-        pdf.addImage(slice.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, A4_W, sliceRenderH)
-        pageTop += A4_H
+        const slicePt = sliceH * ptPerPx
+        pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN, MARGIN, imgW, slicePt)
+        srcY = cutY
       }
 
-      // Step 5: Download PDF
+      // Step 5: Send email with PDF attachment via mail API
       const date = new Date().toLocaleDateString('zh-TW').replace(/\//g, '')
       const filename = `專案報告_${date}.pdf`
-      pdf.save(filename)
-
-      // Step 6: Send email with PDF attachment via mail API
       const pdfBase64 = pdf.output('datauristring').split(',')[1]
       const pjNames = data!.projects.filter(p => selectedProjectIds.includes(p.id)).map(p => p.name).join('、')
 

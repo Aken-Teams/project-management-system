@@ -96,9 +96,9 @@ export async function POST(request: NextRequest) {
       line-height: 1.5;
       color: #0f172a;
       margin: 0;
-      padding: 24px 20px;
+      padding: 32px 40px;
       font-size: 12px;
-      background: #f8fafc;
+      background: #f1f5f9;
     }
     h1 {
       font-size: 24px;
@@ -341,7 +341,7 @@ export async function POST(request: NextRequest) {
   <div class="subtitle">生成時間：${now}</div>
 
   <!-- Stats Overview -->
-  <div class="grid grid-4 avoid-break" style="margin-bottom: 12px;">
+  <div class="grid grid-4 avoid-break" style="margin-bottom: 16px;">
     <div class="stat-card">
       <span class="stat-label">總專案數</span>
       <div class="stat-value">${projects.length}</div>
@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
   </div>
 
   <!-- Charts Section -->
-  <div class="grid grid-3 avoid-break" style="margin-bottom: 12px;">
+  <div class="grid grid-3 avoid-break" style="margin-bottom: 20px;">
     ${(() => {
       const inProgressTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'in_progress').length, 0)
       const blockedTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'blocked').length, 0)
