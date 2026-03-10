@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
 }
 
 // ─── Enums ───────────────────────────────────────────────
@@ -142,19 +142,21 @@ model Project {
   projectTier     ProjectTier?  @map("project_tier")
   demandSource    DemandSource? @map("demand_source")
   name            String
-  objective       String        @default("")
-  purpose         String        @default("")
-  scope           String        @default("")
-  roi             String        @default("")
-  createdReason   String        @default("") @map("created_reason")
-  expectedBenefits String?      @map("expected_benefits")
+  // VarChar(1000): has @default(""), MySQL TEXT cannot have DEFAULT value
+  objective       String        @default("") @db.VarChar(1000) @map("objective")
+  purpose         String        @default("") @db.VarChar(1000)
+  scope           String        @default("") @db.VarChar(1000)
+  roi             String        @default("") @db.VarChar(1000)
+  createdReason   String        @default("") @db.VarChar(1000) @map("created_reason")
+  // Nullable TEXT: no DEFAULT needed, NULL is implicit
+  expectedBenefits String?      @db.Text @map("expected_benefits")
 
-  // SMART Objective (individual columns)
-  smartSpecific   String?       @map("smart_specific")
-  smartMeasurable String?       @map("smart_measurable")
-  smartAchievable String?       @map("smart_achievable")
-  smartRelevant   String?       @map("smart_relevant")
-  smartTimeBound  String?       @map("smart_time_bound")
+  // SMART Objective (nullable TEXT: no DEFAULT needed)
+  smartSpecific   String?       @db.Text @map("smart_specific")
+  smartMeasurable String?       @db.Text @map("smart_measurable")
+  smartAchievable String?       @db.Text @map("smart_achievable")
+  smartRelevant   String?       @db.Text @map("smart_relevant")
+  smartTimeBound  String?       @db.Text @map("smart_time_bound")
 
   startDate       DateTime      @map("start_date")
   endDate         DateTime      @map("end_date")
@@ -192,7 +194,7 @@ model ProjectTeamMember {
   role           TeamRole
   jobTitle       String   @default("") @map("job_title")
   organization   String   @default("")
-  responsibility String   @default("")
+  responsibility String   @default("") @db.VarChar(500)
 
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -245,7 +247,7 @@ model Task {
   projectId   String     @map("project_id")
   milestoneId String     @map("milestone_id")
   title       String
-  description String     @default("")
+  description String     @default("") @db.VarChar(1000)
   assignee    String     @default("")
   status      TaskStatus @default(todo)
   priority    Priority   @default(medium)
@@ -294,8 +296,8 @@ model TaskLog {
   projectId String   @map("project_id")
   authorId  String   @map("author_id")
   logDate   DateTime @map("log_date")
-  content   String
-  nextPlans String? @map("next_plans") // JSON: [{date?: string, content: string}]
+  content   String   @db.Text
+  nextPlans String?  @db.Text @map("next_plans") // JSON: [{date?: string, content: string}]
   createdAt DateTime @default(now()) @map("created_at")
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -311,10 +313,10 @@ model Risk {
   id          String          @id @default(cuid())
   projectId   String          @map("project_id")
   title       String
-  description String          @default("")
+  description String          @default("") @db.VarChar(1000)
   impact      RiskImpact      @default(medium)
   probability RiskProbability @default(medium)
-  mitigation  String          @default("")
+  mitigation  String          @default("") @db.VarChar(1000)
   status      RiskStatus      @default(open)
 
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -329,10 +331,10 @@ model WeeklyUpdate {
   weekOf           DateTime           @map("week_of")
   updatedById      String             @map("updated_by_id")
   overallStatus    WeeklyUpdateStatus @default(on_time) @map("overall_status")
-  overallNotes     String             @default("") @map("overall_notes")
-  blockers         String             @default("")
-  nextWeekPlan     String             @default("") @map("next_week_plan")
-  keyAchievements  String             @default("") @map("key_achievements")
+  overallNotes     String             @default("") @db.VarChar(1000) @map("overall_notes")
+  blockers         String             @default("") @db.VarChar(1000)
+  nextWeekPlan     String             @default("") @db.VarChar(1000) @map("next_week_plan")
+  keyAchievements  String             @default("") @db.VarChar(1000) @map("key_achievements")
   createdAt        DateTime           @default(now()) @map("created_at")
   updatedAt        DateTime           @updatedAt @map("updated_at")
 
@@ -350,7 +352,7 @@ model MilestoneUpdate {
   weeklyUpdateId String       @map("weekly_update_id")
   milestoneId    String       @map("milestone_id")
   progress       Int          @default(0)
-  notes          String       @default("")
+  notes          String       @default("") @db.VarChar(1000)
 
   weeklyUpdate   WeeklyUpdate @relation(fields: [weeklyUpdateId], references: [id], onDelete: Cascade)
   milestone      Milestone    @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
@@ -364,18 +366,18 @@ model DelayRequest {
   id                   String             @id @default(cuid())
   projectId            String             @map("project_id")
   requesterId          String             @map("requester_id")
-  reason               String
+  reason               String             @db.Text
   canCatchUp           Boolean            @default(false) @map("can_catch_up")
-  supportNeeded        String             @default("") @map("support_needed")
+  supportNeeded        String             @default("") @db.VarChar(1000) @map("support_needed")
   type                 DelayRequestType   @default(delay)
   status               DelayRequestStatus @default(pending)
   reviewerId           String?            @map("reviewer_id")
   reviewedAt           DateTime?          @map("reviewed_at")
-  reviewNotes          String?            @map("review_notes")
+  reviewNotes          String?            @db.Text @map("review_notes")
   supportResolved      Boolean?           @map("support_resolved")
   supportResolvedAt    DateTime?          @map("support_resolved_at")
   supportResolvedById  String?            @map("support_resolved_by_id")
-  supportResolvedNotes String?            @map("support_resolved_notes")
+  supportResolvedNotes String?            @db.Text @map("support_resolved_notes")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
@@ -413,7 +415,7 @@ model Notification {
   userId    String           @map("user_id")
   type      NotificationType
   title     String
-  message   String
+  message   String           @db.Text
   read      Boolean          @default(false)
   projectId String?          @map("project_id")
   createdAt DateTime         @default(now()) @map("created_at")

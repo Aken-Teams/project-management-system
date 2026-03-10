@@ -13,6 +13,7 @@
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
     "db:reset": "npx prisma migrate reset",
+    "db:migrate-from-pg": "tsx scripts/migrate-pg-to-mysql.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -23,8 +24,10 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^3.9.1",
-    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/adapter-mariadb": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "mariadb": "^3.4.0",
+    "mysql2": "^3.11.5",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
     "@radix-ui/react-aspect-ratio": "1.1.1",
@@ -80,10 +83,12 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
     "@types/node": "^22",
+    "@types/pg": "^8.11.14",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "agentation": "^2.2.0",
     "dotenv": "^17.2.4",
+    "pg": "^8.13.3",
     "postcss": "^8.5",
     "prisma": "^7.3.0",
     "tailwindcss": "^3.4.17",
