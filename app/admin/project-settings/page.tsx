@@ -5,14 +5,24 @@ import { useAuth } from '@/lib/auth-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Trash2, RotateCcw } from 'lucide-react'
-import { PROJECT_TYPE_LABELS } from '@/lib/mock-data'
-import type { ProjectType } from '@/lib/mock-data'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Plus, Trash2, RotateCcw, Pencil } from 'lucide-react'
+
+interface ProjectTypeConfig {
+  key: string
+  label: string
+  sortOrder: number
+}
 
 interface TemplateSummary {
-  projectType: ProjectType
+  projectType: string
   label: string
   count: number
   isCustomized: boolean
@@ -33,29 +43,54 @@ interface TypeDetail {
 export default function AdminProjectSettingsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
+
+  // Project types state
+  const [projectTypes, setProjectTypes] = useState<ProjectTypeConfig[]>([])
+
+  // Template state
   const [summaries, setSummaries] = useState<TemplateSummary[]>([])
-  const [selected, setSelected] = useState<ProjectType | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
   const [detail, setDetail] = useState<TypeDetail | null>(null)
   const [editing, setEditing] = useState<TemplateRow[]>([])
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Project type CRUD dialogs
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addLabel, setAddLabel] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+
+  const [editDialog, setEditDialog] = useState<{ key: string; label: string } | null>(null)
+  const [editLabel, setEditLabel] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+
+  const [deleteDialog, setDeleteDialog] = useState<{ key: string; label: string } | null>(null)
+  const [deleteSaving, setDeleteSaving] = useState(false)
+
   const headers = useCallback(() =>
     ({ 'x-user-email': user?.email ?? '' }), [user])
 
-  useEffect(() => {
+  // Load project types and summaries together
+  const loadData = useCallback(async () => {
     if (!user) return
-    fetch('/api/admin/milestone-templates', { headers: headers() })
-      .then(r => r.json())
-      .then(setSummaries)
+    const [typesRes, summariesRes] = await Promise.all([
+      fetch('/api/admin/project-types', { headers: headers() }),
+      fetch('/api/admin/milestone-templates', { headers: headers() }),
+    ])
+    const types: ProjectTypeConfig[] = await typesRes.json()
+    const sums: TemplateSummary[] = await summariesRes.json()
+    setProjectTypes(types)
+    setSummaries(sums)
   }, [user, headers])
 
-  const selectType = async (type: ProjectType) => {
+  useEffect(() => { loadData() }, [loadData])
+
+  const selectType = async (key: string) => {
     if (!user) return
-    setSelected(type)
+    setSelected(key)
     setLoadingDetail(true)
     try {
-      const res = await fetch(`/api/admin/milestone-templates/${type}`, { headers: headers() })
+      const res = await fetch(`/api/admin/milestone-templates/${key}`, { headers: headers() })
       const data: TypeDetail = await res.json()
       setDetail(data)
       setEditing(data.templates.map(t => ({ ...t })))
@@ -64,17 +99,11 @@ export default function AdminProjectSettingsPage() {
     }
   }
 
-  const addRow = () => {
-    setEditing(prev => [...prev, { name: '', durationDays: 14 }])
-  }
-
-  const removeRow = (i: number) => {
-    setEditing(prev => prev.filter((_, idx) => idx !== i))
-  }
-
-  const updateRow = (i: number, field: 'name' | 'durationDays', value: string | number) => {
+  // ── Template row actions ──────────────────────────────
+  const addRow = () => setEditing(prev => [...prev, { name: '', durationDays: 14 }])
+  const removeRow = (i: number) => setEditing(prev => prev.filter((_, idx) => idx !== i))
+  const updateRow = (i: number, field: 'name' | 'durationDays', value: string | number) =>
     setEditing(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
-  }
 
   const save = async () => {
     if (!user || !selected) return
@@ -93,10 +122,11 @@ export default function AdminProjectSettingsPage() {
         const data: TypeDetail = await res.json()
         setDetail(data)
         setEditing(data.templates.map(t => ({ ...t })))
+        const label = projectTypes.find(pt => pt.key === selected)?.label ?? selected
         setSummaries(prev => prev.map(s =>
           s.projectType === selected ? { ...s, isCustomized: data.isCustomized, count: data.templates.length } : s
         ))
-        toast({ title: '已儲存', description: `${PROJECT_TYPE_LABELS[selected]} 里程碑範本已更新` })
+        toast({ title: '已儲存', description: `${label} 里程碑範本已更新` })
       }
     } finally {
       setSaving(false)
@@ -119,54 +149,152 @@ export default function AdminProjectSettingsPage() {
         setSummaries(prev => prev.map(s =>
           s.projectType === selected ? { ...s, isCustomized: false, count: data.templates.length } : s
         ))
-        toast({ title: '已重設', description: `已還原為預設範本` })
+        toast({ title: '已重設', description: '已還原為預設範本' })
       }
     } finally {
       setSaving(false)
     }
   }
 
+  // ── Project type CRUD ─────────────────────────────────
+  const handleAdd = async () => {
+    if (!addLabel.trim()) return
+    setAddSaving(true)
+    try {
+      const res = await fetch('/api/admin/project-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ label: addLabel.trim() }),
+      })
+      if (res.ok) {
+        setAddDialogOpen(false)
+        setAddLabel('')
+        toast({ title: '已新增', description: `專案類型「${addLabel.trim()}」已建立` })
+        await loadData()
+      } else {
+        const err = await res.json()
+        toast({ title: '新增失敗', description: err.error, variant: 'destructive' })
+      }
+    } finally {
+      setAddSaving(false)
+    }
+  }
+
+  const handleEdit = async () => {
+    if (!editDialog || !editLabel.trim()) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/admin/project-types/${editDialog.key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ label: editLabel.trim() }),
+      })
+      if (res.ok) {
+        setEditDialog(null)
+        toast({ title: '已更新', description: `名稱已更新為「${editLabel.trim()}」` })
+        await loadData()
+        // If currently selected, update label in detail
+        if (selected === editDialog.key) {
+          setDetail(prev => prev ? { ...prev } : null)
+        }
+      } else {
+        const err = await res.json()
+        toast({ title: '更新失敗', description: err.error, variant: 'destructive' })
+      }
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteDialog) return
+    setDeleteSaving(true)
+    try {
+      const res = await fetch(`/api/admin/project-types/${deleteDialog.key}`, {
+        method: 'DELETE',
+        headers: headers(),
+      })
+      if (res.ok) {
+        if (selected === deleteDialog.key) {
+          setSelected(null)
+          setDetail(null)
+          setEditing([])
+        }
+        setDeleteDialog(null)
+        toast({ title: '已刪除', description: `專案類型「${deleteDialog.label}」已移除` })
+        await loadData()
+      } else {
+        const err = await res.json()
+        toast({ title: '刪除失敗', description: err.error, variant: 'destructive' })
+      }
+    } finally {
+      setDeleteSaving(false)
+    }
+  }
+
+  const selectedLabel = projectTypes.find(pt => pt.key === selected)?.label ?? selected ?? ''
+
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-base font-semibold">專案設定</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">編輯各專案類型的里程碑範本，新建專案時將套用對應範本</p>
+        <p className="text-sm text-muted-foreground mt-0.5">管理專案類型，並編輯各類型的里程碑範本</p>
       </div>
 
       <div className="grid grid-cols-[240px_1fr] gap-4 items-start">
-        {/* Left: type list */}
+        {/* Left: type list with CRUD */}
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm">專案類型</CardTitle>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0"
+              onClick={() => { setAddLabel(''); setAddDialogOpen(true) }}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </CardHeader>
           <CardContent className="p-2">
             <div className="space-y-0.5">
-              {summaries.map(s => (
-                <button
-                  key={s.projectType}
-                  onClick={() => selectType(s.projectType)}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center justify-between gap-2 ${
-                    selected === s.projectType
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted/50'
-                  }`}
-                >
-                  <span className="truncate">{s.label}</span>
-                  {s.isCustomized && (
-                    <Badge
-                      variant="secondary"
-                      className={`text-[10px] px-1.5 shrink-0 ${selected === s.projectType ? 'bg-primary-foreground/20 text-primary-foreground' : ''}`}
+              {projectTypes.map(pt => {
+                const isSelected = selected === pt.key
+                return (
+                  <div
+                    key={pt.key}
+                    className={`group w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+                      isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => selectType(pt.key)}
+                  >
+                    <span className="truncate flex-1">{pt.label}</span>
+                    {/* Action buttons (visible on hover or when selected) */}
+                    <div className={`flex items-center gap-0.5 shrink-0 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
+                      onClick={e => e.stopPropagation()}
                     >
-                      自訂
-                    </Badge>
-                  )}
-                </button>
-              ))}
+                      <button
+                        className={`h-6 w-6 flex items-center justify-center rounded hover:bg-black/10 ${isSelected ? 'text-primary-foreground' : 'text-muted-foreground'}`}
+                        title="編輯名稱"
+                        onClick={() => { setEditDialog({ key: pt.key, label: pt.label }); setEditLabel(pt.label) }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        className={`h-6 w-6 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive ${isSelected ? 'text-primary-foreground' : 'text-muted-foreground'}`}
+                        title="刪除類型"
+                        onClick={() => setDeleteDialog({ key: pt.key, label: pt.label })}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </CardContent>
         </Card>
 
-        {/* Right: editor */}
+        {/* Right: milestone template editor */}
         {!selected ? (
           <Card>
             <CardContent className="py-16 text-center text-muted-foreground text-sm">
@@ -178,7 +306,7 @@ export default function AdminProjectSettingsPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-sm">{PROJECT_TYPE_LABELS[selected]}</CardTitle>
+                  <CardTitle className="text-sm">{selectedLabel}</CardTitle>
                   <CardDescription className="text-xs mt-0.5">
                     {detail?.isCustomized ? '使用自訂範本' : '使用預設範本'}
                   </CardDescription>
@@ -239,6 +367,72 @@ export default function AdminProjectSettingsPage() {
           </Card>
         )}
       </div>
+
+      {/* Add project type dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>新增專案類型</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              placeholder="例如：客製化專案"
+              value={addLabel}
+              onChange={e => setAddLabel(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !addSaving && handleAdd()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={addSaving}>取消</Button>
+            <Button onClick={handleAdd} disabled={addSaving || !addLabel.trim()}>
+              {addSaving ? '新增中...' : '新增'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit project type dialog */}
+      <Dialog open={!!editDialog} onOpenChange={open => !open && setEditDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>編輯專案類型名稱</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={editLabel}
+              onChange={e => setEditLabel(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !editSaving && handleEdit()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(null)} disabled={editSaving}>取消</Button>
+            <Button onClick={handleEdit} disabled={editSaving || !editLabel.trim()}>
+              {editSaving ? '儲存中...' : '儲存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <Dialog open={!!deleteDialog} onOpenChange={open => !open && setDeleteDialog(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>刪除專案類型</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            確定要刪除「<span className="font-medium text-foreground">{deleteDialog?.label}</span>」嗎？
+            此操作無法復原，且無法刪除已有專案的類型。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog(null)} disabled={deleteSaving}>取消</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteSaving}>
+              {deleteSaving ? '刪除中...' : '確認刪除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

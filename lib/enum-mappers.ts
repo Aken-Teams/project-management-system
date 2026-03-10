@@ -32,15 +32,13 @@ export function taskStatusToFe(status: DbTaskStatus): FeTaskStatus {
 }
 
 // ProjectType: 'cost-optimization' ↔ 'cost_optimization'
-import type { ProjectType as DbProjectType } from '@prisma/client'
-import type { ProjectType as FeProjectType } from './mock-data'
-
-export function projectTypeToDb(type: FeProjectType): DbProjectType {
-  return toDbEnum<DbProjectType>(type)
+// ProjectType is now a plain String in DB (no longer a Prisma enum)
+export function projectTypeToDb(type: string): string {
+  return type.replace(/-/g, '_')
 }
 
-export function projectTypeToFe(type: DbProjectType): FeProjectType {
-  return toFrontendEnum<FeProjectType>(type)
+export function projectTypeToFe(type: string): string {
+  return type.replace(/_/g, '-')
 }
 
 // WeeklyUpdateStatus: 'on-time' ↔ 'on_time'

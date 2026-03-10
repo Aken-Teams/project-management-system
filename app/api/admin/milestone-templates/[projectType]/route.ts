@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getMilestoneTemplates, MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
-import type { ProjectType } from '@/lib/mock-data'
-
 async function guardAdmin(request: NextRequest) {
   const email = request.headers.get('x-user-email') ?? ''
   if (!email) return false
@@ -17,11 +15,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: '無權限' }, { status: 403 })
   }
 
+  // projectType is now always the DB key (underscore_case)
   const { projectType } = await params
-  const templates = await getMilestoneTemplates(projectType as ProjectType, prisma)
-  const dbType = projectType.replace(/-/g, '_')
+  const feKey = projectType.replace(/_/g, '-')
+  const templates = await getMilestoneTemplates(feKey, prisma)
   const dbRows = await prisma.milestoneTemplateConfig.findMany({
-    where: { projectType: dbType },
+    where: { projectType },
     orderBy: { sortOrder: 'asc' },
   })
 
@@ -41,7 +40,9 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: '無權限' }, { status: 403 })
   }
 
+  // projectType is now always the DB key (underscore_case)
   const { projectType } = await params
+  const feKey = projectType.replace(/_/g, '-')
   const { templates } = await request.json() as {
     templates: { name: string; durationDays: number }[]
   }
@@ -50,15 +51,13 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: '無效的範本格式' }, { status: 400 })
   }
 
-  const dbType = projectType.replace(/-/g, '_')
-
   if (templates.length === 0) {
     // Reset to defaults: delete all DB rows
-    await prisma.milestoneTemplateConfig.deleteMany({ where: { projectType: dbType } })
+    await prisma.milestoneTemplateConfig.deleteMany({ where: { projectType } })
     return NextResponse.json({
       projectType,
       isCustomized: false,
-      templates: (MILESTONE_TEMPLATES[projectType as ProjectType] ?? []).map(t => ({
+      templates: (MILESTONE_TEMPLATES[feKey] ?? []).map(t => ({
         name: t.name,
         durationDays: t.durationDays,
       })),
@@ -67,10 +66,10 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 
   // Full replace
   await prisma.$transaction([
-    prisma.milestoneTemplateConfig.deleteMany({ where: { projectType: dbType } }),
+    prisma.milestoneTemplateConfig.deleteMany({ where: { projectType } }),
     prisma.milestoneTemplateConfig.createMany({
       data: templates.map((t, i) => ({
-        projectType: dbType,
+        projectType,
         name: t.name,
         durationDays: t.durationDays,
         sortOrder: i,
@@ -79,7 +78,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
   ])
 
   const saved = await prisma.milestoneTemplateConfig.findMany({
-    where: { projectType: dbType },
+    where: { projectType },
     orderBy: { sortOrder: 'asc' },
   })
 

@@ -1,6 +1,6 @@
 export type ProjectStatus = 'green' | 'yellow' | 'red'
 export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked'
-export type ProjectType = 'npi' | 'cost-optimization' | 'quality-improvement' | 'automation' | 'product-strategy' | 'process-optimization' | 'external-requirement'
+export type ProjectType = 'npi' | 'cost-optimization' | 'quality-improvement' | 'automation' | 'product-strategy' | 'process-optimization' | 'external-requirement' | (string & {})
 
 export type ProjectTier = 'T1' | 'T2' | 'T3' | 'CIP'
 
@@ -180,7 +180,7 @@ export interface TeamMember {
   responsibility: string
 }
 
-export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+export const PROJECT_TYPE_LABELS: Record<string, string> = {
   'npi': 'NPI-新產品開發',
   'cost-optimization': '成本優化',
   'quality-improvement': '品質提升',

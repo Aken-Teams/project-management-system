@@ -21,16 +21,6 @@ enum TaskStatus {
   blocked
 }
 
-enum ProjectType {
-  npi
-  cost_optimization
-  quality_improvement
-  automation
-  product_strategy
-  process_optimization
-  external_requirement
-}
-
 enum ProjectTier {
   T1
   T2
@@ -142,7 +132,7 @@ model User {
 model Project {
   id              String        @id @default(cuid())
   projectCode     String        @unique @map("project_code")
-  projectType     ProjectType   @map("project_type")
+  projectType     String        @db.VarChar(100) @map("project_type")
   projectTier     ProjectTier?  @map("project_tier")
   demandSource    DemandSource? @map("demand_source")
   name            String
@@ -488,7 +478,7 @@ model ProjectBudgetItem {
 
 model ProjectCodeSequence {
   id          String      @id @default(cuid())
-  projectType ProjectType @map("project_type")
+  projectType String      @db.VarChar(100) @map("project_type")
   year        Int
   lastSeq     Int         @default(0) @map("last_seq")
 
@@ -513,4 +503,15 @@ model MilestoneTemplateConfig {
 
   @@index([projectType, sortOrder])
   @@map("milestone_template_configs")
+}
+
+model ProjectTypeConfig {
+  key       String   @id @db.VarChar(100)
+  label     String   @db.VarChar(100)
+  isBuiltIn Boolean  @default(false) @map("is_built_in")
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("project_type_configs")
 }

@@ -3,8 +3,6 @@ import {
   projectTierToFe,
   demandSourceToFe,
 } from '@/lib/enum-mappers'
-import type { ProjectType as DbProjectType } from '@prisma/client'
-
 // ─── Auto-compute project status & progress from tasks ─────
 
 interface FeTask {
@@ -58,7 +56,7 @@ export function dbProjectToFrontend(
   proj: {
     id: string
     projectCode: string
-    projectType: DbProjectType
+    projectType: string
     projectTier: string | null
     demandSource: string | null
     name: string

@@ -1,11 +1,9 @@
-import type { ProjectType } from './mock-data'
-
 export interface MilestoneTemplate {
   name: string
   durationDays: number
 }
 
-export const MILESTONE_TEMPLATES: Record<ProjectType, MilestoneTemplate[]> = {
+export const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
   'npi': [
     { name: '需求分析與可行性評估', durationDays: 14 },
     { name: '概念設計', durationDays: 21 },
@@ -63,10 +61,11 @@ export const MILESTONE_TEMPLATES: Record<ProjectType, MilestoneTemplate[]> = {
 import type { PrismaClient } from '@prisma/client'
 
 export async function getMilestoneTemplates(
-  projectType: ProjectType,
+  projectType: string,  // accepts either hyphen-case (npi, cost-optimization) or underscore_case (cost_optimization)
   prisma: PrismaClient,
 ): Promise<MilestoneTemplate[]> {
-  const dbType = projectType.replace(/-/g, '_') // 'cost-optimization' → 'cost_optimization'
+  const dbType = projectType.replace(/-/g, '_')
+  const feType = projectType.replace(/_/g, '-')
   const dbRows = await prisma.milestoneTemplateConfig.findMany({
     where: { projectType: dbType },
     orderBy: { sortOrder: 'asc' },
@@ -74,5 +73,5 @@ export async function getMilestoneTemplates(
   if (dbRows.length > 0) {
     return dbRows.map(r => ({ name: r.name, durationDays: r.durationDays }))
   }
-  return MILESTONE_TEMPLATES[projectType] ?? []
+  return MILESTONE_TEMPLATES[feType] ?? MILESTONE_TEMPLATES[projectType] ?? []
 }
