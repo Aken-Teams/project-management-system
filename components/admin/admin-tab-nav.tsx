@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { Users, Settings, Bell, FileText, ShieldCheck } from 'lucide-react'
+import { Users, Settings, Bell, FileText, ShieldCheck, CalendarDays } from 'lucide-react'
 
 const tabs = [
   { label: '使用者管理', href: '/admin/users', icon: Users },
@@ -11,6 +11,7 @@ const tabs = [
   { label: '專案設定', href: '/admin/project-settings', icon: Settings },
   { label: '通知設定', href: '/admin/notifications', icon: Bell },
   { label: '報告設定', href: '/admin/reports', icon: FileText },
+  { label: '排程行事曆', href: '/admin/schedule', icon: CalendarDays },
 ]
 
 export function AdminTabNav() {

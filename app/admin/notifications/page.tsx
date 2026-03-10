@@ -7,11 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { Bell, CheckCircle2, AlertCircle, Info, Clock, Mail, MailX } from 'lucide-react'
 import { TemplateTextarea, applyTemplateSamples, type VariableDef } from '@/components/template-textarea'
-import { CronScheduleView } from '@/components/admin/cron-schedule-view'
 
 const DAY_OPTIONS = [
   { value: '1', label: '週一' }, { value: '2', label: '週二' }, { value: '3', label: '週三' },
@@ -148,9 +146,6 @@ export default function AdminNotificationsPage() {
 
   if (loading) return <p className="text-sm text-muted-foreground">載入中...</p>
 
-  const scheduleDay = parseInt(settings['notification.schedule.dayOfWeek'] ?? '5')
-  const scheduleHour = parseInt(settings['notification.schedule.hour'] ?? '9')
-
   const templateKey = previewType === 'missing' ? 'upload_missing' : 'report_ready'
   const previewTitle = applyTemplateSamples(
     settings[`notification.template.weekly_${templateKey}.title`] ?? '',
@@ -177,15 +172,7 @@ export default function AdminNotificationsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">設定週報通知的觸發時間與訊息內容</p>
       </div>
 
-      <Tabs defaultValue="settings">
-        <TabsList className="mb-4">
-          <TabsTrigger value="settings">通知設定</TabsTrigger>
-          <TabsTrigger value="schedule">行事曆</TabsTrigger>
-        </TabsList>
-
-        {/* ── Settings Tab ── */}
-        <TabsContent value="settings">
-          <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
+      <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
 
             {/* Left: settings */}
             <div className="space-y-5">
@@ -407,21 +394,6 @@ export default function AdminNotificationsPage() {
               <p className="text-xs text-muted-foreground text-center">以上為模擬預覽，實際通知以實際結果為準</p>
             </div>
           </div>
-        </TabsContent>
-
-        {/* ── Calendar Tab ── */}
-        <TabsContent value="schedule">
-          <Card className="max-w-2xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">通知排程行事曆</CardTitle>
-              <CardDescription className="text-xs">查看下次執行時間與歷史記錄</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CronScheduleView jobType="weekly_notification" scheduleDay={scheduleDay} scheduleHour={scheduleHour} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }

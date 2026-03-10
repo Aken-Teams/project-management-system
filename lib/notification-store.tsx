@@ -111,8 +111,6 @@ export function NotificationStoreProvider({ children }: { children: React.ReactN
     fetchNotifications()
   }, [fetchNotifications])
 
-  if (!loaded) return <>{children}</>
-
   return (
     <NotificationStoreContext.Provider value={{
       notifications,
