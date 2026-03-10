@@ -2,6 +2,41 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { PROJECT_TYPE_LABELS } from '@/lib/mock-data'
 
+// ─── Compute project status & progress from tasks/milestones (same logic as dashboard) ───
+function computeProjectProgress(milestones: { progress: number }[]): number {
+  if (milestones.length === 0) return 0
+  const total = milestones.reduce((sum, m) => sum + m.progress, 0)
+  return Math.round(total / milestones.length)
+}
+
+function computeProjectStatus(
+  tasks: { status: string; endDate: Date }[],
+  projectEndDate: Date,
+): 'green' | 'yellow' | 'red' {
+  if (tasks.length === 0) return 'green'
+
+  const today = new Date().toISOString().split('T')[0]
+  const overdueTasks = tasks.filter(t => t.status !== 'done' && t.endDate.toISOString().split('T')[0] < today)
+  const blockedTasks = tasks.filter(t => t.status === 'blocked')
+  const doneTasks = tasks.filter(t => t.status === 'done')
+
+  if (doneTasks.length === tasks.length) return 'green'
+
+  const overdueRatio = overdueTasks.length / tasks.length
+  const blockedRatio = blockedTasks.length / tasks.length
+
+  const projectEnd = projectEndDate.toISOString().split('T')[0]
+  if (overdueRatio > 0.3 || blockedRatio > 0.2 || (projectEnd < today && doneTasks.length < tasks.length)) {
+    return 'red'
+  }
+
+  if (overdueTasks.length > 0 || blockedTasks.length > 0) {
+    return 'yellow'
+  }
+
+  return 'green'
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -30,21 +65,27 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Compute actual status & progress for each project (same logic as dashboard)
+    const projectsWithStatus = projects.map(p => {
+      const parentTasks = p.tasks.filter(t => !t.parentId)
+      const actualStatus = computeProjectStatus(parentTasks, p.endDate)
+      const actualProgress = computeProjectProgress(p.milestones)
+      return { ...p, actualStatus, actualProgress }
+    })
+
     // Calculate summary statistics (parent tasks only, exclude subtasks)
-    const totalTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId).length, 0)
-    const doneTasks = projects.reduce(
+    const totalTasks = projectsWithStatus.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId).length, 0)
+    const doneTasks = projectsWithStatus.reduce(
       (sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'done').length,
       0,
     )
-    const totalMilestones = projects.reduce((sum, p) => sum + p.milestones.length, 0)
-    const doneMilestones = projects.reduce(
+    const totalMilestones = projectsWithStatus.reduce((sum, p) => sum + p.milestones.length, 0)
+    const doneMilestones = projectsWithStatus.reduce(
       (sum, p) => sum + p.milestones.filter(m => m.status === 'done').length,
       0,
     )
-    const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0)
-    const totalBudgetUsed = projects.reduce((sum, p) => sum + p.budgetUsed, 0)
-    const totalRisks = projects.reduce((sum, p) => sum + p.risks.length, 0)
-
+    const totalBudget = projectsWithStatus.reduce((sum, p) => sum + p.budget, 0)
+    const totalBudgetUsed = projectsWithStatus.reduce((sum, p) => sum + p.budgetUsed, 0)
     // Build HTML content for PDF
     const now = new Date().toLocaleString('zh-TW', {
       year: 'numeric',
@@ -341,65 +382,65 @@ export async function POST(request: NextRequest) {
   <div class="subtitle">生成時間：${now}</div>
 
   <!-- Stats Overview -->
+  ${(() => {
+    const avgProgress = projectsWithStatus.length > 0
+      ? Math.round(projectsWithStatus.reduce((sum, p) => sum + p.actualProgress, 0) / projectsWithStatus.length)
+      : 0
+    const totalRisksAndDelays = projectsWithStatus.reduce((sum, p) => sum + p.risks.length, 0)
+    return `
   <div class="grid grid-4 avoid-break" style="margin-bottom: 16px;">
     <div class="stat-card">
-      <span class="stat-label">總專案數</span>
-      <div class="stat-value">${projects.length}</div>
-      <div class="stat-sub">共 ${projects.length} 個專案</div>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">總任務數</span>
-      <div class="stat-value">${totalTasks}</div>
-      <div class="stat-sub">已完成 ${doneTasks} 個</div>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">里程碑進度</span>
-      <div class="stat-value">${doneMilestones}/${totalMilestones}</div>
-      <div class="stat-sub">${totalMilestones > 0 ? Math.round((doneMilestones / totalMilestones) * 100) : 0}% 完成</div>
+      <span class="stat-label">整體進度</span>
+      <div class="stat-value">${avgProgress}%</div>
+      <div class="stat-sub">共 ${projectsWithStatus.length} 個專案</div>
     </div>
     <div class="stat-card">
       <span class="stat-label">預算執行</span>
       <div class="stat-value">${totalBudget > 0 ? Math.round((totalBudgetUsed / totalBudget) * 100) : 0}%</div>
       <div class="stat-sub">${fmtMoney(totalBudgetUsed)} / ${fmtMoney(totalBudget)}</div>
     </div>
-  </div>
+    <div class="stat-card">
+      <span class="stat-label">里程碑</span>
+      <div class="stat-value">${doneMilestones}/${totalMilestones}</div>
+      <div class="stat-sub">${totalMilestones > 0 ? Math.round((doneMilestones / totalMilestones) * 100) : 0}% 完成</div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">未解決風險</span>
+      <div class="stat-value" style="color: ${totalRisksAndDelays > 0 ? '#dc2626' : '#0f172a'};">${totalRisksAndDelays}</div>
+      <div class="stat-sub">個未解決風險</div>
+    </div>
+  </div>`
+  })()}
 
   <!-- Charts Section -->
   <div class="grid grid-3 avoid-break" style="margin-bottom: 20px;">
     ${(() => {
-      const inProgressTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'in_progress').length, 0)
-      const blockedTasks = projects.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'blocked').length, 0)
+      const inProgressTasks = projectsWithStatus.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'in_progress').length, 0)
+      const blockedTasks = projectsWithStatus.reduce((sum, p) => sum + p.tasks.filter(t => !t.parentId && t.status === 'blocked').length, 0)
       const todoTasks = totalTasks - doneTasks - inProgressTasks - blockedTasks
 
-      const donePercent = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0
-      const inProgressPercent = totalTasks > 0 ? (inProgressTasks / totalTasks) * 100 : 0
-      const blockedPercent = totalTasks > 0 ? (blockedTasks / totalTasks) * 100 : 0
-      const todoPercent = totalTasks > 0 ? (todoTasks / totalTasks) * 100 : 0
+      const C = 2 * Math.PI * 50
+      const taskSegs = [
+        { v: doneTasks, color: '#10b981' },
+        { v: inProgressTasks, color: '#3b82f6' },
+        { v: todoTasks, color: '#94a3b8' },
+        { v: blockedTasks, color: '#ef4444' },
+      ]
+      let taskAcc = 0
+      const taskCircles = totalTasks > 0 ? taskSegs.filter(s => s.v > 0).map(s => {
+        const dl = C * (s.v / totalTasks)
+        const doff = C * (1 - taskAcc / totalTasks)
+        taskAcc += s.v
+        return `<circle cx="70" cy="70" r="50" fill="none" stroke="${s.color}" stroke-width="20" stroke-dasharray="${dl} ${C - dl}" stroke-dashoffset="${doff}"/>`
+      }).join('') : ''
 
       return `
         <div class="card">
           <div class="card-title">任務狀態分佈</div>
           <div class="donut-chart">
-            <svg width="140" height="140" viewBox="0 0 140 140">
+            <svg width="140" height="140" viewBox="0 0 140 140" style="transform: rotate(-90deg); transform-origin: 50% 50%;">
               <circle cx="70" cy="70" r="50" fill="none" stroke="#e2e8f0" stroke-width="20"/>
-              ${totalTasks > 0 ? `
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#10b981" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * donePercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * 0.25}"
-                  transform="rotate(-90 70 70)"/>
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#3b82f6" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * inProgressPercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * (0.25 - donePercent / 100)}"
-                  transform="rotate(-90 70 70)"/>
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#94a3b8" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * todoPercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * (0.25 - donePercent / 100 - inProgressPercent / 100)}"
-                  transform="rotate(-90 70 70)"/>
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#ef4444" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * blockedPercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * (0.25 - donePercent / 100 - inProgressPercent / 100 - todoPercent / 100)}"
-                  transform="rotate(-90 70 70)"/>
-              ` : ''}
+              ${taskCircles}
             </svg>
             <div class="donut-center">
               <div class="donut-value">${totalTasks}</div>
@@ -433,37 +474,35 @@ export async function POST(request: NextRequest) {
     })()}
 
     ${(() => {
-      const greenProjects = projects.filter(p => p.status === 'green').length
-      const yellowProjects = projects.filter(p => p.status === 'yellow').length
-      const redProjects = projects.filter(p => p.status === 'red').length
+      const greenProjects = projectsWithStatus.filter(p => p.actualStatus === 'green').length
+      const yellowProjects = projectsWithStatus.filter(p => p.actualStatus === 'yellow').length
+      const redProjects = projectsWithStatus.filter(p => p.actualStatus === 'red').length
+      const totalP = projectsWithStatus.length
 
-      const greenPercent = projects.length > 0 ? (greenProjects / projects.length) * 100 : 0
-      const yellowPercent = projects.length > 0 ? (yellowProjects / projects.length) * 100 : 0
-      const redPercent = projects.length > 0 ? (redProjects / projects.length) * 100 : 0
+      const C = 2 * Math.PI * 50
+      const healthSegs = [
+        { v: greenProjects, color: '#10b981' },
+        { v: yellowProjects, color: '#f59e0b' },
+        { v: redProjects, color: '#ef4444' },
+      ]
+      let healthAcc = 0
+      const healthCircles = totalP > 0 ? healthSegs.filter(s => s.v > 0).map(s => {
+        const dl = C * (s.v / totalP)
+        const doff = C * (1 - healthAcc / totalP)
+        healthAcc += s.v
+        return `<circle cx="70" cy="70" r="50" fill="none" stroke="${s.color}" stroke-width="20" stroke-dasharray="${dl} ${C - dl}" stroke-dashoffset="${doff}"/>`
+      }).join('') : ''
 
       return `
         <div class="card">
           <div class="card-title">專案健康度</div>
           <div class="donut-chart">
-            <svg width="140" height="140" viewBox="0 0 140 140">
+            <svg width="140" height="140" viewBox="0 0 140 140" style="transform: rotate(-90deg); transform-origin: 50% 50%;">
               <circle cx="70" cy="70" r="50" fill="none" stroke="#e2e8f0" stroke-width="20"/>
-              ${projects.length > 0 ? `
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#10b981" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * greenPercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * 0.25}"
-                  transform="rotate(-90 70 70)"/>
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#f59e0b" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * yellowPercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * (0.25 - greenPercent / 100)}"
-                  transform="rotate(-90 70 70)"/>
-                <circle cx="70" cy="70" r="50" fill="none" stroke="#ef4444" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * redPercent / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * (0.25 - greenPercent / 100 - yellowPercent / 100)}"
-                  transform="rotate(-90 70 70)"/>
-              ` : ''}
+              ${healthCircles}
             </svg>
             <div class="donut-center">
-              <div class="donut-value">${projects.length}</div>
+              <div class="donut-value">${totalP}</div>
               <div class="donut-label">專案</div>
             </div>
           </div>
@@ -496,14 +535,13 @@ export async function POST(request: NextRequest) {
         <div class="card">
           <div class="card-title">預算執行狀況</div>
           <div class="donut-chart">
-            <svg width="140" height="140" viewBox="0 0 140 140">
+            <svg width="140" height="140" viewBox="0 0 140 140" style="transform: rotate(-90deg); transform-origin: 50% 50%;">
               <circle cx="70" cy="70" r="50" fill="none" stroke="#e2e8f0" stroke-width="20"/>
-              ${totalBudget > 0 ? `
-                <circle cx="70" cy="70" r="50" fill="none" stroke="${isOverBudget ? '#ef4444' : budgetPercent > 80 ? '#f59e0b' : '#10b981'}" stroke-width="20"
-                  stroke-dasharray="${2 * Math.PI * 50 * Math.min(budgetPercent, 100) / 100} ${2 * Math.PI * 50}"
-                  stroke-dashoffset="${2 * Math.PI * 50 * 0.25}"
-                  transform="rotate(-90 70 70)"/>
-              ` : ''}
+              ${totalBudget > 0 ? (() => {
+                const C = 2 * Math.PI * 50
+                const dl = C * Math.min(budgetPercent, 100) / 100
+                return `<circle cx="70" cy="70" r="50" fill="none" stroke="${isOverBudget ? '#ef4444' : budgetPercent > 80 ? '#f59e0b' : '#10b981'}" stroke-width="20" stroke-dasharray="${dl} ${C - dl}" stroke-dashoffset="${C}"/>`
+              })() : ''}
             </svg>
             <div class="donut-center">
               <div class="donut-value" style="color: ${isOverBudget ? '#dc2626' : '#0f172a'};">${budgetPercent}%</div>
@@ -532,13 +570,13 @@ export async function POST(request: NextRequest) {
   </div>
 
   <!-- Projects Detail (each on separate page) -->
-  ${projects.map((project, index) => {
+  ${projectsWithStatus.map((project, index) => {
     const statusClass =
-      project.status === 'green' ? 'badge-green' :
-      project.status === 'yellow' ? 'badge-yellow' : 'badge-red'
+      project.actualStatus === 'green' ? 'badge-green' :
+      project.actualStatus === 'yellow' ? 'badge-yellow' : 'badge-red'
     const statusText =
-      project.status === 'green' ? '正常' :
-      project.status === 'yellow' ? '注意' : '風險'
+      project.actualStatus === 'green' ? '正常' :
+      project.actualStatus === 'yellow' ? '注意' : '風險'
 
     return `
       ${index > 0 ? '<div class="page-break"></div>' : ''}
@@ -575,9 +613,9 @@ export async function POST(request: NextRequest) {
           </div>
           <div class="stat-card">
             <span class="stat-label">進度</span>
-            <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 4px;">${project.progress}%</div>
+            <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-top: 4px;">${project.actualProgress}%</div>
             <div class="progress-bar" style="margin-top: 6px;">
-              <div class="progress-fill" style="width: ${project.progress}%; background: #3b82f6;"></div>
+              <div class="progress-fill" style="width: ${project.actualProgress}%; background: #3b82f6;"></div>
             </div>
           </div>
           <div class="stat-card">

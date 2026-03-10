@@ -221,6 +221,7 @@ export default function ReportsPage() {
   const [emailSearchLoading, setEmailSearchLoading] = useState(false)
   const [emailFetchingUsers, setEmailFetchingUsers] = useState<Set<string>>(new Set())
   const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [isPreviewingPdf, setIsPreviewingPdf] = useState(false)
 
   // ── Fetch reports data from API ──
   useEffect(() => {
@@ -468,50 +469,32 @@ export default function ReportsPage() {
     }
   }
 
-  const handleSendEmail = async () => {
-    const validRecipients = emailSelectedUsers.filter(u => u.email)
-    if (validRecipients.length === 0) {
-      alert('請先選擇有效的收件人（需有 email）')
-      return
-    }
-    if (selectedProjectIds.length === 0) {
-      alert('請至少選擇一個專案')
-      return
-    }
+  // Shared PDF builder (html2canvas → jsPDF) — returns pdf object
+  const buildEmailPdf = async (projectIds: string[]) => {
+    const pdfRes = await fetch('/api/reports/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectIds }),
+    })
+    if (!pdfRes.ok) throw new Error('PDF 生成失敗')
+    const html = await pdfRes.text()
 
-    setIsSendingEmail(true)
-    let styleEl: HTMLStyleElement | null = null
-    let container: HTMLDivElement | null = null
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(html, 'text/html')
+    const styleContent = Array.from(doc.querySelectorAll('style')).map(s => s.textContent || '').join('\n')
+
+    const container = document.createElement('div')
+    container.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1400px;background:#ffffff;overflow:visible;z-index:-1'
+    container.innerHTML = doc.body.innerHTML
+
+    const styleEl = document.createElement('style')
+    styleEl.textContent = styleContent
+    document.head.appendChild(styleEl)
+    document.body.appendChild(container)
 
     try {
-      // Step 1: Get report HTML from backend
-      const pdfRes = await fetch('/api/reports/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectIds: selectedProjectIds }),
-      })
-      if (!pdfRes.ok) throw new Error('PDF 生成失敗')
-      const html = await pdfRes.text()
-
-      // Step 2: Parse and inject HTML into DOM so html2canvas can capture it
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(html, 'text/html')
-      const styleContent = Array.from(doc.querySelectorAll('style'))
-        .map(s => s.textContent || '').join('\n')
-
-      container = document.createElement('div')
-      container.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1400px;background:#ffffff;overflow:visible;z-index:-1'
-      container.innerHTML = doc.body.innerHTML
-
-      styleEl = document.createElement('style')
-      styleEl.textContent = styleContent
-      document.head.appendChild(styleEl)
-      document.body.appendChild(container)
-
-      // Wait for fonts and images to render
       await new Promise(r => setTimeout(r, 1800))
 
-      // Step 3: Capture with html2canvas
       const { default: html2canvasFn } = await import('html2canvas')
       const canvas = await html2canvasFn(container, {
         scale: 1.5,
@@ -522,28 +505,17 @@ export default function ReportsPage() {
         backgroundColor: '#ffffff',
       })
 
-      // Cleanup injected DOM
-      document.body.removeChild(container)
-      document.head.removeChild(styleEl)
-      container = null
-      styleEl = null
-
-      // Step 4: Build multi-page landscape A4 PDF with margins and smart page breaks
       const { jsPDF } = await import('jspdf')
-      const A4_W = 841.89   // pts, landscape
+      const A4_W = 841.89
       const A4_H = 595.28
-      const MARGIN = 30     // ~11mm margin on all sides
+      const MARGIN = 30
       const imgW = A4_W - 2 * MARGIN
       const imgH_avail = A4_H - 2 * MARGIN
-
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
 
-      // pt per canvas pixel
       const ptPerPx = imgW / canvas.width
       const pxPerPage = imgH_avail / ptPerPx
 
-      // Scan pixel rows to find the lightest (whitest) row near a target cut point,
-      // so we avoid slicing through text or card borders.
       const findCutRow = (nearPx: number): number => {
         const range = Math.min(100, Math.floor(pxPerPage * 0.07))
         const start = Math.max(0, Math.round(nearPx) - range)
@@ -551,8 +523,7 @@ export default function ReportsPage() {
         const ctx = canvas.getContext('2d')!
         const data = ctx.getImageData(0, start, canvas.width, end - start + 1).data
         const step = Math.max(1, Math.floor(canvas.width / 120))
-        let bestRow = Math.round(nearPx)
-        let bestAvg = -1
+        let bestRow = Math.round(nearPx), bestAvg = -1
         for (let row = 0; row <= end - start; row++) {
           let sum = 0, cnt = 0
           for (let col = 0; col < canvas.width; col += step) {
@@ -565,27 +536,59 @@ export default function ReportsPage() {
         return bestRow
       }
 
-      let srcY = 0
-      let firstPage = true
+      let srcY = 0, firstPage = true
       while (srcY < canvas.height) {
         if (!firstPage) pdf.addPage()
         firstPage = false
-
         const idealEnd = srcY + pxPerPage
         const cutY = idealEnd >= canvas.height ? canvas.height : findCutRow(idealEnd)
         const sliceH = Math.max(1, cutY - srcY)
-
         const slice = document.createElement('canvas')
         slice.width = canvas.width
         slice.height = sliceH
         slice.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
-
-        const slicePt = sliceH * ptPerPx
-        pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN, MARGIN, imgW, slicePt)
+        pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN, MARGIN, imgW, sliceH * ptPerPx)
         srcY = cutY
       }
 
-      // Step 5: Send email with PDF attachment via mail API
+      return pdf
+    } finally {
+      if (document.body.contains(container)) document.body.removeChild(container)
+      if (document.head.contains(styleEl)) document.head.removeChild(styleEl)
+    }
+  }
+
+  const handlePreviewEmailPdf = async () => {
+    if (selectedProjectIds.length === 0) { alert('請至少選擇一個專案'); return }
+    setIsPreviewingPdf(true)
+    try {
+      const pdf = await buildEmailPdf(selectedProjectIds)
+      const date = new Date().toLocaleDateString('zh-TW').replace(/\//g, '')
+      pdf.save(`專案報告_預覽_${date}.pdf`)
+    } catch (err) {
+      console.error('Preview PDF failed:', err)
+      alert(err instanceof Error ? err.message : 'PDF 預覽失敗')
+    } finally {
+      setIsPreviewingPdf(false)
+    }
+  }
+
+  const handleSendEmail = async () => {
+    const validRecipients = emailSelectedUsers.filter(u => u.email)
+    if (validRecipients.length === 0) {
+      alert('請先選擇有效的收件人（需有 email）')
+      return
+    }
+    if (selectedProjectIds.length === 0) {
+      alert('請至少選擇一個專案')
+      return
+    }
+
+    setIsSendingEmail(true)
+    try {
+      const pdf = await buildEmailPdf(selectedProjectIds)
+
+      // Send email with PDF attachment via mail API
       const date = new Date().toLocaleDateString('zh-TW').replace(/\//g, '')
       const filename = `專案報告_${date}.pdf`
       const pdfBase64 = pdf.output('datauristring').split(',')[1]
@@ -617,8 +620,6 @@ export default function ReportsPage() {
       console.error('Email send failed:', err)
       alert(err instanceof Error ? err.message : '寄送失敗，請稍後再試')
     } finally {
-      if (container && document.body.contains(container)) document.body.removeChild(container)
-      if (styleEl && document.head.contains(styleEl)) document.head.removeChild(styleEl)
       setIsSendingEmail(false)
     }
   }
@@ -878,12 +879,24 @@ export default function ReportsPage() {
                   </div>
 
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowEmailDialog(false)} size="lg" disabled={isSendingEmail}>
+                    <Button variant="outline" onClick={() => setShowEmailDialog(false)} size="lg" disabled={isSendingEmail || isPreviewingPdf}>
                       取消
                     </Button>
                     <Button
+                      variant="outline"
+                      onClick={handlePreviewEmailPdf}
+                      disabled={selectedProjectIds.length === 0 || isPreviewingPdf || isSendingEmail}
+                      className="gap-2"
+                      size="lg"
+                    >
+                      {isPreviewingPdf
+                        ? <><Loader2 className="h-4 w-4 animate-spin" /> 產生中...</>
+                        : <><FileDown className="h-4 w-4" /> 下載預覽 PDF</>
+                      }
+                    </Button>
+                    <Button
                       onClick={handleSendEmail}
-                      disabled={emailSelectedUsers.filter(u => u.email).length === 0 || selectedProjectIds.length === 0 || isSendingEmail}
+                      disabled={emailSelectedUsers.filter(u => u.email).length === 0 || selectedProjectIds.length === 0 || isSendingEmail || isPreviewingPdf}
                       className="gap-2"
                       size="lg"
                     >
