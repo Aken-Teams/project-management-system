@@ -182,6 +182,7 @@ model Project {
   taskLogs        TaskLog[]
   notifications   Notification[]
   shareLinks      ShareLink[]
+  budgetItems     ProjectBudgetItem[]
 
   @@index([startDate, endDate])
   @@map("projects")
@@ -457,6 +458,24 @@ model ShareLink {
   @@index([projectId])
   @@index([token])
   @@map("share_links")
+}
+
+model ProjectBudgetItem {
+  id            String   @id @default(cuid())
+  projectId     String   @map("project_id")
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  station       String   @default("") // 站別
+  vendor        String   @default("") // 廠商
+  equipment     String   @default("") // 設備機型/名稱
+  quantity      Int      @default(1)  // 組數
+  purchaseType  String   @default("") @map("purchase_type") // 選購方式
+  estimatedCost Float?   @map("estimated_cost") // 預估費用
+  actualCost    Float?   @map("actual_cost")    // 實際費用
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([projectId, sortOrder])
+  @@map("project_budget_items")
 }
 
 model ProjectCodeSequence {

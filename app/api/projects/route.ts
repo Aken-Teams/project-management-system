@@ -85,6 +85,15 @@ interface CreateProjectBody {
     mitigation: string
     status: string
   }[]
+  budgetItems?: {
+    station?: string
+    vendor?: string
+    equipment: string
+    quantity?: number
+    purchaseType?: string
+    estimatedCost?: number | null
+    actualCost?: number | null
+  }[]
 }
 
 export async function POST(request: NextRequest) {
@@ -366,6 +375,23 @@ export async function POST(request: NextRequest) {
             },
           })
         }
+      }
+
+      // 8. Create budget items
+      if (body.budgetItems?.length) {
+        await tx.projectBudgetItem.createMany({
+          data: body.budgetItems.map((item, i) => ({
+            projectId: proj.id,
+            station: item.station ?? '',
+            vendor: item.vendor ?? '',
+            equipment: item.equipment ?? '',
+            quantity: item.quantity ?? 1,
+            purchaseType: item.purchaseType ?? '',
+            estimatedCost: item.estimatedCost ?? null,
+            actualCost: item.actualCost ?? null,
+            sortOrder: i,
+          })),
+        })
       }
 
       return { proj, milestones, tasks, risks }

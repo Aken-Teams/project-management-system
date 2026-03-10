@@ -30,6 +30,7 @@ import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
 import { TimelineTable } from '@/components/timeline-table'
 import { TeamMemberTable } from '@/components/team-member-table'
 import { VoiceInputButton } from '@/components/voice-input-button'
+import { BudgetListEditor } from '@/components/budget-list-editor'
 import {
   Loader2,
   Sparkles,
@@ -340,6 +341,7 @@ export default function NewProjectPage() {
   const [manualDemandSource, setManualDemandSource] = useState<DemandSource | ''>('')
   const [manualMilestones, setManualMilestones] = useState<ManualMilestone[]>([])
   const [manualRisks, setManualRisks] = useState<ManualRisk[]>([])
+  const [manualBudgetItems, setManualBudgetItems] = useState<import('@/components/budget-list-editor').BudgetItem[]>([])
   const [editingRiskIndex, setEditingRiskIndex] = useState<number | null>(null)
   const [showRiskAddForm, setShowRiskAddForm] = useState(false)
   const [manualTeamDetails, setManualTeamDetails] = useState<TeamMemberDraft[]>([])
@@ -348,6 +350,14 @@ export default function NewProjectPage() {
 
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
+
+  // Auto-sync budget from budget items total
+  useEffect(() => {
+    const total = manualBudgetItems.reduce((sum, item) => sum + (item.estimatedCost ?? 0), 0)
+    if (manualBudgetItems.some(i => i.estimatedCost != null)) {
+      setManualData(prev => ({ ...prev, budget: String(total) }))
+    }
+  }, [manualBudgetItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load drafts from API on mount
   useEffect(() => {
@@ -876,6 +886,7 @@ export default function NewProjectPage() {
           risks: validRisks,
           tasks: validTasks,
           teamMembers: teamMembersData,
+          budgetItems: manualBudgetItems,
         }),
       })
 
@@ -1798,17 +1809,33 @@ export default function NewProjectPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="budget">
-                        投資預算 (NT$)
-                      </Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="budget">投資預算 (NT$)</Label>
+                        {manualBudgetItems.some(i => i.estimatedCost != null) && (
+                          <span className="text-xs text-muted-foreground">由設備清單自動計算</span>
+                        )}
+                      </div>
                       <Input
                         id="budget"
                         type="number"
                         placeholder="5000000"
                         value={manualData.budget}
                         onChange={(e) => setManualData({ ...manualData, budget: e.target.value })}
+                        readOnly={manualBudgetItems.some(i => i.estimatedCost != null)}
+                        className={manualBudgetItems.some(i => i.estimatedCost != null) ? 'bg-muted cursor-not-allowed' : ''}
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>投資設備清單（選填）</Label>
+                    <p className="text-xs text-muted-foreground -mt-1">
+                      各設備預估費用合計自動更新上方預算金額。可手動新增，或上傳截圖讓 AI 解析。
+                    </p>
+                    <BudgetListEditor
+                      items={manualBudgetItems}
+                      onChange={setManualBudgetItems}
+                    />
                   </div>
 
                   <div className="space-y-2">

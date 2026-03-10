@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign } from 'lucide-react'
+import { BudgetListEditor, type BudgetItem } from '@/components/budget-list-editor'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -148,6 +149,28 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [teamMembers, setTeamMembers] = useState(project.teamMembers ?? [])
   const [teamLoading, setTeamLoading] = useState<string | null>(null)
   const [teamError, setTeamError] = useState('')
+
+  // ─── Budget items state ──────────────────────────────────
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([])
+  const [budgetItemsLoaded, setBudgetItemsLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setBudgetItemsLoaded(false)
+    fetch(`/api/projects/${project.id}/budget-items`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: BudgetItem[]) => { setBudgetItems(data); setBudgetItemsLoaded(true) })
+      .catch(() => setBudgetItemsLoaded(true))
+  }, [open, project.id])
+
+  // Auto-sync budget from items total
+  useEffect(() => {
+    if (!budgetItemsLoaded) return
+    const total = budgetItems.reduce((sum, item) => sum + (item.estimatedCost ?? 0), 0)
+    if (budgetItems.some(i => i.estimatedCost != null)) {
+      update('budget', total)
+    }
+  }, [budgetItems, budgetItemsLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Risk state ─────────────────────────────────────────
   const [risks, setRisks] = useState<Risk[]>(project.risks ?? [])
@@ -436,6 +459,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
     // ─── No date changes: proceed with normal full save ──
     await executeBatchSave(diff)
+
+    // ─── Save budget items ───────────────────────────────
+    await fetch(`/api/projects/${project.id}/budget-items`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: budgetItems }),
+    })
 
     return true
   }
@@ -812,13 +842,35 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-budget">預算 (NTD)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-budget">投資預算 (NTD)</Label>
+                {budgetItems.some(i => i.estimatedCost != null) && (
+                  <span className="text-xs text-muted-foreground">由設備清單自動計算</span>
+                )}
+              </div>
               <Input
                 id="edit-budget"
                 type="number"
                 value={form.budget}
                 onChange={e => update('budget', Number(e.target.value) || 0)}
+                readOnly={budgetItems.some(i => i.estimatedCost != null)}
+                className={budgetItems.some(i => i.estimatedCost != null) ? 'bg-muted cursor-not-allowed' : ''}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>投資設備清單</Label>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                各設備預估費用合計自動更新上方預算金額
+              </p>
+              {!budgetItemsLoaded ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  載入中...
+                </div>
+              ) : (
+                <BudgetListEditor items={budgetItems} onChange={setBudgetItems} />
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1188,6 +1240,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               <p className="text-sm text-destructive">{workItemError}</p>
             )}
           </TabsContent>
+
         </Tabs>
 
         {error && (
