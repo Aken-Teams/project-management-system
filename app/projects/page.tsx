@@ -26,6 +26,7 @@ import {
 import Link from 'next/link'
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/lib/auth-context'
+import { getRolePermissions } from '@/lib/permissions'
 import { Loader2 } from 'lucide-react'
 import { useProjectTypes } from '@/hooks/use-project-types'
 
@@ -123,7 +124,7 @@ export default function ProjectsPage() {
               }
             </p>
           </div>
-          {user?.role === 'pm' && (
+          {getRolePermissions(user?.role).canCreateProject && (
             <Link href="/projects/new">
               <Button>建立新專案</Button>
             </Link>

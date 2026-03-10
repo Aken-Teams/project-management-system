@@ -13,7 +13,7 @@ export interface Permission {
   canViewGantt: boolean
 }
 
-export function getRolePermissions(role: UserRole): Permission {
+export function getRolePermissions(role: UserRole | undefined | null): Permission {
   switch (role) {
     case 'pm':
       return {

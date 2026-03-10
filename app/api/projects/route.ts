@@ -138,18 +138,32 @@ export async function POST(request: NextRequest) {
 
     // ─── Generate project code (atomic) ────────────────
     const currentYear = new Date().getFullYear()
-    const sequence = await prisma.projectCodeSequence.upsert({
-      where: {
-        projectType_year: {
-          projectType: dbProjectType,
-          year: currentYear,
-        },
-      },
-      update: { lastSeq: { increment: 1 } },
-      create: { projectType: dbProjectType, year: currentYear, lastSeq: 1 },
+    const prefix = CODE_PREFIX[dbProjectType] || 'PRJ'
+
+    // When no sequence record exists (e.g. after a DB migration), initialize
+    // from the highest existing project code to avoid unique constraint conflicts
+    const existingSeq = await prisma.projectCodeSequence.findUnique({
+      where: { projectType_year: { projectType: dbProjectType, year: currentYear } },
     })
 
-    const prefix = CODE_PREFIX[dbProjectType as string] || 'PRJ'
+    let initSeq = 1
+    if (!existingSeq) {
+      const maxProject = await prisma.project.findFirst({
+        where: { projectCode: { startsWith: `${prefix}-${currentYear}-` } },
+        orderBy: { projectCode: 'desc' },
+        select: { projectCode: true },
+      })
+      if (maxProject) {
+        initSeq = parseInt(maxProject.projectCode.split('-').pop() || '0', 10) + 1
+      }
+    }
+
+    const sequence = await prisma.projectCodeSequence.upsert({
+      where: { projectType_year: { projectType: dbProjectType, year: currentYear } },
+      update: { lastSeq: { increment: 1 } },
+      create: { projectType: dbProjectType, year: currentYear, lastSeq: initSeq },
+    })
+
     const projectCode = `${prefix}-${currentYear}-${String(sequence.lastSeq).padStart(3, '0')}`
 
     // ─── Create project with all relations in a transaction ─
