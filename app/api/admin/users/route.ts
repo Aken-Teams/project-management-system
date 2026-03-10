@@ -52,3 +52,31 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ users, total, page, limit })
 }
+
+const VALID_ROLES: UserRole[] = ['pm', 'member', 'executive', 'admin']
+
+// POST /api/admin/users — pre-register an AD user with a role
+export async function POST(request: NextRequest) {
+  if (!await guardAdmin(request)) {
+    return NextResponse.json({ error: '無權限' }, { status: 403 })
+  }
+
+  const { email, name, role, organization, jobTitle } = await request.json()
+
+  if (!email || !name || !role) {
+    return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
+  }
+  if (!VALID_ROLES.includes(role)) {
+    return NextResponse.json({ error: '無效的角色' }, { status: 400 })
+  }
+
+  // Upsert: if email already in DB, just update role/org
+  const user = await prisma.user.upsert({
+    where: { email },
+    create: { name, email, role, organization: organization ?? '', jobTitle: jobTitle ?? '' },
+    update: { role, organization: organization ?? undefined },
+    select: { id: true, name: true, email: true, role: true, organization: true },
+  })
+
+  return NextResponse.json(user)
+}

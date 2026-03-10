@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import {
   Search, ChevronLeft, ChevronRight, Pencil, ChevronDown, ChevronRight as ChevronRightIcon,
-  Users, Loader2, FolderOpen, ExternalLink, CalendarCheck, AlertCircle,
+  Users, Loader2, FolderOpen, ExternalLink, CalendarCheck, AlertCircle, UserPlus,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -104,6 +104,8 @@ const DEPTH_COLORS = [
   'text-muted-foreground',
 ]
 
+const LINE_W = 14 // px per depth level
+
 function OrgTreeNodeItem({
   node, depth, isLast, parentLines, selectedOrg, onSelect,
 }: {
@@ -114,49 +116,58 @@ function OrgTreeNodeItem({
   const [expanded, setExpanded] = useState(depth < 1)
   const hasChildren = node.children.length > 0
   const isSelected = selectedOrg === node.name
-
-  // Build prefix: vertical lines from ancestors + connector for this node
-  const prefix = depth === 0 ? '' :
-    parentLines.map(hasLine => hasLine ? '│  ' : '   ').join('') +
-    (isLast ? '└─ ' : '├─ ')
-
   const childParentLines = [...parentLines, !isLast]
   const colorClass = DEPTH_COLORS[Math.min(depth, DEPTH_COLORS.length - 1)]
+  const mid = Math.floor(LINE_W / 2) // 7px — center of each guide column
 
   return (
     <div>
-      <div className="flex items-center">
+      {/* items-stretch: guide columns stretch to match button height automatically */}
+      <div className="flex items-stretch">
+        {/* Ancestor vertical guide lines */}
+        {parentLines.map((hasLine, i) => (
+          <div key={i} className="relative shrink-0" style={{ width: LINE_W }}>
+            {hasLine && (
+              <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 0, bottom: 0, width: 1 }} />
+            )}
+          </div>
+        ))}
+
+        {/* Current node connector elbow */}
+        {depth > 0 && (
+          <div className="relative shrink-0" style={{ width: LINE_W }}>
+            {/* Vertical: top → elbow */}
+            <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 0, height: 13, width: 1 }} />
+            {/* Vertical: elbow → bottom (only if not last sibling) */}
+            {!isLast && (
+              <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 13, bottom: 0, width: 1 }} />
+            )}
+            {/* Horizontal: elbow → button */}
+            <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 13, right: 0, height: 1 }} />
+          </div>
+        )}
+
+        {/* Node button */}
         <button
-          title={node.name}
           className={cn(
-            'flex-1 flex items-center text-left text-sm py-1 px-1 rounded transition-colors min-w-0',
+            'flex-1 flex items-start text-left text-sm py-1 px-1 rounded transition-colors min-w-0',
             colorClass,
             isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50'
           )}
           onClick={() => onSelect(collectNames(node))}
         >
-          {/* Tree connector */}
-          {depth > 0 && (
-            <span
-              className="shrink-0 font-mono text-muted-foreground/40 whitespace-pre leading-5"
-              style={{ fontSize: '12px' }}
-            >
-              {prefix}
-            </span>
-          )}
-          {/* Expand toggle */}
           {hasChildren ? (
             <span
-              className="shrink-0 text-muted-foreground mr-0.5"
+              className="shrink-0 text-muted-foreground mr-0.5 mt-0.5"
               onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
             >
-              {expanded
-                ? <ChevronDown className="h-3 w-3 inline" />
-                : <ChevronRightIcon className="h-3 w-3 inline" />}
+              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRightIcon className="h-3 w-3" />}
             </span>
-          ) : <span className="w-3 shrink-0" />}
-          <span className="flex-1 truncate">{node.name}</span>
-          <span className="shrink-0 tabular-nums text-muted-foreground/60 ml-1 text-xs">
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
+          <span className="flex-1 leading-5">{node.name}</span>
+          <span className="shrink-0 tabular-nums text-muted-foreground/60 ml-1 text-xs mt-px">
             {node.totalCount}
           </span>
         </button>
@@ -214,7 +225,7 @@ function OrgTreePanel({
       </button>
 
       {/* Tree */}
-      <div className="overflow-y-auto flex-1 pr-1" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+      <div className="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ maxHeight: 'calc(100vh - 260px)' }}>
         {orgLoading && (
           <div className="flex items-center gap-1.5 px-1 py-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" /> 載入中...
@@ -260,15 +271,10 @@ function UserDetailSheet({
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
       <SheetContent className="w-[480px] sm:max-w-[480px] overflow-y-auto">
-        {loading && (
-          <div className="flex items-center justify-center h-40">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        )}
-        {!loading && u && detail && (
-          <div className="space-y-5 pt-2">
-            <SheetHeader>
-              <SheetTitle className="flex items-center gap-3">
+        <SheetHeader className={cn(!loading && u ? '' : 'sr-only')}>
+          <SheetTitle className="flex items-center gap-3">
+            {u && (
+              <>
                 <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-base font-semibold shrink-0">
                   {u.name.slice(0, 1)}
                 </div>
@@ -281,8 +287,18 @@ function UserDetailSheet({
                   </div>
                   <div className="text-sm text-muted-foreground font-normal truncate">{u.email}</div>
                 </div>
-              </SheetTitle>
-            </SheetHeader>
+              </>
+            )}
+            {!u && <span>使用者詳細資料</span>}
+          </SheetTitle>
+        </SheetHeader>
+        {loading && (
+          <div className="flex items-center justify-center h-40">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        {!loading && u && detail && (
+          <div className="space-y-5 pt-2">
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><p className="text-xs text-muted-foreground mb-0.5">部門</p><p className="font-medium">{u.organization || '—'}</p></div>
@@ -337,7 +353,7 @@ function UserDetailSheet({
                           {p.name} <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                         </Link>
                         <span className={cn('inline-flex px-1.5 py-0.5 rounded text-xs font-medium shrink-0', STATUS_COLORS[p.status])}>
-                          {p.status === 'green' ? '正常' : p.status === 'yellow' ? '警示' : '延誤'}
+                          {p.status === 'green' ? '正常' : p.status === 'yellow' ? '注意' : '風險'}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -373,7 +389,7 @@ function UserDetailSheet({
                       <Link href={`/projects/${p.id}`} className="flex-1 hover:underline truncate" target="_blank">{p.name}</Link>
                       <span className="text-xs text-muted-foreground shrink-0">{TEAM_ROLE_LABELS[p.teamRole] ?? p.teamRole}</span>
                       <span className={cn('inline-flex px-1.5 py-0.5 rounded text-xs font-medium shrink-0', STATUS_COLORS[p.status])}>
-                        {p.status === 'green' ? '正常' : p.status === 'yellow' ? '警示' : '延誤'}
+                        {p.status === 'green' ? '正常' : p.status === 'yellow' ? '注意' : '風險'}
                       </span>
                     </div>
                   ))}
@@ -430,12 +446,20 @@ export default function AdminUsersPage() {
   const [tableLoading, setTableLoading] = useState(true)
   const limit = 10
 
-  // Edit dialog
+  // Edit dialog (existing DB user)
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [editRole, setEditRole] = useState<UserRole>('member')
   const [editOrg, setEditOrg] = useState('')
   const [editActive, setEditActive] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // Add-from-AD dialog (AD-only user)
+  interface AddingUser { adUsername: string; name: string; org: string; email: string | null }
+  const [addingUser, setAddingUser] = useState<AddingUser | null>(null)
+  const [addRole, setAddRole] = useState<UserRole>('member')
+  const [addOrg, setAddOrg] = useState('')
+  const [addLoading, setAddLoading] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   // Detail sheet
   const [detailDbId, setDetailDbId] = useState<string | null>(null)
@@ -539,6 +563,47 @@ export default function AdminUsersPage() {
     setDetailOpen(false)
   }
 
+  const openAddFromAd = async (row: DisplayRow) => {
+    const draft: AddingUser = { adUsername: row.key, name: row.name, org: row.organization, email: null }
+    setAddingUser(draft)
+    setAddRole('member')
+    setAddOrg(row.organization)
+    setAddLoading(true)
+    try {
+      const res = await fetch(`/api/ad-users/${encodeURIComponent(row.key)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setAddingUser({ ...draft, email: data.email || `${row.key}@ad.panjit.local` })
+        // Don't overwrite addOrg here — user may have already edited it
+      } else {
+        setAddingUser({ ...draft, email: `${row.key}@ad.panjit.local` })
+      }
+    } catch {
+      setAddingUser({ ...draft, email: `${row.key}@ad.panjit.local` })
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
+  const handleAddSave = async () => {
+    if (!addingUser?.email || !user) return
+    setAdding(true)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-email': user.email },
+        body: JSON.stringify({ email: addingUser.email, name: addingUser.name, role: addRole, organization: addOrg }),
+      })
+      if (res.ok) {
+        toast({ title: '已加入系統', description: `${addingUser.name} 已設定為 ${ROLE_LABELS[addRole]}` })
+        setAddingUser(null)
+        fetchTable()
+      }
+    } finally {
+      setAdding(false)
+    }
+  }
+
   const handleSave = async () => {
     if (!editingUser || !user) return
     setSaving(true)
@@ -618,7 +683,7 @@ export default function AdminUsersPage() {
                     <tr className="border-b bg-muted/30">
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">姓名</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">部門</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground w-56">部門</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">職稱</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">角色</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">專案數</th>
@@ -662,7 +727,7 @@ export default function AdminUsersPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{row.email || '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate" title={row.organization}>
+                        <td className="px-4 py-3 text-muted-foreground w-56 truncate" title={row.organization}>
                           {row.organization || '—'}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{row.jobTitle || '—'}</td>
@@ -677,9 +742,18 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{row.projectCount}</td>
                         <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          {row.dbId && row.role && (
+                          {row.inSystem ? (
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(row)}>
                               <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 w-7 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                              title="加入系統並設定角色"
+                              onClick={() => openAddFromAd(row)}
+                            >
+                              <UserPlus className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </td>
@@ -757,6 +831,52 @@ export default function AdminUsersPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingUser(null)}>取消</Button>
             <Button onClick={handleSave} disabled={saving}>{saving ? '儲存中...' : '儲存'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add-from-AD Dialog */}
+      <Dialog open={!!addingUser} onOpenChange={open => !open && setAddingUser(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" /> 加入系統
+            </DialogTitle>
+          </DialogHeader>
+          {addingUser && (
+            <div className="space-y-4 py-2">
+              <div>
+                <p className="text-sm font-medium">{addingUser.name}</p>
+                {addLoading ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Loader2 className="h-3 w-3 animate-spin" /> 取得帳號資料中...
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-0.5">{addingUser.email}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label>系統角色</Label>
+                <Select value={addRole} onValueChange={v => setAddRole(v as UserRole)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ROLE_LABELS).map(([v, l]) => (
+                      <SelectItem key={v} value={v}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>部門</Label>
+                <Input value={addOrg} onChange={e => setAddOrg(e.target.value)} placeholder="部門名稱" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddingUser(null)}>取消</Button>
+            <Button onClick={handleAddSave} disabled={adding || addLoading}>
+              {adding ? '儲存中...' : '加入系統'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

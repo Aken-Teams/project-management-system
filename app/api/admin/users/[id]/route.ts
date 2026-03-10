@@ -13,6 +13,24 @@ const VALID_ROLES: UserRole[] = ['pm', 'member', 'executive', 'admin']
 
 type RouteContext = { params: Promise<{ id: string }> }
 
+function computeProjectStatus(
+  tasks: { status: string; endDate: Date }[],
+  projectEndDate: Date,
+): 'green' | 'yellow' | 'red' {
+  if (tasks.length === 0) return 'green'
+  const today = new Date().toISOString().split('T')[0]
+  const overdueTasks = tasks.filter(t => t.status !== 'done' && t.endDate.toISOString().split('T')[0] < today)
+  const blockedTasks = tasks.filter(t => t.status === 'blocked')
+  const doneTasks = tasks.filter(t => t.status === 'done')
+  if (doneTasks.length === tasks.length) return 'green'
+  const overdueRatio = overdueTasks.length / tasks.length
+  const blockedRatio = blockedTasks.length / tasks.length
+  const projectEnd = projectEndDate.toISOString().split('T')[0]
+  if (overdueRatio > 0.3 || blockedRatio > 0.2 || (projectEnd < today && doneTasks.length < tasks.length)) return 'red'
+  if (overdueTasks.length > 0 || blockedTasks.length > 0) return 'yellow'
+  return 'green'
+}
+
 export async function GET(request: NextRequest, { params }: RouteContext) {
   if (!await guardAdmin(request)) {
     return NextResponse.json({ error: '無權限' }, { status: 403 })
@@ -34,9 +52,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     prisma.project.findMany({
       where: { ownerId: id },
       select: {
-        id: true, name: true, status: true, progress: true,
+        id: true, name: true, progress: true,
         projectTier: true, startDate: true, endDate: true,
         milestones: { select: { id: true, status: true, dueDate: true } },
+        tasks: { where: { parentId: null }, select: { status: true, endDate: true } },
       },
       orderBy: { updatedAt: 'desc' },
       take: 10,
@@ -45,7 +64,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       where: { userId: id },
       select: {
         role: true,
-        project: { select: { id: true, name: true, status: true, projectTier: true } },
+        project: {
+          select: {
+            id: true, name: true, projectTier: true, endDate: true,
+            tasks: { where: { parentId: null }, select: { status: true, endDate: true } },
+          },
+        },
       },
     }),
     prisma.weeklyUpdate.findMany({
@@ -59,7 +83,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   if (!user) return NextResponse.json({ error: '找不到使用者' }, { status: 404 })
 
   const ownedProjectsWithStats = ownedProjects.map(p => ({
-    id: p.id, name: p.name, status: p.status, progress: p.progress,
+    id: p.id, name: p.name, progress: p.progress,
+    status: computeProjectStatus(p.tasks, p.endDate),
     projectTier: p.projectTier,
     startDate: p.startDate.toISOString(),
     endDate: p.endDate.toISOString(),
@@ -73,7 +98,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   return NextResponse.json({
     user,
     ownedProjects: ownedProjectsWithStats,
-    teamProjects: teamMemberships.map(tm => ({ teamRole: tm.role, ...tm.project })),
+    teamProjects: teamMemberships.map(tm => ({
+      teamRole: tm.role,
+      id: tm.project.id,
+      name: tm.project.name,
+      projectTier: tm.project.projectTier,
+      status: computeProjectStatus(tm.project.tasks, tm.project.endDate),
+    })),
     weeklyUpdates: weeklyUpdates.map(wu => ({
       weekOf: wu.weekOf.toISOString(),
       status: wu.overallStatus,
