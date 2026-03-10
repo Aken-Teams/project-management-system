@@ -138,14 +138,15 @@ export async function POST(request: NextRequest) {
 
     // ─── Generate project code (atomic) ────────────────
     const currentYear = new Date().getFullYear()
-    const sequence = await prisma.projectCodeSequence.update({
+    const sequence = await prisma.projectCodeSequence.upsert({
       where: {
         projectType_year: {
           projectType: dbProjectType,
           year: currentYear,
         },
       },
-      data: { lastSeq: { increment: 1 } },
+      update: { lastSeq: { increment: 1 } },
+      create: { projectType: dbProjectType, year: currentYear, lastSeq: 1 },
     })
 
     const prefix = CODE_PREFIX[dbProjectType as string] || 'PRJ'

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, type ProjectStatus, type ProjectType, type ProjectTier, type Project } from '@/lib/mock-data'
+import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier, type Project } from '@/lib/mock-data'
 import {
   Search,
   Users,
@@ -27,14 +27,16 @@ import Link from 'next/link'
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { Loader2 } from 'lucide-react'
+import { useProjectTypes } from '@/hooks/use-project-types'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
+  const { projectTypes } = useProjectTypes()
   const [allProjects, setAllProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
-  const [typeFilter, setTypeFilter] = useState<ProjectType | 'all'>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
   const [tierFilter, setTierFilter] = useState<ProjectTier | 'all'>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
 
@@ -183,13 +185,13 @@ export default function ProjectsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as ProjectType | 'all')}>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部類型</SelectItem>
-              {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(([key, label]) => (
+              {projectTypes.map(({ key, label }) => (
                 <SelectItem key={key} value={key}>{label}</SelectItem>
               ))}
             </SelectContent>
@@ -234,7 +236,7 @@ export default function ProjectsPage() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
                       <Badge variant="outline" className="text-sm">
-                        {PROJECT_TYPE_LABELS[project.projectType]}
+                        {projectTypes.find(t => t.key === project.projectType)?.label ?? project.projectType}
                       </Badge>
                       <Badge variant="outline" className={`text-sm font-semibold ${
                         project.projectTier === 'T1' ? 'border-blue-400 text-blue-600' :

@@ -34,11 +34,11 @@ import {
   type SmartObjective,
   type TeamRole,
   type Risk,
-  PROJECT_TYPE_LABELS,
   PROJECT_TIER_LABELS,
   DEMAND_SOURCE_LABELS,
   TEAM_ROLE_LABELS,
 } from '@/lib/mock-data'
+import { useProjectTypes } from '@/hooks/use-project-types'
 import { TeamMemberAutocomplete } from '@/components/team-member-autocomplete'
 import { useAuth } from '@/lib/auth-context'
 import { toast } from 'sonner'
@@ -125,6 +125,7 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
 }
 
 export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange, defaultTab }: ProjectEditDialogProps) {
+  const { projectTypes } = useProjectTypes()
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
     projectType: project.projectType,
@@ -828,8 +829,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                 <Select value={form.projectType} onValueChange={v => update('projectType', v as ProjectType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    {projectTypes.map(({ key, label }) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

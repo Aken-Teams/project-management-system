@@ -25,7 +25,8 @@ import { useToast } from '@/hooks/use-toast'
 import { type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
+import { PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
+import { useProjectTypes } from '@/hooks/use-project-types'
 import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
 import { TimelineTable } from '@/components/timeline-table'
 import { TeamMemberTable } from '@/components/team-member-table'
@@ -273,6 +274,7 @@ export default function NewProjectPage() {
   const router = useRouter()
   const { addProject } = useProjectStore()
   const { user } = useAuth()
+  const { projectTypes } = useProjectTypes()
   const { toast } = useToast()
   const [isCreating, setIsCreating] = useState(false)
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai')
@@ -1193,8 +1195,7 @@ export default function NewProjectPage() {
                           <SelectValue placeholder="選擇專案類型" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(
-                            ([value, label]) => (
+                          {projectTypes.map(({ key: value, label }) => (
                               <SelectItem key={value} value={value}>
                                 {label}
                               </SelectItem>
@@ -1777,8 +1778,7 @@ export default function NewProjectPage() {
                           <SelectValue placeholder="選擇專案類型" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(Object.entries(PROJECT_TYPE_LABELS) as [ProjectType, string][]).map(
-                            ([value, label]) => (
+                          {projectTypes.map(({ key: value, label }) => (
                               <SelectItem key={value} value={value}>
                                 {label}
                               </SelectItem>
@@ -2044,7 +2044,7 @@ export default function NewProjectPage() {
                     <Alert className="border-blue-200 bg-blue-50/50">
                       <Lightbulb className="h-4 w-4 text-blue-500" />
                       <AlertDescription className="text-sm text-blue-700">
-                        已根據「{PROJECT_TYPE_LABELS[manualProjectType]}」自動帶入 {manualMilestones.length} 個里程碑範本。
+                        已根據「{projectTypes.find(t => t.key === manualProjectType)?.label ?? manualProjectType}」自動帶入 {manualMilestones.length} 個里程碑範本。
                         可直接在表格中編輯名稱、期程，或在每個里程碑下方快速新增任務。
                       </AlertDescription>
                     </Alert>
