@@ -79,7 +79,7 @@ function NotificationPreview({ title, message, type }: { title: string; message:
 // ── Email notification preview (missing type only) ────────────────────────
 function EmailNotificationPreview({ subject, body }: { subject: string; body: string }) {
   return (
-    <div className="rounded-xl border shadow-sm overflow-hidden">
+    <div className="rounded-xl border shadow-sm overflow-hidden bg-white">
       <div className="bg-slate-100 px-4 py-2 flex items-center gap-2 border-b text-xs text-muted-foreground">
         <Mail className="h-3.5 w-3.5" />
         <span>信件通知</span>

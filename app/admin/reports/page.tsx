@@ -51,15 +51,15 @@ function EmailPreview({ subject, body, recipients }: { subject: string; body: st
   const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="rounded-xl border shadow-sm overflow-hidden text-sm">
+    <div className="rounded-xl border shadow-sm overflow-hidden text-sm bg-white">
       {/* Email client chrome */}
-      <div className="bg-muted/50 px-4 py-2.5 flex items-center gap-2 border-b">
+      <div className="bg-slate-100 px-4 py-2.5 flex items-center gap-2 border-b">
         <Mail className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground font-medium">郵件預覽</span>
       </div>
 
       {/* Header fields */}
-      <div className="bg-background border-b divide-y divide-border/60">
+      <div className="bg-white border-b divide-y divide-border/60">
         <div className="grid grid-cols-[40px_1fr] px-4 py-2 text-xs">
           <span className="text-muted-foreground self-start pt-0.5">寄件</span>
           <span className="text-foreground">專案管理系統 &lt;noreply@system&gt;</span>
@@ -79,7 +79,7 @@ function EmailPreview({ subject, body, recipients }: { subject: string; body: st
       </div>
 
       {/* Email body */}
-      <div className="bg-background px-4 py-4 min-h-[100px]">
+      <div className="bg-white px-4 py-4 min-h-[100px]">
         {body ? (
           <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
             {body}
@@ -91,7 +91,7 @@ function EmailPreview({ subject, body, recipients }: { subject: string; body: st
 
       {/* PDF attachment */}
       <div className="bg-muted/30 border-t px-4 py-3">
-        <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
+        <div className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2">
           <div className="flex h-8 w-8 items-center justify-center rounded bg-red-100 shrink-0">
             <Paperclip className="h-4 w-4 text-red-500" />
           </div>
