@@ -83,6 +83,7 @@ export function dbProjectToFrontend(
     budget: number
     budgetUsed: number
     ownerId: string
+    budgetItems?: { actualCost: number | null; estimatedCost: number | null }[]
     createdAt: Date
     updatedAt: Date
     owner: { name: string }
@@ -354,7 +355,9 @@ export function dbProjectToFrontend(
     status: computeProjectStatus(feTasks.filter(t => !t.parentId), proj.endDate),
     progress: computeProjectProgress(feMilestones),
     budget: proj.budget,
-    budgetUsed: proj.budgetUsed,
+    budgetUsed: proj.budgetItems
+      ? proj.budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
+      : proj.budgetUsed,
     owner: displayOwner,
     team: teamNames,
     teamMembers: proj.teamMembers.map((tm) => ({
@@ -410,5 +413,8 @@ export const projectFullInclude = {
   taskLogs: {
     include: { author: true },
     orderBy: { createdAt: 'desc' as const },
+  },
+  budgetItems: {
+    select: { actualCost: true, estimatedCost: true },
   },
 } as const

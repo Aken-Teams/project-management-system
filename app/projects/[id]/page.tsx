@@ -207,7 +207,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
   }
 
-  const budgetUtilization = Math.round((project.budgetUsed / project.budget) * 100)
+  const actualTotal = budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
+  const estimatedTotal = budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
+  const budgetDenom = estimatedTotal > 0 ? estimatedTotal : project.budget
+  const budgetUtilization = budgetDenom > 0 ? Math.round((actualTotal / budgetDenom) * 100) : 0
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -299,7 +302,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               </div>
               <span className="text-xl font-bold">{budgetUtilization}%</span>
               <div className="text-sm text-muted-foreground">
-                ${(project.budgetUsed / 1000000).toFixed(1)}M / ${(project.budget / 1000000).toFixed(1)}M
+                ${(actualTotal / 1000000).toFixed(1)}M / ${(budgetDenom / 1000000).toFixed(1)}M
               </div>
             </div>
           )}

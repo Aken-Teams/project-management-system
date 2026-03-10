@@ -152,6 +152,9 @@ export async function GET(request: NextRequest) {
         owner: {
           select: { name: true },
         },
+        budgetItems: {
+          select: { actualCost: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -184,7 +187,8 @@ export async function GET(request: NextRequest) {
     const doneMilestones = projectsWithProgress.reduce((a, p) => a + p.milestones.filter(m => m.status === 'done').length, 0)
 
     const budget = projectsWithProgress.reduce((a, p) => a + p.budget, 0)
-    const budgetUsed = projectsWithProgress.reduce((a, p) => a + p.budgetUsed, 0)
+    const budgetUsed = projectsWithProgress.reduce((a, p) =>
+      a + p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0), 0)
     const openRisks = projectsWithProgress.reduce((a, p) => a + p.risks.length, 0)
     const pendingDelays = projectsWithProgress.reduce((a, p) => a + p.delayRequests.length, 0)
 
@@ -262,7 +266,7 @@ export async function GET(request: NextRequest) {
         startDate: p.startDate.toISOString().split('T')[0],
         endDate: p.endDate.toISOString().split('T')[0],
         budget: p.budget,
-        budgetUsed: p.budgetUsed,
+        budgetUsed: p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0),
         teamSize: p.teamMembers.length,
         totalTasks: parentTasks.length,
         doneTasks,

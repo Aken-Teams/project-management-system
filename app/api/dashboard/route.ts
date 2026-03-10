@@ -145,6 +145,9 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        budgetItems: {
+          select: { actualCost: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -179,7 +182,8 @@ export async function GET(request: NextRequest) {
         CIP: projectsWithProgress.filter(p => p.projectTier === 'CIP').length,
       },
       totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budget, 0),
-      totalBudgetUsed: projectsWithProgress.reduce((acc, p) => acc + p.budgetUsed, 0),
+      totalBudgetUsed: projectsWithProgress.reduce((acc, p) =>
+        acc + p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0), 0),
       budgetUtilization: 0,
     }
     stats.budgetUtilization = stats.totalBudget > 0

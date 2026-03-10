@@ -898,7 +898,7 @@ export default function ReportsPage() {
                 <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                   <div className={cn('h-full rounded-full transition-all', budgetPct > 100 ? 'bg-destructive' : 'bg-emerald-500')} style={{ width: `${Math.min(budgetPct, 100)}%` }} />
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-1">
+                <div className="text-xs text-muted-foreground mt-1">
                   {fmtMoney(displayStats.budgetUsed)} / {fmtMoney(displayStats.budget)}
                 </div>
               </CardContent>
@@ -924,10 +924,10 @@ export default function ReportsPage() {
                     {displayStats.openRisks}
                   </div>
                   {displayStats.pendingDelays > 0 && (
-                    <Badge variant="destructive" className="text-[10px]">{displayStats.pendingDelays} 待審</Badge>
+                    <Badge variant="destructive" className="text-xs">{displayStats.pendingDelays} 待審</Badge>
                   )}
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-1">
+                <div className="text-xs text-muted-foreground mt-1">
                   {displayStats.openRisks === 0 ? '無未解決風險' : `${displayStats.openRisks} 個未解決風險`}
                 </div>
               </CardContent>
