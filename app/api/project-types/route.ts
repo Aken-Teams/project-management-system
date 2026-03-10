@@ -27,7 +27,9 @@ export async function GET() {
     })
   }
 
+  // Return keys in hyphen-case to match frontend project.projectType format
+  // (DB stores underscore_case, frontend uses hyphen-case via projectTypeToFe)
   return NextResponse.json(
-    types.map(t => ({ key: t.key, label: t.label }))
+    types.map(t => ({ key: t.key.replace(/_/g, '-'), label: t.label }))
   )
 }
