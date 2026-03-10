@@ -206,7 +206,7 @@ function OrgTreePanel({
   onSelect: (org: string | null, names: string[]) => void
 }) {
   return (
-    <div className="w-72 shrink-0 flex flex-col">
+    <div className="hidden lg:flex w-56 shrink-0 flex-col">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-1.5">
         組織架構
       </p>
@@ -661,22 +661,22 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header + Toolbar */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">使用者管理</h2>
           <p className="text-sm text-muted-foreground mt-0.5">管理系統所有使用者的角色與部門資訊</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="搜尋姓名或 Email"
-              className="pl-8 h-9 w-52"
+              className="pl-8 h-9 w-44 sm:w-52"
               onChange={e => handleSearchChange(e.target.value)}
             />
           </div>
           <Select value={roleFilter} onValueChange={v => { setRoleFilter(v); setPage(1) }}>
-            <SelectTrigger className="h-9 w-32">
+            <SelectTrigger className="h-9 w-28 sm:w-32">
               <SelectValue placeholder="角色" />
             </SelectTrigger>
             <SelectContent>
@@ -712,23 +712,23 @@ export default function AdminUsersPage() {
                     <tr className="border-b bg-muted/30">
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">姓名</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground w-56">部門</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">職稱</th>
+                      <th className="hidden lg:table-cell text-left px-4 py-3 font-medium text-muted-foreground">部門</th>
+                      <th className="hidden xl:table-cell text-left px-4 py-3 font-medium text-muted-foreground">職稱</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">角色</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">專案數</th>
+                      <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-muted-foreground">專案數</th>
                       <th className="px-4 py-3 w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {tableLoading ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center">
+                        <td colSpan={5} className="py-12 text-center">
                           <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                         </td>
                       </tr>
                     ) : rows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                        <td colSpan={5} className="py-12 text-center text-muted-foreground text-sm">
                           {selectedOrg ? `${selectedOrg} 沒有人員` : '沒有使用者'}
                         </td>
                       </tr>
@@ -750,10 +750,10 @@ export default function AdminUsersPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{row.email || '—'}</td>
-                        <td className="px-4 py-3 text-muted-foreground w-56 truncate" title={row.organization}>
+                        <td className="hidden lg:table-cell px-4 py-3 text-muted-foreground max-w-[180px] truncate" title={row.organization}>
                           {row.organization || '—'}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{row.jobTitle || '—'}</td>
+                        <td className="hidden xl:table-cell px-4 py-3 text-muted-foreground">{row.jobTitle || '—'}</td>
                         <td className="px-4 py-3">
                           {row.role ? (
                             <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', ROLE_COLORS[row.role])}>
@@ -763,7 +763,7 @@ export default function AdminUsersPage() {
                             <span className="text-muted-foreground text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{row.projectCount}</td>
+                        <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">{row.projectCount}</td>
                         <td className="px-4 py-3">
                           {row.inSystem ? (
                             <div className="flex items-center gap-0.5">
