@@ -98,32 +98,30 @@ function RoiParamsTable({
   ]
 
   return (
-    <div className="overflow-hidden rounded-md border text-xs">
-      <div className="bg-[#1f3864] text-white text-center font-semibold py-1.5 px-3 text-sm">
+    <div className="overflow-hidden rounded-md border text-xs h-full flex flex-col">
+      <div className="bg-[#1f3864] text-white text-center font-semibold py-1.5 px-3 text-sm shrink-0">
         預計投資回收期
       </div>
-      <table className="w-full border-collapse">
-        <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.label}
-              className={
-                r.highlight
-                  ? 'bg-red-50 font-bold text-red-700'
-                  : 'border-b last:border-0 even:bg-muted/20'
-              }
-            >
-              <td className="px-3 py-1.5 text-left border-r border-muted font-medium w-28">
-                {r.label}
-              </td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{r.value}</td>
-              <td className="px-3 py-1.5 text-left text-muted-foreground w-20 border-l border-muted">
-                {r.unit}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="flex flex-col flex-1 divide-y">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className={`flex items-center flex-1 ${
+              r.highlight
+                ? 'bg-red-50 font-bold text-red-700'
+                : 'even:bg-muted/20'
+            }`}
+          >
+            <div className="px-3 py-1 font-medium w-28 shrink-0 border-r border-muted self-stretch flex items-center">
+              {r.label}
+            </div>
+            <div className="px-3 py-1 text-right tabular-nums flex-1">{r.value}</div>
+            <div className="px-3 py-1 text-left text-muted-foreground w-20 shrink-0 border-l border-muted self-stretch flex items-center">
+              {r.unit}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -169,7 +167,7 @@ function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit
       </div>
       <div className="flex-1 min-h-[240px]">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 20, right: 80, left: 0, bottom: 8 }}>
+        <LineChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="month" tick={{ fontSize: 12 }}
             label={{ value: '月', position: 'insideBottomRight', offset: -4, fontSize: 12 }} />
@@ -410,7 +408,9 @@ export function RoiSection({
           {monthlyProfit != null && monthlyProfit > 0 && capitalExp > 0 ? (
             <div className="grid grid-cols-[auto_1fr] gap-4 items-stretch">
               <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
+              <div className="min-w-0">
               <PaybackChart budget={capitalExp} monthlyProfit={monthlyProfit} />
+              </div>
             </div>
           ) : (
             <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
