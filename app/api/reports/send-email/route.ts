@@ -5,11 +5,11 @@ const AD_URL = process.env.AD_URL!
 const AD_API = process.env.AD_API!
 
 // ─── POST /api/reports/send-email ───────────────────────────────────────────
-// Body: { projectIds: string[], recipients: string[], subject?: string, filename?: string }
+// Body: { projectIds: string[], recipients: string[], cc?: string[], subject?: string, filename?: string }
 // Generates the PDF server-side (same quality as browser print) then sends email.
 export async function POST(request: NextRequest) {
   try {
-    const { projectIds, recipients, subject, filename } = await request.json()
+    const { projectIds, recipients, cc, subject, filename } = await request.json()
 
     if (!recipients || recipients.length === 0) {
       return NextResponse.json({ error: '請提供收件人' }, { status: 400 })
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         to: recipients,
+        ...(cc && cc.length > 0 ? { cc } : {}),
         subject: subject || '專案報告',
         body: '您好，\n\n請查收附件中的專案報告。\n\n此信件由專案管理系統自動發送。',
         attachments: [

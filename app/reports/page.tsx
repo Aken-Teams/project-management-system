@@ -214,12 +214,18 @@ export default function ReportsPage() {
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
   const [exportSuccess, setExportSuccess] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState(false)
-  // Email dialog — AD user picker
+  // Email dialog — AD user picker (To)
   const [emailSelectedUsers, setEmailSelectedUsers] = useState<EmailUser[]>([])
   const [emailSearchQuery, setEmailSearchQuery] = useState('')
   const [emailSearchResults, setEmailSearchResults] = useState<ADSearchResult[]>([])
   const [emailSearchLoading, setEmailSearchLoading] = useState(false)
   const [emailFetchingUsers, setEmailFetchingUsers] = useState<Set<string>>(new Set())
+  // Email dialog — CC picker
+  const [ccSelectedUsers, setCcSelectedUsers] = useState<EmailUser[]>([])
+  const [ccSearchQuery, setCcSearchQuery] = useState('')
+  const [ccSearchResults, setCcSearchResults] = useState<ADSearchResult[]>([])
+  const [ccSearchLoading, setCcSearchLoading] = useState(false)
+  const [ccFetchingUsers, setCcFetchingUsers] = useState<Set<string>>(new Set())
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [isPreviewingPdf, setIsPreviewingPdf] = useState(false)
 
@@ -421,6 +427,44 @@ export default function ReportsPage() {
   const removeEmailUser = (username: string) =>
     setEmailSelectedUsers(prev => prev.filter(u => u.username !== username))
 
+  const searchCcUsers = async (q: string) => {
+    setCcSearchQuery(q)
+    if (!q.trim()) { setCcSearchResults([]); return }
+    setCcSearchLoading(true)
+    try {
+      const res = await fetch(`/api/ad-users/search?q=${encodeURIComponent(q.trim())}&limit=8`)
+      if (res.ok) {
+        const users: ADSearchResult[] = await res.json()
+        const selected = new Set([...ccSelectedUsers.map(u => u.username), ...emailSelectedUsers.map(u => u.username)])
+        setCcSearchResults(users.filter(u => !selected.has(u.id)))
+      }
+    } catch { setCcSearchResults([]) }
+    finally { setCcSearchLoading(false) }
+  }
+
+  const addCcUser = async (result: ADSearchResult) => {
+    setCcSearchQuery('')
+    setCcSearchResults([])
+    setCcFetchingUsers(prev => new Set([...prev, result.id]))
+    try {
+      const res = await fetch(`/api/ad-users/${encodeURIComponent(result.id)}`)
+      const detail = res.ok ? await res.json() : {}
+      setCcSelectedUsers(prev => [...prev, {
+        username: result.id,
+        name: detail.name || result.name,
+        email: detail.email || '',
+        organization: detail.organization || result.organization,
+      }])
+    } catch {
+      setCcSelectedUsers(prev => [...prev, { username: result.id, name: result.name, email: '', organization: result.organization }])
+    } finally {
+      setCcFetchingUsers(prev => { const s = new Set(prev); s.delete(result.id); return s })
+    }
+  }
+
+  const removeCcUser = (username: string) =>
+    setCcSelectedUsers(prev => prev.filter(u => u.username !== username))
+
   const handleExportPdf = async () => {
     if (!data || selectedProjectIds.length === 0) return
 
@@ -519,6 +563,7 @@ export default function ReportsPage() {
         body: JSON.stringify({
           projectIds: selectedProjectIds,
           recipients: validRecipients.map(u => u.email),
+          cc: ccSelectedUsers.filter(u => u.email).map(u => u.email),
           filename: `專案報告_${date}.pdf`,
           subject: `專案報告 - ${pjNames || '所有專案'}`,
         }),
@@ -534,6 +579,7 @@ export default function ReportsPage() {
         setShowEmailDialog(false)
         setEmailSuccess(false)
         setEmailSelectedUsers([])
+        setCcSelectedUsers([])
       }, 3000)
     } catch (err) {
       console.error('Email send failed:', err)
@@ -760,6 +806,67 @@ export default function ReportsPage() {
                           已選 {emailSelectedUsers.length} 位，其中 {emailSelectedUsers.filter(u => u.email).length} 位有 email
                         </p>
                       )}
+                    </div>
+
+                    {/* CC — AD user picker */}
+                    <div className="space-y-2">
+                      <Label className="text-base font-medium">副本 (CC)</Label>
+
+                      {ccSelectedUsers.length > 0 && (
+                        <div className="flex flex-wrap gap-2 p-2 border rounded-lg bg-muted/30 min-h-[42px]">
+                          {ccSelectedUsers.map(u => (
+                            <div key={u.username} className="flex items-center gap-1.5 bg-background border rounded-full px-3 py-1 text-sm shadow-sm">
+                              <span className="font-medium">{u.name}</span>
+                              {u.email
+                                ? <span className="text-muted-foreground text-xs">{u.email}</span>
+                                : <span className="text-amber-500 text-xs">無 email</span>
+                              }
+                              <button
+                                onClick={() => removeCcUser(u.username)}
+                                className="ml-1 text-muted-foreground hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="relative">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="搜尋姓名或帳號..."
+                            value={ccSearchQuery}
+                            onChange={e => searchCcUsers(e.target.value)}
+                            className="pl-9 h-10"
+                          />
+                          {ccSearchLoading && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                        {ccSearchResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 z-50 mt-1 border rounded-lg bg-background shadow-md max-h-48 overflow-y-auto">
+                            {ccSearchResults.map(result => (
+                              <button
+                                key={result.id}
+                                onClick={() => addCcUser(result)}
+                                disabled={ccFetchingUsers.has(result.id)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted text-left disabled:opacity-60"
+                              >
+                                {ccFetchingUsers.has(result.id)
+                                  ? <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+                                  : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                }
+                                <div>
+                                  <div className="text-sm font-medium">{result.name}</div>
+                                  <div className="text-xs text-muted-foreground">{result.organization}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Select Projects */}

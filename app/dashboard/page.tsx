@@ -47,6 +47,7 @@ interface DashboardData {
     projectCode: string
     name: string
     projectType: string
+    projectTier: ProjectTier
     status: ProjectStatus
     progress: number
     owner: string
@@ -315,7 +316,7 @@ export default function DashboardPage() {
                           <span className="font-medium text-sm truncate">{project.name}</span>
                         </div>
                       </div>
-                      <Badge variant="outline" className="text-sm shrink-0 hidden sm:flex">
+<Badge variant="outline" className="text-sm shrink-0 hidden sm:flex">
                         {PROJECT_TYPE_LABELS[project.projectType]}
                       </Badge>
                       <div className="flex items-center gap-2 shrink-0">

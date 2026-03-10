@@ -197,6 +197,7 @@ export async function GET(request: NextRequest) {
         projectCode: p.projectCode,
         name: p.name,
         projectType: projectTypeToFe(p.projectType),
+        projectTier: p.projectTier,
         status: p.actualStatus,
         progress: p.actualProgress,
         owner: displayOwner,
