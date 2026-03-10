@@ -469,102 +469,25 @@ export default function ReportsPage() {
     }
   }
 
-  // Shared PDF builder (html2canvas → jsPDF) — returns pdf object
-  const buildEmailPdf = async (projectIds: string[]) => {
-    const pdfRes = await fetch('/api/reports/pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectIds }),
-    })
-    if (!pdfRes.ok) throw new Error('PDF 生成失敗')
-    const html = await pdfRes.text()
-
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
-    const styleContent = Array.from(doc.querySelectorAll('style')).map(s => s.textContent || '').join('\n')
-
-    const container = document.createElement('div')
-    container.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1400px;background:#ffffff;overflow:visible;z-index:-1'
-    container.innerHTML = doc.body.innerHTML
-
-    const styleEl = document.createElement('style')
-    styleEl.textContent = styleContent
-    document.head.appendChild(styleEl)
-    document.body.appendChild(container)
-
-    try {
-      await new Promise(r => setTimeout(r, 1800))
-
-      const { default: html2canvasFn } = await import('html2canvas')
-      const canvas = await html2canvasFn(container, {
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-        width: 1400,
-        windowWidth: 1400,
-        backgroundColor: '#ffffff',
-      })
-
-      const { jsPDF } = await import('jspdf')
-      const A4_W = 841.89
-      const A4_H = 595.28
-      const MARGIN = 30
-      const imgW = A4_W - 2 * MARGIN
-      const imgH_avail = A4_H - 2 * MARGIN
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-
-      const ptPerPx = imgW / canvas.width
-      const pxPerPage = imgH_avail / ptPerPx
-
-      const findCutRow = (nearPx: number): number => {
-        const range = Math.min(100, Math.floor(pxPerPage * 0.07))
-        const start = Math.max(0, Math.round(nearPx) - range)
-        const end = Math.min(canvas.height - 1, Math.round(nearPx) + range)
-        const ctx = canvas.getContext('2d')!
-        const data = ctx.getImageData(0, start, canvas.width, end - start + 1).data
-        const step = Math.max(1, Math.floor(canvas.width / 120))
-        let bestRow = Math.round(nearPx), bestAvg = -1
-        for (let row = 0; row <= end - start; row++) {
-          let sum = 0, cnt = 0
-          for (let col = 0; col < canvas.width; col += step) {
-            const i = (row * canvas.width + col) * 4
-            sum += (data[i] + data[i + 1] + data[i + 2]) / 3
-            cnt++
-          }
-          if (sum / cnt > bestAvg) { bestAvg = sum / cnt; bestRow = start + row }
-        }
-        return bestRow
-      }
-
-      let srcY = 0, firstPage = true
-      while (srcY < canvas.height) {
-        if (!firstPage) pdf.addPage()
-        firstPage = false
-        const idealEnd = srcY + pxPerPage
-        const cutY = idealEnd >= canvas.height ? canvas.height : findCutRow(idealEnd)
-        const sliceH = Math.max(1, cutY - srcY)
-        const slice = document.createElement('canvas')
-        slice.width = canvas.width
-        slice.height = sliceH
-        slice.getContext('2d')!.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
-        pdf.addImage(slice.toDataURL('image/jpeg', 0.88), 'JPEG', MARGIN, MARGIN, imgW, sliceH * ptPerPx)
-        srcY = cutY
-      }
-
-      return pdf
-    } finally {
-      if (document.body.contains(container)) document.body.removeChild(container)
-      if (document.head.contains(styleEl)) document.head.removeChild(styleEl)
-    }
-  }
-
+  // Download email PDF preview — server-side Puppeteer rendering (same quality as 匯出 PDF)
   const handlePreviewEmailPdf = async () => {
     if (selectedProjectIds.length === 0) { alert('請至少選擇一個專案'); return }
     setIsPreviewingPdf(true)
     try {
-      const pdf = await buildEmailPdf(selectedProjectIds)
+      const res = await fetch('/api/reports/pdf-binary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectIds: selectedProjectIds }),
+      })
+      if (!res.ok) throw new Error('PDF 生成失敗')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
       const date = new Date().toLocaleDateString('zh-TW').replace(/\//g, '')
-      pdf.save(`專案報告_預覽_${date}.pdf`)
+      a.href = url
+      a.download = `專案報告_預覽_${date}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Preview PDF failed:', err)
       alert(err instanceof Error ? err.message : 'PDF 預覽失敗')
@@ -586,21 +509,17 @@ export default function ReportsPage() {
 
     setIsSendingEmail(true)
     try {
-      const pdf = await buildEmailPdf(selectedProjectIds)
-
-      // Send email with PDF attachment via mail API
       const date = new Date().toLocaleDateString('zh-TW').replace(/\//g, '')
-      const filename = `專案報告_${date}.pdf`
-      const pdfBase64 = pdf.output('datauristring').split(',')[1]
       const pjNames = data!.projects.filter(p => selectedProjectIds.includes(p.id)).map(p => p.name).join('、')
 
+      // Server generates the PDF (same quality as 匯出 PDF) and sends the email
       const mailRes = await fetch('/api/reports/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectIds: selectedProjectIds,
           recipients: validRecipients.map(u => u.email),
-          pdfBase64,
-          filename,
+          filename: `專案報告_${date}.pdf`,
           subject: `專案報告 - ${pjNames || '所有專案'}`,
         }),
       })

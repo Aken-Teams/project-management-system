@@ -1,21 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
+import puppeteer from 'puppeteer'
 
 const AD_URL = process.env.AD_URL!
 const AD_API = process.env.AD_API!
 
-// ─── POST /api/reports/send-email ───────────────────────
-// Body: { recipients: string[], pdfBase64: string, filename: string, subject: string }
+// ─── POST /api/reports/send-email ───────────────────────────────────────────
+// Body: { projectIds: string[], recipients: string[], subject?: string, filename?: string }
+// Generates the PDF server-side (same quality as browser print) then sends email.
 export async function POST(request: NextRequest) {
   try {
-    const { recipients, pdfBase64, filename, subject } = await request.json()
+    const { projectIds, recipients, subject, filename } = await request.json()
 
     if (!recipients || recipients.length === 0) {
       return NextResponse.json({ error: '請提供收件人' }, { status: 400 })
     }
-    if (!pdfBase64) {
-      return NextResponse.json({ error: '缺少 PDF 內容' }, { status: 400 })
+    if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
+      return NextResponse.json({ error: '請選擇至少一個專案' }, { status: 400 })
     }
 
+    // 1. Generate HTML from the PDF template route
+    const origin = request.nextUrl.origin
+    const htmlResponse = await fetch(`${origin}/api/reports/pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectIds }),
+    })
+
+    if (!htmlResponse.ok) throw new Error('HTML 模板生成失敗')
+    const html = await htmlResponse.text()
+
+    // 2. Render to PDF with headless Chrome
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    })
+
+    let pdfBase64: string
+    try {
+      const page = await browser.newPage()
+      await page.setContent(html, { waitUntil: 'networkidle0' })
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' },
+        printBackground: true,
+      })
+      pdfBase64 = Buffer.from(pdfBuffer).toString('base64')
+    } finally {
+      await browser.close()
+    }
+
+    // 3. Send email with PDF attachment
     const res = await fetch(`${AD_URL}/api/v1/mail/send`, {
       method: 'POST',
       headers: {
