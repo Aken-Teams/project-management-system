@@ -167,7 +167,7 @@ function OrgTreeNodeItem({
             <span className="w-3 shrink-0" />
           )}
           <span className="flex-1 leading-5">{node.name}</span>
-          <span className="shrink-0 tabular-nums text-muted-foreground/60 ml-1 text-xs mt-px">
+          <span className="w-8 shrink-0 tabular-nums text-muted-foreground/60 text-xs text-right mt-px">
             {node.totalCount}
           </span>
         </button>
@@ -868,7 +868,7 @@ export default function AdminUsersPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>部門</Label>
-                <Input value={addOrg} onChange={e => setAddOrg(e.target.value)} placeholder="部門名稱" />
+                <Input value={addOrg} readOnly className="bg-muted/50 text-muted-foreground cursor-default" />
               </div>
             </div>
           )}
