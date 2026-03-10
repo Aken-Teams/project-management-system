@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import {
   Search, ChevronLeft, ChevronRight, Pencil, ChevronDown, ChevronRight as ChevronRightIcon,
-  Users, Loader2, FolderOpen, ExternalLink, CalendarCheck, AlertCircle, UserPlus,
+  Users, Loader2, FolderOpen, ExternalLink, CalendarCheck, AlertCircle, UserPlus, Eye,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -76,6 +76,12 @@ const STATUS_COLORS: Record<string, string> = {
   green: 'bg-emerald-100 text-emerald-700',
   yellow: 'bg-amber-100 text-amber-700',
   red: 'bg-red-100 text-red-700',
+}
+const TIER_COLORS: Record<string, string> = {
+  T1: 'bg-blue-100 text-blue-700',
+  T2: 'bg-violet-100 text-violet-700',
+  T3: 'bg-gray-100 text-gray-700',
+  CIP: 'bg-amber-100 text-amber-700',
 }
 const TEAM_ROLE_LABELS: Record<string, string> = {
   R: '執行 (R)', A: '負責 (A)', C: '諮詢 (C)', I: '知會 (I)',
@@ -256,9 +262,10 @@ function UserDetailSheet({
 }) {
   const [detail, setDetail] = useState<UserDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [tierFilter, setTierFilter] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!userId || !open) { setDetail(null); return }
+    if (!userId || !open) { setDetail(null); setTierFilter(null); return }
     setLoading(true)
     fetch(`/api/admin/users/${userId}`, { headers: { 'x-user-email': authEmail } })
       .then(r => r.ok ? r.json() : null)
@@ -267,6 +274,12 @@ function UserDetailSheet({
   }, [userId, open, authEmail])
 
   const u = detail?.user
+  const allTiers = detail ? Array.from(new Set([
+    ...detail.ownedProjects.map(p => p.projectTier),
+    ...detail.teamProjects.map(p => p.projectTier),
+  ].filter((t): t is string => !!t))).sort() : []
+  const filteredOwned = detail ? (tierFilter ? detail.ownedProjects.filter(p => p.projectTier === tierFilter) : detail.ownedProjects) : []
+  const filteredTeam = detail ? (tierFilter ? detail.teamProjects.filter(p => p.projectTier === tierFilter) : detail.teamProjects) : []
 
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
@@ -321,16 +334,10 @@ function UserDetailSheet({
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { label: '負責專案', value: u._count.ownedProjects },
                 { label: '參與專案', value: u._count.teamMemberships },
-                { label: '近期準時率', value: (() => {
-                  const wus = detail.weeklyUpdates
-                  if (!wus.length) return '—'
-                  const onTime = wus.filter(w => w.status === 'on_time').length
-                  return `${Math.round(onTime / wus.length * 100)}%`
-                })() },
               ].map(s => (
                 <div key={s.label} className="bg-muted/40 rounded-lg p-3 text-center">
                   <p className="text-xl font-bold">{s.value}</p>
@@ -339,14 +346,36 @@ function UserDetailSheet({
               ))}
             </div>
 
+            {/* Tier filter */}
+            {allTiers.length > 1 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors',
+                    !tierFilter ? 'bg-primary text-primary-foreground border-transparent' : 'bg-muted/60 text-muted-foreground border-muted-foreground/20 hover:bg-muted'
+                  )}
+                  onClick={() => setTierFilter(null)}
+                >全部</button>
+                {allTiers.map(t => (
+                  <button key={t}
+                    className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors',
+                      tierFilter === t
+                        ? cn(TIER_COLORS[t] ?? 'bg-primary text-primary-foreground', 'border-transparent')
+                        : 'bg-muted/60 text-muted-foreground border-muted-foreground/20 hover:bg-muted'
+                    )}
+                    onClick={() => setTierFilter(v => v === t ? null : t)}
+                  >{t}</button>
+                ))}
+              </div>
+            )}
+
             {/* Owned projects */}
-            {detail.ownedProjects.length > 0 && (
+            {filteredOwned.length > 0 && (
               <div>
                 <p className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                   <FolderOpen className="h-4 w-4 text-muted-foreground" /> 負責的專案
                 </p>
                 <div className="space-y-2">
-                  {detail.ownedProjects.map(p => (
+                  {filteredOwned.map(p => (
                     <div key={p.id} className="border rounded-lg p-3 text-sm">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <Link href={`/projects/${p.id}`} className="font-medium hover:underline flex items-center gap-1 truncate" target="_blank">
@@ -378,13 +407,13 @@ function UserDetailSheet({
             )}
 
             {/* Team projects */}
-            {detail.teamProjects.length > 0 && (
+            {filteredTeam.length > 0 && (
               <div>
                 <p className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                   <Users className="h-4 w-4 text-muted-foreground" /> 參與的專案
                 </p>
                 <div className="space-y-1.5">
-                  {detail.teamProjects.map(p => (
+                  {filteredTeam.map(p => (
                     <div key={p.id} className="flex items-center gap-2 border rounded-md px-3 py-2 text-sm">
                       <Link href={`/projects/${p.id}`} className="flex-1 hover:underline truncate" target="_blank">{p.name}</Link>
                       <span className="text-xs text-muted-foreground shrink-0">{TEAM_ROLE_LABELS[p.teamRole] ?? p.teamRole}</span>
@@ -415,7 +444,7 @@ function UserDetailSheet({
               </div>
             )}
 
-            {detail.ownedProjects.length === 0 && detail.teamProjects.length === 0 && (
+            {filteredOwned.length === 0 && filteredTeam.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">尚無專案紀錄</p>
             )}
           </div>
@@ -687,7 +716,7 @@ export default function AdminUsersPage() {
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">職稱</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">角色</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">專案數</th>
-                      <th className="px-4 py-3 w-12" />
+                      <th className="px-4 py-3 w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -708,15 +737,9 @@ export default function AdminUsersPage() {
                         key={row.key}
                         className={cn(
                           'transition-colors border-b last:border-0',
-                          row.dbId ? 'cursor-pointer hover:bg-muted/20' : 'opacity-60',
+                          !row.inSystem && 'opacity-60',
                           row.isActive === false && 'bg-orange-50/30'
                         )}
-                        onClick={() => {
-                          if (row.dbId) {
-                            setDetailDbId(row.dbId)
-                            setDetailOpen(true)
-                          }
-                        }}
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -741,11 +764,16 @@ export default function AdminUsersPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{row.projectCount}</td>
-                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <td className="px-4 py-3">
                           {row.inSystem ? (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(row)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex items-center gap-0.5">
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="查看詳細" onClick={() => { setDetailDbId(row.dbId); setDetailOpen(true) }}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="編輯" onClick={() => openEdit(row)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           ) : (
                             <Button
                               variant="ghost" size="sm"
@@ -809,7 +837,7 @@ export default function AdminUsersPage() {
                 <Select value={editRole} onValueChange={v => setEditRole(v as UserRole)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ROLE_LABELS).map(([v, l]) => (
+                    {Object.entries(ROLE_LABELS).filter(([v]) => v !== 'pm').map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
                     ))}
                   </SelectContent>
@@ -860,7 +888,7 @@ export default function AdminUsersPage() {
                 <Select value={addRole} onValueChange={v => setAddRole(v as UserRole)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ROLE_LABELS).map(([v, l]) => (
+                    {Object.entries(ROLE_LABELS).filter(([v]) => v !== 'pm').map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
                     ))}
                   </SelectContent>

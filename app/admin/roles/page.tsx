@@ -83,7 +83,7 @@ function PermCell({ value }: { value: boolean | 'project' }) {
   if (value === 'project') {
     return (
       <div className="flex items-center justify-center" title="僅限負責的專案">
-        <CheckCircle2 className="h-4 w-4 text-blue-400" />
+        <CheckCircle2 className="h-5 w-5 text-orange-500" />
       </div>
     )
   }
@@ -125,9 +125,9 @@ export default function AdminRolesPage() {
 
       {/* Note */}
       <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5">
-        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400" />
+        <Info className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
         <span>
-          <span className="inline-flex items-center gap-1 mr-1"><CheckCircle2 className="h-3 w-3 text-blue-400 inline" /> 藍色</span>表示「僅限負責的專案」，專案經理只對自己建立或被指派的專案擁有此權限。
+          <span className="inline-flex items-center gap-1 mr-1"><CheckCircle2 className="h-4 w-4 text-orange-500 inline" /> 橙色</span>表示「僅限負責的專案」，專案經理只對自己建立或被指派的專案擁有此權限。
         </span>
       </div>
 

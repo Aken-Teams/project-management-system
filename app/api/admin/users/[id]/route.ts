@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       select: {
         id: true, name: true, progress: true,
         projectTier: true, startDate: true, endDate: true,
-        milestones: { select: { id: true, status: true, dueDate: true } },
+        milestones: { select: { id: true, status: true, dueDate: true, progress: true } },
         tasks: { where: { parentId: null }, select: { status: true, endDate: true } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -82,8 +82,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
   if (!user) return NextResponse.json({ error: '找不到使用者' }, { status: 404 })
 
-  const ownedProjectsWithStats = ownedProjects.map(p => ({
-    id: p.id, name: p.name, progress: p.progress,
+  const ownedProjectsWithStats = ownedProjects.map(p => {
+    const progress = p.milestones.length === 0 ? 0
+      : Math.round(p.milestones.reduce((s, m) => s + m.progress, 0) / p.milestones.length)
+    return {
+    id: p.id, name: p.name, progress,
     status: computeProjectStatus(p.tasks, p.endDate),
     projectTier: p.projectTier,
     startDate: p.startDate.toISOString(),
@@ -93,7 +96,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     overdueMilestones: p.milestones.filter(
       m => m.status !== 'done' && new Date(m.dueDate) < now
     ).length,
-  }))
+  }
+  })
 
   return NextResponse.json({
     user,
