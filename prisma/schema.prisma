@@ -120,6 +120,7 @@ model User {
   jobTitle     String   @default("") @map("job_title")
   organization String   @default("")
   avatarUrl    String?  @map("avatar_url")
+  isActive     Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

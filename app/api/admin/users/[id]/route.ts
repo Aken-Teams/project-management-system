@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       where: { id },
       select: {
         id: true, name: true, email: true, role: true,
-        jobTitle: true, organization: true, createdAt: true,
+        isActive: true, jobTitle: true, organization: true, createdAt: true,
         _count: { select: { ownedProjects: true, teamMemberships: true } },
       },
     }),
@@ -97,6 +97,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
     data.role = body.role
   }
   if (body.organization !== undefined) data.organization = body.organization
+  if (body.isActive !== undefined) data.isActive = Boolean(body.isActive)
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: '沒有提供更新欄位' }, { status: 400 })
