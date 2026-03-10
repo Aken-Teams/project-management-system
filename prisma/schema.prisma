@@ -147,7 +147,9 @@ model Project {
   purpose         String        @default("") @db.VarChar(1000)
   scope           String        @default("") @db.VarChar(1000)
   roi             String        @default("") @db.VarChar(1000)
-  roiParams       String?       @db.Text @map("roi_params")  // JSON: {grossMargin, avgPrice, capacity}
+  roiGrossMargin  Float?        @map("roi_gross_margin")
+  roiAvgPrice     Float?        @map("roi_avg_price")
+  roiCapacity     Float?        @map("roi_capacity")
   createdReason   String        @default("") @db.VarChar(1000) @map("created_reason")
   // Nullable TEXT: no DEFAULT needed, NULL is implicit
   expectedBenefits String?      @db.Text @map("expected_benefits")

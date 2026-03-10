@@ -160,33 +160,35 @@ function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit
     Math.abs(v) >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
       : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)
 
-  if (!mounted) return <div className="h-[200px]" />
+  if (!mounted) return <div className="min-h-[260px]" />
 
   return (
-    <div>
-      <div className="text-xs text-muted-foreground mb-1 font-medium">
+    <div className="flex flex-col h-full">
+      <div className="text-sm text-muted-foreground mb-2 font-medium shrink-0">
         投資回收曲線（預估回收期：<span className="text-[#1f3864] font-semibold">{payback.toFixed(1)} 個月</span>）
       </div>
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data} margin={{ top: 16, right: 72, left: 0, bottom: 4 }}>
+      <div className="flex-1 min-h-[240px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 20, right: 80, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="month" tick={{ fontSize: 10 }}
-            label={{ value: '月', position: 'insideBottomRight', offset: -4, fontSize: 10 }} />
-          <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9 }} width={44} domain={yDomain} />
+          <XAxis dataKey="month" tick={{ fontSize: 12 }}
+            label={{ value: '月', position: 'insideBottomRight', offset: -4, fontSize: 12 }} />
+          <YAxis tickFormatter={tickFmt} tick={{ fontSize: 11 }} width={56} domain={yDomain} />
           <Tooltip
             formatter={(v: number) => [fmtNT(v), '累積淨益']}
             labelFormatter={(l) => `第 ${l} 個月`}
-            contentStyle={{ fontSize: 11 }}
+            contentStyle={{ fontSize: 13 }}
           />
           <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5}
-            label={{ value: '損益平衡', position: 'insideTopRight', fontSize: 9, fill: '#ef4444' }} />
+            label={{ value: '損益平衡', position: 'insideTopRight', fontSize: 11, fill: '#ef4444' }} />
           <ReferenceLine
             x={Math.round(payback)} stroke="#1f3864" strokeDasharray="4 2" strokeWidth={1.5}
-            label={{ value: `第 ${payback.toFixed(1)} 月回收`, position: 'top', fontSize: 9, fill: '#1f3864' }}
+            label={{ value: `第 ${payback.toFixed(1)} 月回收`, position: 'top', fontSize: 11, fill: '#1f3864' }}
           />
-          <Line type="monotone" dataKey="累積淨益" stroke="#2563eb" dot={false} strokeWidth={2} />
+          <Line type="monotone" dataKey="累積淨益" stroke="#2563eb" dot={false} strokeWidth={2.5} />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -229,7 +231,11 @@ export function RoiSection({
       await fetch(`/api/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roiParams: JSON.stringify(paramDraft) }),
+        body: JSON.stringify({
+          roiGrossMargin: paramDraft.grossMargin,
+          roiAvgPrice: paramDraft.avgPrice,
+          roiCapacity: paramDraft.capacity,
+        }),
       })
       const updatedItems = initialItems.map((item, i) => ({
         ...item,
@@ -292,21 +298,21 @@ export function RoiSection({
                 <Input type="number" min={0} max={100} step={0.1}
                   value={paramDraft.grossMargin ?? ''}
                   onChange={(e) => setParamDraft((p) => ({ ...p, grossMargin: parseNum(e.target.value) }))}
-                  className="h-7 text-xs" placeholder="例：30" />
+                  className="h-7 text-xs" placeholder="—" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">平均售價 (NTD/K)</Label>
                 <Input type="number" min={0}
                   value={paramDraft.avgPrice ?? ''}
                   onChange={(e) => setParamDraft((p) => ({ ...p, avgPrice: parseNum(e.target.value) }))}
-                  className="h-7 text-xs" placeholder="例：150" />
+                  className="h-7 text-xs" placeholder="—" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Capacity (K/M)</Label>
                 <Input type="number" min={0}
                   value={paramDraft.capacity ?? ''}
                   onChange={(e) => setParamDraft((p) => ({ ...p, capacity: parseNum(e.target.value) }))}
-                  className="h-7 text-xs" placeholder="例：3552" />
+                  className="h-7 text-xs" placeholder="—" />
               </div>
             </div>
           </div>
@@ -380,30 +386,34 @@ export function RoiSection({
       {!editing && (
         <div className="space-y-3">
 
-          {/* Budget vs actual summary */}
-          {initialItems.length > 0 && (
-            <div className="text-xs space-y-1 bg-muted/40 rounded-md p-2.5">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">資本支出（預估）</span>
-                <span className="font-medium tabular-nums">{fmtNT(estimated)}</span>
+          {/* Actual vs estimated stat cards (only when actual data exists) */}
+          {hasActual && estimated > 0 && (
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <div className="text-muted-foreground mb-0.5">預估資本支出</div>
+                <div className="font-semibold tabular-nums">{fmtNT(estimated)}</div>
               </div>
-              {hasActual && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">實際投入</span>
-                  <span className="font-medium tabular-nums">{fmtNT(actual)}</span>
+              <div className="rounded-md bg-muted/40 px-3 py-2">
+                <div className="text-muted-foreground mb-0.5">實際投入</div>
+                <div className="font-semibold tabular-nums">{fmtNT(actual)}</div>
+              </div>
+              <div className={`rounded-md px-3 py-2 ${actual <= estimated ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div className="text-muted-foreground mb-0.5">{actual <= estimated ? '節省' : '超支'}</div>
+                <div className={`font-semibold tabular-nums ${actual <= estimated ? 'text-green-600' : 'text-destructive'}`}>
+                  {fmtNT(Math.abs(estimated - actual))}
                 </div>
-              )}
-              <div className="flex justify-between pt-0.5 border-t text-muted-foreground">
-                <span>{initialItems.length} 項設備</span>
-                {hasActual && actual > 0 && estimated > 0 && (
-                  <span className={actual <= estimated ? 'text-green-600 font-semibold' : 'text-destructive font-semibold'}>
-                    {actual <= estimated
-                      ? `節省 ${fmtNT(estimated - actual)}`
-                      : `超支 ${fmtNT(actual - estimated)}`}
-                  </span>
-                )}
               </div>
             </div>
+          )}
+
+          {/* Table + chart side by side when chart data available, else table alone */}
+          {monthlyProfit != null && monthlyProfit > 0 && capitalExp > 0 ? (
+            <div className="grid grid-cols-[auto_1fr] gap-4 items-stretch">
+              <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
+              <PaybackChart budget={capitalExp} monthlyProfit={monthlyProfit} />
+            </div>
+          ) : (
+            <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
           )}
 
           {/* Incomplete actual costs reminder */}
@@ -415,14 +425,6 @@ export function RoiSection({
                 點擊右上角鉛筆圖示補充以計算實際 ROI。
               </span>
             </div>
-          )}
-
-          {/* Always show 6-indicator ROI table */}
-          <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
-
-          {/* Payback chart (only when data is available) */}
-          {monthlyProfit != null && monthlyProfit > 0 && capitalExp > 0 && (
-            <PaybackChart budget={capitalExp} monthlyProfit={monthlyProfit} />
           )}
 
           {/* Hint when completely empty */}

@@ -72,7 +72,9 @@ interface UpdateProjectBody {
   purpose?: string
   scope?: string
   roi?: string
-  roiParams?: string | null
+  roiGrossMargin?: number | null
+  roiAvgPrice?: number | null
+  roiCapacity?: number | null
   createdReason?: string
   expectedBenefits?: string | null
   smartObjective?: {
@@ -127,7 +129,9 @@ export async function PUT(
     if (body.purpose !== undefined) data.purpose = body.purpose
     if (body.scope !== undefined) data.scope = body.scope
     if (body.roi !== undefined) data.roi = body.roi
-    if (body.roiParams !== undefined) data.roiParams = body.roiParams ?? null
+    if (body.roiGrossMargin !== undefined) data.roiGrossMargin = body.roiGrossMargin ?? null
+    if (body.roiAvgPrice !== undefined) data.roiAvgPrice = body.roiAvgPrice ?? null
+    if (body.roiCapacity !== undefined) data.roiCapacity = body.roiCapacity ?? null
     if (body.createdReason !== undefined) data.createdReason = body.createdReason
     if (body.expectedBenefits !== undefined) data.expectedBenefits = body.expectedBenefits || null
     if (body.smartObjective !== undefined) {

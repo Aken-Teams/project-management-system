@@ -66,6 +66,9 @@ export function dbProjectToFrontend(
     purpose: string
     scope: string
     roi: string
+    roiGrossMargin: number | null
+    roiAvgPrice: number | null
+    roiCapacity: number | null
     createdReason: string
     expectedBenefits: string | null
     smartSpecific: string | null
@@ -340,6 +343,9 @@ export function dbProjectToFrontend(
     purpose: proj.purpose,
     scope: proj.scope,
     roi: proj.roi,
+    roiGrossMargin: proj.roiGrossMargin,
+    roiAvgPrice: proj.roiAvgPrice,
+    roiCapacity: proj.roiCapacity,
     createdReason: proj.createdReason,
     expectedBenefits: proj.expectedBenefits || undefined,
     smartObjective,

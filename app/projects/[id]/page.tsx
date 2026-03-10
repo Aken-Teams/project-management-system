@@ -88,8 +88,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         if (!cancelled) {
           setProject(data)
           setLoading(false)
-          if (data?.roiParams) {
-            try { setRoiParams(JSON.parse(data.roiParams)) } catch { /* ignore */ }
+          if (data?.roiGrossMargin != null || data?.roiAvgPrice != null || data?.roiCapacity != null) {
+            setRoiParams({
+              grossMargin: data.roiGrossMargin ?? null,
+              avgPrice: data.roiAvgPrice ?? null,
+              capacity: data.roiCapacity ?? null,
+            })
           }
         }
       })
