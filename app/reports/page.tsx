@@ -37,10 +37,14 @@ import {
   BarChart3,
   Users,
   Loader2,
+  Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ── Types ──
+type EmailUser = { username: string; name: string; email: string; organization: string }
+type ADSearchResult = { id: string; name: string; organization: string }
+
 interface ReportsData {
   user: {
     id: string
@@ -208,10 +212,15 @@ export default function ReportsPage() {
   const [showPdfDialog, setShowPdfDialog] = useState(false)
   const [showEmailDialog, setShowEmailDialog] = useState(false)
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
-  const [emailRecipients, setEmailRecipients] = useState('')
-  const [selectedReports, setSelectedReports] = useState<string[]>(['summary', 'tasks', 'milestones'])
   const [exportSuccess, setExportSuccess] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState(false)
+  // Email dialog — AD user picker
+  const [emailSelectedUsers, setEmailSelectedUsers] = useState<EmailUser[]>([])
+  const [emailSearchQuery, setEmailSearchQuery] = useState('')
+  const [emailSearchResults, setEmailSearchResults] = useState<ADSearchResult[]>([])
+  const [emailSearchLoading, setEmailSearchLoading] = useState(false)
+  const [emailFetchingUsers, setEmailFetchingUsers] = useState<Set<string>>(new Set())
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   // ── Fetch reports data from API ──
   useEffect(() => {
@@ -348,8 +357,10 @@ export default function ReportsPage() {
 
   const handleOpenEmailDialog = () => {
     setSelectedProjectIds(data.projects.map(p => p.id))
-    setEmailRecipients('')
-    setSelectedReports(['summary', 'tasks', 'milestones'])
+    setEmailSelectedUsers([])
+    setEmailSearchQuery('')
+    setEmailSearchResults([])
+    setIsSendingEmail(false)
     setShowEmailDialog(true)
     setEmailSuccess(false)
   }
@@ -370,13 +381,44 @@ export default function ReportsPage() {
     setSelectedProjectIds([])
   }
 
-  const handleToggleReport = (reportId: string) => {
-    setSelectedReports(prev =>
-      prev.includes(reportId)
-        ? prev.filter(id => id !== reportId)
-        : [...prev, reportId]
-    )
+  // ── Email user picker ──
+  const searchEmailUsers = async (q: string) => {
+    setEmailSearchQuery(q)
+    if (!q.trim()) { setEmailSearchResults([]); return }
+    setEmailSearchLoading(true)
+    try {
+      const res = await fetch(`/api/ad-users/search?q=${encodeURIComponent(q.trim())}&limit=8`)
+      if (res.ok) {
+        const users: ADSearchResult[] = await res.json()
+        const selected = new Set(emailSelectedUsers.map(u => u.username))
+        setEmailSearchResults(users.filter(u => !selected.has(u.id)))
+      }
+    } catch { setEmailSearchResults([]) }
+    finally { setEmailSearchLoading(false) }
   }
+
+  const addEmailUser = async (result: ADSearchResult) => {
+    setEmailSearchQuery('')
+    setEmailSearchResults([])
+    setEmailFetchingUsers(prev => new Set([...prev, result.id]))
+    try {
+      const res = await fetch(`/api/ad-users/${encodeURIComponent(result.id)}`)
+      const detail = res.ok ? await res.json() : {}
+      setEmailSelectedUsers(prev => [...prev, {
+        username: result.id,
+        name: detail.name || result.name,
+        email: detail.email || '',
+        organization: detail.organization || result.organization,
+      }])
+    } catch {
+      setEmailSelectedUsers(prev => [...prev, { username: result.id, name: result.name, email: '', organization: result.organization }])
+    } finally {
+      setEmailFetchingUsers(prev => { const s = new Set(prev); s.delete(result.id); return s })
+    }
+  }
+
+  const removeEmailUser = (username: string) =>
+    setEmailSelectedUsers(prev => prev.filter(u => u.username !== username))
 
   const handleExportPdf = async () => {
     if (!data || selectedProjectIds.length === 0) return
@@ -427,128 +469,130 @@ export default function ReportsPage() {
   }
 
   const handleSendEmail = async () => {
-    if (!emailRecipients.trim()) {
-      alert('請輸入至少一個 email 地址')
+    const validRecipients = emailSelectedUsers.filter(u => u.email)
+    if (validRecipients.length === 0) {
+      alert('請先選擇有效的收件人（需有 email）')
       return
     }
-
-    if (!data || selectedProjectIds.length === 0) {
+    if (selectedProjectIds.length === 0) {
       alert('請至少選擇一個專案')
       return
     }
 
+    setIsSendingEmail(true)
+    let styleEl: HTMLStyleElement | null = null
+    let container: HTMLDivElement | null = null
+
     try {
-      // Get selected project names and data
-      const selectedProjects = data.projects?.filter(p => selectedProjectIds.includes(p.id)) || []
-      const projectNames = selectedProjects.map(p => p.name).join('、')
-
-      // Calculate statistics for selected projects (using aggregated data from API)
-      const totalTasks = selectedProjects.reduce((sum, p) => sum + p.totalTasks, 0)
-      const doneTasks = selectedProjects.reduce((sum, p) => sum + p.doneTasks, 0)
-      const totalMilestones = selectedProjects.reduce((sum, p) => sum + p.totalMilestones, 0)
-      const doneMilestones = selectedProjects.reduce((sum, p) => sum + p.doneMilestones, 0)
-      const totalBudget = selectedProjects.reduce((sum, p) => sum + p.budget, 0)
-      const totalBudgetUsed = selectedProjects.reduce((sum, p) => sum + p.budgetUsed, 0)
-      const avgProgress = selectedProjects.length > 0
-        ? Math.round(selectedProjects.reduce((sum, p) => sum + p.progress, 0) / selectedProjects.length)
-        : 0
-
-      // Count risks (using aggregated data)
-      const totalRisks = selectedProjects.reduce((sum, p) => sum + p.openRisks, 0)
-
-      // Map report types to Chinese names
-      const reportTypeMap: Record<string, string> = {
-        summary: '專案摘要',
-        tasks: '任務列表',
-        milestones: '里程碑',
-        budget: '預算資訊',
-        risks: '風險管理'
-      }
-      const reportNames = selectedReports.map(r => reportTypeMap[r] || r).join('、')
-
-      // Step 1: Generate and download PDF
-      const response = await fetch('/api/reports/pdf', {
+      // Step 1: Get report HTML from backend
+      const pdfRes = await fetch('/api/reports/pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectIds: selectedProjectIds }),
+      })
+      if (!pdfRes.ok) throw new Error('PDF 生成失敗')
+      const html = await pdfRes.text()
+
+      // Step 2: Parse and inject HTML into DOM so html2canvas can capture it
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(html, 'text/html')
+      const styleContent = Array.from(doc.querySelectorAll('style'))
+        .map(s => s.textContent || '').join('\n')
+
+      container = document.createElement('div')
+      container.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:1400px;background:#ffffff;overflow:visible;z-index:-1'
+      container.innerHTML = doc.body.innerHTML
+
+      styleEl = document.createElement('style')
+      styleEl.textContent = styleContent
+      document.head.appendChild(styleEl)
+      document.body.appendChild(container)
+
+      // Wait for fonts and images to render
+      await new Promise(r => setTimeout(r, 1800))
+
+      // Step 3: Capture with html2canvas
+      const { default: html2canvasFn } = await import('html2canvas')
+      const canvas = await html2canvasFn(container, {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        width: 1400,
+        windowWidth: 1400,
+        backgroundColor: '#ffffff',
+      })
+
+      // Cleanup injected DOM
+      document.body.removeChild(container)
+      document.head.removeChild(styleEl)
+      container = null
+      styleEl = null
+
+      // Step 4: Build multi-page landscape A4 PDF
+      const { jsPDF } = await import('jspdf')
+      const A4_W = 841.89  // pts, landscape
+      const A4_H = 595.28
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+
+      const totalImgH = (A4_W / canvas.width) * canvas.height
+      let pageTop = 0
+      let firstPage = true
+
+      while (pageTop < totalImgH) {
+        if (!firstPage) pdf.addPage()
+        firstPage = false
+
+        const sliceRenderH = Math.min(A4_H, totalImgH - pageTop)
+        const srcY = Math.round((pageTop / totalImgH) * canvas.height)
+        const srcH = Math.ceil((sliceRenderH / totalImgH) * canvas.height)
+
+        const slice = document.createElement('canvas')
+        slice.width = canvas.width
+        slice.height = srcH
+        slice.getContext('2d')!.drawImage(canvas, 0, -srcY)
+
+        pdf.addImage(slice.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, A4_W, sliceRenderH)
+        pageTop += A4_H
+      }
+
+      // Step 5: Download PDF
+      const date = new Date().toLocaleDateString('zh-TW').replace(/\//g, '')
+      const filename = `專案報告_${date}.pdf`
+      pdf.save(filename)
+
+      // Step 6: Send email with PDF attachment via mail API
+      const pdfBase64 = pdf.output('datauristring').split(',')[1]
+      const pjNames = data!.projects.filter(p => selectedProjectIds.includes(p.id)).map(p => p.name).join('、')
+
+      const mailRes = await fetch('/api/reports/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectIds: selectedProjectIds,
+          recipients: validRecipients.map(u => u.email),
+          pdfBase64,
+          filename,
+          subject: `專案報告 - ${pjNames || '所有專案'}`,
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to generate PDF')
+      if (!mailRes.ok) {
+        const err = await mailRes.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || '郵件發送失敗')
       }
 
-      // Get the HTML content and convert to PDF using print
-      const html = await response.text()
-
-      // Create a blob from the HTML and trigger download
-      const blob = new Blob([html], { type: 'text/html' })
-      const url = URL.createObjectURL(blob)
-
-      // Open in new window for user to print to PDF
-      const pdfWindow = window.open(url, '_blank')
-      if (pdfWindow) {
-        pdfWindow.onload = () => {
-          // Small delay to ensure content is loaded
-          setTimeout(() => {
-            pdfWindow.print()
-          }, 500)
-        }
-      }
-
-      // Step 2: Build email content with reminder to attach PDF
-      const subject = `專案報告 - ${projectNames || '所有專案'}`
-      const body = `您好，
-
-這是專案報告的詳細資訊：
-
-【報告範圍】
-專案：${projectNames || '所有專案'}
-報告內容：${reportNames}
-生成時間：${new Date().toLocaleString('zh-TW')}
-
-【關鍵指標】
-• 專案數量：${selectedProjects.length} 個
-• 平均進度：${avgProgress}%
-• 任務完成：${doneTasks}/${totalTasks} (${totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0}%)
-• 里程碑完成：${doneMilestones}/${totalMilestones} (${totalMilestones > 0 ? Math.round((doneMilestones / totalMilestones) * 100) : 0}%)
-• 預算執行：${fmtMoney(totalBudgetUsed)}/${fmtMoney(totalBudget)} (${totalBudget > 0 ? Math.round((totalBudgetUsed / totalBudget) * 100) : 0}%)
-${totalRisks > 0 ? `• 風險項目：${totalRisks} 個` : '• 無未解決風險'}
-
-【專案狀態】
-${selectedProjects.map((p, i) => {
-  const statusText = p.status === 'green' ? '✓ 正常' : p.status === 'yellow' ? '⚠ 注意' : '✕ 風險'
-  return `${i + 1}. ${p.name} - ${statusText} (${p.progress}%)
-   任務：${p.doneTasks}/${p.totalTasks}，里程碑：${p.doneMilestones}/${p.totalMilestones}`
-}).join('\n')}
-
-📎 請記得附加剛才儲存的 PDF 報告檔案
-
-詳細報告請參考附件的 PDF 檔案。
-
-如有任何問題，歡迎隨時討論。
-
-謝謝！`
-
-      // Step 3: Open default email client after a short delay
-      setTimeout(() => {
-        const mailtoUrl = `mailto:${emailRecipients}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-        window.location.href = mailtoUrl
-      }, 1000)
-
-      // Show success message and close dialog
       setEmailSuccess(true)
       setTimeout(() => {
         setShowEmailDialog(false)
         setEmailSuccess(false)
-      }, 2000)
-
-    } catch (error) {
-      console.error('Email preparation failed:', error)
-      alert('準備郵件失敗，請稍後再試')
+        setEmailSelectedUsers([])
+      }, 3000)
+    } catch (err) {
+      console.error('Email send failed:', err)
+      alert(err instanceof Error ? err.message : '寄送失敗，請稍後再試')
+    } finally {
+      if (container && document.body.contains(container)) document.body.removeChild(container)
+      if (styleEl && document.head.contains(styleEl)) document.head.removeChild(styleEl)
+      setIsSendingEmail(false)
     }
   }
 
@@ -689,35 +733,86 @@ ${selectedProjects.map((p, i) => {
               <DialogHeader>
                 <DialogTitle>Email 報告</DialogTitle>
                 <DialogDescription>
-                  輸入收件人並選擇要寄送的報告內容
+                  選擇收件人與專案，系統將自動產生 PDF 並透過 Email 直接寄出
                 </DialogDescription>
               </DialogHeader>
 
               {emailSuccess ? (
                 <div className="text-center py-8">
                   <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500" />
-                  <p className="font-medium text-emerald-600">Email 已成功發送！</p>
+                  <p className="font-medium text-emerald-600">PDF 已產生並成功寄出！</p>
                   <p className="text-sm text-muted-foreground mt-1">報告已寄送至指定收件人</p>
                 </div>
               ) : (
                 <>
                   <div className="space-y-4">
-                    {/* Email Recipients */}
+                    {/* Email Recipients — AD user picker */}
                     <div className="space-y-2">
-                      <Label htmlFor="email-recipients" className="text-base font-medium">
-                        收件人
-                      </Label>
-                      <Input
-                        id="email-recipients"
-                        type="text"
-                        placeholder="輸入 email 地址，多個 email 請用逗號分隔"
-                        value={emailRecipients}
-                        onChange={(e) => setEmailRecipients(e.target.value)}
-                        className="text-base h-11"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        範例: user1@example.com, user2@example.com
-                      </p>
+                      <Label className="text-base font-medium">收件人</Label>
+
+                      {/* Selected user tags */}
+                      {emailSelectedUsers.length > 0 && (
+                        <div className="flex flex-wrap gap-2 p-2 border rounded-lg bg-muted/30 min-h-[42px]">
+                          {emailSelectedUsers.map(u => (
+                            <div key={u.username} className="flex items-center gap-1.5 bg-background border rounded-full px-3 py-1 text-sm shadow-sm">
+                              <span className="font-medium">{u.name}</span>
+                              {u.email
+                                ? <span className="text-muted-foreground text-xs">{u.email}</span>
+                                : <span className="text-amber-500 text-xs">無 email</span>
+                              }
+                              <button
+                                onClick={() => removeEmailUser(u.username)}
+                                className="ml-1 text-muted-foreground hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Search input + dropdown */}
+                      <div className="relative">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="搜尋姓名或帳號..."
+                            value={emailSearchQuery}
+                            onChange={e => searchEmailUsers(e.target.value)}
+                            className="pl-9 h-10"
+                          />
+                          {emailSearchLoading && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                        {emailSearchResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 z-50 mt-1 border rounded-lg bg-background shadow-md max-h-48 overflow-y-auto">
+                            {emailSearchResults.map(result => (
+                              <button
+                                key={result.id}
+                                onClick={() => addEmailUser(result)}
+                                disabled={emailFetchingUsers.has(result.id)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted text-left disabled:opacity-60"
+                              >
+                                {emailFetchingUsers.has(result.id)
+                                  ? <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+                                  : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                }
+                                <div>
+                                  <div className="text-sm font-medium">{result.name}</div>
+                                  <div className="text-xs text-muted-foreground">{result.organization}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {emailSelectedUsers.length > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          已選 {emailSelectedUsers.length} 位，其中 {emailSelectedUsers.filter(u => u.email).length} 位有 email
+                        </p>
+                      )}
                     </div>
 
                     {/* Select Projects */}
@@ -725,27 +820,10 @@ ${selectedProjects.map((p, i) => {
                       <div className="flex items-center justify-between">
                         <Label className="text-base font-medium">選擇專案</Label>
                         <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleSelectAllProjects}
-                            className="h-8 text-sm"
-                          >
-                            全選
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleDeselectAllProjects}
-                            className="h-8 text-sm"
-                          >
-                            清除
-                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={handleSelectAllProjects} className="h-8 text-sm">全選</Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={handleDeselectAllProjects} className="h-8 text-sm">清除</Button>
                         </div>
                       </div>
-
                       <div className="border rounded-lg p-3 space-y-2 max-h-[200px] overflow-y-auto">
                         {data.projects.map(project => (
                           <div key={project.id} className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
@@ -755,111 +833,37 @@ ${selectedProjects.map((p, i) => {
                               onCheckedChange={() => handleToggleProject(project.id)}
                               className="h-5 w-5"
                             />
-                            <label
-                              htmlFor={`email-project-${project.id}`}
-                              className="flex-1 text-base cursor-pointer flex items-center justify-between"
-                            >
+                            <label htmlFor={`email-project-${project.id}`} className="flex-1 text-base cursor-pointer flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <StatusDot status={project.status} />
                                 <span className="font-medium">{project.name}</span>
                               </div>
-                              <Badge variant="outline" className="text-sm">
-                                {PROJECT_TYPE_LABELS[project.projectType]}
-                              </Badge>
+                              <Badge variant="outline" className="text-sm">{PROJECT_TYPE_LABELS[project.projectType]}</Badge>
                             </label>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Select Report Sections */}
-                    <div className="space-y-2">
-                      <Label className="text-base font-medium">報告內容</Label>
-                      <div className="border rounded-lg p-3 space-y-2">
-                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
-                          <Checkbox
-                            id="report-summary"
-                            checked={selectedReports.includes('summary')}
-                            onCheckedChange={() => handleToggleReport('summary')}
-                            className="h-5 w-5"
-                          />
-                          <label htmlFor="report-summary" className="flex-1 cursor-pointer">
-                            <div className="font-medium text-base">專案摘要</div>
-                            <div className="text-sm text-muted-foreground">包含專案基本資訊、目標、範圍等</div>
-                          </label>
-                        </div>
-
-                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
-                          <Checkbox
-                            id="report-tasks"
-                            checked={selectedReports.includes('tasks')}
-                            onCheckedChange={() => handleToggleReport('tasks')}
-                            className="h-5 w-5"
-                          />
-                          <label htmlFor="report-tasks" className="flex-1 cursor-pointer">
-                            <div className="font-medium text-base">任務進度</div>
-                            <div className="text-sm text-muted-foreground">任務狀態、完成度、團隊工作量分析</div>
-                          </label>
-                        </div>
-
-                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
-                          <Checkbox
-                            id="report-milestones"
-                            checked={selectedReports.includes('milestones')}
-                            onCheckedChange={() => handleToggleReport('milestones')}
-                            className="h-5 w-5"
-                          />
-                          <label htmlFor="report-milestones" className="flex-1 cursor-pointer">
-                            <div className="font-medium text-base">里程碑追蹤</div>
-                            <div className="text-sm text-muted-foreground">里程碑達成狀況、時程分析</div>
-                          </label>
-                        </div>
-
-                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
-                          <Checkbox
-                            id="report-budget"
-                            checked={selectedReports.includes('budget')}
-                            onCheckedChange={() => handleToggleReport('budget')}
-                            className="h-5 w-5"
-                          />
-                          <label htmlFor="report-budget" className="flex-1 cursor-pointer">
-                            <div className="font-medium text-base">預算執行</div>
-                            <div className="text-sm text-muted-foreground">預算使用情況、成本分析</div>
-                          </label>
-                        </div>
-
-                        <div className="flex items-center space-x-3 p-3 rounded hover:bg-muted/50">
-                          <Checkbox
-                            id="report-risks"
-                            checked={selectedReports.includes('risks')}
-                            onCheckedChange={() => handleToggleReport('risks')}
-                            className="h-5 w-5"
-                          />
-                          <label htmlFor="report-risks" className="flex-1 cursor-pointer">
-                            <div className="font-medium text-base">風險管理</div>
-                            <div className="text-sm text-muted-foreground">未解決風險、延期請求狀態</div>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-sm text-muted-foreground">
-                      已選擇 {selectedProjectIds.length} 個專案，{selectedReports.length} 個報告區塊
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      已選擇 {selectedProjectIds.length} 個專案
+                    </p>
                   </div>
 
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowEmailDialog(false)} size="lg">
+                    <Button variant="outline" onClick={() => setShowEmailDialog(false)} size="lg" disabled={isSendingEmail}>
                       取消
                     </Button>
                     <Button
                       onClick={handleSendEmail}
-                      disabled={!emailRecipients.trim() || selectedProjectIds.length === 0 || selectedReports.length === 0}
+                      disabled={emailSelectedUsers.filter(u => u.email).length === 0 || selectedProjectIds.length === 0 || isSendingEmail}
                       className="gap-2"
                       size="lg"
                     >
-                      <Mail className="h-4 w-4" />
-                      發送 Email
+                      {isSendingEmail
+                        ? <><Loader2 className="h-4 w-4 animate-spin" /> 產生中...</>
+                        : <><Mail className="h-4 w-4" /> 產生 PDF 並寄出</>
+                      }
                     </Button>
                   </DialogFooter>
                 </>

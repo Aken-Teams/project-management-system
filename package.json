@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 12039",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 12039",
     "lint": "eslint .",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
