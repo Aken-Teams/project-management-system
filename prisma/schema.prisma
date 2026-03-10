@@ -515,3 +515,15 @@ model ProjectTypeConfig {
 
   @@map("project_type_configs")
 }
+
+model CronJobLog {
+  id            String   @id @default(cuid())
+  jobType       String   @db.VarChar(50)
+  runAt         DateTime @default(now()) @map("run_at")
+  status        String   @db.VarChar(20)
+  summary       String?  @db.Text
+  affectedCount Int      @default(0) @map("affected_count")
+
+  @@index([jobType, runAt])
+  @@map("cron_job_logs")
+}

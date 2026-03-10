@@ -1,0 +1,295 @@
+'use client'
+
+import { useRef, useState, useCallback, useEffect, KeyboardEvent } from 'react'
+import { cn } from '@/lib/utils'
+
+export interface VariableDef {
+  name: string    // e.g. "projectName"
+  label: string   // e.g. "專案名稱"
+  sample: string  // e.g. "條碼自動化"
+}
+
+interface TemplateTextareaProps {
+  value: string
+  onChange: (value: string) => void
+  variables: VariableDef[]
+  placeholder?: string
+  rows?: number
+  className?: string
+  singleLine?: boolean
+  showPreview?: boolean
+  onFocus?: () => void
+}
+
+function renderHighlighted(text: string): React.ReactNode[] {
+  const parts = text.split(/({{[^}]*}})/g)
+  return parts.map((part, i) => {
+    if (/^{{[^}]*}}$/.test(part)) {
+      return (
+        <span key={i} className="text-blue-600 bg-blue-50 rounded px-0.5 font-mono text-[0.85em] border border-blue-200">
+          {part}
+        </span>
+      )
+    }
+    return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>
+  })
+}
+
+// Exported so pages can render template variables in their own preview UI
+export function applyTemplateSamples(text: string, variables: VariableDef[]): string {
+  const sampleMap = Object.fromEntries(variables.map(v => [v.name, v.sample]))
+  return text.replace(/{{(\w+)}}/g, (_, key) => sampleMap[key] ?? `{{${key}}}`)
+}
+
+function renderWithSamples(text: string, variables: VariableDef[]): React.ReactNode[] {
+  const sampleMap = Object.fromEntries(variables.map(v => [v.name, v.sample]))
+  const parts = text.split(/({{[^}]*}})/g)
+  return parts.map((part, i) => {
+    const match = part.match(/^{{(\w+)}}$/)
+    if (match) {
+      const sample = sampleMap[match[1]]
+      if (sample) {
+        return <span key={i} className="text-blue-600 font-medium">{sample}</span>
+      }
+      return <span key={i} className="text-red-500 font-mono text-[0.85em]">{part}</span>
+    }
+    return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>
+  })
+}
+
+export function TemplateTextarea({
+  value,
+  onChange,
+  variables,
+  placeholder,
+  rows = 4,
+  className,
+  singleLine = false,
+  showPreview = true,
+  onFocus,
+}: TemplateTextareaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const [showAC, setShowAC] = useState(false)
+  const [acQuery, setAcQuery] = useState('')
+  const [acIndex, setAcIndex] = useState(0)
+  const [acTriggerPos, setAcTriggerPos] = useState(0)
+  const [previewMode, setPreviewMode] = useState<'highlight' | 'sample'>('highlight')
+
+  const filteredVars = variables.filter(v =>
+    v.name.toLowerCase().includes(acQuery.toLowerCase()) || v.label.includes(acQuery)
+  )
+
+  const checkAutocomplete = useCallback((val: string, cursorPos: number) => {
+    const textBefore = val.substring(0, cursorPos)
+    const match = textBefore.match(/\{\{([^}]*)$/)
+    if (match) {
+      setShowAC(true)
+      setAcQuery(match[1])
+      setAcTriggerPos(cursorPos - match[0].length)
+      setAcIndex(0)
+    } else {
+      setShowAC(false)
+    }
+  }, [])
+
+  const insertVariable = useCallback((variable: VariableDef) => {
+    const el = (textareaRef.current ?? inputRef.current) as HTMLTextAreaElement | HTMLInputElement | null
+    if (!el) return
+    const cursorPos = el.selectionStart ?? 0
+    const before = value.substring(0, acTriggerPos)
+    const after = value.substring(cursorPos)
+    const inserted = `{{${variable.name}}}`
+    onChange(before + inserted + after)
+    setShowAC(false)
+    requestAnimationFrame(() => {
+      const newPos = acTriggerPos + inserted.length
+      el.setSelectionRange(newPos, newPos)
+      el.focus()
+    })
+  }, [value, acTriggerPos, onChange])
+
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    if (!showAC || filteredVars.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setAcIndex(i => (i + 1) % filteredVars.length) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setAcIndex(i => (i - 1 + filteredVars.length) % filteredVars.length) }
+    else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); insertVariable(filteredVars[acIndex]) }
+    else if (e.key === 'Escape') { setShowAC(false) }
+  }, [showAC, filteredVars, acIndex, insertVariable])
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    const newVal = e.target.value
+    onChange(newVal)
+    checkAutocomplete(newVal, e.target.selectionStart ?? 0)
+  }, [onChange, checkAutocomplete])
+
+  const handleClick = useCallback((e: React.MouseEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    checkAutocomplete((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart ?? 0)
+  }, [checkAutocomplete])
+
+  const insertAtCursor = useCallback((varName: string) => {
+    const el = (textareaRef.current ?? inputRef.current) as HTMLTextAreaElement | HTMLInputElement | null
+    if (!el) return
+    const pos = el.selectionStart ?? value.length
+    const inserted = `{{${varName}}}`
+    onChange(value.substring(0, pos) + inserted + value.substring(pos))
+    requestAnimationFrame(() => {
+      el.setSelectionRange(pos + inserted.length, pos + inserted.length)
+      el.focus()
+    })
+  }, [value, onChange])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        textareaRef.current && !textareaRef.current.contains(e.target as Node) &&
+        inputRef.current && !inputRef.current.contains(e.target as Node)
+      ) {
+        setShowAC(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // ── Preview panel (shared) ──────────────────────────────────────────────────
+  const previewPanel = (
+    <div className="rounded-md border border-dashed bg-muted/20 flex flex-col h-full">
+      {/* Tab header */}
+      <div className="flex border-b shrink-0">
+        <button
+          type="button"
+          className={cn(
+            'px-3 py-1.5 text-xs transition-colors rounded-tl-md',
+            previewMode === 'highlight' ? 'bg-background border-r font-medium' : 'text-muted-foreground hover:text-foreground'
+          )}
+          onClick={() => setPreviewMode('highlight')}
+        >
+          帶色顯示
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'px-3 py-1.5 text-xs transition-colors',
+            previewMode === 'sample' ? 'bg-background border-r font-medium' : 'text-muted-foreground hover:text-foreground'
+          )}
+          onClick={() => setPreviewMode('sample')}
+        >
+          預覽效果
+        </button>
+      </div>
+      {/* Content */}
+      <div className="px-3 py-2 text-sm leading-relaxed flex-1 overflow-auto">
+        {value
+          ? previewMode === 'highlight'
+            ? renderHighlighted(value)
+            : renderWithSamples(value, variables)
+          : <span className="text-muted-foreground text-xs italic">（空白）</span>
+        }
+      </div>
+    </div>
+  )
+
+  // ── Autocomplete dropdown ──────────────────────────────────────────────────
+  const autocompleteDropdown = showAC && filteredVars.length > 0 && (
+    <div
+      ref={dropdownRef}
+      className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border bg-popover shadow-md text-popover-foreground"
+    >
+      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">↑↓ 選擇，Tab 插入</div>
+      {filteredVars.map((v, i) => (
+        <button
+          key={v.name}
+          type="button"
+          className={cn(
+            'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm cursor-pointer',
+            i === acIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+          )}
+          onMouseDown={e => { e.preventDefault(); insertVariable(v) }}
+          onMouseEnter={() => setAcIndex(i)}
+        >
+          <span className="font-mono text-blue-600 text-xs">{`{{${v.name}}}`}</span>
+          <span className="text-muted-foreground">{v.label}</span>
+          <span className="ml-auto text-muted-foreground text-xs shrink-0">{v.sample}</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className={cn('space-y-2', className)}>
+      {/* Variable chips */}
+      <div className="flex flex-wrap gap-1">
+        {variables.map(v => (
+          <button
+            key={v.name}
+            type="button"
+            className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors font-mono"
+            onClick={() => insertAtCursor(v.name)}
+          >
+            {`{{${v.name}}}`}
+            <span className="text-blue-500 font-sans ml-0.5">= {v.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {singleLine ? (
+        /* Single-line: input above, preview below */
+        <>
+          <div className="relative">
+            <input
+              ref={inputRef}
+              value={value}
+              onChange={handleChange}
+              onClick={handleClick}
+              onKeyDown={handleKeyDown}
+              onFocus={onFocus}
+              placeholder={placeholder}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            {autocompleteDropdown}
+          </div>
+          {showPreview && previewPanel}
+        </>
+      ) : (
+        /* Multi-line: textarea (full width or left half with preview) */
+        showPreview ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={handleChange}
+                onClick={handleClick}
+                onKeyDown={handleKeyDown}
+                onFocus={onFocus}
+                placeholder={placeholder}
+                rows={rows}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              />
+              {autocompleteDropdown}
+            </div>
+            <div style={{ minHeight: `${rows * 1.5 + 1}rem` }}>{previewPanel}</div>
+          </div>
+        ) : (
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleChange}
+              onClick={handleClick}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              rows={rows}
+              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+            />
+            {autocompleteDropdown}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
