@@ -5,13 +5,15 @@ import { Card, CardContent } from '@/components/ui/card'
 import { CheckCircle2, XCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+type PermValue = boolean | 'project' | 'department'
+
 interface PermissionRow {
   label: string
   description: string
-  member: boolean
-  executive: boolean
-  pm: 'project' | boolean  // 'project' = 僅限負責的專案
-  admin: boolean
+  member: PermValue
+  executive: PermValue
+  pm: PermValue
+  admin: PermValue
 }
 
 const CAT_STYLES: Record<string, { bg: string; text: string; border: string }> = {
@@ -29,8 +31,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
     category: '專案',
     color: 'blue',
     rows: [
-      { label: '查看所有專案', description: '可瀏覽所有專案的基本資訊', member: false, executive: true, pm: 'project', admin: true },
-      { label: '查看負責專案', description: '只能查看自己被指派的專案', member: true, executive: false, pm: false, admin: false },
+      { label: '查看專案', description: '管理員看全部；主管看部門；經理與成員僅看自己負責的', member: 'project', executive: 'department', pm: 'project', admin: true },
       { label: '建立專案', description: '新增新的專案', member: false, executive: false, pm: true, admin: true },
       { label: '編輯專案', description: '修改專案基本資訊、目標、範圍', member: false, executive: false, pm: 'project', admin: true },
       { label: '刪除專案', description: '永久刪除專案及所有相關資料', member: false, executive: false, pm: 'project', admin: true },
@@ -40,7 +41,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
     category: '預算',
     color: 'emerald',
     rows: [
-      { label: '查看預算', description: '查看專案預算與設備清單', member: false, executive: true, pm: true, admin: true },
+      { label: '查看預算', description: '查看專案預算與設備清單', member: false, executive: 'department', pm: 'project', admin: true },
       { label: '編輯預算', description: '新增/修改設備清單與費用', member: false, executive: false, pm: 'project', admin: true },
     ],
   },
@@ -57,22 +58,22 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
     rows: [
       { label: '管理風險', description: '新增/編輯/關閉風險項目', member: false, executive: false, pm: 'project', admin: true },
       { label: '提交延期申請', description: '提交里程碑延期或調整申請', member: false, executive: false, pm: 'project', admin: true },
-      { label: '審核延期申請', description: '核准或駁回延期申請', member: false, executive: true, pm: true, admin: true },
+      { label: '審核延期申請', description: '核准或駁回延期申請', member: false, executive: 'department', pm: false, admin: true },
     ],
   },
   {
     category: '報告',
     color: 'amber',
     rows: [
-      { label: '匯出報告', description: '產生並下載 PDF 報告', member: false, executive: true, pm: true, admin: true },
-      { label: '寄送報告郵件', description: '以 Email 發送週報給指定收件人', member: false, executive: true, pm: true, admin: true },
+      { label: '匯出報告', description: '產生並下載 PDF 報告', member: false, executive: 'department', pm: 'project', admin: true },
+      { label: '寄送報告郵件', description: '以 Email 發送週報給指定收件人', member: false, executive: 'department', pm: 'project', admin: true },
     ],
   },
   {
     category: '甘特圖',
     color: 'teal',
     rows: [
-      { label: '查看甘特圖', description: '瀏覽時程甘特圖', member: true, executive: true, pm: true, admin: true },
+      { label: '查看甘特圖', description: '瀏覽時程甘特圖', member: 'project', executive: 'department', pm: 'project', admin: true },
     ],
   },
   {
@@ -88,15 +89,22 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
 ]
 
 const ROLES = [
-  { key: 'member', label: '團隊成員', color: 'bg-gray-100 text-gray-700', description: '被指派到專案的執行人員，只能查看自己參與的專案' },
-  { key: 'executive', label: '主管', color: 'bg-purple-100 text-purple-700', description: '有查閱所有專案、預算與報告的權限，但不能修改' },
-  { key: 'pm', label: '專案經理', color: 'bg-blue-100 text-blue-700', description: '對自己負責的專案有完整操作權，非本人專案只能查看' },
-  { key: 'admin', label: '系統管理員', color: 'bg-red-100 text-red-700', description: '最高權限，可管理系統設定與所有使用者' },
+  { key: 'member', label: '團隊成員', color: 'bg-gray-100 text-gray-700', description: '被指派到專案的執行人員，只能查看自己負責的專案' },
+  { key: 'executive', label: '主管', color: 'bg-purple-100 text-purple-700', description: '可查看自己部門所有成員的專案與報告，但不能修改' },
+  { key: 'pm', label: '專案經理', color: 'bg-blue-100 text-blue-700', description: '對自己負責的專案有完整操作權，只能查看自己的專案' },
+  { key: 'admin', label: '系統管理員', color: 'bg-red-100 text-red-700', description: '最高權限，可查看所有人專案並管理系統設定與使用者' },
 ] as const
 
 type RoleKey = 'member' | 'executive' | 'pm' | 'admin'
 
-function PermCell({ value }: { value: boolean | 'project' }) {
+function PermCell({ value }: { value: PermValue }) {
+  if (value === 'department') {
+    return (
+      <div className="flex items-center justify-center" title="僅限部門專案">
+        <CheckCircle2 className="h-4 w-4 text-violet-500" />
+      </div>
+    )
+  }
   if (value === 'project') {
     return (
       <div className="flex items-center justify-center" title="僅限負責的專案">
@@ -148,10 +156,12 @@ export default function AdminRolesPage() {
       </div>
 
       {/* Note */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5">
-        <span>
-          <span className="inline-flex items-center gap-1 mr-1"><CheckCircle2 className="h-4 w-4 text-orange-500 inline" /> 橙色</span>表示「僅限負責的專案」，專案經理只對自己建立或被指派的專案擁有此權限。
-        </span>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5 flex-wrap">
+        <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> 綠色：完整存取</span>
+        <span className="text-muted-foreground/40">|</span>
+        <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-violet-500" /> 紫色：僅限部門專案</span>
+        <span className="text-muted-foreground/40">|</span>
+        <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-orange-500" /> 橙色：僅限自己負責的專案</span>
       </div>
 
       {/* Permission table */}
