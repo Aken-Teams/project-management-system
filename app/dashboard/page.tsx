@@ -119,9 +119,9 @@ export default function DashboardPage() {
 
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
-      case 'green': return 'bg-success text-success-foreground'
-      case 'yellow': return 'bg-warning text-warning-foreground'
-      case 'red': return 'bg-destructive text-destructive-foreground'
+      case 'green': return 'bg-success text-success-foreground hover:bg-success'
+      case 'yellow': return 'bg-warning text-warning-foreground hover:bg-warning'
+      case 'red': return 'bg-destructive text-destructive-foreground hover:bg-destructive'
     }
   }
 
