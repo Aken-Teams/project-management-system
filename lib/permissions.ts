@@ -41,6 +41,19 @@ export function getRolePermissions(role: UserRole): Permission {
         canManageRisks: false,
         canViewGantt: true,
       }
+    case 'admin':
+      return {
+        canCreateProject: true,
+        canEditProject: true,
+        canDeleteProject: true,
+        canViewBudget: true,
+        canEditBudget: true,
+        canManageTeam: true,
+        canViewAllProjects: true,
+        canExportReports: true,
+        canManageRisks: true,
+        canViewGantt: true,
+      }
     case 'member':
       return {
         canCreateProject: false,
@@ -76,15 +89,19 @@ export function canUserAccessProject(
   userRole: UserRole,
   project: { team: string[]; owner: string }
 ): boolean {
-  // PM 和主管可以看所有專案
-  if (userRole === 'pm' || userRole === 'executive') {
+  // Admin, PM 和主管可以看所有專案
+  if (userRole === 'admin' || userRole === 'pm' || userRole === 'executive') {
     return true
   }
-  
+
   // 一般成員只能看自己參與的專案
   if (userRole === 'member') {
     return project.team.includes(userName) || project.owner === userName
   }
-  
+
   return false
+}
+
+export function isAdmin(user: { role: string } | null): boolean {
+  return user?.role === 'admin'
 }

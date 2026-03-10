@@ -4,7 +4,7 @@ import React from "react"
 
 import { createContext, useContext, useState, useEffect } from 'react'
 
-export type UserRole = 'pm' | 'member' | 'executive'
+export type UserRole = 'pm' | 'member' | 'executive' | 'admin'
 
 export interface User {
   id: string
@@ -54,13 +54,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // Always re-resolve DB user ID from email (localStorage may have stale mock ID)
+    // Always re-resolve DB user ID and role from email (localStorage may have stale data)
     fetch(`/api/users/search?q=${encodeURIComponent(parsed.email)}&limit=1`)
       .then(res => res.ok ? res.json() : [])
-      .then((users: { id: string; email: string }[]) => {
+      .then((users: { id: string; email: string; role?: string }[]) => {
         const dbUser = users.find(u => u.email === parsed.email)
-        if (dbUser && dbUser.id !== parsed.id) {
-          const updated = { ...parsed, id: dbUser.id }
+        if (dbUser && (dbUser.id !== parsed.id || dbUser.role !== parsed.role)) {
+          const updated = { ...parsed, id: dbUser.id, role: (dbUser.role ?? parsed.role) as UserRole }
           setUser(updated)
           localStorage.setItem('currentUser', JSON.stringify(updated))
         } else {
@@ -76,14 +76,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const foundUser = MOCK_USERS.find(u => u.email === email)
     if (!foundUser) throw new Error('Invalid credentials')
 
-    // Resolve real DB user ID (mock IDs '1','2','3' don't match DB cuids)
+    // Resolve real DB user ID and role
     let resolvedUser = { ...foundUser }
     try {
       const res = await fetch(`/api/users/search?q=${encodeURIComponent(email)}&limit=1`)
       if (res.ok) {
         const users = await res.json()
         const dbUser = users.find((u: { email: string }) => u.email === email)
-        if (dbUser) resolvedUser = { ...foundUser, id: dbUser.id }
+        if (dbUser) resolvedUser = { ...foundUser, id: dbUser.id, role: dbUser.role ?? foundUser.role }
       }
     } catch { /* fallback to mock id */ }
 

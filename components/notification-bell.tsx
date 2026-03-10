@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   HelpCircle,
   CheckCheck,
+  AlertCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -24,6 +25,8 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'delay-rejected': XCircle,
   'task-overdue': AlertTriangle,
   'support-needed': HelpCircle,
+  'weekly-upload-missing': AlertCircle,
+  'weekly-report-ready': CheckCircle2,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -33,6 +36,8 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'delay-rejected': 'text-red-500',
   'task-overdue': 'text-red-500',
   'support-needed': 'text-amber-500',
+  'weekly-upload-missing': 'text-amber-500',
+  'weekly-report-ready': 'text-emerald-500',
 }
 
 function formatRelativeTime(dateStr: string): string {

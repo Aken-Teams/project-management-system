@@ -34,35 +34,40 @@ import {
   Menu,
   X,
   BookOpen,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProjectStore } from '@/lib/project-store'
 import { computeTaskStatus } from '@/lib/task-utils'
 import { Badge } from '@/components/ui/badge'
 import { NotificationBell } from '@/components/notification-bell'
+import { isAdmin } from '@/lib/permissions'
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
 const navigation = [
-  { name: '儀表板', href: '/dashboard', icon: LayoutDashboard, roles: ['pm', 'executive'] as const },
+  { name: '儀表板', href: '/dashboard', icon: LayoutDashboard, roles: ['pm', 'executive', 'admin'] as const },
   // { name: '我的任務', href: '/my-tasks', icon: ClipboardList, roles: ['pm', 'member'] as const },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
-  { name: '報告', href: '/reports', icon: FileText, roles: ['pm', 'executive'] as const },
-  { name: '審核中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive'] as const },
+  { name: '報告', href: '/reports', icon: FileText, roles: ['pm', 'executive', 'admin'] as const },
+  { name: '審核中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive', 'admin'] as const },
+  { name: '管理後台', href: '/admin', icon: Shield, adminOnly: true as const },
 ]
 
 const defaultRoute: Record<string, string> = {
   pm: '/dashboard',
   member: '/projects',
   executive: '/dashboard',
+  admin: '/admin',
 }
 
 const roleNames: Record<string, string> = {
   pm: '專案經理',
   member: '團隊成員',
   executive: '主管',
+  admin: '系統管理員',
 }
 
 const SIDEBAR_KEY = 'sidebar-collapsed'
@@ -109,7 +114,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     if (!loading && user && pathname) {
       const isOnRestrictedPage = navigation.some(
         item => (pathname === item.href || pathname.startsWith(item.href + '/')) &&
-                item.roles && !item.roles.includes(user.role)
+                item.roles && !item.roles.includes(user.role as never)
       )
       if (isOnRestrictedPage) {
         router.replace(defaultRoute[user.role] || '/dashboard')
@@ -132,9 +137,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
-  const visibleNav = navigation.filter(
-    item => !('roles' in item) || !item.roles || item.roles.includes(user.role)
-  )
+  const visibleNav = navigation.filter(item => {
+    if ('adminOnly' in item && item.adminOnly) return isAdmin(user)
+    if ('roles' in item && item.roles) return item.roles.includes(user.role as never)
+    return true
+  })
 
   const getBadgeValue = (href: string) => {
     if (href === '/approvals') return pendingCount

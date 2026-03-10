@@ -57,3 +57,22 @@ export const MILESTONE_TEMPLATES: Record<ProjectType, MilestoneTemplate[]> = {
     { name: '結案與交付', durationDays: 7 },
   ],
 }
+
+// DB-aware loader: returns DB rows if customized, otherwise falls back to hardcoded MILESTONE_TEMPLATES
+// Use this in server-side code (API routes) instead of reading MILESTONE_TEMPLATES directly
+import type { PrismaClient } from '@prisma/client'
+
+export async function getMilestoneTemplates(
+  projectType: ProjectType,
+  prisma: PrismaClient,
+): Promise<MilestoneTemplate[]> {
+  const dbType = projectType.replace(/-/g, '_') // 'cost-optimization' → 'cost_optimization'
+  const dbRows = await prisma.milestoneTemplateConfig.findMany({
+    where: { projectType: dbType },
+    orderBy: { sortOrder: 'asc' },
+  })
+  if (dbRows.length > 0) {
+    return dbRows.map(r => ({ name: r.name, durationDays: r.durationDays }))
+  }
+  return MILESTONE_TEMPLATES[projectType] ?? []
+}
