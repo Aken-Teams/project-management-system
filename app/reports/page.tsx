@@ -739,58 +739,37 @@ export default function ReportsPage() {
               ) : (
                 <>
                   <div className="space-y-4">
-                    {/* Email Recipients — AD user picker */}
-                    <div className="space-y-2">
-                      <Label className="text-base font-medium">收件人</Label>
-
-                      {/* Selected user tags */}
-                      {emailSelectedUsers.length > 0 && (
-                        <div className="flex flex-wrap gap-2 p-2 border rounded-lg bg-muted/30 min-h-[42px]">
+                    {/* To + CC — Gmail-style compose fields */}
+                    <div className="border rounded-lg overflow-visible divide-y">
+                      {/* 收件人 row */}
+                      <div className="relative flex items-start gap-2 px-3 py-2 min-h-[44px]">
+                        <span className="text-sm text-muted-foreground w-14 shrink-0 pt-1.5">收件人</span>
+                        <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0">
                           {emailSelectedUsers.map(u => (
-                            <div key={u.username} className="flex items-center gap-1.5 bg-background border rounded-full px-3 py-1 text-sm shadow-sm">
+                            <span key={u.username} className="inline-flex items-center gap-1 bg-muted rounded-md px-2 py-0.5 text-sm">
                               <span className="font-medium">{u.name}</span>
-                              {u.email
-                                ? <span className="text-muted-foreground text-xs">{u.email}</span>
-                                : <span className="text-amber-500 text-xs">無 email</span>
-                              }
-                              <button
-                                onClick={() => removeEmailUser(u.username)}
-                                className="ml-1 text-muted-foreground hover:text-destructive"
-                              >
+                              {!u.email && <span className="text-amber-500 text-xs">無mail</span>}
+                              <button onClick={() => removeEmailUser(u.username)} className="text-muted-foreground hover:text-destructive ml-0.5">
                                 <X className="h-3 w-3" />
                               </button>
-                            </div>
+                            </span>
                           ))}
-                        </div>
-                      )}
-
-                      {/* Search input + dropdown */}
-                      <div className="relative">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="搜尋姓名或帳號..."
+                          <input
+                            placeholder={emailSelectedUsers.length === 0 ? '搜尋姓名或帳號...' : ''}
                             value={emailSearchQuery}
                             onChange={e => searchEmailUsers(e.target.value)}
-                            className="pl-9 h-10"
+                            className="flex-1 min-w-[120px] text-sm bg-transparent outline-none placeholder:text-muted-foreground py-1"
                           />
-                          {emailSearchLoading && (
-                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                          )}
+                          {emailSearchLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
                         </div>
                         {emailSearchResults.length > 0 && (
                           <div className="absolute top-full left-0 right-0 z-50 mt-1 border rounded-lg bg-background shadow-md max-h-48 overflow-y-auto">
                             {emailSearchResults.map(result => (
-                              <button
-                                key={result.id}
-                                onClick={() => addEmailUser(result)}
-                                disabled={emailFetchingUsers.has(result.id)}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted text-left disabled:opacity-60"
-                              >
+                              <button key={result.id} onClick={() => addEmailUser(result)} disabled={emailFetchingUsers.has(result.id)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted text-left disabled:opacity-60">
                                 {emailFetchingUsers.has(result.id)
                                   ? <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-                                  : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                }
+                                  : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />}
                                 <div>
                                   <div className="text-sm font-medium">{result.name}</div>
                                   <div className="text-xs text-muted-foreground">{result.organization}</div>
@@ -801,63 +780,35 @@ export default function ReportsPage() {
                         )}
                       </div>
 
-                      {emailSelectedUsers.length > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          已選 {emailSelectedUsers.length} 位，其中 {emailSelectedUsers.filter(u => u.email).length} 位有 email
-                        </p>
-                      )}
-                    </div>
-
-                    {/* CC — AD user picker */}
-                    <div className="space-y-2">
-                      <Label className="text-base font-medium">副本 (CC)</Label>
-
-                      {ccSelectedUsers.length > 0 && (
-                        <div className="flex flex-wrap gap-2 p-2 border rounded-lg bg-muted/30 min-h-[42px]">
+                      {/* CC row */}
+                      <div className="relative flex items-start gap-2 px-3 py-2 min-h-[44px]">
+                        <span className="text-sm text-muted-foreground w-14 shrink-0 pt-1.5">副本</span>
+                        <div className="flex-1 flex flex-wrap items-center gap-1.5 min-w-0">
                           {ccSelectedUsers.map(u => (
-                            <div key={u.username} className="flex items-center gap-1.5 bg-background border rounded-full px-3 py-1 text-sm shadow-sm">
+                            <span key={u.username} className="inline-flex items-center gap-1 bg-muted rounded-md px-2 py-0.5 text-sm">
                               <span className="font-medium">{u.name}</span>
-                              {u.email
-                                ? <span className="text-muted-foreground text-xs">{u.email}</span>
-                                : <span className="text-amber-500 text-xs">無 email</span>
-                              }
-                              <button
-                                onClick={() => removeCcUser(u.username)}
-                                className="ml-1 text-muted-foreground hover:text-destructive"
-                              >
+                              {!u.email && <span className="text-amber-500 text-xs">無mail</span>}
+                              <button onClick={() => removeCcUser(u.username)} className="text-muted-foreground hover:text-destructive ml-0.5">
                                 <X className="h-3 w-3" />
                               </button>
-                            </div>
+                            </span>
                           ))}
-                        </div>
-                      )}
-
-                      <div className="relative">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="搜尋姓名或帳號..."
+                          <input
+                            placeholder={ccSelectedUsers.length === 0 ? '搜尋姓名或帳號...' : ''}
                             value={ccSearchQuery}
                             onChange={e => searchCcUsers(e.target.value)}
-                            className="pl-9 h-10"
+                            className="flex-1 min-w-[120px] text-sm bg-transparent outline-none placeholder:text-muted-foreground py-1"
                           />
-                          {ccSearchLoading && (
-                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                          )}
+                          {ccSearchLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
                         </div>
                         {ccSearchResults.length > 0 && (
                           <div className="absolute top-full left-0 right-0 z-50 mt-1 border rounded-lg bg-background shadow-md max-h-48 overflow-y-auto">
                             {ccSearchResults.map(result => (
-                              <button
-                                key={result.id}
-                                onClick={() => addCcUser(result)}
-                                disabled={ccFetchingUsers.has(result.id)}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted text-left disabled:opacity-60"
-                              >
+                              <button key={result.id} onClick={() => addCcUser(result)} disabled={ccFetchingUsers.has(result.id)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted text-left disabled:opacity-60">
                                 {ccFetchingUsers.has(result.id)
                                   ? <Loader2 className="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-                                  : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                }
+                                  : <Users className="h-4 w-4 shrink-0 text-muted-foreground" />}
                                 <div>
                                   <div className="text-sm font-medium">{result.name}</div>
                                   <div className="text-xs text-muted-foreground">{result.organization}</div>
@@ -908,19 +859,7 @@ export default function ReportsPage() {
                     <Button variant="outline" onClick={() => setShowEmailDialog(false)} size="lg" disabled={isSendingEmail || isPreviewingPdf}>
                       取消
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handlePreviewEmailPdf}
-                      disabled={selectedProjectIds.length === 0 || isPreviewingPdf || isSendingEmail}
-                      className="gap-2"
-                      size="lg"
-                    >
-                      {isPreviewingPdf
-                        ? <><Loader2 className="h-4 w-4 animate-spin" /> 產生中...</>
-                        : <><FileDown className="h-4 w-4" /> 下載預覽 PDF</>
-                      }
-                    </Button>
-                    <Button
+<Button
                       onClick={handleSendEmail}
                       disabled={emailSelectedUsers.filter(u => u.email).length === 0 || selectedProjectIds.length === 0 || isSendingEmail || isPreviewingPdf}
                       className="gap-2"
