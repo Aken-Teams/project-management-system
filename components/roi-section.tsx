@@ -132,37 +132,52 @@ function RoiParamsTable({
 function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit: number }) {
   if (monthlyProfit <= 0 || budget <= 0) return null
   const payback = budget / monthlyProfit
-  const maxMonths = Math.min(Math.ceil(payback * 2.2), 60)
+
+  // When payback is too long, the chart is misleading — show text instead
+  if (payback > 60) {
+    const years = (payback / 12).toFixed(1)
+    return (
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        預估回收期約 <strong>{payback.toFixed(0)} 個月（{years} 年）</strong>，
+        時間較長，圖表不適合呈現。請確認 ROI 參數是否填寫正確
+        （提示：平均售價單位為 NTD/千顆，Capacity 單位為千顆/月）。
+      </div>
+    )
+  }
+
+  const maxMonths = Math.ceil(payback * 2.2)
   const data = Array.from({ length: maxMonths + 1 }, (_, m) => ({
     month: m,
     累積淨益: Math.round(monthlyProfit * m - budget),
   }))
+  const yMax = Math.round(monthlyProfit * maxMonths - budget)
+  const yDomain: [number, number] = [-budget * 1.05, Math.max(yMax * 1.1, budget * 0.1)]
+
+  const tickFmt = (v: number) =>
+    Math.abs(v) >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
+      : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)
 
   return (
     <div>
-      <div className="text-xs text-muted-foreground mb-1 font-medium">投資回收曲線（月）</div>
-      <ResponsiveContainer width="100%" height={180}>
-        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <div className="text-xs text-muted-foreground mb-1 font-medium">
+        投資回收曲線（預估回收期：<span className="text-[#1f3864] font-semibold">{payback.toFixed(1)} 個月</span>）
+      </div>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="month" tick={{ fontSize: 10 }}
-            label={{ value: '月', position: 'insideRight', offset: -4, fontSize: 10 }} />
-          <YAxis
-            tickFormatter={(v) =>
-              Math.abs(v) >= 1_000_000 ? `${(v / 1_000_000).toFixed(0)}M`
-                : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)
-            }
-            tick={{ fontSize: 9 }} width={42}
-          />
+            label={{ value: '月', position: 'insideBottomRight', offset: -4, fontSize: 10 }} />
+          <YAxis tickFormatter={tickFmt} tick={{ fontSize: 9 }} width={44} domain={yDomain} />
           <Tooltip
             formatter={(v: number) => [fmtNT(v), '累積淨益']}
             labelFormatter={(l) => `第 ${l} 個月`}
             contentStyle={{ fontSize: 11 }}
           />
-          <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
+          <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5}
+            label={{ value: '損益平衡', position: 'right', fontSize: 9, fill: '#ef4444' }} />
           <ReferenceLine
-            x={Math.round(payback)}
-            stroke="#1f3864" strokeDasharray="4 2" strokeWidth={1.5}
-            label={{ value: `回收 ${payback.toFixed(1)} 月`, position: 'top', fontSize: 10, fill: '#1f3864' }}
+            x={Math.round(payback)} stroke="#1f3864" strokeDasharray="4 2" strokeWidth={1.5}
+            label={{ value: `第 ${payback.toFixed(1)} 月回收`, position: 'top', fontSize: 9, fill: '#1f3864' }}
           />
           <Line type="monotone" dataKey="累積淨益" stroke="#2563eb" dot={false} strokeWidth={2} />
         </LineChart>
