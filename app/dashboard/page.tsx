@@ -223,11 +223,16 @@ export default function DashboardPage() {
               <span className="text-sm text-muted-foreground">專案層級</span>
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-              {(['T1', 'T2', 'T3', 'CIP'] as const).map(tier => (
-                <div key={tier} className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{tier}</span>
-                  <span className="text-sm font-bold">{stats.tierCounts[tier]}</span>
+            <div className="flex justify-between">
+              {([
+                { tier: 'T1', color: 'text-blue-500' },
+                { tier: 'T2', color: 'text-violet-500' },
+                { tier: 'T3', color: 'text-slate-500' },
+                { tier: 'CIP', color: 'text-amber-500' },
+              ] as const).map(({ tier, color }, i) => (
+                <div key={tier} className={`flex-1 text-center ${i < 3 ? 'border-r' : ''}`}>
+                  <div className={`text-xl font-bold ${color}`}>{stats.tierCounts[tier]}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{tier}</div>
                 </div>
               ))}
             </div>
