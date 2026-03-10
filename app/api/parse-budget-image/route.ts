@@ -25,19 +25,23 @@ export async function POST(request: NextRequest) {
   "items": [
     {
       "station": "站別（如 DW、MD、DG、TF、TMTT 等）",
-      "vendor": "廠商名稱",
-      "equipment": "設備機型/名稱",
+      "vendor": "廠商名稱（請仔細辨識原始文字，不要自行推測或替換）",
+      "equipment": "設備機型/名稱（請仔細辨識原始文字，不要自行推測或替換）",
       "quantity": 1,
       "purchaseType": "選購方式（如 新購、移撥）",
+      "unitPrice": 123456,
       "estimatedCost": 123456
     }
   ]
 }
 
-注意：
+規則：
 - 數字欄位只填純數字（去掉千分位逗號和貨幣符號）
+- unitPrice：填「預估單價」欄（每組單價），若無此欄填 null
+- estimatedCost：填「預估費用」欄（總金額 = 單價 × 組數）；若表格只有單價欄而無費用欄，則自行計算 unitPrice × quantity
+- 文字欄位（vendor、equipment）請逐字對照圖片原文，勿替換為相近詞彙
 - 若某欄位讀不到值，填 null 或空字串
-- 略過小計、合計等匯總行
+- 略過小計、合計、TOTAL 等匯總行
 - 只回傳 JSON，不要任何說明文字`
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-2024-11-20',
         messages: [
           {
             role: 'user',

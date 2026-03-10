@@ -30,7 +30,7 @@ import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
 import { TimelineTable } from '@/components/timeline-table'
 import { TeamMemberTable } from '@/components/team-member-table'
 import { VoiceInputButton } from '@/components/voice-input-button'
-import { BudgetListEditor } from '@/components/budget-list-editor'
+import { BudgetListEditor, validateBudgetItems } from '@/components/budget-list-editor'
 import {
   Loader2,
   Sparkles,
@@ -859,6 +859,17 @@ export default function NewProjectPage() {
       }
     })
     const teamMembersData = manualTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
+
+    // Validate budget items before submit
+    const budgetErrors = validateBudgetItems(manualBudgetItems)
+    if (budgetErrors.length > 0) {
+      toast({
+        title: '設備清單費用有誤，請修正後再送出',
+        description: budgetErrors[0] + (budgetErrors.length > 1 ? ` 等 ${budgetErrors.length} 筆` : ''),
+        variant: 'destructive',
+      })
+      return
+    }
 
     setIsCreating(true)
     try {
@@ -1796,7 +1807,7 @@ export default function NewProjectPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <div className="space-y-2">
                       <Label htmlFor="name">
                         專案名稱 <span className="text-destructive">*</span>
@@ -1808,9 +1819,8 @@ export default function NewProjectPage() {
                         onChange={(e) => setManualData({ ...manualData, name: e.target.value })}
                       />
                     </div>
-                    {/* 無設備清單時才顯示手動預算輸入 */}
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between min-h-[20px]">
                         <Label htmlFor="budget">投資預算 (NT$)</Label>
                         {manualBudgetItems.some(i => i.estimatedCost != null) && (
                           <span className="text-xs text-muted-foreground">由設備清單自動帶入，不可手動修改</span>

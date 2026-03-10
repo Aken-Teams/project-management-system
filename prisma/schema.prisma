@@ -147,6 +147,7 @@ model Project {
   purpose         String        @default("") @db.VarChar(1000)
   scope           String        @default("") @db.VarChar(1000)
   roi             String        @default("") @db.VarChar(1000)
+  roiParams       String?       @db.Text @map("roi_params")  // JSON: {grossMargin, avgPrice, capacity}
   createdReason   String        @default("") @db.VarChar(1000) @map("created_reason")
   // Nullable TEXT: no DEFAULT needed, NULL is implicit
   expectedBenefits String?      @db.Text @map("expected_benefits")
@@ -469,7 +470,8 @@ model ProjectBudgetItem {
   equipment     String   @default("") // 設備機型/名稱
   quantity      Int      @default(1)  // 組數
   purchaseType  String   @default("") @map("purchase_type") // 選購方式
-  estimatedCost Float?   @map("estimated_cost") // 預估費用
+  unitPrice     Float?   @map("unit_price")      // 預估單價
+  estimatedCost Float?   @map("estimated_cost") // 預估費用（= 單價 × 組數）
   actualCost    Float?   @map("actual_cost")    // 實際費用
   sortOrder     Int      @default(0) @map("sort_order")
   createdAt     DateTime @default(now()) @map("created_at")

@@ -32,6 +32,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         equipment: string
         quantity?: number
         purchaseType?: string
+        unitPrice?: number | null
         estimatedCost?: number | null
         actualCost?: number | null
       }[]
@@ -48,6 +49,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             equipment: item.equipment ?? '',
             quantity: item.quantity ?? 1,
             purchaseType: item.purchaseType ?? '',
+            unitPrice: item.unitPrice ?? null,
             estimatedCost: item.estimatedCost ?? null,
             actualCost: item.actualCost ?? null,
             sortOrder: i,

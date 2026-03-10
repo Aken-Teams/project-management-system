@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Trash2, ImageUp, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ImageUp, Loader2, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 export interface BudgetItem {
@@ -13,6 +13,7 @@ export interface BudgetItem {
   equipment: string
   quantity: number
   purchaseType: string
+  unitPrice: number | null
   estimatedCost: number | null
   actualCost: number | null
 }
@@ -29,6 +30,7 @@ function emptyItem(): BudgetItem {
     equipment: '',
     quantity: 1,
     purchaseType: '新購',
+    unitPrice: null,
     estimatedCost: null,
     actualCost: null,
   }
@@ -44,6 +46,26 @@ function parseNumber(val: string): number | null {
   return isNaN(n) ? null : n
 }
 
+/** Returns true if unitPrice × quantity does NOT equal estimatedCost (when both are set) */
+export function hasCostMismatch(item: BudgetItem): boolean {
+  if (item.unitPrice == null || item.estimatedCost == null) return false
+  const expected = item.unitPrice * item.quantity
+  return Math.abs(expected - item.estimatedCost) > 0.5
+}
+
+/** Returns error messages for a list of items (for parent submit validation) */
+export function validateBudgetItems(items: BudgetItem[]): string[] {
+  const errors: string[] = []
+  items.forEach((item, i) => {
+    if (hasCostMismatch(item)) {
+      errors.push(
+        `第 ${i + 1} 筆（${item.equipment || '未命名'}）：單價 × 組數 (${formatNT(item.unitPrice)} × ${item.quantity} = ${formatNT((item.unitPrice ?? 0) * item.quantity)}) 不等於預估費用 (${formatNT(item.estimatedCost)})`
+      )
+    }
+  })
+  return errors
+}
+
 export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
   const { toast } = useToast()
   const [parsing, setParsing] = useState(false)
@@ -51,7 +73,18 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const update = (index: number, field: keyof BudgetItem, value: string | number | null) => {
-    onChange(items.map((item, i) => i === index ? { ...item, [field]: value } : item))
+    const updated = items.map((item, i) => {
+      if (i !== index) return item
+      const next = { ...item, [field]: value }
+      // Auto-calc estimatedCost when unitPrice or quantity changes
+      if (field === 'unitPrice' || field === 'quantity') {
+        const price = field === 'unitPrice' ? (value as number | null) : next.unitPrice
+        const qty = field === 'quantity' ? (value as number) : next.quantity
+        next.estimatedCost = price != null ? price * qty : next.estimatedCost
+      }
+      return next
+    })
+    onChange(updated)
   }
 
   const addRow = () => {
@@ -98,15 +131,26 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
         return
       }
 
-      const newItems: BudgetItem[] = parsed.map((p: Partial<BudgetItem>) => ({
-        station: p.station ?? '',
-        vendor: p.vendor ?? '',
-        equipment: p.equipment ?? '',
-        quantity: typeof p.quantity === 'number' ? p.quantity : 1,
-        purchaseType: p.purchaseType ?? '新購',
-        estimatedCost: typeof p.estimatedCost === 'number' ? p.estimatedCost : null,
-        actualCost: null,
-      }))
+      const newItems: BudgetItem[] = parsed.map((p: Partial<BudgetItem>) => {
+        const unitPrice = typeof p.unitPrice === 'number' ? p.unitPrice : null
+        const qty = typeof p.quantity === 'number' ? p.quantity : 1
+        const estimatedCost =
+          typeof p.estimatedCost === 'number'
+            ? p.estimatedCost
+            : unitPrice != null
+            ? unitPrice * qty
+            : null
+        return {
+          station: p.station ?? '',
+          vendor: p.vendor ?? '',
+          equipment: p.equipment ?? '',
+          quantity: qty,
+          purchaseType: p.purchaseType ?? '新購',
+          unitPrice,
+          estimatedCost,
+          actualCost: null,
+        }
+      })
 
       onChange([...items, ...newItems])
       toast({
@@ -127,10 +171,11 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
 
   const estimatedTotal = items.reduce((sum, i) => sum + (i.estimatedCost ?? 0), 0)
   const hasItems = items.length > 0
+  const mismatchCount = items.filter(hasCostMismatch).length
 
   return (
     <div className="rounded-md border">
-      {/* ─── Header (always visible) — shows total here, not in table footer ─── */}
+      {/* ─── Header (always visible) ─── */}
       <div
         className="flex items-center justify-between px-3 py-2 cursor-pointer select-none hover:bg-muted/40 transition-colors"
         onClick={() => setExpanded(v => !v)}
@@ -146,6 +191,11 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
               <span className="text-muted-foreground text-xs">
                 預估合計：<span className="font-semibold text-foreground">NT$ {formatNT(estimatedTotal)}</span>
               </span>
+              {mismatchCount > 0 && (
+                <span className="flex items-center gap-0.5 text-amber-600 text-xs">
+                  <AlertTriangle className="h-3 w-3" />{mismatchCount} 筆費用不符
+                </span>
+              )}
             </>
           ) : (
             <span className="text-muted-foreground text-xs">點擊展開 / 新增設備清單</span>
@@ -182,59 +232,77 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
                     <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-14">站別</th>
                     <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-24">廠商</th>
                     <th className="px-2 py-1.5 text-left font-medium text-muted-foreground min-w-[150px]">設備機型/名稱</th>
-                    <th className="px-2 py-1.5 text-center font-medium text-muted-foreground w-12">組數</th>
+                    <th className="px-2 py-1.5 text-center font-medium text-muted-foreground w-20">組數</th>
                     <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-20">選購方式</th>
-                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">預估費用 (NT$)</th>
-                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">實際費用 (NT$)</th>
+                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">預估單價 (NT$)</th>
+                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-36">預估費用 (NT$)</th>
                     <th className="px-2 py-1.5 w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {items.map((item, i) => (
-                    <tr key={i} className="hover:bg-muted/30">
-                      <td className="px-1 py-1">
-                        <Input value={item.station} onChange={e => update(i, 'station', e.target.value)}
-                          className="h-7 text-xs px-1.5 w-12" placeholder="DW" />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input value={item.vendor} onChange={e => update(i, 'vendor', e.target.value)}
-                          className="h-7 text-xs px-1.5 w-22" placeholder="廠商" />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input value={item.equipment} onChange={e => update(i, 'equipment', e.target.value)}
-                          className="h-7 text-xs px-1.5 min-w-[140px]" placeholder="設備名稱" />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input type="number" min={1} value={item.quantity}
-                          onChange={e => update(i, 'quantity', parseInt(e.target.value) || 1)}
-                          className="h-7 text-xs px-1.5 w-12 text-center" />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input value={item.purchaseType} onChange={e => update(i, 'purchaseType', e.target.value)}
-                          className="h-7 text-xs px-1.5 w-16" placeholder="新購" />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input type="number" min={0} value={item.estimatedCost ?? ''}
-                          onChange={e => update(i, 'estimatedCost', parseNumber(e.target.value))}
-                          className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
-                      </td>
-                      <td className="px-1 py-1">
-                        <Input type="number" min={0} value={item.actualCost ?? ''}
-                          onChange={e => update(i, 'actualCost', parseNumber(e.target.value))}
-                          className="h-7 text-xs px-1.5 w-28 text-right" placeholder="—" />
-                      </td>
-                      <td className="px-1 py-1 text-center">
-                        <Button type="button" variant="ghost" size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeRow(i)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((item, i) => {
+                    const mismatch = hasCostMismatch(item)
+                    return (
+                      <tr key={i} className={mismatch ? 'bg-amber-50/60 hover:bg-amber-50' : 'hover:bg-muted/30'}>
+                        <td className="px-1 py-1">
+                          <Input value={item.station} onChange={e => update(i, 'station', e.target.value)}
+                            className="h-7 text-xs px-1.5 w-12" placeholder="DW" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input value={item.vendor} onChange={e => update(i, 'vendor', e.target.value)}
+                            className="h-7 text-xs px-1.5 w-22" placeholder="廠商" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input value={item.equipment} onChange={e => update(i, 'equipment', e.target.value)}
+                            className="h-7 text-xs px-1.5 min-w-[140px]" placeholder="設備名稱" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input type="number" min={1} value={item.quantity}
+                            onChange={e => update(i, 'quantity', parseInt(e.target.value) || 1)}
+                            className="h-7 text-xs px-1.5 w-16 text-center" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input value={item.purchaseType} onChange={e => update(i, 'purchaseType', e.target.value)}
+                            className="h-7 text-xs px-1.5 w-16" placeholder="新購" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input type="number" min={0} value={item.unitPrice ?? ''}
+                            onChange={e => update(i, 'unitPrice', parseNumber(e.target.value))}
+                            className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <div className="flex items-center gap-1">
+                            <Input type="number" min={0} value={item.estimatedCost ?? ''}
+                              onChange={e => update(i, 'estimatedCost', parseNumber(e.target.value))}
+                              className={`h-7 text-xs px-1.5 w-28 text-right ${mismatch ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
+                              placeholder="0" />
+                            {mismatch && (
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" title={`應為 ${formatNT((item.unitPrice ?? 0) * item.quantity)}`} />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-1 py-1 text-center">
+                          <Button type="button" variant="ghost" size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeRow(i)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
-                {/* No tfoot — total is shown in the header above to avoid duplication */}
               </table>
+              {/* Mismatch summary */}
+              {mismatchCount > 0 && (
+                <div className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-t flex items-start gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    橘色標示列的「預估費用」與「單價 × 組數」不符，請確認後修正再儲存。
+                    點擊預估費用欄直接輸入正確金額，或修正單價使其自動計算。
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-6 text-sm text-muted-foreground">

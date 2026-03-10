@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign } from 'lucide-react'
-import { BudgetListEditor, type BudgetItem } from '@/components/budget-list-editor'
+import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/components/budget-list-editor'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
@@ -390,6 +390,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     if (!form.purpose.trim()) {
       setError('專案目的不可為空')
       setActiveTab('description')
+      return false
+    }
+
+    // Validate budget items cost consistency
+    const budgetErrors = validateBudgetItems(budgetItems)
+    if (budgetErrors.length > 0) {
+      setError(`設備清單費用有誤：${budgetErrors[0]}${budgetErrors.length > 1 ? ` 等 ${budgetErrors.length} 筆` : ''}`)
+      setActiveTab('basic')
       return false
     }
 

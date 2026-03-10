@@ -56,6 +56,7 @@ import { ProjectEditDialog, type ProjectEditData } from '@/components/project-ed
 import { ProjectDeleteDialog } from '@/components/project-delete-dialog'
 import { ProjectRiskTab } from '@/components/project-risk-tab'
 import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
+import { RoiSection, type RoiParams } from '@/components/roi-section'
 
 // --- Main page ---
 
@@ -69,7 +70,8 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const { user } = useAuth()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
-  const [budgetItems, setBudgetItems] = useState<{ station: string; vendor: string; equipment: string; quantity: number; estimatedCost: number | null; actualCost: number | null }[]>([])
+  const [budgetItems, setBudgetItems] = useState<{ id?: string; station: string; vendor: string; equipment: string; quantity: number; unitPrice: number | null; estimatedCost: number | null; actualCost: number | null }[]>([])
+  const [roiParams, setRoiParams] = useState<RoiParams | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -86,6 +88,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         if (!cancelled) {
           setProject(data)
           setLoading(false)
+          if (data?.roiParams) {
+            try { setRoiParams(JSON.parse(data.roiParams)) } catch { /* ignore */ }
+          }
         }
       })
       .catch(() => {
@@ -386,42 +391,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       <p className="text-sm">{project.scope}</p>
                     </div>
                     <div className="py-3 last:pb-0">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-                        <TrendingUp className="h-3 w-3" />
-                        投資報酬 (ROI)
-                      </div>
-                      {project.roi && <p className="text-sm mb-2">{project.roi}</p>}
-                      {budgetItems.length > 0 && (() => {
-                        const estimated = budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
-                        const actual = budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
-                        const hasActual = budgetItems.some(i => i.actualCost != null)
-                        const fmt = (n: number) => `NT$ ${n.toLocaleString('zh-TW')}`
-                        return (
-                          <div className="text-xs space-y-1 bg-muted/50 rounded-md p-2.5">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">投資預算（預估）</span>
-                              <span className="font-medium">{fmt(estimated)}</span>
-                            </div>
-                            {hasActual && (
-                              <div className="flex justify-between">
-                                <span className="text-muted-foreground">實際投入</span>
-                                <span className="font-medium">{fmt(actual)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between text-muted-foreground pt-0.5 border-t">
-                              <span>{budgetItems.length} 項設備</span>
-                              {hasActual && actual > 0 && estimated > 0 && (
-                                <span className={actual <= estimated ? 'text-success font-semibold' : 'text-destructive font-semibold'}>
-                                  {actual <= estimated ? `節省 ${fmt(estimated - actual)}` : `超支 ${fmt(actual - estimated)}`}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })()}
-                      {!project.roi && budgetItems.length === 0 && (
-                        <p className="text-sm text-muted-foreground">未填寫</p>
-                      )}
+                      <RoiSection
+                        projectId={id}
+                        budget={project.budget ?? 0}
+                        roiText={project.roi ?? ''}
+                        roiParams={roiParams}
+                        budgetItems={budgetItems}
+                        onSaved={(newItems, newParams) => {
+                          setBudgetItems(newItems as typeof budgetItems)
+                          setRoiParams(newParams)
+                        }}
+                      />
                     </div>
                   </div>
                 </CardContent>
