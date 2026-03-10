@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -130,6 +130,9 @@ function RoiParamsTable({
 
 // ─── Payback chart ──────────────────────────────────────────
 function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit: number }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   if (monthlyProfit <= 0 || budget <= 0) return null
   const payback = budget / monthlyProfit
 
@@ -157,13 +160,15 @@ function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit
     Math.abs(v) >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
       : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)
 
+  if (!mounted) return <div className="h-[200px]" />
+
   return (
     <div>
       <div className="text-xs text-muted-foreground mb-1 font-medium">
         投資回收曲線（預估回收期：<span className="text-[#1f3864] font-semibold">{payback.toFixed(1)} 個月</span>）
       </div>
       <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 4 }}>
+        <LineChart data={data} margin={{ top: 16, right: 72, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="month" tick={{ fontSize: 10 }}
             label={{ value: '月', position: 'insideBottomRight', offset: -4, fontSize: 10 }} />
@@ -174,7 +179,7 @@ function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit
             contentStyle={{ fontSize: 11 }}
           />
           <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5}
-            label={{ value: '損益平衡', position: 'right', fontSize: 9, fill: '#ef4444' }} />
+            label={{ value: '損益平衡', position: 'insideTopRight', fontSize: 9, fill: '#ef4444' }} />
           <ReferenceLine
             x={Math.round(payback)} stroke="#1f3864" strokeDasharray="4 2" strokeWidth={1.5}
             label={{ value: `第 ${payback.toFixed(1)} 月回收`, position: 'top', fontSize: 9, fill: '#1f3864' }}
@@ -335,11 +340,28 @@ export function RoiSection({
                       <td className="px-2 py-1">
                         <Input
                           type="text" inputMode="numeric"
-                          value={actualCostDraft[i] != null ? String(actualCostDraft[i]) : ''}
+                          value={actualCostDraft[i] != null ? actualCostDraft[i]!.toLocaleString('zh-TW') : ''}
                           onChange={(e) => {
+                            const raw = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '')
                             const d = [...actualCostDraft]
-                            d[i] = parseNum(e.target.value)
+                            d[i] = raw === '' ? null : (parseFloat(raw) || null)
                             setActualCostDraft(d)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Tab' && !e.shiftKey && actualCostDraft[i] == null && item.estimatedCost != null) {
+                              e.preventDefault()
+                              const d = [...actualCostDraft]
+                              d[i] = item.estimatedCost
+                              setActualCostDraft(d)
+                              // move focus to next row
+                              const inputs = (e.target as HTMLInputElement)
+                                .closest('tbody')
+                                ?.querySelectorAll<HTMLInputElement>('input')
+                              if (inputs) {
+                                const idx = Array.from(inputs).indexOf(e.target as HTMLInputElement)
+                                inputs[idx + 1]?.focus()
+                              }
+                            }
                           }}
                           placeholder="—"
                           className="h-6 text-xs w-full text-right"
