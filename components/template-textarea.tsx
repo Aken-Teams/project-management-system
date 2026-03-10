@@ -278,7 +278,7 @@ export function TemplateTextarea({
         className="relative flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
         style={{
           color: 'transparent',
-          caretColor: 'var(--foreground, #0f172a)',
+          caretColor: 'hsl(var(--foreground))',
           lineHeight: '1.25rem',
         }}
       />
@@ -332,7 +332,7 @@ export function TemplateTextarea({
               onFocus={onFocus}
               spellCheck={false}
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              style={{ color: 'transparent', caretColor: 'var(--foreground, #0f172a)' }}
+              style={{ color: 'transparent', caretColor: 'hsl(var(--foreground))' }}
             />
             {autocompleteDropdown}
           </div>
