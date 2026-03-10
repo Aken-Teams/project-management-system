@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+// Support both common naming conventions
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY
 
 // ─── POST /api/parse-budget-image ────────────────────────
 // Body: { imageBase64: string, mimeType?: string }
 // Returns: { items: BudgetItem[] }
 export async function POST(request: NextRequest) {
   if (!OPENAI_API_KEY) {
-    return NextResponse.json({ error: '未設定 OPENAI_API_KEY' }, { status: 500 })
+    console.error('OpenAI key not found. Set OPENAI_API_KEY or OPENAI_KEY in .env')
+    return NextResponse.json({ error: '未設定 OpenAI API Key' }, { status: 500 })
   }
 
   try {

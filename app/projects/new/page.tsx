@@ -1808,11 +1808,12 @@ export default function NewProjectPage() {
                         onChange={(e) => setManualData({ ...manualData, name: e.target.value })}
                       />
                     </div>
+                    {/* 無設備清單時才顯示手動預算輸入 */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="budget">投資預算 (NT$)</Label>
                         {manualBudgetItems.some(i => i.estimatedCost != null) && (
-                          <span className="text-xs text-muted-foreground">由設備清單自動計算</span>
+                          <span className="text-xs text-muted-foreground">由設備清單自動帶入，不可手動修改</span>
                         )}
                       </div>
                       <Input
@@ -1822,7 +1823,7 @@ export default function NewProjectPage() {
                         value={manualData.budget}
                         onChange={(e) => setManualData({ ...manualData, budget: e.target.value })}
                         readOnly={manualBudgetItems.some(i => i.estimatedCost != null)}
-                        className={manualBudgetItems.some(i => i.estimatedCost != null) ? 'bg-muted cursor-not-allowed' : ''}
+                        className={manualBudgetItems.some(i => i.estimatedCost != null) ? 'bg-muted/60 cursor-not-allowed' : ''}
                       />
                     </div>
                   </div>
@@ -1830,7 +1831,7 @@ export default function NewProjectPage() {
                   <div className="space-y-2">
                     <Label>投資設備清單（選填）</Label>
                     <p className="text-xs text-muted-foreground -mt-1">
-                      各設備預估費用合計自動更新上方預算金額。可手動新增，或上傳截圖讓 AI 解析。
+                      有設備清單時，預算由清單預估合計自動填入
                     </p>
                     <BudgetListEditor
                       items={manualBudgetItems}

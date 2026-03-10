@@ -1,10 +1,9 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Trash2, ImageUp, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { Plus, Trash2, ImageUp, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 export interface BudgetItem {
@@ -36,7 +35,7 @@ function emptyItem(): BudgetItem {
 }
 
 function formatNT(val: number | null | undefined): string {
-  if (val == null) return ''
+  if (val == null || val === 0) return '0'
   return val.toLocaleString('zh-TW')
 }
 
@@ -48,15 +47,16 @@ function parseNumber(val: string): number | null {
 export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
   const { toast } = useToast()
   const [parsing, setParsing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const update = (index: number, field: keyof BudgetItem, value: string | number | null) => {
-    const next = items.map((item, i) => i === index ? { ...item, [field]: value } : item)
-    onChange(next)
+    onChange(items.map((item, i) => i === index ? { ...item, [field]: value } : item))
   }
 
   const addRow = () => {
     onChange([...items, emptyItem()])
+    setExpanded(true)
   }
 
   const removeRow = (index: number) => {
@@ -72,13 +72,11 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
     }
 
     setParsing(true)
+    setExpanded(true)
     try {
       const reader = new FileReader()
       const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const result = reader.result as string
-          resolve(result.split(',')[1])
-        }
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
         reader.onerror = reject
         reader.readAsDataURL(file)
       })
@@ -113,7 +111,7 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
       onChange([...items, ...newItems])
       toast({
         title: `AI 解析完成`,
-        description: `已新增 ${newItems.length} 筆設備資料，請檢查並修正`,
+        description: `已新增 ${newItems.length} 筆設備資料，請確認並修正`,
       })
     } catch (err) {
       toast({
@@ -128,161 +126,121 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
   }
 
   const estimatedTotal = items.reduce((sum, i) => sum + (i.estimatedCost ?? 0), 0)
-  const actualTotal = items.reduce((sum, i) => sum + (i.actualCost ?? 0), 0)
-  const hasActual = items.some(i => i.actualCost != null)
+  const hasItems = items.length > 0
 
   return (
-    <div className="space-y-2">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">
-          {items.length > 0 ? `共 ${items.length} 筆設備` : '尚未新增設備'}
-        </span>
-        <div className="flex gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleImageUpload}
-          />
+    <div className="rounded-md border">
+      {/* ─── Header (always visible) — shows total here, not in table footer ─── */}
+      <div
+        className="flex items-center justify-between px-3 py-2 cursor-pointer select-none hover:bg-muted/40 transition-colors"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <div className="flex items-center gap-2 text-sm">
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          }
+          {hasItems ? (
+            <>
+              <span className="font-medium">設備清單（{items.length} 筆）</span>
+              <span className="text-muted-foreground text-xs">
+                預估合計：<span className="font-semibold text-foreground">NT$ {formatNT(estimatedTotal)}</span>
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground text-xs">點擊展開 / 新增設備清單</span>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-1.5" onClick={e => e.stopPropagation()}>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={parsing}
+            type="button" variant="ghost" size="sm" className="h-7 text-xs"
+            onClick={() => fileInputRef.current?.click()} disabled={parsing}
           >
-            {parsing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-            ) : (
-              <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            {parsing ? 'AI 解析中...' : '圖片解析 (AI)'}
+            {parsing
+              ? <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              : <ImageUp className="h-3 w-3 mr-1" />
+            }
+            {parsing ? 'AI 解析中...' : 'AI 解析'}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={addRow}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            新增設備
+          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={addRow}>
+            <Plus className="h-3 w-3 mr-1" />新增
           </Button>
         </div>
       </div>
 
-      {/* Table */}
-      {items.length > 0 && (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="min-w-max w-full text-sm">
-            <thead>
-              <tr className="bg-muted/50 border-b">
-                <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-16">站別</th>
-                <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-24">廠商</th>
-                <th className="px-2 py-1.5 text-left font-medium text-muted-foreground min-w-[160px]">設備機型/名稱</th>
-                <th className="px-2 py-1.5 text-center font-medium text-muted-foreground w-12">組數</th>
-                <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-20">選購方式</th>
-                <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">預估費用 (NT$)</th>
-                <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">實際費用 (NT$)</th>
-                <th className="px-2 py-1.5 w-8"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {items.map((item, i) => (
-                <tr key={i} className="hover:bg-muted/30">
-                  <td className="px-1 py-1">
-                    <Input
-                      value={item.station}
-                      onChange={e => update(i, 'station', e.target.value)}
-                      className="h-7 text-xs px-1.5 w-14"
-                      placeholder="DW"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <Input
-                      value={item.vendor}
-                      onChange={e => update(i, 'vendor', e.target.value)}
-                      className="h-7 text-xs px-1.5 w-22"
-                      placeholder="廠商"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <Input
-                      value={item.equipment}
-                      onChange={e => update(i, 'equipment', e.target.value)}
-                      className="h-7 text-xs px-1.5 min-w-[150px]"
-                      placeholder="設備名稱"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <Input
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={e => update(i, 'quantity', parseInt(e.target.value) || 1)}
-                      className="h-7 text-xs px-1.5 w-12 text-center"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <Input
-                      value={item.purchaseType}
-                      onChange={e => update(i, 'purchaseType', e.target.value)}
-                      className="h-7 text-xs px-1.5 w-18"
-                      placeholder="新購"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      value={item.estimatedCost ?? ''}
-                      onChange={e => update(i, 'estimatedCost', parseNumber(e.target.value))}
-                      className="h-7 text-xs px-1.5 w-30 text-right"
-                      placeholder="0"
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      value={item.actualCost ?? ''}
-                      onChange={e => update(i, 'actualCost', parseNumber(e.target.value))}
-                      className="h-7 text-xs px-1.5 w-30 text-right"
-                      placeholder="—"
-                    />
-                  </td>
-                  <td className="px-1 py-1 text-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeRow(i)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            {/* Summary row */}
-            <tfoot>
-              <tr className="border-t bg-muted/30 font-medium">
-                <td colSpan={5} className="px-2 py-1.5 text-right text-xs text-muted-foreground">
-                  合計
-                </td>
-                <td className="px-2 py-1.5 text-right text-xs">
-                  {estimatedTotal > 0 ? formatNT(estimatedTotal) : '—'}
-                </td>
-                <td className="px-2 py-1.5 text-right text-xs">
-                  {hasActual ? formatNT(actualTotal) : '—'}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {items.length === 0 && (
-        <div className="text-center py-6 text-sm text-muted-foreground border rounded-md border-dashed">
-          尚無設備清單。點擊「新增設備」手動輸入，或上傳截圖讓 AI 自動解析。
+      {/* ─── Expanded table ─── */}
+      {expanded && (
+        <div className="border-t">
+          {hasItems ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-max w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b">
+                    <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-14">站別</th>
+                    <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-24">廠商</th>
+                    <th className="px-2 py-1.5 text-left font-medium text-muted-foreground min-w-[150px]">設備機型/名稱</th>
+                    <th className="px-2 py-1.5 text-center font-medium text-muted-foreground w-12">組數</th>
+                    <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-20">選購方式</th>
+                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">預估費用 (NT$)</th>
+                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">實際費用 (NT$)</th>
+                    <th className="px-2 py-1.5 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {items.map((item, i) => (
+                    <tr key={i} className="hover:bg-muted/30">
+                      <td className="px-1 py-1">
+                        <Input value={item.station} onChange={e => update(i, 'station', e.target.value)}
+                          className="h-7 text-xs px-1.5 w-12" placeholder="DW" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input value={item.vendor} onChange={e => update(i, 'vendor', e.target.value)}
+                          className="h-7 text-xs px-1.5 w-22" placeholder="廠商" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input value={item.equipment} onChange={e => update(i, 'equipment', e.target.value)}
+                          className="h-7 text-xs px-1.5 min-w-[140px]" placeholder="設備名稱" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input type="number" min={1} value={item.quantity}
+                          onChange={e => update(i, 'quantity', parseInt(e.target.value) || 1)}
+                          className="h-7 text-xs px-1.5 w-12 text-center" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input value={item.purchaseType} onChange={e => update(i, 'purchaseType', e.target.value)}
+                          className="h-7 text-xs px-1.5 w-16" placeholder="新購" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input type="number" min={0} value={item.estimatedCost ?? ''}
+                          onChange={e => update(i, 'estimatedCost', parseNumber(e.target.value))}
+                          className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
+                      </td>
+                      <td className="px-1 py-1">
+                        <Input type="number" min={0} value={item.actualCost ?? ''}
+                          onChange={e => update(i, 'actualCost', parseNumber(e.target.value))}
+                          className="h-7 text-xs px-1.5 w-28 text-right" placeholder="—" />
+                      </td>
+                      <td className="px-1 py-1 text-center">
+                        <Button type="button" variant="ghost" size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeRow(i)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {/* No tfoot — total is shown in the header above to avoid duplication */}
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              點擊「新增」手動輸入設備，或點擊「AI 解析」上傳截圖自動填入
+            </div>
+          )}
         </div>
       )}
     </div>
