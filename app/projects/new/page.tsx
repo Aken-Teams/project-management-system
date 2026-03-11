@@ -434,6 +434,7 @@ export default function NewProjectPage() {
 
   // AI Mode
   const [requirements, setRequirements] = useState('')
+  const [requirementsInterim, setRequirementsInterim] = useState('')
   const [parsedData, setParsedData] = useState<ParsedProjectData | null>(null)
   const [aiProjectType, setAiProjectType] = useState<ProjectType | ''>('')
   const [aiProjectTier, setAiProjectTier] = useState<ProjectTier | ''>('')
@@ -1511,7 +1512,7 @@ export default function NewProjectPage() {
                       <Label htmlFor="requirements">專案需求描述 <span className="text-destructive">*</span></Label>
                       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
                         <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                          <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs text-primary border-primary/40 hover:bg-primary/5 hover:border-primary">
                             <ClipboardList className="h-3.5 w-3.5" />
                             套用範本
                           </Button>
@@ -1562,13 +1563,14 @@ export default function NewProjectPage() {
                       <Textarea
                         id="requirements"
                         placeholder="描述您的專案目標、功能需求、開案背景與預期效益。例如：我們需要一套自動化倉儲系統，解決目前人工盤點效率低的問題，預計可降低出貨錯誤率 30%..."
-                        value={requirements}
-                        onChange={(e) => setRequirements(e.target.value)}
+                        value={requirements + (requirementsInterim ? (requirements ? ' ' : '') + requirementsInterim : '')}
+                        onChange={(e) => { setRequirements(e.target.value); setRequirementsInterim('') }}
                         rows={8}
                         className="resize-none flex-1"
                       />
                       <VoiceInputButton
-                        onTranscript={(text) => setRequirements(prev => prev + (prev ? ' ' : '') + text)}
+                        onTranscript={(text) => { setRequirements(prev => prev + (prev ? ' ' : '') + text); setRequirementsInterim('') }}
+                        onInterimTranscript={setRequirementsInterim}
                         className="shrink-0"
                       />
                     </div>

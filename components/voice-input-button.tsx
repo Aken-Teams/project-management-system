@@ -7,10 +7,11 @@ import { useToast } from '@/hooks/use-toast'
 
 interface VoiceInputButtonProps {
   onTranscript: (text: string) => void
+  onInterimTranscript?: (text: string) => void
   className?: string
 }
 
-export function VoiceInputButton({ onTranscript, className }: VoiceInputButtonProps) {
+export function VoiceInputButton({ onTranscript, onInterimTranscript, className }: VoiceInputButtonProps) {
   const [isListening, setIsListening] = useState(false)
   const [recognition, setRecognition] = useState<any>(null)
   const { toast } = useToast()
@@ -28,16 +29,22 @@ export function VoiceInputButton({ onTranscript, className }: VoiceInputButtonPr
 
         recognitionInstance.onresult = (event: any) => {
           let finalTranscript = ''
+          let interimTranscript = ''
 
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript
             if (event.results[i].isFinal) {
               finalTranscript += transcript
+            } else {
+              interimTranscript += transcript
             }
           }
 
           if (finalTranscript) {
             onTranscript(finalTranscript)
+            onInterimTranscript?.('')
+          } else if (interimTranscript) {
+            onInterimTranscript?.(interimTranscript)
           }
         }
 
@@ -61,6 +68,7 @@ export function VoiceInputButton({ onTranscript, className }: VoiceInputButtonPr
 
         recognitionInstance.onend = () => {
           setIsListening(false)
+          onInterimTranscript?.('')
         }
 
         setRecognition(recognitionInstance)
