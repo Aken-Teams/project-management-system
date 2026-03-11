@@ -48,14 +48,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden">
+    <div className="min-h-screen lg:h-screen flex flex-col lg:flex-row lg:overflow-hidden">
       {/* Left Branding Panel */}
-      <div className="hidden lg:flex lg:w-[44%] bg-slate-50 items-center justify-center overflow-hidden">
+      <div className="hidden lg:flex lg:w-[44%] bg-gradient-to-b from-[#F9F5EB] to-[#FAF6ED] relative items-center justify-center overflow-hidden">
         <img src="/login.png" alt="" className="max-w-full max-h-full object-contain" />
       </div>
 
       {/* Right Login Panel */}
-      <div className="flex-1 flex flex-col bg-white">
+      <div className="flex-1 flex flex-col bg-white lg:overflow-y-auto">
         {/* Mobile Header (shown on small screens) */}
         <div className="lg:hidden flex items-center gap-2.5 p-6 bg-blue-600 text-white">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600">
@@ -66,15 +66,25 @@ export default function LoginPage() {
 
         {/* Form Area */}
         <div className="flex-1 flex items-center justify-center px-6 py-10 sm:px-10 lg:px-20">
-          <div className="w-full max-w-[400px] space-y-8">
+          <div className="w-full max-w-[400px] space-y-5">
             {/* Header */}
             <div className="space-y-2">
-              <h2 className="text-[28px] font-bold text-zinc-900 tracking-tight">歡迎回來</h2>
+              <div className="mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+                    <FolderKanban className="h-5 w-5" />
+                  </div>
+                  <span className="font-bold text-zinc-900" style={{ fontSize: '28px' }}>專案管理系統</span>
+                </div>
+                <p className="text-sm text-zinc-400 mt-1.5 ml-[46px]">AI 驅動的智慧專案管理平台</p>
+              </div>
+              <div className="border-t border-zinc-200" />
+              <h2 className="text-[24px] font-bold text-zinc-900 tracking-tight pt-4">歡迎回來</h2>
               <p className="text-[15px] text-zinc-500">請登入您的帳號以繼續</p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm font-medium text-zinc-900">電子郵件</Label>
                 <Input
@@ -134,7 +144,7 @@ export default function LoginPage() {
                   key={item.role}
                   type="button"
                   onClick={() => quickLogin(item.role)}
-                  className="flex flex-col items-center gap-1.5 py-4 px-2 rounded-[10px] border border-zinc-200 bg-slate-50 hover:bg-slate-100 hover:border-zinc-300 transition-colors"
+                  className="flex flex-col items-center gap-1 py-3 px-2 rounded-[10px] border border-zinc-200 bg-slate-50 hover:bg-slate-100 hover:border-zinc-300 transition-colors"
                 >
                   <div className={`w-7 h-7 rounded-full ${item.bgColor} flex items-center justify-center`}>
                     <span className={`text-xs font-semibold ${item.textColor}`}>{item.initial}</span>
@@ -148,7 +158,7 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="py-6 text-center">
+        <div className="py-4 text-center">
           <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">© 2026 智合科技 All rights reserved.</a>
         </div>
       </div>
