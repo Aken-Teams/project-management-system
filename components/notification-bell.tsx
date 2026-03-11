@@ -203,7 +203,7 @@ export function NotificationBell() {
                             {formatRelativeTime(notification.createdAt)}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                        <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
                           {notification.message}
                         </p>
                         {canNavigate && (

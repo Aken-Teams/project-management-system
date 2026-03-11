@@ -526,7 +526,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       setDateChangeDialogOpen(false)
       setDateChangeReason('')
       setAffectedMilestoneDates([])
-      setPendingSaveOptions(null)
       await onWorkItemsChange?.()
       onOpenChange(false)
       toast.success('日期變更申請已送出審核')
