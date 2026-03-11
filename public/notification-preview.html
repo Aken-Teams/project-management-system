@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>通知預覽</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f4f4f5;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 20px;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .scenario-label {
+      font-size: 12px;
+      color: #71717a;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    /* Bell button */
+    .bell-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .bell-btn {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .bell-btn svg { width: 18px; height: 18px; color: #3f3f46; }
+    .badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 20px;
+      height: 20px;
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+
+    /* Popover */
+    .popover {
+      width: 320px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+
+    /* Header */
+    .popover-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f4f4f5;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-title { font-size: 14px; font-weight: 600; color: #18181b; }
+    .header-count { font-size: 14px; color: #71717a; }
+    .mark-all-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #71717a;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+    .mark-all-btn:hover { background: #f4f4f5; }
+    .mark-all-btn svg { width: 14px; height: 14px; }
+
+    /* Summary chips */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 99px;
+      border: 1px solid currentColor;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .chip svg { width: 10px; height: 10px; }
+    .chip-blue { color: #3b82f6; background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.2); }
+    .chip-red { color: #ef4444; background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.2); }
+    .chip-amber { color: #f59e0b; background: rgba(245,158,11,0.06); border-color: rgba(245,158,11,0.2); }
+    .chip-emerald { color: #10b981; background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.2); }
+
+    /* Notification items */
+    .notif-list { max-height: 400px; overflow-y: auto; }
+    .notif-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 16px;
+      text-align: left;
+      background: none;
+      border: none;
+      border-bottom: 1px solid #f4f4f5;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-item.unread { background: rgba(99,102,241,0.02); }
+    .notif-item:hover { background: #f9f9fa; }
+
+    .unread-dot-col { display: flex; align-items: flex-start; padding-top: 6px; }
+    .unread-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .unread-dot.active { background: #6366f1; }
+    .unread-dot.read { background: transparent; }
+
+    .notif-icon { margin-top: 2px; flex-shrink: 0; }
+    .notif-icon svg { width: 16px; height: 16px; }
+    .icon-blue { color: #3b82f6; }
+    .icon-red { color: #ef4444; }
+    .icon-amber { color: #f59e0b; }
+    .icon-emerald { color: #10b981; }
+
+    .notif-body { flex: 1; min-width: 0; }
+    .notif-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; margin-bottom: 2px; }
+    .notif-title { font-size: 14px; font-weight: 600; color: #18181b; line-height: 1.3; }
+    .notif-title.read { color: #71717a; }
+    .notif-time { font-size: 12px; color: #a1a1aa; flex-shrink: 0; margin-top: 1px; }
+    .notif-msg { font-size: 14px; color: #71717a; line-height: 1.5; }
+    .notif-nav {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 6px;
+    }
+    .notif-nav span {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 12px;
+      color: #6366f1;
+      font-weight: 500;
+    }
+    .notif-nav svg { width: 12px; height: 12px; }
+
+    /* SVG icons inline */
+  </style>
+</head>
+<body>
+
+<!-- ─── 場景1：任務指派通知 ─── -->
+<div>
+  <div class="scenario-label">場景 1 — 任務指派</div>
+  <div class="popover">
+    <div class="popover-header">
+      <div class="header-row">
+        <div class="header-left">
+          <span class="header-title">通知</span>
+          <span class="header-count">1 未讀 / 1 則</span>
+        </div>
+        <button class="mark-all-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L7 17l-5-5"/><path d="M22 6L11 17"/></svg>
+          全部已讀
+        </button>
+      </div>
+      <div class="chips">
+        <span class="chip chip-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M5 4h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M9 12h6M9 16h4"/></svg>
+          任務指派 1
+        </span>
+      </div>
+    </div>
+    <div class="notif-list">
+      <button class="notif-item unread">
+        <div class="unread-dot-col"><div class="unread-dot active"></div></div>
+        <div class="notif-icon icon-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M5 4h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M9 12h6M9 16h4"/></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <span class="notif-title">新任務指派</span>
+            <span class="notif-time">剛剛</span>
+          </div>
+          <p class="notif-msg">您被指派了任務「實作登入驗證功能」（專案：條碼自動化系統）</p>
+          <div class="notif-nav">
+            <span>查看專案 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          </div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── 場景2：多種通知混合 ─── -->
+<div>
+  <div class="scenario-label">場景 2 — 多種通知</div>
+  <div class="popover">
+    <div class="popover-header">
+      <div class="header-row">
+        <div class="header-left">
+          <span class="header-title">通知</span>
+          <span class="header-count">4 未讀 / 5 則</span>
+        </div>
+        <button class="mark-all-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L7 17l-5-5"/><path d="M22 6L11 17"/></svg>
+          全部已讀
+        </button>
+      </div>
+      <div class="chips">
+        <span class="chip chip-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M5 4h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M9 12h6M9 16h4"/></svg>
+          任務指派 1
+        </span>
+        <span class="chip chip-amber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>
+          延期申請 1
+        </span>
+        <span class="chip chip-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          逾期提醒 2
+        </span>
+      </div>
+    </div>
+    <div class="notif-list">
+
+      <!-- 任務指派 -->
+      <button class="notif-item unread">
+        <div class="unread-dot-col"><div class="unread-dot active"></div></div>
+        <div class="notif-icon icon-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M5 4h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M9 12h6M9 16h4"/></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <span class="notif-title">新任務指派</span>
+            <span class="notif-time">3 分鐘前</span>
+          </div>
+          <p class="notif-msg">您被指派了任務「實作登入驗證功能」（專案：條碼自動化系統）</p>
+          <div class="notif-nav">
+            <span>查看專案 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          </div>
+        </div>
+      </button>
+
+      <!-- 延期申請 -->
+      <button class="notif-item unread">
+        <div class="unread-dot-col"><div class="unread-dot active"></div></div>
+        <div class="notif-icon icon-amber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01"/></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <span class="notif-title">延期申請待審核</span>
+            <span class="notif-time">15 分鐘前</span>
+          </div>
+          <p class="notif-msg">Carol Lee 提出延期申請（專案：IoT 感測器整合），請前往審核</p>
+          <div class="notif-nav">
+            <span>查看專案 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          </div>
+        </div>
+      </button>
+
+      <!-- 逾期提醒 -->
+      <button class="notif-item unread">
+        <div class="unread-dot-col"><div class="unread-dot active"></div></div>
+        <div class="notif-icon icon-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <span class="notif-title">專案進度逾期</span>
+            <span class="notif-time">1 小時前</span>
+          </div>
+          <p class="notif-msg">專案「條碼自動化系統」有里程碑已逾期，請確認進度</p>
+          <div class="notif-nav">
+            <span>查看專案 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          </div>
+        </div>
+      </button>
+
+      <!-- 逾期提醒 2 -->
+      <button class="notif-item unread">
+        <div class="unread-dot-col"><div class="unread-dot active"></div></div>
+        <div class="notif-icon icon-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <span class="notif-title">專案進度逾期</span>
+            <span class="notif-time">3 天前</span>
+          </div>
+          <p class="notif-msg">專案「IoT 感測器整合」有里程碑已逾期，請確認進度</p>
+          <div class="notif-nav">
+            <span>查看專案 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          </div>
+        </div>
+      </button>
+
+      <!-- 已讀 — 申請核准 -->
+      <button class="notif-item">
+        <div class="unread-dot-col"><div class="unread-dot read"></div></div>
+        <div class="notif-icon icon-emerald">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="notif-body">
+          <div class="notif-top">
+            <span class="notif-title read">延期申請已核准</span>
+            <span class="notif-time">2 天前</span>
+          </div>
+          <p class="notif-msg">您的延期申請（專案：條碼自動化系統）已通過審核</p>
+          <div class="notif-nav">
+            <span>查看專案 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+          </div>
+        </div>
+      </button>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

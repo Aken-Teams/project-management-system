@@ -7,14 +7,18 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 100)
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 500)
+    const typeFilter = searchParams.get('type') // optional, frontend hyphen-case
 
     if (!userId) {
       return NextResponse.json({ error: '缺少 userId' }, { status: 400 })
     }
 
     const notifications = await prisma.notification.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(typeFilter ? { type: notifTypeToDb(typeFilter as import('@/lib/notification-store').NotificationType) } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
     })

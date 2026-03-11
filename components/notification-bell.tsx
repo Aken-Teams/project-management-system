@@ -221,11 +221,20 @@ export function NotificationBell() {
             </ScrollArea>
 
             {/* Footer */}
-            {totalCount > 20 && (
-              <div className="border-t px-4 py-2 text-center">
-                <span className="text-xs text-muted-foreground">僅顯示最近 20 則，共 {totalCount} 則通知</span>
-              </div>
-            )}
+            <div className="border-t px-4 py-2">
+              {totalCount > 20 && (
+                <p className="text-xs text-muted-foreground text-center mb-1.5">僅顯示最近 20 則，共 {totalCount} 則通知</p>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-8 text-xs text-muted-foreground hover:text-foreground gap-1.5"
+                onClick={() => { setOpen(false); router.push('/notifications') }}
+              >
+                查看所有通知
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </>
         )}
       </PopoverContent>
