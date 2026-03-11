@@ -1506,64 +1506,58 @@ export default function NewProjectPage() {
                     </div>
                   </div>
 
-                  {/* Template reference panel */}
-                  <div className="rounded-lg border bg-muted/20">
-                    <button
-                      type="button"
-                      onClick={() => setShowTemplates(v => !v)}
-                      className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors rounded-lg"
-                    >
-                      <span className="flex items-center gap-2">
-                        <ClipboardList className="h-4 w-4 text-primary" />
-                        範本參考 — 點擊套用範本快速填入
-                      </span>
-                      <span className="text-muted-foreground text-xs">{showTemplates ? '▲ 收起' : '▼ 展開'}</span>
-                    </button>
-                    {showTemplates && (
-                      <div className="px-4 pb-4 space-y-3">
-                        <p className="text-xs text-muted-foreground">以下為常見專案類型範本，點擊任一範本即可套用至下方表單，再依實際情況修改。</p>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          {AI_TEMPLATES.map((tpl) => (
-                            <div
-                              key={tpl.label}
-                              className="rounded-lg border bg-card p-3 space-y-1.5 cursor-pointer hover:border-primary hover:shadow-sm transition-all"
-                              onClick={() => {
-                                handleAiTypeChange(tpl.projectType as ProjectType)
-                                setAiProjectTier(tpl.projectTier as ProjectTier)
-                                setAiDemandSource(tpl.demandSource as DemandSource)
-                                setRequirements(tpl.requirements)
-                                setAiProjectNameHint(tpl.nameHint)
-                                setAiDurationMonths(tpl.durationMonths)
-                                setAiBudgetRange(tpl.budgetRange)
-                                setAiCreatedReason(tpl.createdReason)
-                                setAiExpectedBenefits(tpl.expectedBenefits)
-                                setAiConstraints(tpl.constraints)
-                                setShowTemplates(false)
-                              }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-sm">{tpl.label}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">{tpl.description}</p>
-                              <div className="flex flex-wrap gap-1 pt-0.5">
-                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                  {projectTypes.find(t => t.key === tpl.projectType)?.label ?? tpl.projectType}
-                                </span>
-                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                  {PROJECT_TIER_LABELS[tpl.projectTier as ProjectTier] ?? tpl.projectTier}
-                                </span>
-                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.durationMonths} 個月</span>
-                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.budgetRange}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="requirements">專案需求描述 <span className="text-destructive">*</span></Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="requirements">專案需求描述 <span className="text-destructive">*</span></Label>
+                      <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            套用範本
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>選擇範本</DialogTitle>
+                            <DialogDescription>點擊範本即可快速填入，再依實際情況修改。</DialogDescription>
+                          </DialogHeader>
+                          <div className="grid gap-3 sm:grid-cols-2 pt-2">
+                            {AI_TEMPLATES.map((tpl) => (
+                              <div
+                                key={tpl.label}
+                                className="rounded-lg border bg-card p-3 space-y-1.5 cursor-pointer hover:border-primary hover:shadow-sm transition-all"
+                                onClick={() => {
+                                  handleAiTypeChange(tpl.projectType as ProjectType)
+                                  setAiProjectTier(tpl.projectTier as ProjectTier)
+                                  setAiDemandSource(tpl.demandSource as DemandSource)
+                                  setRequirements(tpl.requirements)
+                                  setAiProjectNameHint(tpl.nameHint)
+                                  setAiDurationMonths(tpl.durationMonths)
+                                  setAiBudgetRange(tpl.budgetRange)
+                                  setAiCreatedReason(tpl.createdReason)
+                                  setAiExpectedBenefits(tpl.expectedBenefits)
+                                  setAiConstraints(tpl.constraints)
+                                  setShowTemplates(false)
+                                }}
+                              >
+                                <span className="font-medium text-sm">{tpl.label}</span>
+                                <p className="text-xs text-muted-foreground">{tpl.description}</p>
+                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                  <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                                    {projectTypes.find(t => t.key === tpl.projectType)?.label ?? tpl.projectType}
+                                  </span>
+                                  <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                                    {PROJECT_TIER_LABELS[tpl.projectTier as ProjectTier] ?? tpl.projectTier}
+                                  </span>
+                                  <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tpl.durationMonths} 個月</span>
+                                  <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tpl.budgetRange}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                     <div className="flex gap-2">
                       <Textarea
                         id="requirements"
