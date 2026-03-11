@@ -157,11 +157,11 @@ export async function notifyDelayReviewed({
 export async function notifyProjectOverdueIfNeeded({
   projectId,
   projectName,
-  pmId,
+  fallbackOwnerId,
 }: {
   projectId: string
   projectName: string
-  pmId: string
+  fallbackOwnerId: string
 }) {
   const now = new Date()
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -175,6 +175,14 @@ export async function notifyProjectOverdueIfNeeded({
     },
   })
   if (!overdueMilestone) return
+
+  // Use the Accountable (A) team member as the PM to notify;
+  // fall back to project.ownerId if no such team member is set
+  const accountable = await prisma.projectTeamMember.findFirst({
+    where: { projectId, role: 'A' },
+    select: { userId: true },
+  })
+  const pmId = accountable?.userId ?? fallbackOwnerId
 
   // Deduplicate: skip if already notified in the last 7 days
   const recent = await prisma.notification.findFirst({

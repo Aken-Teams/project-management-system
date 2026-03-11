@@ -51,10 +51,10 @@ export async function GET(
     }
 
     // ── Overdue check: notify PM at most once per 7 days ──
-    notifyProjectOverdueIfNeeded({
+    await notifyProjectOverdueIfNeeded({
       projectId: id,
       projectName: project.name,
-      pmId: project.ownerId,
+      fallbackOwnerId: project.ownerId,
     })
 
     const feProject = dbProjectToFrontend(project as Parameters<typeof dbProjectToFrontend>[0])

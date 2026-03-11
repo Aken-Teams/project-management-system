@@ -60,7 +60,7 @@ const defaultRoute: Record<string, string> = {
   pm: '/dashboard',
   member: '/projects',
   executive: '/dashboard',
-  admin: '/admin',
+  admin: '/dashboard',
 }
 
 const roleNames: Record<string, string> = {
@@ -361,7 +361,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <span className="ml-3 font-semibold text-sm flex-1">專案管理系統</span>
+          <Link href="/dashboard" className="ml-3 font-semibold text-sm flex-1">專案管理系統</Link>
           <NotificationBell />
         </header>
 

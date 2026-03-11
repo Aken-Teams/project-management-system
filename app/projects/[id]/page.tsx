@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useAuth } from '@/lib/auth-context'
+import { useNotificationStore } from '@/lib/notification-store'
 import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
 import { Input } from '@/components/ui/input'
 import {
@@ -68,6 +69,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const { id } = use(params)
   const router = useRouter()
   const { user } = useAuth()
+  const { refreshNotifications } = useNotificationStore()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [budgetItems, setBudgetItems] = useState<{ id?: string; station: string; vendor: string; equipment: string; quantity: number; unitPrice: number | null; estimatedCost: number | null; actualCost: number | null }[]>([])
@@ -88,6 +90,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         if (!cancelled) {
           setProject(data)
           setLoading(false)
+          refreshNotifications() // pick up any overdue notification just created server-side
           if (data?.roiGrossMargin != null || data?.roiAvgPrice != null || data?.roiCapacity != null) {
             setRoiParams({
               grossMargin: data.roiGrossMargin ?? null,

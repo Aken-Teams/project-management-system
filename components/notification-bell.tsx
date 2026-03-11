@@ -207,9 +207,11 @@ export function NotificationBell() {
                           {notification.message}
                         </p>
                         {canNavigate && (
-                          <span className="inline-flex items-center gap-0.5 text-xs text-primary mt-1 font-medium">
-                            查看專案 <ArrowRight className="h-3 w-3" />
-                          </span>
+                          <div className="flex justify-end mt-1.5">
+                            <span className="inline-flex items-center gap-0.5 text-xs text-primary font-medium">
+                              查看專案 <ArrowRight className="h-3 w-3" />
+                            </span>
+                          </div>
                         )}
                       </div>
                     </button>
