@@ -155,6 +155,7 @@ export default function MyTasksPage() {
   const [editLogDate, setEditLogDate] = useState('')
   const [editLogAttachments, setEditLogAttachments] = useState<TaskLogAttachment[]>([])
   const [editUploadingFiles, setEditUploadingFiles] = useState(false)
+  const [editLogContentInterim, setEditLogContentInterim] = useState('')
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
   const [msDateDialogOpen, setMsDateDialogOpen] = useState(false)
   const [msDateDialogData, setMsDateDialogData] = useState<{
@@ -183,6 +184,7 @@ export default function MyTasksPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
+  const editImageInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch tasks from API
   useEffect(() => {
@@ -585,6 +587,7 @@ export default function MyTasksPage() {
     setEditLogContent('')
     setEditLogDate('')
     setEditLogAttachments([])
+    setEditLogContentInterim('')
   }
 
   const handleEditFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1643,58 +1646,83 @@ export default function MyTasksPage() {
                                   />
                                 </div>
                                 <div className="px-4 py-3 space-y-3">
-                                  <Textarea
-                                    value={editLogContent}
-                                    onChange={e => setEditLogContent(e.target.value)}
-                                    className="text-sm min-h-[80px] resize-none bg-background"
-                                    placeholder="工作內容"
-                                  />
-                                  {/* Attachments in edit */}
-                                  <div className="space-y-2">
-                                    {editLogAttachments.filter(a => a.type === 'image').length > 0 && (
-                                      <div className="grid grid-cols-4 gap-1.5">
-                                        {editLogAttachments.filter(a => a.type === 'image').map((att, ai) => (
-                                          <div key={ai} className="relative group/img">
-                                            <img src={att.url} alt={att.name} className="aspect-square w-full object-cover rounded-lg border border-border" />
-                                            <button
-                                              onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== ai))}
-                                              className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
-                                            >
-                                              <X className="h-3 w-3" />
-                                            </button>
+                                  {/* Textarea with toolbar (same style as new-log input) */}
+                                  <div className={cn(
+                                    'rounded-xl border bg-muted/30 transition-colors overflow-hidden',
+                                    'border-muted-foreground/20 focus-within:border-primary/40 focus-within:bg-background'
+                                  )}>
+                                    <Textarea
+                                      value={editLogContent + (editLogContentInterim ? (editLogContent ? ' ' : '') + editLogContentInterim : '')}
+                                      onChange={e => { setEditLogContent(e.target.value); setEditLogContentInterim('') }}
+                                      className="text-sm min-h-[80px] resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 rounded-none"
+                                      placeholder="工作內容"
+                                    />
+                                    {/* Attachment previews below textarea */}
+                                    {editLogAttachments.length > 0 && (
+                                      <div className="px-3 pb-2 space-y-1.5">
+                                        {editLogAttachments.filter(a => a.type === 'image').length > 0 && (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {editLogAttachments.filter(a => a.type === 'image').map((att) => (
+                                              <div key={att.url} className="relative group/img">
+                                                <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded-lg border border-border" />
+                                                <button
+                                                  onClick={() => setEditLogAttachments(prev => prev.filter(a => a.url !== att.url))}
+                                                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-destructive flex items-center justify-center"
+                                                >
+                                                  <X className="h-2.5 w-2.5" />
+                                                </button>
+                                              </div>
+                                            ))}
                                           </div>
-                                        ))}
+                                        )}
+                                        {editLogAttachments.filter(a => a.type === 'file').length > 0 && (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {editLogAttachments.filter(a => a.type === 'file').map((att) => (
+                                              <div key={att.url} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg border border-border/70 bg-background text-xs">
+                                                <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                <span className="max-w-[120px] truncate">{att.name}</span>
+                                                <button
+                                                  onClick={() => setEditLogAttachments(prev => prev.filter(a => a.url !== att.url))}
+                                                  className="ml-0.5 text-muted-foreground hover:text-destructive"
+                                                >
+                                                  <X className="h-3 w-3" />
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
-                                    {editLogAttachments.filter(a => a.type === 'file').length > 0 && (
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {editLogAttachments.filter(a => a.type === 'file').map((att, ai) => (
-                                          <div key={ai} className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border border-border/70 bg-muted/50 text-xs">
-                                            <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                                            <span className="max-w-[120px] truncate">{att.name}</span>
-                                            <button
-                                              onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== ai))}
-                                              className="ml-0.5 text-muted-foreground hover:text-destructive"
-                                            >
-                                              <X className="h-3 w-3" />
-                                            </button>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
+                                    {/* Toolbar */}
+                                    <div className="flex items-center gap-0.5 px-2 py-1.5 border-t border-border/40">
+                                      <VoiceInputButton
+                                        className="h-7 w-7"
+                                        onTranscript={(text) => { setEditLogContent(prev => prev ? `${prev} ${text}` : text); setEditLogContentInterim('') }}
+                                        onInterimTranscript={setEditLogContentInterim}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => editImageInputRef.current?.click()}
+                                        disabled={editUploadingFiles}
+                                        className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+                                        title="上傳圖片"
+                                      >
+                                        <ImagePlus className="h-4 w-4" />
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => editFileInputRef.current?.click()}
                                         disabled={editUploadingFiles}
-                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-lg px-2.5 py-1 hover:bg-muted transition-colors disabled:opacity-50"
+                                        className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+                                        title="上傳檔案"
                                       >
-                                        <Paperclip className="h-3.5 w-3.5" />新增附件
+                                        <Paperclip className="h-4 w-4" />
                                       </button>
-                                      {editUploadingFiles && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                                      {editUploadingFiles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
                                     </div>
-                                    <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
                                   </div>
+                                  <input ref={editImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleEditFileSelect} />
+                                  <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
                                   {/* Save / cancel */}
                                   <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/40">
                                     <Button size="sm" variant="ghost" className="h-7 px-3 text-sm" onClick={handleCancelEditLog}>
