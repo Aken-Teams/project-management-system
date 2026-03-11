@@ -26,7 +26,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
-import { type Task, type TaskLog, type SubTask, type Project } from '@/lib/mock-data'
+import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
+import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
 import {
   computeTaskStatus,
@@ -51,8 +52,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Info,
-  Mic,
-  MicOff,
   ImagePlus,
   Paperclip,
   Loader2,
@@ -148,8 +147,9 @@ export default function MyTasksPage() {
   const [extensionDate, setExtensionDate] = useState('')
   const [extensionSupport, setExtensionSupport] = useState('')
   const [showActions, setShowActions] = useState(false)
-  const [isListening, setIsListening] = useState(false)
-  const [attachments, setAttachments] = useState<string[]>([])
+  const [logContentInterim, setLogContentInterim] = useState('')
+  const [attachments, setAttachments] = useState<TaskLogAttachment[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [editLogContent, setEditLogContent] = useState('')
   const [editLogDate, setEditLogDate] = useState('')
@@ -178,7 +178,6 @@ export default function MyTasksPage() {
   const [editProjectLoading, setEditProjectLoading] = useState<string | null>(null)
   const [importSubLogsOpen, setImportSubLogsOpen] = useState(false)
   const [importSubLogsLoading, setImportSubLogsLoading] = useState(false)
-  const recognitionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
@@ -305,51 +304,41 @@ export default function MyTasksPage() {
     setExtensionSupport('')
     setShowActions(false)
     setAttachments([])
-    setIsListening(false)
+    setLogContentInterim('')
+    setUploadingFiles(false)
     setEditingLogId(null)
     setDialogOpen(true)
   }
 
-  // Voice input using Web Speech API
-  const toggleVoiceInput = useCallback(() => {
-    if (isListening) {
-      setIsListening(false)
-      if (recognitionRef.current) {
-        clearTimeout(recognitionRef.current)
-        recognitionRef.current = null
+  // ── File/image select ──
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    // Copy to array BEFORE clearing input (clearing value may empty the FileList reference)
+    const fileArray = Array.from(files)
+    e.target.value = ''
+    setUploadingFiles(true)
+    try {
+      const uploaded: TaskLogAttachment[] = []
+      for (const file of fileArray) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        if (res.ok) {
+          uploaded.push(await res.json())
+        } else {
+          const err = await res.json().catch(() => ({}))
+          alert(`上傳失敗：${err.error || res.status}`)
+        }
       }
-      // @ts-expect-error SpeechRecognition not typed
-      window._speechRecognition?.stop()
-      return
+      if (uploaded.length > 0) setAttachments(prev => [...prev, ...uploaded])
+    } catch (err) {
+      console.error('Upload error:', err)
+      alert('上傳失敗，請確認網路連線')
+    } finally {
+      setUploadingFiles(false)
     }
-    const SpeechRecognition = (window as unknown as Record<string, unknown>).SpeechRecognition || (window as unknown as Record<string, unknown>).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      alert('您的瀏覽器不支援語音輸入')
-      return
-    }
-    // @ts-expect-error SpeechRecognition constructor
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'zh-TW'
-    recognition.continuous = true
-    recognition.interimResults = true
-    // @ts-expect-error assign to window
-    window._speechRecognition = recognition
-    recognition.onresult = (event: Record<string, unknown>) => {
-      const results = event.results as SpeechRecognitionResultList
-      let transcript = ''
-      for (let i = 0; i < results.length; i++) {
-        transcript += results[i][0].transcript
-      }
-      setLogContent(prev => {
-        const base = prev.replace(/\[語音輸入中...\]$/, '').trimEnd()
-        return base ? `${base} ${transcript}` : transcript
-      })
-    }
-    recognition.onend = () => setIsListening(false)
-    recognition.onerror = () => setIsListening(false)
-    recognition.start()
-    setIsListening(true)
-  }, [isListening])
+  }, [])
 
   // ── PM: Submit milestone date change as a delay request ──
   const handleMilestoneDateChange = async () => {
@@ -547,19 +536,9 @@ export default function MyTasksPage() {
 
   if (!user) return null
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
-    const files = e.target.files
-    if (!files) return
-    const names = Array.from(files).map(f => `${type === 'image' ? '📷' : '📎'} ${f.name}`)
-    setAttachments(prev => [...prev, ...names])
-    e.target.value = ''
-  }
-
   const handleSubmitLog = async () => {
     if (!dialogTask || !logContent.trim()) return
-    const content = attachments.length > 0
-      ? `${logContent.trim()}\n\n附件：${attachments.join('、')}`
-      : logContent.trim()
+    const content = logContent.trim()
 
     try {
       const res = await fetch(`/api/projects/${dialogTask.project.id}/task-logs`, {
@@ -570,6 +549,7 @@ export default function MyTasksPage() {
           userId: user.id,
           logDate,
           content,
+          ...(attachments.length > 0 ? { attachments } : {}),
         }),
       })
       if (!res.ok) throw new Error()
@@ -585,6 +565,7 @@ export default function MyTasksPage() {
     }
 
     setLogContent('')
+    setLogContentInterim('')
     setAttachments([])
     setShowActions(true)
   }
@@ -1329,8 +1310,8 @@ export default function MyTasksPage() {
                 </div>
 
                 {/* Hidden file inputs */}
-                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleFileSelect(e, 'image')} />
-                <input ref={fileInputRef} type="file" className="hidden" onChange={e => handleFileSelect(e, 'file')} />
+                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
 
                 {/* 3 Tabs — hidden when extension form is open */}
                 {!showExtensionForm && <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
@@ -1392,8 +1373,7 @@ export default function MyTasksPage() {
                             <>
                               <div className={cn(
                                 'rounded-xl border bg-muted/30 transition-colors overflow-hidden',
-                                isListening && 'border-red-400 ring-2 ring-red-100 dark:ring-red-900/30',
-                                !isListening && 'border-muted-foreground/20 focus-within:border-primary/40 focus-within:bg-background'
+                                'border-muted-foreground/20 focus-within:border-primary/40 focus-within:bg-background'
                               )}>
                                 {/* Import subtask logs button — only for parent tasks with subtasks */}
                                 {(task.subtasks || []).length > 0 && (
@@ -1433,8 +1413,8 @@ export default function MyTasksPage() {
                                 )}
                                 <Textarea
                                   placeholder="描述您今天做了什麼..."
-                                  value={logContent}
-                                  onChange={e => setLogContent(e.target.value)}
+                                  value={logContent + (logContentInterim ? (logContent ? ' ' : '') + logContentInterim : '')}
+                                  onChange={e => { setLogContent(e.target.value); setLogContentInterim('') }}
                                   rows={3}
                                   className="text-sm resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 rounded-none"
                                 />
@@ -1442,12 +1422,17 @@ export default function MyTasksPage() {
                                 {/* Attachments inside box */}
                                 {attachments.length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-                                    {attachments.map((name, i) => (
-                                      <Badge key={i} variant="secondary" className="text-sm gap-1 rounded-md py-0.5">
-                                        {name}
+                                    {attachments.map((att, i) => (
+                                      <Badge key={i} variant="secondary" className="text-sm gap-1 rounded-md py-0.5 max-w-[180px]">
+                                        {att.type === 'image' ? (
+                                          <img src={att.url} alt={att.name} className="h-4 w-4 rounded object-cover" />
+                                        ) : (
+                                          <Paperclip className="h-3 w-3 shrink-0" />
+                                        )}
+                                        <span className="truncate">{att.name}</span>
                                         <button
                                           onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                                          className="ml-0.5 text-muted-foreground hover:text-foreground"
+                                          className="ml-0.5 text-muted-foreground hover:text-foreground shrink-0"
                                         >
                                           ×
                                         </button>
@@ -1459,23 +1444,16 @@ export default function MyTasksPage() {
                                 {/* Toolbar inside box */}
                                 <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/40">
                                   <div className="flex items-center gap-0.5">
-                                    <button
-                                      type="button"
-                                      onClick={toggleVoiceInput}
-                                      className={cn(
-                                        'p-1.5 rounded-md transition-all',
-                                        isListening
-                                          ? 'bg-red-100 text-red-600 animate-pulse dark:bg-red-900/50'
-                                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                      )}
-                                      title={isListening ? '停止語音' : '語音輸入'}
-                                    >
-                                      {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                                    </button>
+                                    <VoiceInputButton
+                                      className="h-7 w-7"
+                                      onTranscript={(text) => { setLogContent(prev => prev ? `${prev} ${text}` : text); setLogContentInterim('') }}
+                                      onInterimTranscript={setLogContentInterim}
+                                    />
                                     <button
                                       type="button"
                                       onClick={() => imageInputRef.current?.click()}
-                                      className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                      disabled={uploadingFiles}
+                                      className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
                                       title="上傳圖片"
                                     >
                                       <ImagePlus className="h-4 w-4" />
@@ -1483,11 +1461,13 @@ export default function MyTasksPage() {
                                     <button
                                       type="button"
                                       onClick={() => fileInputRef.current?.click()}
-                                      className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                      disabled={uploadingFiles}
+                                      className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
                                       title="上傳檔案"
                                     >
                                       <Paperclip className="h-4 w-4" />
                                     </button>
+                                    {uploadingFiles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
                                   </div>
                                   <Button
                                     size="sm"
@@ -1683,6 +1663,35 @@ export default function MyTasksPage() {
                                       </div>
                                     </div>
                                     <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.content}</p>
+                                    {log.attachments && log.attachments.length > 0 && (
+                                      <div className="mt-1.5 space-y-1.5">
+                                        {log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                              <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
+                                                <img
+                                                  src={att.url}
+                                                  alt={att.name}
+                                                  className="h-20 w-20 object-cover rounded-lg border border-border/50 hover:opacity-80 transition-opacity"
+                                                />
+                                              </a>
+                                            ))}
+                                          </div>
+                                        )}
+                                        {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
+                                          <a
+                                            key={ai}
+                                            href={att.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                                          >
+                                            <Paperclip className="h-3 w-3 shrink-0" />
+                                            <span className="truncate">{att.name}</span>
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>

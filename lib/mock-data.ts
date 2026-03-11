@@ -139,6 +139,12 @@ export interface NextPlanItem {
   content: string
 }
 
+export interface TaskLogAttachment {
+  name: string
+  url: string
+  type: 'image' | 'file'
+}
+
 export interface TaskLog {
   id: string
   taskId: string
@@ -147,6 +153,7 @@ export interface TaskLog {
   logDate: string
   content: string
   nextPlans?: NextPlanItem[]
+  attachments?: TaskLogAttachment[]
   createdAt: string
 }
 

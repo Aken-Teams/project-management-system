@@ -12,6 +12,7 @@ interface AddTaskLogBody {
   logDate: string
   content: string
   nextPlans?: { date?: string; content: string }[]
+  attachments?: { name: string; url: string; type: 'image' | 'file' }[]
 }
 
 export async function POST(
@@ -52,6 +53,7 @@ export async function POST(
         logDate: new Date(body.logDate),
         content: body.content.trim(),
         ...(validPlans.length > 0 ? { nextPlans: JSON.stringify(validPlans) } : {}),
+        ...(body.attachments?.length ? { attachments: JSON.stringify(body.attachments) } : {}),
       },
       include: { author: true },
     })
@@ -72,6 +74,7 @@ export async function POST(
       logDate: log.logDate.toISOString().split('T')[0],
       content: log.content,
       ...(log.nextPlans ? { nextPlans: JSON.parse(log.nextPlans) } : {}),
+      ...(log.attachments ? { attachments: JSON.parse(log.attachments) } : {}),
       createdAt: log.createdAt.toISOString(),
     }, { status: 201 })
   } catch (error) {

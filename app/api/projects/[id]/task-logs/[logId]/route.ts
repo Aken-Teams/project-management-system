@@ -27,6 +27,7 @@ interface UpdateTaskLogBody {
   logDate?: string
   content?: string
   nextPlans?: { date?: string; content: string }[] | null
+  attachments?: { name: string; url: string; type: 'image' | 'file' }[] | null
 }
 
 export async function PUT(
@@ -57,6 +58,9 @@ export async function PUT(
       const validPlans = body.nextPlans?.filter(p => p.content.trim()) || []
       data.nextPlans = validPlans.length > 0 ? JSON.stringify(validPlans) : null
     }
+    if (body.attachments !== undefined) {
+      data.attachments = body.attachments?.length ? JSON.stringify(body.attachments) : null
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: '沒有提供任何更新欄位' }, { status: 400 })
@@ -81,6 +85,7 @@ export async function PUT(
       logDate: updated.logDate.toISOString().split('T')[0],
       content: updated.content,
       ...(updated.nextPlans ? { nextPlans: JSON.parse(updated.nextPlans) } : {}),
+      ...(updated.attachments ? { attachments: JSON.parse(updated.attachments) } : {}),
       createdAt: updated.createdAt.toISOString(),
     })
   } catch (error) {

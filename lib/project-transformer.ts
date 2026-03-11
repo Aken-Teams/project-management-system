@@ -189,6 +189,8 @@ export function dbProjectToFrontend(
       author: { name: string }
       logDate: Date
       content: string
+      nextPlans: string | null
+      attachments: string | null
       createdAt: Date
     }[]
   },
@@ -324,6 +326,7 @@ export function dbProjectToFrontend(
     logDate: tl.logDate.toISOString().split('T')[0],
     content: tl.content,
     ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
+    ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
     createdAt: tl.createdAt.toISOString(),
   }))
 

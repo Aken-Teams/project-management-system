@@ -37,8 +37,9 @@ import {
   ArrowRight,
   User,
   X,
+  Paperclip,
 } from 'lucide-react'
-import { type Project } from '@/lib/mock-data'
+import { type Project, type TaskLogAttachment } from '@/lib/mock-data'
 
 // --- Helpers ---
 
@@ -78,7 +79,7 @@ interface WeekDelayRequest {
 interface WeekActivity {
   weekMonday: string
   completedTasks: { taskId: string; taskName: string; completedBy: string; assignee: string; completedAt: string; milestoneName: string }[]
-  logs: { logId: string; taskId: string; taskName: string; milestoneName: string; author: string; assignee: string; content: string; logDate: string; nextPlans?: { date?: string; content: string }[] }[]
+  logs: { logId: string; taskId: string; taskName: string; milestoneName: string; author: string; assignee: string; content: string; logDate: string; nextPlans?: { date?: string; content: string }[]; attachments?: TaskLogAttachment[] }[]
   delayRequests: WeekDelayRequest[]
   activeMembers: Set<string>
 }
@@ -126,6 +127,7 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
       content: log.content,
       logDate: log.logDate,
       nextPlans: log.nextPlans,
+      attachments: log.attachments,
     })
     week.activeMembers.add(assignee)
   })
@@ -763,6 +765,24 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                   </span>
                                 </div>
                                 <p className="text-muted-foreground text-sm leading-relaxed">{log.content}</p>
+                                {log.attachments && log.attachments.length > 0 && (
+                                  <div className="mt-1.5 space-y-1">
+                                    {log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                          <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
+                                            <img src={att.url} alt={att.name} className="h-16 w-16 object-cover rounded border border-border/50 hover:opacity-80 transition-opacity" />
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
+                                      <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                        <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -974,6 +994,24 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                                 <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
                                               </div>
                                               <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
+                                              {log.attachments && log.attachments.length > 0 && (
+                                                <div className="mt-1 space-y-1">
+                                                  {log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                                    <div className="flex flex-wrap gap-1">
+                                                      {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                                        <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
+                                                          <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded border border-border/50 hover:opacity-80 transition-opacity" />
+                                                        </a>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                  {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
+                                                    <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                                      <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
+                                                    </a>
+                                                  ))}
+                                                </div>
+                                              )}
                                             </div>
                                             {log.nextPlans && log.nextPlans.length > 0 && (
                                               <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
@@ -1013,6 +1051,24 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                                   <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
                                                 </div>
                                                 <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
+                                                {log.attachments && log.attachments.length > 0 && (
+                                                  <div className="mt-1 space-y-1">
+                                                    {log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                                      <div className="flex flex-wrap gap-1">
+                                                        {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                                          <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
+                                                            <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded border border-border/50 hover:opacity-80 transition-opacity" />
+                                                          </a>
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                    {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
+                                                      <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                                        <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
+                                                      </a>
+                                                    ))}
+                                                  </div>
+                                                )}
                                               </div>
                                               {log.nextPlans && log.nextPlans.length > 0 && (
                                                 <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">

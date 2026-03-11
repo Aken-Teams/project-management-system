@@ -278,9 +278,31 @@ export async function GET(request: NextRequest) {
     const nextMonday = new Date(thisMonday)
     nextMonday.setDate(nextMonday.getDate() + 7)
 
+    const twoWeeksLater = new Date(nextMonday)
+    twoWeeksLater.setDate(twoWeeksLater.getDate() + 14)
+
     const missingUpdates = projectsWithProgress
       .filter(p => {
-        // Check if any task log was recorded for this week (logDate within this week)
+        // Only flag projects that have active work this week
+        const hasActiveWork =
+          // In-progress tasks
+          p.tasks.some(t => !t.parentId && t.status === 'in_progress') ||
+          // Todo tasks whose date range overlaps this week
+          p.tasks.some(t => {
+            if (t.parentId || t.status !== 'todo') return false
+            const start = t.startDate ? new Date(t.startDate) : null
+            const end = t.endDate ? new Date(t.endDate) : null
+            return start && end && start < nextMonday && end >= thisMonday
+          }) ||
+          // Milestones not done with dueDate coming up within 2 weeks
+          p.milestones.some(m => {
+            const due = new Date(m.dueDate)
+            return m.status !== 'done' && due >= thisMonday && due <= twoWeeksLater
+          })
+
+        if (!hasActiveWork) return false
+
+        // Check if any task log was recorded this week
         const hasThisWeekLog = p.taskLogs.some(l => {
           const logDate = new Date(l.logDate)
           return logDate >= thisMonday && logDate < nextMonday
