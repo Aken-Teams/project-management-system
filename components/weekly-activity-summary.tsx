@@ -77,8 +77,8 @@ interface WeekDelayRequest {
 
 interface WeekActivity {
   weekMonday: string
-  completedTasks: { taskId: string; taskName: string; completedBy: string; completedAt: string; milestoneName: string }[]
-  logs: { logId: string; taskId: string; taskName: string; milestoneName: string; author: string; content: string; logDate: string; nextPlans?: { date?: string; content: string }[] }[]
+  completedTasks: { taskId: string; taskName: string; completedBy: string; assignee: string; completedAt: string; milestoneName: string }[]
+  logs: { logId: string; taskId: string; taskName: string; milestoneName: string; author: string; assignee: string; content: string; logDate: string; nextPlans?: { date?: string; content: string }[] }[]
   delayRequests: WeekDelayRequest[]
   activeMembers: Set<string>
 }
@@ -98,15 +98,15 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
       const monday = getWeekMonday(task.completedAt)
       const milestone = project.milestones.find(m => m.id === task.milestoneId)
       const week = getOrCreate(monday)
-      const who = task.completedBy || task.assignee
       week.completedTasks.push({
         taskId: task.id,
         taskName: task.title,
-        completedBy: who,
+        completedBy: task.completedBy || task.assignee,
+        assignee: task.assignee,
         completedAt: task.completedAt,
         milestoneName: milestone?.name || '',
       })
-      week.activeMembers.add(who)
+      week.activeMembers.add(task.assignee)
     }
   })
 
@@ -115,17 +115,19 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     const task = project.tasks.find(t => t.id === log.taskId)
     const milestone = task ? project.milestones.find(m => m.id === task.milestoneId) : null
     const week = getOrCreate(monday)
+    const assignee = task?.assignee || log.author
     week.logs.push({
       logId: log.id,
       taskId: log.taskId,
       taskName: task?.title || log.taskId,
       milestoneName: milestone?.name || '',
       author: log.author,
+      assignee,
       content: log.content,
       logDate: log.logDate,
       nextPlans: log.nextPlans,
     })
-    week.activeMembers.add(log.author)
+    week.activeMembers.add(assignee)
   })
 
   // Delay requests
@@ -218,8 +220,8 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const summaryFilteredWeeks = useMemo(() => {
     return matrixWeeks.filter(week => {
       if (selectedMember) {
-        const hasLogs = week.logs.some(l => l.author === selectedMember)
-        const hasCompleted = week.completedTasks.some(ct => ct.completedBy === selectedMember)
+        const hasLogs = week.logs.some(l => l.assignee === selectedMember)
+        const hasCompleted = week.completedTasks.some(ct => ct.assignee === selectedMember)
         if (!hasLogs && !hasCompleted) return false
       }
       if (searchQuery.trim()) {
@@ -246,7 +248,10 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     const recentLogAuthors = new Set<string>()
     project.taskLogs.forEach(log => {
-      if (new Date(log.logDate) >= sevenDaysAgo) recentLogAuthors.add(log.author)
+      if (new Date(log.logDate) >= sevenDaysAgo) {
+        const task = project.tasks.find(t => t.id === log.taskId)
+        recentLogAuthors.add(task?.assignee || log.author)
+      }
     })
     const membersWithActiveTasks = new Set<string>()
     project.tasks.forEach(t => {
@@ -636,8 +641,8 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                           </div>
                         </td>
                         {pagedMatrixWeeks.map(week => {
-                          const logCount = week.logs.filter(l => l.author === member).length
-                          const completedCount = week.completedTasks.filter(ct => ct.completedBy === member).length
+                          const logCount = week.logs.filter(l => l.assignee === member).length
+                          const completedCount = week.completedTasks.filter(ct => ct.assignee === member).length
                           const total = logCount + completedCount
                           const isSelectedWeek = selectedWeekMonday === week.weekMonday
                           return (
@@ -676,8 +681,8 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                 let detailLogs = week.logs
                 let detailCompleted = week.completedTasks
                 if (selectedMember) {
-                  detailLogs = detailLogs.filter(l => l.author === selectedMember)
-                  detailCompleted = detailCompleted.filter(ct => ct.completedBy === selectedMember)
+                  detailLogs = detailLogs.filter(l => l.assignee === selectedMember)
+                  detailCompleted = detailCompleted.filter(ct => ct.assignee === selectedMember)
                 }
                 if (searchQuery.trim()) {
                   const q = searchQuery.trim().toLowerCase()
