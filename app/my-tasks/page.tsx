@@ -1453,23 +1453,38 @@ export default function MyTasksPage() {
 
                                 {/* Attachments inside box */}
                                 {attachments.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-                                    {attachments.map((att, i) => (
-                                      <Badge key={i} variant="secondary" className="text-sm gap-1 rounded-md py-0.5 max-w-[180px]">
-                                        {att.type === 'image' ? (
-                                          <img src={att.url} alt={att.name} className="h-4 w-4 rounded object-cover" />
-                                        ) : (
-                                          <Paperclip className="h-3 w-3 shrink-0" />
-                                        )}
-                                        <span className="truncate">{att.name}</span>
-                                        <button
-                                          onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                                          className="ml-0.5 text-muted-foreground hover:text-foreground shrink-0"
-                                        >
-                                          ×
-                                        </button>
-                                      </Badge>
-                                    ))}
+                                  <div className="px-3 pb-2 space-y-1.5">
+                                    {attachments.filter(a => a.type === 'image').length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {attachments.filter(a => a.type === 'image').map((att) => (
+                                          <div key={att.url} className="relative group/img">
+                                            <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded-lg border border-border" />
+                                            <button
+                                              onClick={() => setAttachments(prev => prev.filter(a => a.url !== att.url))}
+                                              className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-destructive flex items-center justify-center"
+                                            >
+                                              <X className="h-2.5 w-2.5" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {attachments.filter(a => a.type === 'file').length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {attachments.filter(a => a.type === 'file').map((att) => (
+                                          <div key={att.url} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg border border-border/70 bg-muted/50 text-xs">
+                                            <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                                            <span className="max-w-[120px] truncate">{att.name}</span>
+                                            <button
+                                              onClick={() => setAttachments(prev => prev.filter(a => a.url !== att.url))}
+                                              className="ml-0.5 text-muted-foreground hover:text-destructive"
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
 
@@ -1601,9 +1616,9 @@ export default function MyTasksPage() {
                   </TabsContent>
 
                   {/* Tab: 過往紀錄 */}
-                  <TabsContent value="history" className="flex-1 px-6 mt-0 overflow-hidden">
+                  <TabsContent value="history" className="flex-1 px-4 mt-0 overflow-y-auto">
                     {taskLogs.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
                         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
                           <Clock className="h-5 w-5 text-muted-foreground" />
                         </div>
@@ -1611,149 +1626,152 @@ export default function MyTasksPage() {
                         <p className="text-sm text-muted-foreground/60 mt-1">提交第一筆紀錄後會顯示在這裡</p>
                       </div>
                     ) : (
-                      <div className="py-4 max-h-[320px] overflow-y-auto">
-                        <div className="relative pl-6">
-                          {/* Timeline line */}
-                          <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
-
-                          <div className="space-y-4">
-                            {taskLogs.map((log, i) => (
-                              <div key={log.id} className="relative group">
-                                {/* Timeline dot */}
-                                <div className={cn(
-                                  'absolute -left-6 top-1 h-3.5 w-3.5 rounded-full border-2 border-background',
-                                  i === 0 ? 'bg-primary' : 'bg-muted-foreground/30'
-                                )} />
-
-                                {editingLogId === log.id ? (
-                                  /* ── Inline edit mode ── */
+                      <div className="py-4 space-y-3">
+                        {taskLogs.map((log) => (
+                          <div key={log.id} className="group rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+                            {editingLogId === log.id ? (
+                              /* ── Edit mode ── */
+                              <div>
+                                <div className="flex items-center gap-2 px-4 py-3 border-b border-primary/20 bg-primary/5 rounded-t-xl">
+                                  <Pencil className="h-3.5 w-3.5 text-primary" />
+                                  <span className="text-sm font-medium text-primary">編輯紀錄</span>
+                                  <input
+                                    type="date"
+                                    value={editLogDate}
+                                    onChange={e => setEditLogDate(e.target.value)}
+                                    className="ml-auto h-7 text-xs border rounded px-2 bg-background"
+                                  />
+                                </div>
+                                <div className="px-4 py-3 space-y-3">
+                                  <Textarea
+                                    value={editLogContent}
+                                    onChange={e => setEditLogContent(e.target.value)}
+                                    className="text-sm min-h-[80px] resize-none bg-background"
+                                    placeholder="工作內容"
+                                  />
+                                  {/* Attachments in edit */}
                                   <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium">{log.author}</span>
-                                      <input
-                                        type="date"
-                                        value={editLogDate}
-                                        onChange={e => setEditLogDate(e.target.value)}
-                                        className="h-7 text-sm border rounded px-2 bg-background"
-                                      />
-                                    </div>
-                                    <Textarea
-                                      value={editLogContent}
-                                      onChange={e => setEditLogContent(e.target.value)}
-                                      className="text-sm min-h-[60px] resize-none"
-                                    />
-                                    {/* Attachments in edit mode */}
-                                    <div className="space-y-1.5">
-                                      {editLogAttachments.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5">
-                                          {editLogAttachments.map((att, i) => (
-                                            <Badge key={i} variant="secondary" className="text-xs gap-1 rounded-md py-0.5 max-w-[180px]">
-                                              {att.type === 'image'
-                                                ? <img src={att.url} alt={att.name} className="h-3.5 w-3.5 rounded object-cover" />
-                                                : <Paperclip className="h-3 w-3 shrink-0" />}
-                                              <span className="truncate">{att.name}</span>
-                                              <button onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== i))} className="ml-0.5 text-muted-foreground hover:text-destructive shrink-0">×</button>
-                                            </Badge>
-                                          ))}
-                                        </div>
-                                      )}
-                                      <div className="flex items-center gap-1">
-                                        <button type="button" onClick={() => editFileInputRef.current?.click()} disabled={editUploadingFiles}
-                                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
-                                          <Paperclip className="h-3.5 w-3.5" />新增附件
-                                        </button>
-                                        {editUploadingFiles && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-                                      </div>
-                                      <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
-                                    </div>
-                                    <div className="flex items-center gap-1.5 justify-end">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-7 px-2 text-sm"
-                                        onClick={handleCancelEditLog}
-                                      >
-                                        <X className="h-3.5 w-3.5 mr-1" />
-                                        取消
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        className="h-7 px-2 text-sm"
-                                        disabled={!editLogContent.trim()}
-                                        onClick={() => handleSaveEditLog(log)}
-                                      >
-                                        <Check className="h-3.5 w-3.5 mr-1" />
-                                        儲存
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  /* ── Display mode ── */
-                                  <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-sm font-medium">{log.author}</span>
-                                      <div className="flex items-center gap-1">
-                                        {log.author === user.name && (
-                                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button
-                                              size="icon"
-                                              variant="ghost"
-                                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                              onClick={() => handleStartEditLog(log)}
+                                    {editLogAttachments.filter(a => a.type === 'image').length > 0 && (
+                                      <div className="grid grid-cols-4 gap-1.5">
+                                        {editLogAttachments.filter(a => a.type === 'image').map((att, ai) => (
+                                          <div key={ai} className="relative group/img">
+                                            <img src={att.url} alt={att.name} className="aspect-square w-full object-cover rounded-lg border border-border" />
+                                            <button
+                                              onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== ai))}
+                                              className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"
                                             >
-                                              <Pencil className="h-3 w-3" />
-                                            </Button>
-                                            <Button
-                                              size="icon"
-                                              variant="ghost"
-                                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                              onClick={() => setDeletingLog(log)}
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                            </Button>
+                                              <X className="h-3 w-3" />
+                                            </button>
                                           </div>
-                                        )}
-                                        <span className="text-[11px] text-muted-foreground tabular-nums">
-                                          {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{log.content}</p>
-                                    {log.attachments && log.attachments.length > 0 && (
-                                      <div className="mt-1.5 space-y-1.5">
-                                        {log.attachments.filter(a => a.type === 'image').length > 0 && (
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
-                                              <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
-                                                <img
-                                                  src={att.url}
-                                                  alt={att.name}
-                                                  className="h-20 w-20 object-cover rounded-lg border border-border/50 hover:opacity-80 transition-opacity"
-                                                />
-                                              </a>
-                                            ))}
-                                          </div>
-                                        )}
-                                        {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                          <a
-                                            key={ai}
-                                            href={att.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                                          >
-                                            <Paperclip className="h-3 w-3 shrink-0" />
-                                            <span className="truncate">{att.name}</span>
-                                          </a>
                                         ))}
                                       </div>
                                     )}
+                                    {editLogAttachments.filter(a => a.type === 'file').length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {editLogAttachments.filter(a => a.type === 'file').map((att, ai) => (
+                                          <div key={ai} className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border border-border/70 bg-muted/50 text-xs">
+                                            <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                                            <span className="max-w-[120px] truncate">{att.name}</span>
+                                            <button
+                                              onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== ai))}
+                                              className="ml-0.5 text-muted-foreground hover:text-destructive"
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => editFileInputRef.current?.click()}
+                                        disabled={editUploadingFiles}
+                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-lg px-2.5 py-1 hover:bg-muted transition-colors disabled:opacity-50"
+                                      >
+                                        <Paperclip className="h-3.5 w-3.5" />新增附件
+                                      </button>
+                                      {editUploadingFiles && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                                    </div>
+                                    <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
                                   </div>
-                                )}
+                                  {/* Save / cancel */}
+                                  <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/40">
+                                    <Button size="sm" variant="ghost" className="h-7 px-3 text-sm" onClick={handleCancelEditLog}>
+                                      <X className="h-3.5 w-3.5 mr-1" />取消
+                                    </Button>
+                                    <Button size="sm" className="h-7 px-3 text-sm" disabled={!editLogContent.trim()} onClick={() => handleSaveEditLog(log)}>
+                                      <Check className="h-3.5 w-3.5 mr-1" />儲存
+                                    </Button>
+                                  </div>
+                                </div>
                               </div>
-                            ))}
+                            ) : (
+                              /* ── Display mode ── */
+                              <>
+                                {/* Card header */}
+                                <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/40">
+                                  <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <span className="text-[11px] font-semibold text-primary">
+                                      {log.author.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    </span>
+                                  </div>
+                                  <span className="flex-1 text-sm font-medium">{log.author}</span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {log.author === user.name && (
+                                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                          onClick={() => handleStartEditLog(log)}
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                          onClick={() => setDeletingLog(log)}
+                                        >
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                    </span>
+                                  </div>
+                                </div>
+                                {/* Card body */}
+                                <div className="px-4 py-3 space-y-3">
+                                  <p className="text-sm leading-relaxed">{log.content}</p>
+                                  {log.attachments && log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                      {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                        <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer"
+                                          className="block overflow-hidden rounded-lg border border-border/50 hover:opacity-90 transition-opacity">
+                                          <img src={att.url} alt={att.name} className="aspect-video w-full object-cover" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {log.attachments && log.attachments.filter(a => a.type === 'file').length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
+                                        <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer"
+                                          className="flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-lg border border-border/60 bg-muted/40 text-xs text-foreground hover:bg-muted transition-colors">
+                                          <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                          <span className="max-w-[140px] truncate">{att.name}</span>
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           </div>
-                        </div>
+                        ))}
                       </div>
                     )}
                   </TabsContent>
