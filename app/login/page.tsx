@@ -6,18 +6,12 @@ import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2, FolderKanban } from 'lucide-react'
+import { FolderKanban } from 'lucide-react'
 
 const QUICK_LOGINS = [
   { role: 'pm' as const, email: 'alice@example.com', label: '專案經理', initial: 'A', bgColor: 'bg-blue-100', textColor: 'text-blue-600' },
   { role: 'member' as const, email: 'bob@example.com', label: '團隊成員', initial: 'B', bgColor: 'bg-green-100', textColor: 'text-green-600' },
   { role: 'executive' as const, email: 'carol@example.com', label: '高階主管', initial: 'C', bgColor: 'bg-amber-100', textColor: 'text-amber-600' },
-]
-
-const FEATURES = [
-  { title: '任務追蹤與排程', desc: '即時掌握團隊進度與里程碑' },
-  { title: '團隊協作管理', desc: '角色權限分配，溝通無障礙' },
-  { title: '數據報表分析', desc: '週報自動產出，決策有據可依' },
 ]
 
 export default function LoginPage() {
@@ -54,45 +48,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden">
       {/* Left Branding Panel */}
-      <div className="hidden lg:flex lg:w-[44%] bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-600 text-white flex-col justify-between p-16 xl:p-20">
-        {/* Logo */}
-        <div className="space-y-10">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600">
-              <FolderKanban className="h-5 w-5" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight">專案管理系統</span>
-          </div>
-
-          {/* Hero Text */}
-          <div className="space-y-4">
-            <h1 className="text-4xl xl:text-[40px] font-bold leading-tight">
-              高效管理<br />每一個專案
-            </h1>
-            <p className="text-white/80 text-base leading-relaxed">
-              從規劃到執行，一站式專案管理平台<br />
-              讓團隊協作更順暢、進度更透明
-            </p>
-          </div>
-
-          {/* Features */}
-          <div className="space-y-5">
-            {FEATURES.map((feat) => (
-              <div key={feat.title} className="flex items-center gap-3.5">
-                <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-[15px] font-semibold">{feat.title}</div>
-                  <div className="text-[13px] text-white/60">{feat.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
+      <div className="hidden lg:flex lg:w-[44%] bg-slate-50 items-center justify-center overflow-hidden">
+        <img src="/login.png" alt="" className="max-w-full max-h-full object-contain" />
       </div>
 
       {/* Right Login Panel */}
