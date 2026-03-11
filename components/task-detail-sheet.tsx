@@ -133,6 +133,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [editLogContent, setEditLogContent] = useState('')
   const [editLogNextPlans, setEditLogNextPlans] = useState<NextPlanItem[]>([])
   const [editLogDate, setEditLogDate] = useState('')
+  const [editLogAttachments, setEditLogAttachments] = useState<TaskLogAttachment[]>([])
+  const [editUploadingFiles, setEditUploadingFiles] = useState(false)
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
 
   // Completion confirmation step
@@ -147,6 +149,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   // Sync editProgress when task changes
   useEffect(() => {
@@ -186,10 +189,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       setExistingLogId(existing.id)
       setLogContent(existing.content)
       setLogNextPlans(existing.nextPlans?.length ? [...existing.nextPlans] : [{ content: '', date: '' }])
+      setAttachments(existing.attachments ? [...existing.attachments] : [])
     } else {
       setExistingLogId(null)
       setLogContent('')
       setLogNextPlans([{ content: '', date: '' }])
+      setAttachments([])
     }
   }, [logDate, task?.id, open, project.taskLogs]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -353,6 +358,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     setEditLogContent(log.content)
     setEditLogNextPlans(log.nextPlans?.length ? [...log.nextPlans] : [{ content: '', date: '' }])
     setEditLogDate(log.logDate)
+    setEditLogAttachments(log.attachments ? [...log.attachments] : [])
   }
 
   const handleCancelEditLog = () => {
@@ -360,6 +366,30 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     setEditLogContent('')
     setEditLogNextPlans([])
     setEditLogDate('')
+    setEditLogAttachments([])
+  }
+
+  const handleEditFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    const fileArray = Array.from(files)
+    e.target.value = ''
+    setEditUploadingFiles(true)
+    try {
+      const uploaded: TaskLogAttachment[] = []
+      for (const file of fileArray) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        if (res.ok) uploaded.push(await res.json())
+        else alert(`上傳失敗：${res.status}`)
+      }
+      if (uploaded.length > 0) setEditLogAttachments(prev => [...prev, ...uploaded])
+    } catch {
+      alert('上傳失敗，請確認網路連線')
+    } finally {
+      setEditUploadingFiles(false)
+    }
   }
 
   const handleSaveEditLog = async (log: TaskLog) => {
@@ -368,7 +398,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       const res = await fetch(`/api/projects/${log.projectId}/task-logs/${log.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editLogContent.trim(), logDate: editLogDate, nextPlans: editLogNextPlans.filter(p => p.content.trim()) }),
+        body: JSON.stringify({
+          content: editLogContent.trim(),
+          logDate: editLogDate,
+          nextPlans: editLogNextPlans.filter(p => p.content.trim()),
+          attachments: editLogAttachments.length > 0 ? editLogAttachments : null,
+        }),
       })
       if (!res.ok) throw new Error()
       onTaskUpdate?.()
@@ -1196,6 +1231,30 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                   >
                                     <span className="text-sm leading-none">+</span> 新增一筆
                                   </button>
+                                </div>
+                                {/* Attachments in edit mode */}
+                                <div className="space-y-1.5">
+                                  {editLogAttachments.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {editLogAttachments.map((att, i) => (
+                                        <Badge key={i} variant="secondary" className="text-xs gap-1 rounded-md py-0.5 max-w-[180px]">
+                                          {att.type === 'image'
+                                            ? <img src={att.url} alt={att.name} className="h-3.5 w-3.5 rounded object-cover" />
+                                            : <Paperclip className="h-3 w-3 shrink-0" />}
+                                          <span className="truncate">{att.name}</span>
+                                          <button onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== i))} className="ml-0.5 text-muted-foreground hover:text-destructive shrink-0">×</button>
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-1">
+                                    <button type="button" onClick={() => editFileInputRef.current?.click()} disabled={editUploadingFiles}
+                                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                      <Paperclip className="h-3.5 w-3.5" />新增附件
+                                    </button>
+                                    {editUploadingFiles && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                                  </div>
+                                  <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
                                 </div>
                                 <div className="flex items-center gap-1.5 justify-end">
                                   <Button

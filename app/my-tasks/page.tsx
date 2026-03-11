@@ -153,6 +153,8 @@ export default function MyTasksPage() {
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [editLogContent, setEditLogContent] = useState('')
   const [editLogDate, setEditLogDate] = useState('')
+  const [editLogAttachments, setEditLogAttachments] = useState<TaskLogAttachment[]>([])
+  const [editUploadingFiles, setEditUploadingFiles] = useState(false)
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
   const [msDateDialogOpen, setMsDateDialogOpen] = useState(false)
   const [msDateDialogData, setMsDateDialogData] = useState<{
@@ -180,6 +182,7 @@ export default function MyTasksPage() {
   const [importSubLogsLoading, setImportSubLogsLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch tasks from API
   useEffect(() => {
@@ -574,12 +577,37 @@ export default function MyTasksPage() {
     setEditingLogId(log.id)
     setEditLogContent(log.content)
     setEditLogDate(log.logDate)
+    setEditLogAttachments(log.attachments ? [...log.attachments] : [])
   }
 
   const handleCancelEditLog = () => {
     setEditingLogId(null)
     setEditLogContent('')
     setEditLogDate('')
+    setEditLogAttachments([])
+  }
+
+  const handleEditFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    const fileArray = Array.from(files)
+    e.target.value = ''
+    setEditUploadingFiles(true)
+    try {
+      const uploaded: TaskLogAttachment[] = []
+      for (const file of fileArray) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        if (res.ok) uploaded.push(await res.json())
+        else alert(`上傳失敗：${res.status}`)
+      }
+      if (uploaded.length > 0) setEditLogAttachments(prev => [...prev, ...uploaded])
+    } catch {
+      alert('上傳失敗，請確認網路連線')
+    } finally {
+      setEditUploadingFiles(false)
+    }
   }
 
   const handleSaveEditLog = async (log: TaskLog) => {
@@ -588,7 +616,11 @@ export default function MyTasksPage() {
       const res = await fetch(`/api/projects/${log.projectId}/task-logs/${log.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editLogContent.trim(), logDate: editLogDate }),
+        body: JSON.stringify({
+          content: editLogContent.trim(),
+          logDate: editLogDate,
+          attachments: editLogAttachments.length > 0 ? editLogAttachments : null,
+        }),
       })
       if (!res.ok) throw new Error()
       const updated: TaskLog = await res.json()
@@ -1610,6 +1642,30 @@ export default function MyTasksPage() {
                                       onChange={e => setEditLogContent(e.target.value)}
                                       className="text-sm min-h-[60px] resize-none"
                                     />
+                                    {/* Attachments in edit mode */}
+                                    <div className="space-y-1.5">
+                                      {editLogAttachments.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {editLogAttachments.map((att, i) => (
+                                            <Badge key={i} variant="secondary" className="text-xs gap-1 rounded-md py-0.5 max-w-[180px]">
+                                              {att.type === 'image'
+                                                ? <img src={att.url} alt={att.name} className="h-3.5 w-3.5 rounded object-cover" />
+                                                : <Paperclip className="h-3 w-3 shrink-0" />}
+                                              <span className="truncate">{att.name}</span>
+                                              <button onClick={() => setEditLogAttachments(prev => prev.filter((_, j) => j !== i))} className="ml-0.5 text-muted-foreground hover:text-destructive shrink-0">×</button>
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-1">
+                                        <button type="button" onClick={() => editFileInputRef.current?.click()} disabled={editUploadingFiles}
+                                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                          <Paperclip className="h-3.5 w-3.5" />新增附件
+                                        </button>
+                                        {editUploadingFiles && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                                      </div>
+                                      <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
+                                    </div>
                                     <div className="flex items-center gap-1.5 justify-end">
                                       <Button
                                         size="sm"
