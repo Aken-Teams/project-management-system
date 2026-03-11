@@ -376,7 +376,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-sm gap-1.5 ml-auto"
+              className="hidden h-8 text-sm gap-1.5 ml-auto"
               onClick={handleOpenReportDialog}
             >
               <Sparkles className="h-3.5 w-3.5" />

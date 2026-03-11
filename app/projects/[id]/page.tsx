@@ -652,6 +652,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             const res = await fetch(`/api/projects/${id}`)
             if (res.ok) setProject(await res.json())
           }}
+          onSaved={async () => {
+            const res = await fetch(`/api/projects/${id}/budget-items`)
+            if (res.ok) setBudgetItems(await res.json())
+          }}
         />
       )}
       <ProjectDeleteDialog

@@ -51,6 +51,7 @@ interface ProjectEditDialogProps {
   onTeamChange?: () => void
   onRiskChange?: () => void
   onWorkItemsChange?: () => Promise<void> | void
+  onSaved?: () => Promise<void> | void
   defaultTab?: string
 }
 
@@ -124,7 +125,7 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
   return 'low'
 }
 
-export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange, defaultTab }: ProjectEditDialogProps) {
+export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange, onSaved, defaultTab }: ProjectEditDialogProps) {
   const { projectTypes } = useProjectTypes()
   const [form, setForm] = useState<ProjectEditData>({
     name: project.name,
@@ -484,6 +485,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     try {
       if (await validateAndSaveAll()) {
         await onWorkItemsChange?.()
+        await onSaved?.()
         onOpenChange(false)
       }
     } catch {
@@ -527,6 +529,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       setDateChangeReason('')
       setAffectedMilestoneDates([])
       await onWorkItemsChange?.()
+      await onSaved?.()
       onOpenChange(false)
       toast.success('日期變更申請已送出審核')
     } catch (err) {
