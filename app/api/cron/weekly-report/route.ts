@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       const now = new Date()
       const nowDay  = now.getDay()
       const nowHour = now.getHours()
-      if (nowDay !== configDay || Math.abs(nowHour - configHour) > 1) {
+      if (nowDay !== configDay || nowHour !== configHour) {
         return NextResponse.json({
           ok: false,
           skipped: true,

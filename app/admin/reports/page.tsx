@@ -169,7 +169,7 @@ export default function AdminReportsPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">自動報告排程</CardTitle>
-                  <CardDescription className="text-xs">設定後由排程系統自動觸發，需搭配外部 cron job</CardDescription>
+                  <CardDescription className="text-xs">系統啟動後自動排程，修改時間後即時生效（下一個整點套用）</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
