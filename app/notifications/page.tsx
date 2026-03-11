@@ -183,9 +183,9 @@ export default function NotificationsPage() {
               </Badge>
             )}
             {unreadCount > 0 && (
-              <Button variant="outline" size="sm" className="gap-1.5 text-sm" onClick={handleMarkAllRead}>
+              <Button size="sm" className="gap-1.5 text-sm" onClick={handleMarkAllRead}>
                 <CheckCheck className="h-4 w-4" />
-                全部已讀
+                全部標為已讀
               </Button>
             )}
           </div>
