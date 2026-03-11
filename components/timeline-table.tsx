@@ -307,7 +307,7 @@ function TaskRow({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value=" ">未指派</SelectItem>
-            {teamMembers.map((m) => (
+            {teamMembers.filter(m => m.name.trim()).map((m) => (
               <SelectItem key={m.id} value={m.name}>
                 {m.name}
               </SelectItem>
@@ -569,7 +569,7 @@ function SubtaskRow({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value=" ">未指派</SelectItem>
-            {teamMembers.map((m) => (
+            {teamMembers.filter(m => m.name.trim()).map((m) => (
               <SelectItem key={m.id} value={m.name}>
                 {m.name}
               </SelectItem>

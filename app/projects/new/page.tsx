@@ -269,6 +269,140 @@ const AI_STEPS = [
   { label: '時程里程碑', icon: Calendar },
 ]
 
+interface AiTemplate {
+  label: string
+  description: string
+  projectType: string
+  projectTier: string
+  demandSource: string
+  requirements: string
+  nameHint: string
+  durationMonths: string
+  budgetRange: string
+  createdReason: string
+  expectedBenefits: string
+  constraints: string
+}
+
+const AI_TEMPLATES: AiTemplate[] = [
+  {
+    label: '自動化倉儲盤點',
+    description: '條碼 / RFID 取代人工盤點',
+    projectType: 'automation',
+    projectTier: 'T2',
+    demandSource: 'internal_demand',
+    nameHint: '倉儲自動化盤點系統',
+    durationMonths: '6',
+    budgetRange: '100 萬～500 萬',
+    createdReason: '目前倉庫每月需進行人工盤點，耗時 3 天、出錯率約 5%，嚴重影響出貨效率與客戶滿意度。',
+    expectedBenefits: '盤點時間縮短 80%（3 天→半天）、出貨錯誤率降至 0.5% 以下、每年節省人力成本約 120 萬。',
+    constraints: '需整合現有 ERP 系統（SAP B1）、不可影響日常倉儲作業、預算上限 300 萬。',
+    requirements: `【背景】
+目前倉庫採人工條碼掃描盤點，每月需暫停出貨 3 天進行全倉盤點，人員約 10 人，出錯率約 5%，導致帳面庫存與實際不符，影響客戶出貨準時率。
+
+【目標】
+導入 RFID 讀取器與自動化盤點系統，實現快速批量盤點，目標在不停止出貨的情況下，於 4 小時內完成全倉盤點。
+
+【需求】
+1. RFID 標籤貼附於所有棧板與料架，支援批量讀取
+2. 手持式 / 固定式 RFID 讀取器，配合移動推車使用
+3. 盤點結果即時上傳至 ERP（SAP B1）自動對帳
+4. 差異報告自動產生，標示超差品項
+5. 支援多倉儲分區盤點（A、B、C 區各自獨立）
+6. 系統需能匯出 Excel 報表供主管審核
+
+【預期效益】
+盤點工時 3 天縮短至 4 小時、錯誤率 5% 降至 0.5%、年省人力 120 萬元。`,
+  },
+  {
+    label: '品質不良率改善',
+    description: 'SPC / 製程管制降低不良率',
+    projectType: 'quality-improvement',
+    projectTier: 'T2',
+    demandSource: 'internal_demand',
+    nameHint: '製程品質改善專案',
+    durationMonths: '4',
+    budgetRange: '50 萬～100 萬',
+    createdReason: '近三個月 PCB 組裝製程不良率升至 3.2%，超過客戶要求的 1.5%，導致退貨與客訴增加。',
+    expectedBenefits: '不良率從 3.2% 降至 1% 以下，減少每月報廢損失約 80 萬，提升客戶滿意度。',
+    constraints: '不可更換主力設備、需在現有 SMT 產線執行改善、改善措施需通過客戶審核。',
+    requirements: `【背景】
+PCB 組裝線（SMT + DIP）近三個月不良率由 1.8% 上升至 3.2%，主要問題集中在錫橋（40%）、空焊（35%）兩大類，每月報廢損失達 80 萬元，並已收到客戶 A 正式改善通知（CAR）。
+
+【目標】
+透過 SPC 管制、製程參數最佳化與設備保養改善，在 4 個月內將不良率降至 1% 以下，並建立持續監控機制防止復發。
+
+【需求】
+1. 現況分析：8D 報告、魚骨圖、帕雷托分析定位根本原因
+2. 製程參數優化：錫膏印刷壓力、速度、迴焊爐溫度曲線重新設定
+3. 導入 SPC 管制圖（X-bar / R chart），設定管制上下限
+4. 建立首件確認 SOP 與自動 AOI 判讀規則更新
+5. 設備預防保養計畫（PM）更新，清潔週期從雙週改為每週
+6. 改善成果報告提交客戶，取得 CAR 結案確認
+
+【預期效益】
+不良率降至 1% 以下、月省報廢 80 萬、取得客戶 CAR 結案。`,
+  },
+  {
+    label: '新產品導入 (NPI)',
+    description: '新產品量產前的導入規劃',
+    projectType: 'npi',
+    projectTier: 'T1',
+    demandSource: 'self_proposal',
+    nameHint: 'NPI 新產品量產導入',
+    durationMonths: '5',
+    budgetRange: '500 萬～1000 萬',
+    createdReason: '客戶要求新款無線充電模組於 Q3 量產，需完成 EVT→DVT→PVT 三階段驗證並建立量產 SOP。',
+    expectedBenefits: '依計畫達成量產交期、良率 EVT>85% / DVT>92% / PVT>96%、首批出貨 1 萬套。',
+    constraints: '客戶指定關鍵零件供應商（線圈、IC 各一家）、量產前需通過 CE/FCC 認證、人力不可額外招募。',
+    requirements: `【背景】
+客戶委託開發新款 15W 無線充電模組（型號 WC-X15），要求 2026 Q3 正式量產，首批出貨 10,000 套。產品尚在 EVT 階段，需完成三階段驗證後建立完整量產 SOP 並移轉至產線。
+
+【目標】
+在 5 個月內完成 EVT→DVT→PVT 驗證，各階段良率目標 85%/92%/96%，取得 CE/FCC 認證，完成產線移轉與首批量產交付。
+
+【需求】
+1. EVT 階段：樣品製作 50 pcs，功能測試、安規初測、問題清單輸出
+2. DVT 階段：樣品 200 pcs，可靠度驗證（高低溫循環、跌落、EMC）
+3. PVT 階段：試產 500 pcs，全製程 SOP 確認、CT 計算、良率達標
+4. 認證：委外 CE/FCC 認證，目標 DVT 結束前取得
+5. 量產移轉：作業 SOP、BOM 凍結、治具製作、產線作業員訓練
+6. 首批量產：10,000 套排程、物料齊套確認、出貨品質確認
+
+【預期效益】
+如期完成客戶 Q3 量產要求，首批 10,000 套準時出貨，建立可複製的 NPI 流程範本。`,
+  },
+  {
+    label: '流程優化（報表自動化）',
+    description: 'Excel 人工報表改為系統自動化',
+    projectType: 'process-optimization',
+    projectTier: 'T3',
+    demandSource: 'internal_demand',
+    nameHint: '生產日報表自動化',
+    durationMonths: '3',
+    budgetRange: '50 萬以下',
+    createdReason: '生產管理部每日需花費 2 小時手動整理各產線數據並製作日報表，易出錯且時效性差。',
+    expectedBenefits: '每日節省 2 小時人工作業、報表準確率 100%、主管可即時在線查看最新生產數據。',
+    constraints: '需與現有 MES 系統 API 介接、IT 人力有限（1 名工程師）、需在 3 個月內完成。',
+    requirements: `【背景】
+生產管理部每天上午需花 2 小時，人工從 MES、ERP、Excel 三個來源彙整前一日各產線產出、良率、稼動率、異常停機等數據，製作成日報 Excel 後以 Email 發送給主管，時效性差且容易出錯（每月平均 3 次數據有誤）。
+
+【目標】
+開發自動化報表系統，每日凌晨 01:00 自動從 MES 抓取數據，產生標準化日報表並自動發送 Email，讓主管 08:00 上班時即可在線查看最新報表。
+
+【需求】
+1. API 串接 MES 系統，自動抓取：各線日產出、良率、稼動率、前三大停機原因
+2. 報表格式與現有 Excel 日報一致，支援圖表（折線圖、長條圖）
+3. 定時排程每日 01:00 執行，失敗自動告警給 IT
+4. Email 自動發送（收件人清單可在後台維護）
+5. 網頁版儀表板，支援日期區間查詢與歷史報表下載
+6. 異常判斷：良率低於 95% 或稼動率低於 85% 自動標紅並加入異常摘要
+
+【預期效益】
+每日省 2 小時、報表準確率 100%、異常即時可見、可擴充至週報月報自動化。`,
+  },
+]
+
 
 export default function NewProjectPage() {
   const router = useRouter()
@@ -291,6 +425,13 @@ export default function NewProjectPage() {
   const [aiDemandSource, setAiDemandSource] = useState<DemandSource | ''>('')
   const [aiCreatedReason, setAiCreatedReason] = useState('')
   const [aiExpectedBenefits, setAiExpectedBenefits] = useState('')
+  // Additional AI hint fields
+  const [aiProjectNameHint, setAiProjectNameHint] = useState('')
+  const [aiDurationMonths, setAiDurationMonths] = useState<string>('')
+  const [aiBudgetRange, setAiBudgetRange] = useState<string>('')
+  const [aiConstraints, setAiConstraints] = useState('')
+  const [aiParsing, setAiParsing] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   // AI Step Wizard
   const [aiCurrentStep, setAiCurrentStep] = useState(0)
@@ -697,18 +838,113 @@ export default function NewProjectPage() {
     }
   }
 
-  const [showAiComingSoon, setShowAiComingSoon] = useState(false)
+  const handleAIParse = async () => {
+    setAiParsing(true)
+    try {
+      const aiRes = await fetch('/api/ai/analyze-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectType: aiProjectType,
+          projectTier: aiProjectTier,
+          demandSource: aiDemandSource,
+          createdReason: aiCreatedReason,
+          expectedBenefits: aiExpectedBenefits,
+          requirements,
+          projectNameHint: aiProjectNameHint || undefined,
+          durationMonths: aiDurationMonths ? parseInt(aiDurationMonths) : undefined,
+          budgetRange: aiBudgetRange || undefined,
+          constraints: aiConstraints || undefined,
+        }),
+      })
 
-  const handleAIParse = () => {
-    setShowAiComingSoon(true)
+      if (!aiRes.ok) {
+        const err = await aiRes.json().catch(() => ({ error: 'AI 分析失敗' }))
+        toast({ title: 'AI 分析失敗', description: err.error ?? '請稍後再試', variant: 'destructive' })
+        return
+      }
+
+      const { plan } = await aiRes.json()
+
+      type RawMilestone = { name: string; description: string; durationDays: number }
+      type RawTask = { milestoneIndex: number; title: string; priority: string; durationDays: number }
+      type RawTeam = { name: string; role: string; jobTitle: string; responsibility: string }
+      type RawRisk = { title: string; description: string; impact: string; probability: string; mitigation: string }
+
+      // Populate basic info
+      setAiEditableData({
+        name: plan.name ?? '',
+        budget: plan.budget ? String(Math.round(plan.budget / 1000000)) : '',
+        startDate: plan.startDate ?? '',
+        endDate: plan.endDate ?? '',
+        purpose: plan.purpose ?? '',
+        scope: plan.scope ?? '',
+        roi: plan.roi ?? '',
+        expectedBenefits: plan.expectedBenefits ?? '',
+      })
+
+      // Populate SMART objective
+      setAiSmartObjective({
+        specific: plan.smartObjective?.specific ?? '',
+        measurable: plan.smartObjective?.measurable ?? '',
+        achievable: plan.smartObjective?.achievable ?? '',
+        relevant: plan.smartObjective?.relevant ?? '',
+        timeBound: plan.smartObjective?.timeBound ?? '',
+      })
+
+      // Populate milestones
+      const rawMilestones: RawMilestone[] = plan.milestones ?? []
+      const newMilestones: AiMilestone[] = rawMilestones.map((m, i) => ({
+        id: `ai-ms-${i}`,
+        name: m.name,
+        description: m.description ?? '',
+        durationDays: m.durationDays,
+      }))
+      setAiMilestones(newMilestones)
+
+      // Populate tasks
+      const rawTasks: RawTask[] = plan.tasks ?? []
+      setAiTasks(rawTasks.map((t, i) => ({
+        id: `ai-task-${i}`,
+        milestoneId: newMilestones[t.milestoneIndex]?.id ?? newMilestones[0]?.id ?? '',
+        title: t.title,
+        assignee: '',
+        priority: (t.priority ?? 'medium') as 'low' | 'medium' | 'high',
+        durationDays: t.durationDays ?? 3,
+      })))
+
+      // Populate team (AI role suggestions, name = "待確認" — user fills in actual names)
+      const rawTeam: RawTeam[] = plan.team ?? []
+      setAiTeamDetails(rawTeam.map((t, i) => ({
+        id: `ai-team-${i}`,
+        name: t.name === '待確認' ? '' : (t.name ?? ''),
+        role: (t.role ?? 'R') as TeamRole,
+        responsibility: t.responsibility ?? '',
+        organization: t.jobTitle ?? '',
+      })))
+
+      // Populate risks
+      const rawRisks: RawRisk[] = plan.risks ?? []
+      setAiRisks(rawRisks.map(r => ({
+        title: r.title,
+        description: r.description ?? '',
+        impact: (r.impact ?? 'medium') as 'low' | 'medium' | 'high',
+        probability: (r.probability ?? 'medium') as 'low' | 'medium' | 'high',
+      })))
+
+      toast({ title: 'AI 分析完成', description: '請逐步確認並修改各步驟內容，確認無誤後點擊「建立專案」' })
+      setAiCurrentStep(1)
+    } catch (err) {
+      console.error(err)
+      toast({ title: 'AI 分析失敗', description: err instanceof Error ? err.message : '請稍後再試', variant: 'destructive' })
+    } finally {
+      setAiParsing(false)
+    }
   }
 
-  const handleCreateFromAI = () => {
-    if (!parsedData) return
-
+  const handleCreateFromAI = async () => {
     const ownerName = user?.name || 'Unknown'
 
-    // Use editable data instead of original parsedData
     const objective = `${aiSmartObjective.specific}${aiSmartObjective.measurable ? '，' + aiSmartObjective.measurable : ''}`
 
     const milestoneIdMap = new Map<string, string>()
@@ -735,8 +971,6 @@ export default function NewProjectPage() {
         status: 'open' as const,
       }))
 
-    // Map AI draft tasks with calculated dates
-    // Parent tasks first, then subtasks
     const aiParentDrafts = aiTasks.filter(t => !t.parentId && t.title.trim() && milestoneIdMap.has(t.milestoneId))
     const aiSubtaskDrafts = aiTasks.filter(t => t.parentId && t.title.trim())
     const validTasks = [...aiParentDrafts, ...aiSubtaskDrafts]
@@ -762,38 +996,62 @@ export default function NewProjectPage() {
 
     const uniqueNames = new Set<string>()
     const teamNames: string[] = []
-    aiTeamDetails.forEach(m => {
+    aiTeamDetails.filter(m => m.name.trim()).forEach(m => {
       if (!uniqueNames.has(m.name)) {
         uniqueNames.add(m.name)
         teamNames.push(m.name)
       }
     })
-    const teamMembersData = aiTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
+    const teamMembersData = aiTeamDetails
+      .filter(m => m.name.trim())
+      .map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
 
-    const newProject = addProject({
-      projectType: aiProjectType,
-      projectTier: aiProjectTier || undefined,
-      demandSource: aiDemandSource || undefined,
-      name: aiEditableData.name,
-      objective,
-      purpose: aiEditableData.purpose,
-      scope: aiEditableData.scope,
-      roi: aiEditableData.roi,
-      createdReason: aiCreatedReason || aiEditableData.purpose,
-      expectedBenefits: aiEditableData.expectedBenefits,
-      smartObjective: aiSmartObjective,
-      startDate: aiEditableData.startDate,
-      endDate: aiEditableData.endDate,
-      budget: Number(aiEditableData.budget) * 1000000 || 0,
-      owner: ownerName,
-      team: teamNames,
-      milestones,
-      risks,
-      tasks: validTasks,
-      teamMembers: teamMembersData,
-    })
+    setIsCreating(true)
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectType: aiProjectType,
+          projectTier: aiProjectTier || undefined,
+          demandSource: aiDemandSource || undefined,
+          name: aiEditableData.name,
+          objective,
+          purpose: aiEditableData.purpose,
+          scope: aiEditableData.scope,
+          roi: aiEditableData.roi,
+          createdReason: aiCreatedReason || aiEditableData.purpose,
+          expectedBenefits: aiEditableData.expectedBenefits,
+          smartObjective: aiSmartObjective,
+          startDate: aiEditableData.startDate,
+          endDate: aiEditableData.endDate,
+          budget: Number(aiEditableData.budget) * 1000000 || 0,
+          ownerName,
+          team: teamNames,
+          milestones,
+          risks,
+          tasks: validTasks,
+          teamMembers: teamMembersData,
+        }),
+      })
 
-    router.push(`/projects/${newProject.id}`)
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || '建立專案失敗')
+      }
+
+      const newProject = await res.json()
+      toast({ title: '專案建立成功', description: `AI 產生專案：${newProject.projectCode}` })
+      router.push(`/projects/${newProject.id}`)
+    } catch (error) {
+      toast({
+        title: '建立專案失敗',
+        description: error instanceof Error ? error.message : '請稍後再試',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   const handleManualCreate = async () => {
@@ -1212,40 +1470,56 @@ export default function NewProjectPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-created-reason">開案原因 <span className="text-destructive">*</span></Label>
-                    <div className="flex gap-2">
-                      <Textarea
-                        id="ai-created-reason"
-                        placeholder="說明開立此專案的原因或背景"
-                        value={aiCreatedReason}
-                        onChange={(e) => setAiCreatedReason(e.target.value)}
-                        rows={2}
-                        className="flex-1"
-                      />
-                      <VoiceInputButton
-                        onTranscript={(text) => setAiCreatedReason(prev => prev + (prev ? ' ' : '') + text)}
-                        className="shrink-0"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ai-expected-benefits">預期效益 <span className="text-destructive">*</span></Label>
-                    <div className="flex gap-2">
-                      <Textarea
-                        id="ai-expected-benefits"
-                        placeholder="描述專案完成後的預期效益，例如：提升營運效率、降低成本、增加收益等"
-                        value={aiExpectedBenefits}
-                        onChange={(e) => setAiExpectedBenefits(e.target.value)}
-                        rows={2}
-                        className="flex-1"
-                      />
-                      <VoiceInputButton
-                        onTranscript={(text) => setAiExpectedBenefits(prev => prev + (prev ? ' ' : '') + text)}
-                        className="shrink-0"
-                      />
-                    </div>
+                  {/* Template reference panel */}
+                  <div className="rounded-lg border bg-muted/20">
+                    <button
+                      type="button"
+                      onClick={() => setShowTemplates(v => !v)}
+                      className="flex w-full items-center justify-between px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors rounded-lg"
+                    >
+                      <span className="flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4 text-primary" />
+                        範本參考 — 點擊套用範本快速填入
+                      </span>
+                      <span className="text-muted-foreground text-xs">{showTemplates ? '▲ 收起' : '▼ 展開'}</span>
+                    </button>
+                    {showTemplates && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <p className="text-xs text-muted-foreground">以下為常見專案類型範本，點擊任一範本即可套用至下方表單，再依實際情況修改。</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {AI_TEMPLATES.map((tpl) => (
+                            <div
+                              key={tpl.label}
+                              className="rounded-lg border bg-card p-3 space-y-1.5 cursor-pointer hover:border-primary hover:shadow-sm transition-all"
+                              onClick={() => {
+                                handleAiTypeChange(tpl.projectType as ProjectType)
+                                setAiProjectTier(tpl.projectTier as ProjectTier)
+                                setAiDemandSource(tpl.demandSource as DemandSource)
+                                setRequirements(tpl.requirements)
+                                setAiProjectNameHint(tpl.nameHint)
+                                setAiDurationMonths(tpl.durationMonths)
+                                setAiBudgetRange(tpl.budgetRange)
+                                setAiCreatedReason(tpl.createdReason)
+                                setAiExpectedBenefits(tpl.expectedBenefits)
+                                setAiConstraints(tpl.constraints)
+                                setShowTemplates(false)
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{tpl.label}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{tpl.description}</p>
+                              <div className="flex flex-wrap gap-1 pt-0.5">
+                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.projectType}</span>
+                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.projectTier}</span>
+                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.durationMonths} 個月</span>
+                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.budgetRange}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1253,7 +1527,7 @@ export default function NewProjectPage() {
                     <div className="flex gap-2">
                       <Textarea
                         id="requirements"
-                        placeholder="例如：我需要開發一個客戶管理系統，用來整合現有的客戶資料，追蹤銷售機會，並提供完整的客戶視圖。希望能提升銷售團隊的工作效率..."
+                        placeholder="描述您的專案目標、功能需求、開案背景與預期效益。例如：我們需要一套自動化倉儲系統，解決目前人工盤點效率低的問題，預計可降低出貨錯誤率 30%..."
                         value={requirements}
                         onChange={(e) => setRequirements(e.target.value)}
                         rows={8}
@@ -1265,44 +1539,125 @@ export default function NewProjectPage() {
                       />
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      提示：描述越詳細，AI 產生的規劃越準確。可以包含目標、功能需求、預期效益等。點擊麥克風圖示可使用語音輸入。
+                      描述越詳細，AI 產生的規劃越準確。可包含目標、背景、需求、預期效益等。
                     </p>
+                  </div>
+
+                  {/* Optional hint fields */}
+                  <div className="rounded-lg border border-dashed p-4 space-y-4 bg-muted/20">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">選填：提供更多提示讓 AI 產生更精準的規劃</p>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-name-hint">專案名稱提示</Label>
+                        <Input
+                          id="ai-name-hint"
+                          placeholder="例如：WMS 倉儲系統"
+                          value={aiProjectNameHint}
+                          onChange={(e) => setAiProjectNameHint(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-duration">預計工期</Label>
+                        <Select value={aiDurationMonths} onValueChange={setAiDurationMonths}>
+                          <SelectTrigger id="ai-duration">
+                            <SelectValue placeholder="選擇工期" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[1,2,3,4,5,6,9,12,18,24].map(m => (
+                              <SelectItem key={m} value={String(m)}>{m} 個月</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-budget-range">預算範圍</Label>
+                        <Select value={aiBudgetRange} onValueChange={setAiBudgetRange}>
+                          <SelectTrigger id="ai-budget-range">
+                            <SelectValue placeholder="選擇預算區間" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="50 萬以下">50 萬以下</SelectItem>
+                            <SelectItem value="50 萬～100 萬">50 萬～100 萬</SelectItem>
+                            <SelectItem value="100 萬～500 萬">100 萬～500 萬</SelectItem>
+                            <SelectItem value="500 萬～1000 萬">500 萬～1000 萬</SelectItem>
+                            <SelectItem value="1000 萬以上">1000 萬以上</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-created-reason">開案原因</Label>
+                        <div className="flex gap-2">
+                          <Textarea
+                            id="ai-created-reason"
+                            placeholder="若需求描述已說明可略過"
+                            value={aiCreatedReason}
+                            onChange={(e) => setAiCreatedReason(e.target.value)}
+                            rows={2}
+                            className="flex-1 resize-none"
+                          />
+                          <VoiceInputButton
+                            onTranscript={(text) => setAiCreatedReason(prev => prev + (prev ? ' ' : '') + text)}
+                            className="shrink-0"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-expected-benefits">預期效益</Label>
+                        <div className="flex gap-2">
+                          <Textarea
+                            id="ai-expected-benefits"
+                            placeholder="若需求描述已說明可略過"
+                            value={aiExpectedBenefits}
+                            onChange={(e) => setAiExpectedBenefits(e.target.value)}
+                            rows={2}
+                            className="flex-1 resize-none"
+                          />
+                          <VoiceInputButton
+                            onTranscript={(text) => setAiExpectedBenefits(prev => prev + (prev ? ' ' : '') + text)}
+                            className="shrink-0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-constraints">主要限制與備註</Label>
+                      <Textarea
+                        id="ai-constraints"
+                        placeholder="例如：需在農曆年前完成、團隊只有 3 人、需整合現有 ERP 系統..."
+                        value={aiConstraints}
+                        onChange={(e) => setAiConstraints(e.target.value)}
+                        rows={2}
+                        className="resize-none"
+                      />
+                    </div>
                   </div>
 
                   <Button
                     onClick={handleAIParse}
-                    disabled={!aiProjectTier || !aiDemandSource || !aiProjectType || !aiCreatedReason.trim() || !aiExpectedBenefits.trim() || !requirements.trim()}
+                    disabled={aiParsing || !aiProjectTier || !aiDemandSource || !aiProjectType || !requirements.trim()}
                     className="w-full gap-2"
                     size="lg"
                   >
-                    <Sparkles className="h-4 w-4" />
-                    使用 AI 解析並產生規劃
+                    {aiParsing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        AI 分析中，請稍候...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        AI 分析需求，進入審核流程
+                      </>
+                    )}
                   </Button>
-
-                  <Dialog open={showAiComingSoon} onOpenChange={setShowAiComingSoon}>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-primary" />
-                          功能開發中
-                        </DialogTitle>
-                        <DialogDescription>
-                          AI 解析功能尚在開發中，敬請期待！
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="flex justify-end">
-                        <Button onClick={() => setShowAiComingSoon(false)}>
-                          我知道了
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
                 </CardContent>
               </Card>
             )}
 
             {/* Step 1: 基本資訊 */}
-            {aiCurrentStep === 1 && parsedData && (
+            {aiCurrentStep === 1 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1357,7 +1712,7 @@ export default function NewProjectPage() {
             )}
 
             {/* Step 2: SMART 目標 */}
-            {aiCurrentStep === 2 && parsedData && (
+            {aiCurrentStep === 2 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1438,7 +1793,7 @@ export default function NewProjectPage() {
             )}
 
             {/* Step 3: 專案定義 */}
-            {aiCurrentStep === 3 && parsedData && (
+            {aiCurrentStep === 3 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1469,6 +1824,17 @@ export default function NewProjectPage() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="ai-roi">投資報酬 (ROI)</Label>
+                    <Textarea
+                      id="ai-roi"
+                      value={aiEditableData.roi}
+                      onChange={(e) => setAiEditableData({ ...aiEditableData, roi: e.target.value })}
+                      rows={2}
+                      placeholder="描述量化效益與投資回報率"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="ai-expected-benefits">預期效益</Label>
                     <Textarea
                       id="ai-expected-benefits"
@@ -1483,7 +1849,7 @@ export default function NewProjectPage() {
             )}
 
             {/* Step 5: 時程里程碑 */}
-            {aiCurrentStep === 5 && parsedData && (
+            {aiCurrentStep === 5 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1545,7 +1911,7 @@ export default function NewProjectPage() {
             )}
 
             {/* Step 4: 團隊與風險 */}
-            {aiCurrentStep === 4 && parsedData && (
+            {aiCurrentStep === 4 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1621,7 +1987,7 @@ export default function NewProjectPage() {
             )}
 
             {/* Navigation Buttons */}
-            {aiCurrentStep > 0 && parsedData && (
+            {aiCurrentStep > 0 && (
               <div className="flex items-center justify-between">
                 <Button
                   variant="outline"
@@ -1646,10 +2012,20 @@ export default function NewProjectPage() {
                     <Button
                       size="lg"
                       onClick={handleCreateFromAI}
+                      disabled={isCreating}
                       className="gap-2"
                     >
-                      <Check className="h-4 w-4" />
-                      建立專案
+                      {isCreating ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          建立中...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4" />
+                          建立專案
+                        </>
+                      )}
                     </Button>
                   )}
                 </div>

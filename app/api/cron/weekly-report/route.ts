@@ -62,10 +62,10 @@ export async function POST(request: NextRequest) {
       .filter(e => e.includes('@'))
 
     const execUsers = await prisma.user.findMany({
-      where: { role: 'executive', email: { not: null } },
+      where: { role: 'executive' },
       select: { email: true },
     })
-    const execEmails = execUsers.map(u => u.email!).filter(Boolean)
+    const execEmails = execUsers.map(u => u.email).filter((e): e is string => !!e)
 
     const allRecipients = [...new Set([...customRecipients, ...execEmails])]
     if (allRecipients.length === 0) {
