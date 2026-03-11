@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { notifyDelayReviewed } from '@/lib/notifications'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -232,6 +233,21 @@ export async function PATCH(
           reviewedAt: now,
           reviewNotes: body.reviewNotes?.trim() || null,
         },
+      })
+    }
+
+    // Notify requester of review result (fire-and-forget)
+    const projectForNotif = await prisma.project.findUnique({
+      where: { id: delayRequest.projectId },
+      select: { name: true },
+    })
+    if (projectForNotif) {
+      notifyDelayReviewed({
+        requesterId: delayRequest.requesterId,
+        projectId: delayRequest.projectId,
+        projectName: projectForNotif.name,
+        approved: body.action === 'approve',
+        reviewNotes: body.reviewNotes,
       })
     }
 

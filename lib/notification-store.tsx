@@ -57,12 +57,14 @@ export function NotificationStoreProvider({ children }: { children: React.ReactN
   }, [user?.id])
 
   useEffect(() => {
-    if (user?.id) {
-      fetchNotifications()
-    } else {
+    if (!user?.id) {
       setNotifications([])
       setLoaded(true)
+      return
     }
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 20000) // poll every 20s
+    return () => clearInterval(interval)
   }, [user?.id, fetchNotifications])
 
   const unreadCount = notifications.filter(n => !n.read).length

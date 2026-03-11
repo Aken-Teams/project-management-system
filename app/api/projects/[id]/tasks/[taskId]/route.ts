@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
+import { notifyTaskAssigned } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> }
@@ -84,6 +85,20 @@ export async function PUT(
       where: { id: taskId },
       data,
     })
+
+    // ── Notify new assignee when assignee changes ──
+    const newAssignee = data.assignee as string | undefined
+    if (newAssignee && newAssignee !== task.assignee && newAssignee.includes('@')) {
+      const project = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      if (project) {
+        notifyTaskAssigned({
+          assigneeEmail: newAssignee,
+          taskTitle: updated.title,
+          projectId: id,
+          projectName: project.name,
+        })
+      }
+    }
 
     // ── Auto-sync milestone status & progress ──
     const milestoneId = updated.milestoneId ?? task.milestoneId

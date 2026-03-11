@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
+import { notifyProjectOverdueIfNeeded } from '@/lib/notifications'
 import {
   projectTypeToDb,
   projectTierToDb,
@@ -48,6 +49,13 @@ export async function GET(
         ;(ms as { progress: number }).progress = correctProgress
       }
     }
+
+    // ── Overdue check: notify PM at most once per 7 days ──
+    notifyProjectOverdueIfNeeded({
+      projectId: id,
+      projectName: project.name,
+      pmId: project.ownerId,
+    })
 
     const feProject = dbProjectToFrontend(project as Parameters<typeof dbProjectToFrontend>[0])
 

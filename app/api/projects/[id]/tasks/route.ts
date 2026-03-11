@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { notifyTaskAssigned } from '@/lib/notifications'
 import type { Priority } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -87,6 +88,16 @@ export async function POST(
         ...(body.parentId ? { parentId: body.parentId } : {}),
       },
     })
+
+    // Notify assignee (fire-and-forget)
+    if (task.assignee) {
+      notifyTaskAssigned({
+        assigneeEmail: task.assignee,
+        taskTitle: task.title,
+        projectId: id,
+        projectName: project.name,
+      })
+    }
 
     return NextResponse.json({
       id: task.id,

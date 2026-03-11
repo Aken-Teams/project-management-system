@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { notifyDelaySubmitted, notifySupportNeeded } from '@/lib/notifications'
 
 // ─── POST /api/delay-requests — Submit a new delay request ────
 
@@ -83,6 +84,28 @@ export async function POST(request: NextRequest) {
       })
       return dr
     })
+
+    // Notify executives (fire-and-forget)
+    const projectForNotif = await prisma.project.findUnique({
+      where: { id: body.projectId },
+      select: { name: true },
+    })
+    if (projectForNotif) {
+      notifyDelaySubmitted({
+        requesterName: requester.name,
+        projectId: body.projectId,
+        projectName: projectForNotif.name,
+      })
+      // Also notify support_needed if supportNeeded text is present
+      if (body.supportNeeded?.trim()) {
+        notifySupportNeeded({
+          requesterName: requester.name,
+          projectId: body.projectId,
+          projectName: projectForNotif.name,
+          detail: body.supportNeeded.trim(),
+        })
+      }
+    }
 
     // Return frontend-friendly format
     return NextResponse.json({
