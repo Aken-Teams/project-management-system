@@ -241,7 +241,7 @@ interface ProjectDraft {
     manualMilestones?: ManualMilestone[]
     manualRisks?: ManualRisk[]
     currentStep?: number
-    // AI mode
+    // AI mode — input fields
     aiProjectType?: ProjectType
     aiProjectTier?: ProjectTier
     aiDemandSource?: DemandSource
@@ -249,6 +249,21 @@ interface ProjectDraft {
     aiExpectedBenefits?: string
     requirements?: string
     parsedData?: ParsedProjectData | null
+    aiProjectNameHint?: string
+    aiDurationMonths?: string
+    aiBudgetRange?: string
+    aiConstraints?: string
+    // AI mode — generated content
+    aiCurrentStep?: number
+    aiEditableData?: {
+      name: string; budget: string; startDate: string; endDate: string
+      purpose: string; scope: string; roi: string; expectedBenefits: string
+    }
+    aiSmartObjective?: { specific: string; measurable: string; achievable: string; relevant: string; timeBound: string }
+    aiMilestones?: AiMilestone[]
+    aiRisks?: Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; probability: 'low' | 'medium' | 'high' }>
+    aiTeamDetails?: TeamMemberDraft[]
+    aiTasks?: MilestoneTaskDraft[]
   }
 }
 
@@ -515,7 +530,7 @@ export default function NewProjectPage() {
   const openSaveDraftDialog = () => {
     const defaultName = activeTab === 'manual'
       ? manualData.name || '未命名專案'
-      : parsedData?.name || requirements.slice(0, 30) || '未命名專案'
+      : aiEditableData.name || requirements.slice(0, 30) || '未命名專案'
 
     setDraftNameInput(defaultName)
     setShowSaveDraftDialog(true)
@@ -535,7 +550,7 @@ export default function NewProjectPage() {
       manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
       manualRisks: activeTab === 'manual' ? manualRisks : undefined,
       currentStep: activeTab === 'manual' ? currentStep : undefined,
-      // AI mode data
+      // AI mode data — input fields
       aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
       aiProjectTier: activeTab === 'ai' ? aiProjectTier : undefined,
       aiDemandSource: activeTab === 'ai' ? aiDemandSource : undefined,
@@ -543,6 +558,18 @@ export default function NewProjectPage() {
       aiExpectedBenefits: activeTab === 'ai' ? aiExpectedBenefits : undefined,
       requirements: activeTab === 'ai' ? requirements : undefined,
       parsedData: activeTab === 'ai' ? parsedData : undefined,
+      aiProjectNameHint: activeTab === 'ai' ? aiProjectNameHint : undefined,
+      aiDurationMonths: activeTab === 'ai' ? aiDurationMonths : undefined,
+      aiBudgetRange: activeTab === 'ai' ? aiBudgetRange : undefined,
+      aiConstraints: activeTab === 'ai' ? aiConstraints : undefined,
+      // AI mode data — generated content
+      aiCurrentStep: activeTab === 'ai' ? aiCurrentStep : undefined,
+      aiEditableData: activeTab === 'ai' ? aiEditableData : undefined,
+      aiSmartObjective: activeTab === 'ai' ? aiSmartObjective : undefined,
+      aiMilestones: activeTab === 'ai' ? aiMilestones : undefined,
+      aiRisks: activeTab === 'ai' ? aiRisks : undefined,
+      aiTeamDetails: activeTab === 'ai' ? aiTeamDetails : undefined,
+      aiTasks: activeTab === 'ai' ? aiTasks : undefined,
     }
 
     try {
@@ -593,6 +620,7 @@ export default function NewProjectPage() {
       if (draft.data.manualRisks) setManualRisks(draft.data.manualRisks)
       if (draft.data.currentStep !== undefined) setCurrentStep(draft.data.currentStep)
     } else if (draft.mode === 'ai') {
+      // Restore input fields
       if (draft.data.aiProjectType) setAiProjectType(draft.data.aiProjectType)
       if (draft.data.aiProjectTier) setAiProjectTier(draft.data.aiProjectTier)
       if (draft.data.aiDemandSource) setAiDemandSource(draft.data.aiDemandSource)
@@ -600,6 +628,18 @@ export default function NewProjectPage() {
       if (draft.data.aiExpectedBenefits) setAiExpectedBenefits(draft.data.aiExpectedBenefits)
       if (draft.data.requirements) setRequirements(draft.data.requirements)
       if (draft.data.parsedData) setParsedData(draft.data.parsedData)
+      if (draft.data.aiProjectNameHint) setAiProjectNameHint(draft.data.aiProjectNameHint)
+      if (draft.data.aiDurationMonths) setAiDurationMonths(draft.data.aiDurationMonths)
+      if (draft.data.aiBudgetRange) setAiBudgetRange(draft.data.aiBudgetRange)
+      if (draft.data.aiConstraints) setAiConstraints(draft.data.aiConstraints)
+      // Restore generated content
+      if (draft.data.aiEditableData) setAiEditableData(draft.data.aiEditableData)
+      if (draft.data.aiSmartObjective) setAiSmartObjective(draft.data.aiSmartObjective)
+      if (draft.data.aiMilestones) setAiMilestones(draft.data.aiMilestones)
+      if (draft.data.aiRisks) setAiRisks(draft.data.aiRisks)
+      if (draft.data.aiTeamDetails) setAiTeamDetails(draft.data.aiTeamDetails)
+      if (draft.data.aiTasks) setAiTasks(draft.data.aiTasks)
+      if (draft.data.aiCurrentStep !== undefined) setAiCurrentStep(draft.data.aiCurrentStep)
     }
 
     setShowDraftsDialog(false)
@@ -874,7 +914,7 @@ export default function NewProjectPage() {
       // Populate basic info
       setAiEditableData({
         name: plan.name ?? '',
-        budget: plan.budget ? String(Math.round(plan.budget / 1000000)) : '',
+        budget: plan.budget ? String(Math.round(plan.budget)) : '',
         startDate: plan.startDate ?? '',
         endDate: plan.endDate ?? '',
         purpose: plan.purpose ?? '',
@@ -1025,7 +1065,7 @@ export default function NewProjectPage() {
           smartObjective: aiSmartObjective,
           startDate: aiEditableData.startDate,
           endDate: aiEditableData.endDate,
-          budget: Number(aiEditableData.budget) * 1000000 || 0,
+          budget: Number(aiEditableData.budget) || 0,
           ownerName,
           team: teamNames,
           milestones,
@@ -1239,35 +1279,31 @@ export default function NewProjectPage() {
                     {savedDrafts.map((draft) => (
                       <div
                         key={draft.id}
-                        className="flex items-start justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-accent transition-colors"
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent transition-colors"
                       >
+                        {/* Left: info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium truncate">{draft.title}</h4>
-                            <Badge variant={draft.mode === 'ai' ? 'default' : 'secondary'} className="text-sm">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant={draft.mode === 'ai' ? 'default' : 'secondary'} className="text-xs shrink-0">
                               {draft.mode === 'ai' ? 'AI 模式' : '手動模式'}
                             </Badge>
+                            <h4 className="font-medium text-sm truncate">{draft.title}</h4>
                           </div>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {new Date(draft.updatedAt).toLocaleString('zh-TW')}
-                            </span>
-                          </div>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <Clock className="h-3 w-3 shrink-0" />
+                            {new Date(draft.updatedAt).toLocaleString('zh-TW')}
+                          </span>
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => loadDraft(draft)}
-                          >
+                        {/* Right: actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="sm" variant="default" onClick={() => loadDraft(draft)}>
                             載入
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => deleteDraft(draft.id)}
-                            className="text-destructive hover:text-destructive"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1510,8 +1546,12 @@ export default function NewProjectPage() {
                               </div>
                               <p className="text-xs text-muted-foreground">{tpl.description}</p>
                               <div className="flex flex-wrap gap-1 pt-0.5">
-                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.projectType}</span>
-                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.projectTier}</span>
+                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                  {projectTypes.find(t => t.key === tpl.projectType)?.label ?? tpl.projectType}
+                                </span>
+                                <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                  {PROJECT_TIER_LABELS[tpl.projectTier as ProjectTier] ?? tpl.projectTier}
+                                </span>
                                 <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.durationMonths} 個月</span>
                                 <span className="inline-flex items-center rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tpl.budgetRange}</span>
                               </div>
@@ -1677,7 +1717,7 @@ export default function NewProjectPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="ai-budget">投資預算 (百萬元)</Label>
+                      <Label htmlFor="ai-budget">投資預算（元）</Label>
                       <Input
                         id="ai-budget"
                         type="number"
