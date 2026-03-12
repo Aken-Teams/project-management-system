@@ -30,16 +30,7 @@ export async function GET() {
   }
 }
 
-// ─── Project code prefix map ─────────────────────────────
-const CODE_PREFIX: Record<string, string> = {
-  npi: 'NPI',
-  cost_optimization: 'CST',
-  quality_improvement: 'QAL',
-  automation: 'AUT',
-  product_strategy: 'PST',
-  process_optimization: 'PRC',
-  external_requirement: 'EXT',
-}
+import { generateCodePrefix, BUILTIN_CODE_PREFIX } from '@/lib/code-prefix'
 
 // ─── Request body types ──────────────────────────────────
 interface CreateProjectBody {
@@ -138,7 +129,14 @@ export async function POST(request: NextRequest) {
 
     // ─── Generate project code (atomic) ────────────────
     const currentYear = new Date().getFullYear()
-    const prefix = CODE_PREFIX[dbProjectType] || 'PRJ'
+    // Look up prefix from DB first, then fallback to built-in map, then auto-generate
+    const typeConfig = await prisma.projectTypeConfig.findUnique({
+      where: { key: dbProjectType },
+      select: { codePrefix: true, label: true },
+    })
+    const prefix = typeConfig?.codePrefix
+      ?? BUILTIN_CODE_PREFIX[dbProjectType]
+      ?? generateCodePrefix(typeConfig?.label ?? dbProjectType)
 
     // When no sequence record exists (e.g. after a DB migration), initialize
     // from the highest existing project code to avoid unique constraint conflicts

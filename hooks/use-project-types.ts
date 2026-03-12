@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 export interface ProjectTypeOption {
   key: string
   label: string
+  codePrefix: string
 }
 
 export function useProjectTypes() {

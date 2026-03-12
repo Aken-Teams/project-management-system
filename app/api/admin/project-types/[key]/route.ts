@@ -17,7 +17,7 @@ export async function PUT(
   }
 
   const { key } = await params
-  const { label } = await request.json()
+  const { label, codePrefix } = await request.json()
 
   if (!label?.trim()) {
     return NextResponse.json({ error: '類型名稱為必填' }, { status: 400 })
@@ -28,9 +28,28 @@ export async function PUT(
     return NextResponse.json({ error: '找不到此專案類型' }, { status: 404 })
   }
 
+  // Validate and sanitize codePrefix
+  const cleanPrefix = codePrefix?.trim()?.toUpperCase()?.replace(/[^A-Z0-9]/g, '')?.slice(0, 8)
+
+  // Check prefix uniqueness if changed
+  if (cleanPrefix && cleanPrefix !== existing.codePrefix) {
+    const conflict = await prisma.projectTypeConfig.findFirst({
+      where: { codePrefix: cleanPrefix, key: { not: key } },
+    })
+    if (conflict) {
+      return NextResponse.json(
+        { error: `代碼前綴「${cleanPrefix}」已被「${conflict.label}」使用` },
+        { status: 400 },
+      )
+    }
+  }
+
   const updated = await prisma.projectTypeConfig.update({
     where: { key },
-    data: { label: label.trim() },
+    data: {
+      label: label.trim(),
+      ...(cleanPrefix ? { codePrefix: cleanPrefix } : {}),
+    },
   })
 
   return NextResponse.json(updated)

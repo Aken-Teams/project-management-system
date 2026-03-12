@@ -526,12 +526,13 @@ model MilestoneTemplateTask {
 }
 
 model ProjectTypeConfig {
-  key       String   @id @db.VarChar(100)
-  label     String   @db.VarChar(100)
-  isBuiltIn Boolean  @default(false) @map("is_built_in")
-  sortOrder Int      @default(0) @map("sort_order")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  key        String   @id @db.VarChar(100)
+  label      String   @db.VarChar(100)
+  codePrefix String?  @db.VarChar(10) @map("code_prefix")
+  isBuiltIn  Boolean  @default(false) @map("is_built_in")
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("project_type_configs")
 }

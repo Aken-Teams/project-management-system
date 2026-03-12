@@ -21,10 +21,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Plus, Trash2, Pencil, ChevronDown, ChevronRight, ListTodo, ChevronsUpDown } from 'lucide-react'
+import { generateCodePrefix } from '@/lib/code-prefix'
 
 interface ProjectTypeConfig {
   key: string
   label: string
+  codePrefix?: string
   sortOrder: number
 }
 
@@ -89,10 +91,15 @@ export default function AdminProjectSettingsPage() {
   // Project type CRUD dialogs
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [addLabel, setAddLabel] = useState('')
+  const [addPrefix, setAddPrefix] = useState('')
+  const [addPrefixTouched, setAddPrefixTouched] = useState(false)
   const [addSaving, setAddSaving] = useState(false)
 
-  const [editDialog, setEditDialog] = useState<{ key: string; label: string } | null>(null)
+  const [editDialog, setEditDialog] = useState<{ key: string; label: string; codePrefix?: string } | null>(null)
   const [editLabel, setEditLabel] = useState('')
+  const [editPrefix, setEditPrefix] = useState('')
+  const [editPrefixChanged, setEditPrefixChanged] = useState(false)
+  const [editProjectCount, setEditProjectCount] = useState(0)
   const [editSaving, setEditSaving] = useState(false)
 
   const [deleteDialog, setDeleteDialog] = useState<{ key: string; label: string } | null>(null)
@@ -322,17 +329,19 @@ export default function AdminProjectSettingsPage() {
 
   // ── Project type CRUD ─────────────────────────────────
   const handleAdd = async () => {
-    if (!addLabel.trim()) return
+    if (!addLabel.trim() || !addPrefix.trim()) return
     setAddSaving(true)
     try {
       const res = await fetch('/api/admin/project-types', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers() },
-        body: JSON.stringify({ label: addLabel.trim() }),
+        body: JSON.stringify({ label: addLabel.trim(), codePrefix: addPrefix.trim().toUpperCase() }),
       })
       if (res.ok) {
         setAddDialogOpen(false)
         setAddLabel('')
+        setAddPrefix('')
+        setAddPrefixTouched(false)
         toast({ title: '已新增', description: `專案類型「${addLabel.trim()}」已建立` })
         await loadData()
       } else {
@@ -345,17 +354,17 @@ export default function AdminProjectSettingsPage() {
   }
 
   const handleEdit = async () => {
-    if (!editDialog || !editLabel.trim()) return
+    if (!editDialog || !editLabel.trim() || !editPrefix.trim()) return
     setEditSaving(true)
     try {
       const res = await fetch(`/api/admin/project-types/${editDialog.key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers() },
-        body: JSON.stringify({ label: editLabel.trim() }),
+        body: JSON.stringify({ label: editLabel.trim(), codePrefix: editPrefix.trim().toUpperCase() }),
       })
       if (res.ok) {
         setEditDialog(null)
-        toast({ title: '已更新', description: `名稱已更新為「${editLabel.trim()}」` })
+        toast({ title: '已更新', description: `專案類型已更新` })
         await loadData()
         if (selected === editDialog.key) {
           setDetail(prev => prev ? { ...prev } : null)
@@ -430,14 +439,32 @@ export default function AdminProjectSettingsPage() {
                     }`}
                     onClick={() => selectType(pt.key)}
                   >
-                    <span className="truncate flex-1">{pt.label}</span>
+                    <span className="truncate flex-1">
+                      {pt.label}
+                      {pt.codePrefix && (
+                        <span className={`ml-1.5 text-[10px] font-mono px-1 py-0.5 rounded ${isSelected ? 'bg-white/20' : 'bg-muted text-muted-foreground'}`}>
+                          {pt.codePrefix}
+                        </span>
+                      )}
+                    </span>
                     <div className={`flex items-center gap-0.5 shrink-0 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
                       onClick={e => e.stopPropagation()}
                     >
                       <button
                         className={`h-6 w-6 flex items-center justify-center rounded hover:bg-black/10 ${isSelected ? 'text-primary-foreground' : 'text-muted-foreground'}`}
                         title="編輯名稱"
-                        onClick={() => { setEditDialog({ key: pt.key, label: pt.label }); setEditLabel(pt.label) }}
+                        onClick={async () => {
+                          setEditDialog({ key: pt.key, label: pt.label, codePrefix: pt.codePrefix })
+                          setEditLabel(pt.label)
+                          setEditPrefix(pt.codePrefix ?? '')
+                          setEditPrefixChanged(false)
+                          // Fetch existing project count for this type
+                          try {
+                            const res = await fetch(`/api/admin/project-types/${pt.key}/count`, { headers: headers() })
+                            if (res.ok) { const d = await res.json(); setEditProjectCount(d.count ?? 0) }
+                            else setEditProjectCount(0)
+                          } catch { setEditProjectCount(0) }
+                        }}
                       >
                         <Pencil className="h-3 w-3" />
                       </button>
@@ -742,23 +769,50 @@ export default function AdminProjectSettingsPage() {
       </div>
 
       {/* Add project type dialog */}
-      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+      <Dialog open={addDialogOpen} onOpenChange={open => {
+        setAddDialogOpen(open)
+        if (!open) { setAddLabel(''); setAddPrefix(''); setAddPrefixTouched(false) }
+      }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>新增專案類型</DialogTitle>
           </DialogHeader>
-          <div className="py-2">
-            <Input
-              placeholder="例如：客製化專案"
-              value={addLabel}
-              onChange={e => setAddLabel(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !addSaving && handleAdd()}
-              autoFocus
-            />
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-sm font-medium mb-1 block">類型名稱</label>
+              <Input
+                placeholder="例如：客製化專案"
+                value={addLabel}
+                onChange={e => {
+                  const val = e.target.value
+                  setAddLabel(val)
+                  if (!addPrefixTouched) {
+                    setAddPrefix(generateCodePrefix(val))
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">專案代碼前綴</label>
+              <Input
+                placeholder="例如：APQP（2~8 碼英數字）"
+                value={addPrefix}
+                onChange={e => {
+                  setAddPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))
+                  setAddPrefixTouched(true)
+                }}
+                onKeyDown={e => e.key === 'Enter' && !addSaving && handleAdd()}
+                maxLength={8}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                用於專案代碼，如 <span className="font-mono">{addPrefix || 'XXX'}-2026-001</span>
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={addSaving}>取消</Button>
-            <Button onClick={handleAdd} disabled={addSaving || !addLabel.trim()}>
+            <Button onClick={handleAdd} disabled={addSaving || !addLabel.trim() || !addPrefix.trim()}>
               {addSaving ? '新增中...' : '新增'}
             </Button>
           </DialogFooter>
@@ -767,21 +821,50 @@ export default function AdminProjectSettingsPage() {
 
       {/* Edit project type dialog */}
       <Dialog open={!!editDialog} onOpenChange={open => !open && setEditDialog(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>編輯專案類型名稱</DialogTitle>
+            <DialogTitle>編輯專案類型</DialogTitle>
           </DialogHeader>
-          <div className="py-2">
-            <Input
-              value={editLabel}
-              onChange={e => setEditLabel(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !editSaving && handleEdit()}
-              autoFocus
-            />
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-sm font-medium mb-1 block">類型名稱</label>
+              <Input
+                value={editLabel}
+                onChange={e => setEditLabel(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">專案代碼前綴</label>
+              <Input
+                value={editPrefix}
+                onChange={e => {
+                  const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+                  setEditPrefix(val)
+                  setEditPrefixChanged(val !== (editDialog?.codePrefix ?? ''))
+                }}
+                onKeyDown={e => e.key === 'Enter' && !editSaving && handleEdit()}
+                maxLength={8}
+                placeholder="2~8 碼英數字"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                專案代碼格式：<span className="font-mono">{editPrefix || 'XXX'}-2026-001</span>
+              </p>
+            </div>
+            {editPrefixChanged && editProjectCount > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p className="font-medium">注意：此類型已有 {editProjectCount} 個專案</p>
+                <p className="mt-0.5 text-xs">
+                  修改前綴後，未來新建的專案代碼將使用「<span className="font-mono font-medium">{editPrefix}</span>」，
+                  但已建立的專案代碼（如 <span className="font-mono">{editDialog?.codePrefix}-2026-001</span>）不會變更，
+                  可能導致同類型專案編號不一致。
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialog(null)} disabled={editSaving}>取消</Button>
-            <Button onClick={handleEdit} disabled={editSaving || !editLabel.trim()}>
+            <Button onClick={handleEdit} disabled={editSaving || !editLabel.trim() || !editPrefix.trim()}>
               {editSaving ? '儲存中...' : '儲存'}
             </Button>
           </DialogFooter>

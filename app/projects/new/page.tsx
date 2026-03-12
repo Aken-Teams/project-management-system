@@ -25,7 +25,7 @@ import { useToast } from '@/hooks/use-toast'
 import { type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
+import { PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { MILESTONE_TEMPLATES, type MilestoneTemplate } from '@/lib/milestone-templates'
 import { TimelineTable } from '@/components/timeline-table'
@@ -671,17 +671,10 @@ export default function NewProjectPage() {
   }
 
   const updateProjectCodePreview = (type: ProjectType) => {
-    const prefix: Record<ProjectType, string> = {
-      npi: 'NPI',
-      'cost-optimization': 'CST',
-      'quality-improvement': 'QAL',
-      automation: 'AUT',
-      'product-strategy': 'PST',
-      'process-optimization': 'PRC',
-      'external-requirement': 'EXT',
-    }
+    const match = projectTypes.find(pt => pt.key === type)
+    const prefix = match?.codePrefix ?? 'PRJ'
     const year = new Date().getFullYear()
-    setPreviewCode(`${prefix[type]}-${year}-XXX`)
+    setPreviewCode(`${prefix}-${year}-XXX`)
   }
 
   const applyMilestoneTemplate = async (type: ProjectType, mode: 'manual' | 'ai') => {
