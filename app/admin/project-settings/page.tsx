@@ -13,7 +13,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Trash2, RotateCcw, Pencil } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Plus, Trash2, RotateCcw, Pencil, ChevronDown, ChevronRight, ListTodo } from 'lucide-react'
 
 interface ProjectTypeConfig {
   key: string
@@ -28,10 +35,26 @@ interface TemplateSummary {
   isCustomized: boolean
 }
 
+interface TemplateSubtaskRow {
+  id?: string
+  title: string
+  durationDays: number
+  priority: string
+}
+
+interface TemplateTaskRow {
+  id?: string
+  title: string
+  durationDays: number
+  priority: string
+  children: TemplateSubtaskRow[]
+}
+
 interface TemplateRow {
   id?: string
   name: string
   durationDays: number
+  tasks: TemplateTaskRow[]
 }
 
 interface TypeDetail {
@@ -54,6 +77,11 @@ export default function AdminProjectSettingsPage() {
   const [editing, setEditing] = useState<TemplateRow[]>([])
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Expanded milestone indices (for task editing)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  // Expanded task indices (for subtask editing), key = "milestoneIdx-taskIdx"
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
 
   // Project type CRUD dialogs
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -89,21 +117,118 @@ export default function AdminProjectSettingsPage() {
     if (!user) return
     setSelected(key)
     setLoadingDetail(true)
+    setExpanded(new Set())
+    setExpandedTasks(new Set())
     try {
       const res = await fetch(`/api/admin/milestone-templates/${key}`, { headers: headers() })
       const data: TypeDetail = await res.json()
       setDetail(data)
-      setEditing(data.templates.map(t => ({ ...t })))
+      setEditing(data.templates.map(t => ({
+        ...t,
+        tasks: t.tasks?.map(tk => ({
+          ...tk,
+          children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c })) ?? [],
+        })) ?? [],
+      })))
     } finally {
       setLoadingDetail(false)
     }
   }
 
   // ── Template row actions ──────────────────────────────
-  const addRow = () => setEditing(prev => [...prev, { name: '', durationDays: 14 }])
-  const removeRow = (i: number) => setEditing(prev => prev.filter((_, idx) => idx !== i))
+  const addRow = () => setEditing(prev => [...prev, { name: '', durationDays: 14, tasks: [] }])
+  const removeRow = (i: number) => {
+    setEditing(prev => prev.filter((_, idx) => idx !== i))
+    setExpanded(prev => {
+      const next = new Set<number>()
+      prev.forEach(idx => { if (idx < i) next.add(idx); else if (idx > i) next.add(idx - 1) })
+      return next
+    })
+  }
   const updateRow = (i: number, field: 'name' | 'durationDays', value: string | number) =>
     setEditing(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
+
+  // ── Task row actions ──────────────────────────────────
+  const toggleExpand = (i: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
+  }
+
+  const addTask = (milestoneIdx: number) => {
+    setEditing(prev => prev.map((r, idx) =>
+      idx === milestoneIdx
+        ? { ...r, tasks: [...r.tasks, { title: '', durationDays: 1, priority: 'medium', children: [] }] }
+        : r
+    ))
+    setExpanded(prev => new Set(prev).add(milestoneIdx))
+  }
+
+  const removeTask = (milestoneIdx: number, taskIdx: number) => {
+    setEditing(prev => prev.map((r, idx) =>
+      idx === milestoneIdx
+        ? { ...r, tasks: r.tasks.filter((_, ti) => ti !== taskIdx) }
+        : r
+    ))
+  }
+
+  const updateTask = (milestoneIdx: number, taskIdx: number, field: keyof TemplateTaskRow, value: string | number) => {
+    setEditing(prev => prev.map((r, idx) =>
+      idx === milestoneIdx
+        ? { ...r, tasks: r.tasks.map((t, ti) => ti === taskIdx ? { ...t, [field]: value } : t) }
+        : r
+    ))
+  }
+
+  // ── Subtask row actions ────────────────────────────────
+  const toggleExpandTask = (milestoneIdx: number, taskIdx: number) => {
+    const key = `${milestoneIdx}-${taskIdx}`
+    setExpandedTasks(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
+  const addSubtask = (milestoneIdx: number, taskIdx: number) => {
+    setEditing(prev => prev.map((r, mi) =>
+      mi === milestoneIdx
+        ? { ...r, tasks: r.tasks.map((t, ti) =>
+            ti === taskIdx
+              ? { ...t, children: [...t.children, { title: '', durationDays: 1, priority: 'medium' }] }
+              : t
+          )}
+        : r
+    ))
+    setExpandedTasks(prev => new Set(prev).add(`${milestoneIdx}-${taskIdx}`))
+    setExpanded(prev => new Set(prev).add(milestoneIdx))
+  }
+
+  const removeSubtask = (milestoneIdx: number, taskIdx: number, subtaskIdx: number) => {
+    setEditing(prev => prev.map((r, mi) =>
+      mi === milestoneIdx
+        ? { ...r, tasks: r.tasks.map((t, ti) =>
+            ti === taskIdx
+              ? { ...t, children: t.children.filter((_, si) => si !== subtaskIdx) }
+              : t
+          )}
+        : r
+    ))
+  }
+
+  const updateSubtask = (milestoneIdx: number, taskIdx: number, subtaskIdx: number, field: keyof TemplateSubtaskRow, value: string | number) => {
+    setEditing(prev => prev.map((r, mi) =>
+      mi === milestoneIdx
+        ? { ...r, tasks: r.tasks.map((t, ti) =>
+            ti === taskIdx
+              ? { ...t, children: t.children.map((c, si) => si === subtaskIdx ? { ...c, [field]: value } : c) }
+              : t
+          )}
+        : r
+    ))
+  }
 
   const save = async () => {
     if (!user || !selected) return
@@ -111,17 +236,51 @@ export default function AdminProjectSettingsPage() {
       toast({ title: '請填寫所有里程碑名稱', variant: 'destructive' })
       return
     }
+    // Validate task and subtask names
+    for (const row of editing) {
+      if (row.tasks.some(t => !t.title.trim())) {
+        toast({ title: '請填寫所有任務名稱', variant: 'destructive' })
+        return
+      }
+      for (const task of row.tasks) {
+        if (task.children.some(c => !c.title.trim())) {
+          toast({ title: '請填寫所有子任務名稱', variant: 'destructive' })
+          return
+        }
+      }
+    }
     setSaving(true)
     try {
       const res = await fetch(`/api/admin/milestone-templates/${selected}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers() },
-        body: JSON.stringify({ templates: editing.map(r => ({ name: r.name, durationDays: Number(r.durationDays) })) }),
+        body: JSON.stringify({
+          templates: editing.map(r => ({
+            name: r.name,
+            durationDays: Number(r.durationDays),
+            tasks: r.tasks.map(t => ({
+              title: t.title,
+              durationDays: Number(t.durationDays),
+              priority: t.priority,
+              children: t.children.map(c => ({
+                title: c.title,
+                durationDays: Number(c.durationDays),
+                priority: c.priority,
+              })),
+            })),
+          })),
+        }),
       })
       if (res.ok) {
         const data: TypeDetail = await res.json()
         setDetail(data)
-        setEditing(data.templates.map(t => ({ ...t })))
+        setEditing(data.templates.map(t => ({
+          ...t,
+          tasks: t.tasks?.map(tk => ({
+            ...tk,
+            children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c })) ?? [],
+          })) ?? [],
+        })))
         const label = projectTypes.find(pt => pt.key === selected)?.label ?? selected
         setSummaries(prev => prev.map(s =>
           s.projectType === selected ? { ...s, isCustomized: data.isCustomized, count: data.templates.length } : s
@@ -145,7 +304,15 @@ export default function AdminProjectSettingsPage() {
       if (res.ok) {
         const data: TypeDetail = await res.json()
         setDetail(data)
-        setEditing(data.templates.map(t => ({ ...t })))
+        setEditing(data.templates.map(t => ({
+          ...t,
+          tasks: t.tasks?.map(tk => ({
+            ...tk,
+            children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c })) ?? [],
+          })) ?? [],
+        })))
+        setExpanded(new Set())
+        setExpandedTasks(new Set())
         setSummaries(prev => prev.map(s =>
           s.projectType === selected ? { ...s, isCustomized: false, count: data.templates.length } : s
         ))
@@ -193,7 +360,6 @@ export default function AdminProjectSettingsPage() {
         setEditDialog(null)
         toast({ title: '已更新', description: `名稱已更新為「${editLabel.trim()}」` })
         await loadData()
-        // If currently selected, update label in detail
         if (selected === editDialog.key) {
           setDetail(prev => prev ? { ...prev } : null)
         }
@@ -268,7 +434,6 @@ export default function AdminProjectSettingsPage() {
                     onClick={() => selectType(pt.key)}
                   >
                     <span className="truncate flex-1">{pt.label}</span>
-                    {/* Action buttons (visible on hover or when selected) */}
                     <div className={`flex items-center gap-0.5 shrink-0 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}
                       onClick={e => e.stopPropagation()}
                     >
@@ -323,39 +488,222 @@ export default function AdminProjectSettingsPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1">
               {loadingDetail ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">載入中...</p>
               ) : (
                 <>
-                  <div className="grid grid-cols-[1fr_100px_36px] gap-2 text-xs text-muted-foreground px-1 mb-1">
+                  <div className="grid grid-cols-[24px_1fr_80px_36px_36px] gap-2 text-xs text-muted-foreground px-1 mb-1">
+                    <span />
                     <span>里程碑名稱</span>
                     <span>天數</span>
                     <span />
+                    <span />
                   </div>
                   {editing.map((row, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_100px_36px] gap-2 items-center">
-                      <Input
-                        value={row.name}
-                        onChange={e => updateRow(i, 'name', e.target.value)}
-                        placeholder="里程碑名稱"
-                        className="h-8 text-sm"
-                      />
-                      <Input
-                        type="number"
-                        min={1}
-                        value={row.durationDays}
-                        onChange={e => updateRow(i, 'durationDays', parseInt(e.target.value) || 1)}
-                        className="h-8 text-sm"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeRow(i)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                    <div key={i}>
+                      {/* Milestone row */}
+                      <div className="grid grid-cols-[24px_1fr_80px_36px_36px] gap-2 items-center bg-slate-50 rounded-md px-1 py-0.5">
+                        <button
+                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground"
+                          onClick={() => toggleExpand(i)}
+                          title={expanded.has(i) ? '收合任務' : '展開任務'}
+                        >
+                          {expanded.has(i) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                        <Input
+                          value={row.name}
+                          onChange={e => updateRow(i, 'name', e.target.value)}
+                          placeholder="里程碑名稱"
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          type="number"
+                          min={1}
+                          value={row.durationDays}
+                          onChange={e => updateRow(i, 'durationDays', parseInt(e.target.value) || 1)}
+                          className="h-8 text-sm"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                          onClick={() => addTask(i)}
+                          title="新增任務"
+                        >
+                          <ListTodo className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeRow(i)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+
+                      {/* Task count badge (when collapsed) */}
+                      {!expanded.has(i) && row.tasks.length > 0 && (
+                        <button
+                          className="ml-8 mt-0.5 mb-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                          onClick={() => toggleExpand(i)}
+                        >
+                          <ListTodo className="h-3 w-3" />
+                          {row.tasks.length} 個任務
+                        </button>
+                      )}
+
+                      {/* Expanded task list */}
+                      {expanded.has(i) && (
+                        <div className="ml-8 mt-1 mb-2 pl-3 border-l-2 border-blue-200 space-y-1">
+                          {row.tasks.length > 0 && (
+                            <div className="grid grid-cols-[20px_1fr_70px_90px_28px_28px] gap-1.5 text-[11px] text-muted-foreground px-0.5">
+                              <span />
+                              <span>任務名稱</span>
+                              <span>天數</span>
+                              <span>優先級</span>
+                              <span />
+                              <span />
+                            </div>
+                          )}
+                          {row.tasks.map((task, j) => (
+                            <div key={j}>
+                              {/* Task row */}
+                              <div className="grid grid-cols-[20px_1fr_70px_90px_28px_28px] gap-1.5 items-center bg-blue-50/60 rounded px-1 py-0.5">
+                                <button
+                                  className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground"
+                                  onClick={() => toggleExpandTask(i, j)}
+                                  title={expandedTasks.has(`${i}-${j}`) ? '收合子任務' : '展開子任務'}
+                                >
+                                  {expandedTasks.has(`${i}-${j}`) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </button>
+                                <Input
+                                  value={task.title}
+                                  onChange={e => updateTask(i, j, 'title', e.target.value)}
+                                  placeholder="任務名稱"
+                                  className="h-7 text-xs"
+                                />
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={task.durationDays}
+                                  onChange={e => updateTask(i, j, 'durationDays', parseInt(e.target.value) || 1)}
+                                  className="h-7 text-xs"
+                                />
+                                <Select
+                                  value={task.priority}
+                                  onValueChange={v => updateTask(i, j, 'priority', v)}
+                                >
+                                  <SelectTrigger className="h-7 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="high">高</SelectItem>
+                                    <SelectItem value="medium">中</SelectItem>
+                                    <SelectItem value="low">低</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                                  onClick={() => addSubtask(i, j)}
+                                  title="新增子任務"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                  onClick={() => removeTask(i, j)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+
+                              {/* Subtask count badge (when collapsed) */}
+                              {!expandedTasks.has(`${i}-${j}`) && task.children.length > 0 && (
+                                <button
+                                  className="ml-7 mt-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                  onClick={() => toggleExpandTask(i, j)}
+                                >
+                                  {task.children.length} 個子任務
+                                </button>
+                              )}
+
+                              {/* Expanded subtask list */}
+                              {expandedTasks.has(`${i}-${j}`) && (
+                                <div className="ml-7 mt-1 mb-1 pl-3 border-l-2 border-muted space-y-1">
+                                  {task.children.length > 0 && (
+                                    <div className="grid grid-cols-[1fr_70px_90px_28px] gap-1.5 text-[11px] text-muted-foreground px-0.5">
+                                      <span>子任務名稱</span>
+                                      <span>天數</span>
+                                      <span>優先級</span>
+                                      <span />
+                                    </div>
+                                  )}
+                                  {task.children.map((subtask, k) => (
+                                    <div key={k} className="grid grid-cols-[1fr_70px_90px_28px] gap-1.5 items-center bg-amber-50/50 rounded px-1 py-0.5">
+                                      <Input
+                                        value={subtask.title}
+                                        onChange={e => updateSubtask(i, j, k, 'title', e.target.value)}
+                                        placeholder="子任務名稱"
+                                        className="h-7 text-xs"
+                                      />
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        value={subtask.durationDays}
+                                        onChange={e => updateSubtask(i, j, k, 'durationDays', parseInt(e.target.value) || 1)}
+                                        className="h-7 text-xs"
+                                      />
+                                      <Select
+                                        value={subtask.priority}
+                                        onValueChange={v => updateSubtask(i, j, k, 'priority', v)}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="high">高</SelectItem>
+                                          <SelectItem value="medium">中</SelectItem>
+                                          <SelectItem value="low">低</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                        onClick={() => removeSubtask(i, j, k)}
+                                      >
+                                        <Trash2 className="h-2.5 w-2.5" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                                    onClick={() => addSubtask(i, j)}
+                                  >
+                                    <Plus className="h-2.5 w-2.5" />新增子任務
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                            onClick={() => addTask(i)}
+                          >
+                            <Plus className="h-3 w-3" />新增任務
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   <Button variant="outline" size="sm" className="h-8 text-xs gap-1 mt-2" onClick={addRow}>

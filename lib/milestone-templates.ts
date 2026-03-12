@@ -1,6 +1,14 @@
+export interface MilestoneTemplateTaskDef {
+  title: string
+  durationDays: number
+  priority: 'low' | 'medium' | 'high'
+  children?: MilestoneTemplateTaskDef[]
+}
+
 export interface MilestoneTemplate {
   name: string
   durationDays: number
+  tasks?: MilestoneTemplateTaskDef[]
 }
 
 export const MILESTONE_TEMPLATES: Record<string, MilestoneTemplate[]> = {
@@ -69,9 +77,29 @@ export async function getMilestoneTemplates(
   const dbRows = await prisma.milestoneTemplateConfig.findMany({
     where: { projectType: dbType },
     orderBy: { sortOrder: 'asc' },
+    include: {
+      tasks: {
+        where: { parentId: null },
+        orderBy: { sortOrder: 'asc' },
+        include: { children: { orderBy: { sortOrder: 'asc' } } },
+      },
+    },
   })
   if (dbRows.length > 0) {
-    return dbRows.map(r => ({ name: r.name, durationDays: r.durationDays }))
+    return dbRows.map(r => ({
+      name: r.name,
+      durationDays: r.durationDays,
+      tasks: r.tasks.length > 0
+        ? r.tasks.map(t => ({
+            title: t.title,
+            durationDays: t.durationDays,
+            priority: t.priority as 'low' | 'medium' | 'high',
+            children: t.children.length > 0
+              ? t.children.map(c => ({ title: c.title, durationDays: c.durationDays, priority: c.priority as 'low' | 'medium' | 'high' }))
+              : undefined,
+          }))
+        : undefined,
+    }))
   }
   return MILESTONE_TEMPLATES[feType] ?? MILESTONE_TEMPLATES[projectType] ?? []
 }

@@ -501,9 +501,28 @@ model MilestoneTemplateConfig {
   sortOrder    Int      @default(0) @map("sort_order")
   name         String
   durationDays Int      @default(14) @map("duration_days")
+  tasks        MilestoneTemplateTask[]
 
   @@index([projectType, sortOrder])
   @@map("milestone_template_configs")
+}
+
+model MilestoneTemplateTask {
+  id                  String   @id @default(cuid())
+  milestoneTemplateId String   @map("milestone_template_id")
+  parentId            String?  @map("parent_id")
+  sortOrder           Int      @default(0) @map("sort_order")
+  title               String
+  durationDays        Int      @default(1) @map("duration_days")
+  priority            String   @default("medium")
+
+  milestoneTemplate   MilestoneTemplateConfig @relation(fields: [milestoneTemplateId], references: [id], onDelete: Cascade)
+  parent              MilestoneTemplateTask?  @relation("TemplateTaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children            MilestoneTemplateTask[] @relation("TemplateTaskTree")
+
+  @@index([milestoneTemplateId, sortOrder])
+  @@index([parentId])
+  @@map("milestone_template_tasks")
 }
 
 model ProjectTypeConfig {

@@ -27,7 +27,7 @@ import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, generateProjectCode, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
-import { MILESTONE_TEMPLATES } from '@/lib/milestone-templates'
+import { MILESTONE_TEMPLATES, type MilestoneTemplate } from '@/lib/milestone-templates'
 import { TimelineTable } from '@/components/timeline-table'
 import { TeamMemberTable } from '@/components/team-member-table'
 import { VoiceInputButton } from '@/components/voice-input-button'
@@ -684,25 +684,91 @@ export default function NewProjectPage() {
     setPreviewCode(`${prefix[type]}-${year}-XXX`)
   }
 
-  const applyMilestoneTemplate = (type: ProjectType, mode: 'manual' | 'ai') => {
-    const template = MILESTONE_TEMPLATES[type]
-    if (!template) return
+  const applyMilestoneTemplate = async (type: ProjectType, mode: 'manual' | 'ai') => {
+    // Try fetching from API (includes DB-customized tasks), fallback to hardcoded
+    let templates: MilestoneTemplate[]
+    try {
+      const res = await fetch(`/api/milestone-templates/${type}`)
+      if (res.ok) {
+        const data = await res.json()
+        templates = data.templates
+      } else {
+        templates = MILESTONE_TEMPLATES[type] ?? []
+      }
+    } catch {
+      templates = MILESTONE_TEMPLATES[type] ?? []
+    }
+    if (!templates.length) return
+
+    const now = Date.now()
     if (mode === 'manual') {
-      const newMilestones = template.map((t, i) => ({
-        id: `milestone-${Date.now()}-${i}`,
+      const newMilestones = templates.map((t, i) => ({
+        id: `milestone-${now}-${i}`,
         name: t.name,
         durationDays: t.durationDays,
       }))
+      const newTasks: MilestoneTaskDraft[] = []
+      templates.forEach((t, i) => {
+        (t.tasks ?? []).forEach((task, j) => {
+          const taskId = `task-${now}-${i}-${j}`
+          newTasks.push({
+            id: taskId,
+            milestoneId: `milestone-${now}-${i}`,
+            title: task.title,
+            assignee: '',
+            priority: task.priority,
+            durationDays: task.durationDays,
+          })
+          // Add subtasks (children)
+          ;(task.children ?? []).forEach((child, k) => {
+            newTasks.push({
+              id: `task-${now}-${i}-${j}-${k}`,
+              milestoneId: `milestone-${now}-${i}`,
+              parentId: taskId,
+              title: child.title,
+              assignee: '',
+              priority: child.priority,
+              durationDays: child.durationDays,
+            })
+          })
+        })
+      })
       setManualMilestones(newMilestones)
-      setManualTasks([])
+      setManualTasks(newTasks)
     } else {
-      setAiMilestones(template.map((t, i) => ({
-        id: `ai-ms-${Date.now()}-${i}`,
+      const newMilestones = templates.map((t, i) => ({
+        id: `ai-ms-${now}-${i}`,
         name: t.name,
         description: '',
         durationDays: t.durationDays,
-      })))
-      setAiTasks([])
+      }))
+      const newTasks: MilestoneTaskDraft[] = []
+      templates.forEach((t, i) => {
+        (t.tasks ?? []).forEach((task, j) => {
+          const taskId = `ai-task-${now}-${i}-${j}`
+          newTasks.push({
+            id: taskId,
+            milestoneId: `ai-ms-${now}-${i}`,
+            title: task.title,
+            assignee: '',
+            priority: task.priority,
+            durationDays: task.durationDays,
+          })
+          ;(task.children ?? []).forEach((child, k) => {
+            newTasks.push({
+              id: `ai-task-${now}-${i}-${j}-${k}`,
+              milestoneId: `ai-ms-${now}-${i}`,
+              parentId: taskId,
+              title: child.title,
+              assignee: '',
+              priority: child.priority,
+              durationDays: child.durationDays,
+            })
+          })
+        })
+      })
+      setAiMilestones(newMilestones)
+      setAiTasks(newTasks)
     }
   }
 
