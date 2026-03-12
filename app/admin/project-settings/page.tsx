@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Trash2, RotateCcw, Pencil, ChevronDown, ChevronRight, ListTodo, ChevronsUpDown } from 'lucide-react'
+import { Plus, Trash2, Pencil, ChevronDown, ChevronRight, ListTodo, ChevronsUpDown } from 'lucide-react'
 
 interface ProjectTypeConfig {
   key: string
@@ -82,6 +82,9 @@ export default function AdminProjectSettingsPage() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   // Expanded task indices (for subtask editing), key = "milestoneIdx-taskIdx"
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+
+  // Clear confirm dialog
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
 
   // Project type CRUD dialogs
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -292,8 +295,9 @@ export default function AdminProjectSettingsPage() {
     }
   }
 
-  const reset = async () => {
+  const clearAll = async () => {
     if (!user || !selected) return
+    setClearDialogOpen(false)
     setSaving(true)
     try {
       const res = await fetch(`/api/admin/milestone-templates/${selected}`, {
@@ -302,21 +306,14 @@ export default function AdminProjectSettingsPage() {
         body: JSON.stringify({ templates: [] }),
       })
       if (res.ok) {
-        const data: TypeDetail = await res.json()
-        setDetail(data)
-        setEditing(data.templates.map(t => ({
-          ...t,
-          tasks: t.tasks?.map(tk => ({
-            ...tk,
-            children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c })) ?? [],
-          })) ?? [],
-        })))
+        setDetail({ projectType: selected, isCustomized: false, templates: [] })
+        setEditing([])
         setExpanded(new Set())
         setExpandedTasks(new Set())
         setSummaries(prev => prev.map(s =>
-          s.projectType === selected ? { ...s, isCustomized: false, count: data.templates.length } : s
+          s.projectType === selected ? { ...s, isCustomized: false, count: 0 } : s
         ))
-        toast({ title: '已重設', description: '已還原為預設範本' })
+        toast({ title: '已清空', description: '所有里程碑範本已清除' })
       }
     } finally {
       setSaving(false)
@@ -476,7 +473,7 @@ export default function AdminProjectSettingsPage() {
                     {detail?.isCustomized ? '使用自訂範本' : '使用預設範本'}
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                {editing.length > 0 && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -501,15 +498,7 @@ export default function AdminProjectSettingsPage() {
                     <ChevronsUpDown className="h-3 w-3" />
                     {editing.every((_, i) => expanded.has(i)) ? '全部收合' : '全部展開'}
                   </Button>
-                  {detail?.isCustomized && (
-                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={reset} disabled={saving}>
-                      <RotateCcw className="h-3 w-3" />重設為預設
-                    </Button>
-                  )}
-                  <Button size="sm" className="h-8 text-xs" onClick={save} disabled={saving}>
-                    {saving ? '儲存中...' : '儲存'}
-                  </Button>
-                </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-1">
@@ -730,9 +719,21 @@ export default function AdminProjectSettingsPage() {
                       )}
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1 mt-2" onClick={addRow}>
-                    <Plus className="h-3.5 w-3.5" />新增里程碑
-                  </Button>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={addRow}>
+                      <Plus className="h-3.5 w-3.5" />新增里程碑
+                    </Button>
+                    <div className="flex gap-2">
+                      {editing.length > 0 && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => setClearDialogOpen(true)} disabled={saving}>
+                          <Trash2 className="h-3 w-3" />清空內容
+                        </Button>
+                      )}
+                      <Button size="sm" className="h-8 text-xs" onClick={save} disabled={saving}>
+                        {saving ? '儲存中...' : '儲存'}
+                      </Button>
+                    </div>
+                  </div>
                 </>
               )}
             </CardContent>
@@ -801,6 +802,24 @@ export default function AdminProjectSettingsPage() {
             <Button variant="outline" onClick={() => setDeleteDialog(null)} disabled={deleteSaving}>取消</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteSaving}>
               {deleteSaving ? '刪除中...' : '確認刪除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear all confirm dialog */}
+      <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>清空里程碑範本</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            確定要清空「<span className="font-medium text-foreground">{selectedLabel}</span>」的所有里程碑範本嗎？此操作將刪除所有里程碑、任務及子任務，且無法復原。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearDialogOpen(false)} disabled={saving}>取消</Button>
+            <Button variant="destructive" onClick={clearAll} disabled={saving}>
+              {saving ? '清空中...' : '確認清空'}
             </Button>
           </DialogFooter>
         </DialogContent>
