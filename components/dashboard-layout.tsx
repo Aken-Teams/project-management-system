@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
@@ -155,9 +156,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Logo */}
         <div className={cn('flex items-center h-16 px-4 border-b border-border/50', collapsed && 'justify-center px-2')}>
           <Link href={defaultRoute[user.role] || '/dashboard'} className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <FolderKanban className="h-5 w-5" />
-            </div>
+            <Image src="/logo.png" alt="Logo" width={36} height={36} className="shrink-0 rounded-lg" />
             {!collapsed && (
               <span className="text-base font-semibold truncate">專案管理系統</span>
             )}
@@ -361,7 +360,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Link href="/dashboard" className="ml-3 font-semibold text-sm flex-1">專案管理系統</Link>
+          <Link href="/dashboard" className="ml-3 flex items-center gap-2 flex-1">
+            <Image src="/logo.png" alt="Logo" width={28} height={28} className="shrink-0 rounded" />
+            <span className="font-semibold text-sm">專案管理系統</span>
+          </Link>
           <NotificationBell />
         </header>
 

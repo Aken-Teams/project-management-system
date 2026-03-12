@@ -1,0 +1,18 @@
+{
+  "name": "專案管理系統 | Project Management System",
+  "short_name": "專案管理系統",
+  "description": "企業級專案管理與看板系統，支援甘特圖、里程碑追蹤、報告分析與 AI 智慧輔助",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "lang": "zh-TW",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

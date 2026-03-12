@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { FolderKanban } from 'lucide-react'
+import Image from 'next/image'
 
 const QUICK_LOGINS = [
   { role: 'pm' as const, email: 'alice@example.com', label: '專案經理', initial: 'A', bgColor: 'bg-blue-100', textColor: 'text-blue-600' },
@@ -58,9 +58,7 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col bg-white lg:overflow-y-auto">
         {/* Mobile Header (shown on small screens) */}
         <div className="lg:hidden flex items-center gap-2.5 p-6 bg-blue-600 text-white">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-blue-600">
-            <FolderKanban className="h-4 w-4" />
-          </div>
+          <Image src="/logo.png" alt="Logo" width={32} height={32} className="shrink-0 rounded-lg" />
           <span className="text-lg font-bold">專案管理系統</span>
         </div>
 
@@ -71,9 +69,7 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
-                    <FolderKanban className="h-5 w-5" />
-                  </div>
+                  <Image src="/logo.png" alt="Logo" width={36} height={36} className="shrink-0 rounded-lg" />
                   <span className="font-bold text-zinc-900" style={{ fontSize: '28px' }}>專案管理系統</span>
                 </div>
                 <p className="text-sm text-zinc-400 mt-1.5 ml-[46px]">AI 驅動的智慧專案管理平台</p>

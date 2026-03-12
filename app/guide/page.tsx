@@ -18,13 +18,19 @@ import {
   FileText,
   ClipboardCheck,
   Layers,
+  Bell,
+  Settings,
+  Users,
+  PlusCircle,
+  ShieldCheck,
+  CalendarDays,
 } from 'lucide-react'
 
 export default function GuidePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Page Header — matches other pages */}
+        {/* Page Header */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">使用指南</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -88,14 +94,15 @@ export default function GuidePage() {
                     <div className="space-y-2 text-sm leading-relaxed">
                       <p>身為專案經理，您是系統的核心使用者：</p>
                       <ol className="list-decimal ml-5 space-y-1">
-                        <li><strong>建立專案</strong>：在「專案看板」點擊新增</li>
-                        <li><strong>規劃任務</strong>：為里程碑建立任務、設定負責人</li>
+                        <li><strong>建立專案</strong>：透過手動或 AI 輔助模式建立</li>
+                        <li><strong>規劃任務</strong>：為里程碑建立任務與子任務、設定負責人</li>
                         <li><strong>追蹤進度</strong>：透過「儀表板」掌握整體狀態</li>
                         <li><strong>審核變更</strong>：在「審核中心」處理延期申請</li>
                         <li><strong>產出報告</strong>：透過「報告」匯出 PDF</li>
+                        <li><strong>分享專案</strong>：產生分享連結供外部檢視</li>
                       </ol>
                       <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
-                        提示：「我的任務」中可透過卡片快速填寫日誌與更新進度
+                        提示：建立專案時可選擇里程碑範本，自動帶入預設的任務與子任務結構
                       </p>
                     </div>
                   </AccordionContent>
@@ -119,7 +126,7 @@ export default function GuidePage() {
                   </AccordionContent>
                 </AccordionItem>
 
-                <AccordionItem value="executive" className="border-b-0">
+                <AccordionItem value="executive">
                   <AccordionTrigger className="text-sm">主管（Executive）</AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2 text-sm leading-relaxed">
@@ -130,6 +137,26 @@ export default function GuidePage() {
                         <li><strong>審核中心</strong>：審批延期申請</li>
                         <li><strong>專案看板</strong>：深入查看專案詳情</li>
                       </ol>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="admin" className="border-b-0">
+                  <AccordionTrigger className="text-sm">系統管理員（Admin）</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2 text-sm leading-relaxed">
+                      <p>擁有所有 PM 權限，並可進入「管理後台」：</p>
+                      <ol className="list-decimal ml-5 space-y-1">
+                        <li><strong>使用者管理</strong>：新增、編輯、停用帳號</li>
+                        <li><strong>角色權限</strong>：指派與調整使用者角色</li>
+                        <li><strong>專案設定</strong>：管理專案類型、代碼前綴、里程碑範本</li>
+                        <li><strong>通知設定</strong>：設定系統通知規則</li>
+                        <li><strong>報告設定</strong>：設定自動報告產出規則</li>
+                        <li><strong>排程行事曆</strong>：查看排程任務執行紀錄</li>
+                      </ol>
+                      <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
+                        管理後台僅 admin 角色可見，側邊欄會顯示「管理後台」選項
+                      </p>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -194,7 +221,50 @@ export default function GuidePage() {
                       <li>點擊進入詳情查看里程碑、任務、甘特圖</li>
                       <li>可新增 / 編輯專案、設定 ARCI 角色</li>
                       <li>支援草稿功能，可稍後繼續編輯</li>
+                      <li>支援分享連結，供外部人員檢視專案</li>
                     </ul>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="create-project">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <PlusCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                      建立專案
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3 text-sm">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-md border px-3 py-2 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
+                          <div className="font-medium text-blue-700 dark:text-blue-400 text-xs">手動建立</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">五步驟精靈逐步填寫</div>
+                        </div>
+                        <div className="rounded-md border px-3 py-2 bg-violet-50/50 dark:bg-violet-950/10 border-violet-200 dark:border-violet-800">
+                          <div className="font-medium text-violet-700 dark:text-violet-400 text-xs">AI 輔助建立</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">自然語言描述，AI 自動產生規劃</div>
+                        </div>
+                      </div>
+                      <p className="text-xs font-medium">五步驟流程：</p>
+                      <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                        <span className="rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 font-medium">1. 基本資訊</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 px-2 py-1 font-medium">2. SMART 目標</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 font-medium">3. 專案定義</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 font-medium">4. 團隊與風險</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="rounded-md bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 px-2 py-1 font-medium">5. 時程里程碑</span>
+                      </div>
+                      <ul className="list-disc ml-5 space-y-1 text-xs text-muted-foreground">
+                        <li>基本資訊：專案層別、類型、名稱、預算、投資設備清單</li>
+                        <li>專案代碼依據類型自動產生（如 PDFN8080-2026-001）</li>
+                        <li>選擇類型時自動帶入里程碑範本（含任務與子任務）</li>
+                        <li>設備清單支援 AI 圖片辨識自動匯入</li>
+                        <li>任何階段可暫存草稿，下次繼續編輯</li>
+                      </ul>
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
 
@@ -214,7 +284,7 @@ export default function GuidePage() {
                   </AccordionContent>
                 </AccordionItem>
 
-                <AccordionItem value="approvals" className="border-b-0">
+                <AccordionItem value="approvals">
                   <AccordionTrigger className="text-sm">
                     <span className="flex items-center gap-2">
                       <ClipboardCheck className="h-3.5 w-3.5 text-muted-foreground" />
@@ -227,6 +297,77 @@ export default function GuidePage() {
                       <li>顯示申請人、原因與調整時程</li>
                       <li>審核紀錄可追溯</li>
                     </ul>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="notifications">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <Bell className="h-3.5 w-3.5 text-muted-foreground" />
+                      通知系統
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <ul className="list-disc ml-5 space-y-1 text-sm">
+                      <li>右上角鈴鐺圖示即時顯示未讀通知數量</li>
+                      <li>通知包含：任務指派、延期審核結果、逾期提醒等</li>
+                      <li>點擊通知可跳轉至對應頁面</li>
+                      <li>支援已讀 / 全部已讀操作</li>
+                    </ul>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="admin" className="border-b-0">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                      管理後台（Admin）
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2 text-sm">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-md border px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-medium text-xs">
+                            <Users className="h-3 w-3" /> 使用者管理
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">新增 / 編輯 / 停用帳號</div>
+                        </div>
+                        <div className="rounded-md border px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-medium text-xs">
+                            <ShieldCheck className="h-3 w-3" /> 角色權限
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">指派 PM / 成員 / 主管 / 管理員</div>
+                        </div>
+                        <div className="rounded-md border px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-medium text-xs">
+                            <Settings className="h-3 w-3" /> 專案設定
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">專案類型、代碼前綴、里程碑範本（三層結構）</div>
+                        </div>
+                        <div className="rounded-md border px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-medium text-xs">
+                            <Bell className="h-3 w-3" /> 通知設定
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">系統通知觸發規則</div>
+                        </div>
+                        <div className="rounded-md border px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-medium text-xs">
+                            <FileText className="h-3 w-3" /> 報告設定
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">自動報告產出排程</div>
+                        </div>
+                        <div className="rounded-md border px-3 py-2">
+                          <div className="flex items-center gap-1.5 font-medium text-xs">
+                            <CalendarDays className="h-3 w-3" /> 排程行事曆
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">排程執行紀錄與日曆</div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
+                        專案設定中可自訂里程碑範本（里程碑 → 任務 → 子任務三層結構），建立新專案時自動帶入
+                      </p>
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
@@ -262,7 +403,7 @@ export default function GuidePage() {
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded border border-violet-200 dark:border-violet-800 px-2.5 py-1.5 bg-violet-50/50 dark:bg-violet-950/10">
                         <span className="font-medium text-violet-700 dark:text-violet-400">子任務</span>
-                        <span className="text-muted-foreground ml-1">日誌天數 ÷ 工期</span>
+                        <span className="text-muted-foreground ml-1">日誌天數 / 工期</span>
                       </div>
                       <div className="rounded border border-blue-200 dark:border-blue-800 px-2.5 py-1.5 bg-blue-50/50 dark:bg-blue-950/10">
                         <span className="font-medium text-blue-700 dark:text-blue-400">父任務</span>
@@ -454,30 +595,57 @@ export default function GuidePage() {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 7 - Create project */}
-              <AccordionItem value="faq-create-project">
-                <AccordionTrigger className="text-sm">如何建立新專案？可以存草稿嗎？</AccordionTrigger>
+              {/* 7 - Milestone templates */}
+              <AccordionItem value="faq-templates">
+                <AccordionTrigger className="text-sm">里程碑範本是什麼？怎麼使用？</AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-3 text-sm">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-md border px-3 py-2.5 bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800">
-                        <div className="font-medium text-blue-700 dark:text-blue-400">手動模式</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">逐步填寫資訊、團隊、里程碑、任務與風險</div>
-                      </div>
-                      <div className="rounded-md border px-3 py-2.5 bg-violet-50/50 dark:bg-violet-950/10 border-violet-200 dark:border-violet-800">
-                        <div className="font-medium text-violet-700 dark:text-violet-400">AI 輔助模式</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">自然語言描述，AI 建議專案結構</div>
-                      </div>
+                    <p className="text-muted-foreground">
+                      管理員可在後台為每種專案類型預設里程碑範本，包含三層結構：
+                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                      <span className="rounded-md bg-slate-100 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300 px-2.5 py-1 font-medium">里程碑</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 font-medium">任務</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2.5 py-1 font-medium">子任務</span>
                     </div>
-                    <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
-                      <span className="rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 font-medium">草稿</span>
-                      <span className="text-muted-foreground">任何階段可暫存，下次載入繼續編輯</span>
-                    </div>
+                    <ul className="list-disc ml-5 space-y-1 text-xs text-muted-foreground">
+                      <li>建立新專案時，選擇類型即自動帶入對應範本</li>
+                      <li>每個任務 / 子任務可設定預設工期與優先級</li>
+                      <li>管理員可在後台「專案設定」中新增、編輯、清空範本</li>
+                      <li>支援全部展開 / 收合快速瀏覽範本結構</li>
+                    </ul>
                   </div>
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 8 - Work log */}
+              {/* 8 - Project code */}
+              <AccordionItem value="faq-project-code">
+                <AccordionTrigger className="text-sm">專案代碼怎麼產生的？可以自訂嗎？</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 text-sm">
+                    <p className="text-muted-foreground">
+                      專案代碼由系統自動產生，格式為：
+                    </p>
+                    <div className="rounded-md border px-3 py-2 bg-muted/50 text-center font-mono text-sm">
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">前綴</span>
+                      <span className="text-muted-foreground mx-1">-</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">年份</span>
+                      <span className="text-muted-foreground mx-1">-</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">流水號</span>
+                      <div className="text-xs text-muted-foreground mt-1">例如：PDFN8080-2026-001</div>
+                    </div>
+                    <ul className="list-disc ml-5 space-y-1 text-xs text-muted-foreground">
+                      <li>前綴由管理員在後台「專案設定」中設定（建立類型時自動產生，也可手動修改）</li>
+                      <li>流水號依專案類型 + 年份自動遞增，確保唯一</li>
+                      <li>已建立的專案代碼不會因前綴修改而變更</li>
+                    </ul>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* 9 - Work log */}
               <AccordionItem value="faq-worklog">
                 <AccordionTrigger className="text-sm">工作日誌怎麼填寫？支援語音輸入嗎？</AccordionTrigger>
                 <AccordionContent>
@@ -509,7 +677,7 @@ export default function GuidePage() {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 9 - Gantt */}
+              {/* 10 - Gantt */}
               <AccordionItem value="faq-gantt">
                 <AccordionTrigger className="text-sm">甘特圖怎麼看？可以做什麼？</AccordionTrigger>
                 <AccordionContent>
@@ -543,9 +711,9 @@ export default function GuidePage() {
                 </AccordionContent>
               </AccordionItem>
 
-              {/* 10 - Roles */}
+              {/* 11 - Roles */}
               <AccordionItem value="faq-roles" className="border-b-0">
-                <AccordionTrigger className="text-sm">三種系統角色有什麼差異？</AccordionTrigger>
+                <AccordionTrigger className="text-sm">四種系統角色有什麼差異？</AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-2 text-sm">
                     <div className="overflow-x-auto">
@@ -556,20 +724,22 @@ export default function GuidePage() {
                             <th className="text-center py-1.5 px-2 font-medium text-amber-600 dark:text-amber-400">PM</th>
                             <th className="text-center py-1.5 px-2 font-medium text-blue-600 dark:text-blue-400">成員</th>
                             <th className="text-center py-1.5 px-2 font-medium text-violet-600 dark:text-violet-400">主管</th>
+                            <th className="text-center py-1.5 px-2 font-medium text-rose-600 dark:text-rose-400">管理員</th>
                           </tr>
                         </thead>
                         <tbody className="text-muted-foreground">
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">儀表板</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">我的任務</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">建立 / 編輯專案</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center">—</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">審核延期</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
-                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">報告 / PDF</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
-                          <tr><td className="py-1.5 pr-2">專案看板</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">儀表板</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">我的任務</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">建立 / 編輯專案</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">審核延期</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">報告 / PDF</td><td className="text-center text-green-600">&#10003;</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr className="border-b border-border/50"><td className="py-1.5 pr-2">專案看板</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td><td className="text-center text-green-600">&#10003;</td></tr>
+                          <tr><td className="py-1.5 pr-2">管理後台</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center">—</td><td className="text-center text-green-600">&#10003;</td></tr>
                         </tbody>
                       </table>
                     </div>
                     <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2">
-                      PM 可管理所有任務；成員只看到指派給自己的任務
+                      管理員擁有所有 PM 權限，額外可進入管理後台設定系統參數
                     </p>
                   </div>
                 </AccordionContent>

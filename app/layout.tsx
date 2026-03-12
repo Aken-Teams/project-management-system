@@ -19,9 +19,34 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: '專案管理系統 | Project Management System',
-  description: '企業級專案管理與看板系統，支援甘特圖、報告與 AI 輔助',
-  generator: 'v0.app',
+  title: {
+    default: '專案管理系統 | Project Management System',
+    template: '%s | 專案管理系統',
+  },
+  description: '企業級專案管理與看板系統，支援甘特圖、里程碑追蹤、報告分析與 AI 智慧輔助，助您高效管理專案進度。',
+  keywords: ['專案管理', '看板', '甘特圖', '里程碑', '報告', 'AI', 'Project Management', 'Kanban', 'Gantt Chart'],
+  authors: [{ name: '專案管理系統團隊' }],
+  creator: '專案管理系統',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
+  openGraph: {
+    type: 'website',
+    locale: 'zh_TW',
+    siteName: '專案管理系統',
+    title: '專案管理系統 | Project Management System',
+    description: '企業級專案管理與看板系統，支援甘特圖、里程碑追蹤、報告分析與 AI 智慧輔助。',
+    images: [{ url: '/logo.png', width: 512, height: 512, alt: '專案管理系統' }],
+  },
+  twitter: {
+    card: 'summary',
+    title: '專案管理系統 | Project Management System',
+    description: '企業級專案管理與看板系統，支援甘特圖、里程碑追蹤、報告分析與 AI 智慧輔助。',
+    images: ['/logo.png'],
+  },
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
+  manifest: '/manifest.json',
 }
 
 export default function RootLayout({
