@@ -100,6 +100,7 @@ export default function AdminProjectSettingsPage() {
   const [editPrefix, setEditPrefix] = useState('')
   const [editPrefixChanged, setEditPrefixChanged] = useState(false)
   const [editProjectCount, setEditProjectCount] = useState(0)
+  const [editConfirmOpen, setEditConfirmOpen] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
 
   const [deleteDialog, setDeleteDialog] = useState<{ key: string; label: string } | null>(null)
@@ -353,8 +354,19 @@ export default function AdminProjectSettingsPage() {
     }
   }
 
-  const handleEdit = async () => {
+  const handleEditSave = () => {
     if (!editDialog || !editLabel.trim() || !editPrefix.trim()) return
+    // If prefix changed and there are existing projects, require confirmation
+    if (editPrefixChanged && editProjectCount > 0) {
+      setEditConfirmOpen(true)
+      return
+    }
+    doEditSave()
+  }
+
+  const doEditSave = async () => {
+    if (!editDialog || !editLabel.trim() || !editPrefix.trim()) return
+    setEditConfirmOpen(false)
     setEditSaving(true)
     try {
       const res = await fetch(`/api/admin/project-types/${editDialog.key}`, {
@@ -843,7 +855,7 @@ export default function AdminProjectSettingsPage() {
                   setEditPrefix(val)
                   setEditPrefixChanged(val !== (editDialog?.codePrefix ?? ''))
                 }}
-                onKeyDown={e => e.key === 'Enter' && !editSaving && handleEdit()}
+                onKeyDown={e => e.key === 'Enter' && !editSaving && handleEditSave()}
                 maxLength={8}
                 placeholder="2~8 碼英數字"
               />
@@ -864,8 +876,35 @@ export default function AdminProjectSettingsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialog(null)} disabled={editSaving}>取消</Button>
-            <Button onClick={handleEdit} disabled={editSaving || !editLabel.trim() || !editPrefix.trim()}>
+            <Button onClick={handleEditSave} disabled={editSaving || !editLabel.trim() || !editPrefix.trim()}>
               {editSaving ? '儲存中...' : '儲存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit prefix change confirmation dialog */}
+      <Dialog open={editConfirmOpen} onOpenChange={setEditConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>確認修改代碼前綴</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2 text-sm">
+            <p>
+              此類型已有 <span className="font-bold text-amber-600">{editProjectCount}</span> 個專案使用前綴
+              「<span className="font-mono font-medium">{editDialog?.codePrefix}</span>」。
+            </p>
+            <p>
+              修改後，舊專案代碼<span className="font-medium">不會變更</span>，
+              新專案將使用「<span className="font-mono font-medium">{editPrefix}</span>」，
+              可能導致同類型編號不一致。
+            </p>
+            <p className="font-medium text-destructive">確定要修改嗎？</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditConfirmOpen(false)}>取消</Button>
+            <Button variant="destructive" onClick={doEditSave} disabled={editSaving}>
+              {editSaving ? '儲存中...' : '確認修改'}
             </Button>
           </DialogFooter>
         </DialogContent>
