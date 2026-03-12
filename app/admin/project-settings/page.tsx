@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Trash2, RotateCcw, Pencil, ChevronDown, ChevronRight, ListTodo } from 'lucide-react'
+import { Plus, Trash2, RotateCcw, Pencil, ChevronDown, ChevronRight, ListTodo, ChevronsUpDown } from 'lucide-react'
 
 interface ProjectTypeConfig {
   key: string
@@ -477,6 +477,30 @@ export default function AdminProjectSettingsPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1"
+                    onClick={() => {
+                      const allExpanded = editing.every((_, i) => expanded.has(i))
+                      if (allExpanded) {
+                        setExpanded(new Set())
+                        setExpandedTasks(new Set())
+                      } else {
+                        setExpanded(new Set(editing.map((_, i) => i)))
+                        const allTaskKeys = new Set<string>()
+                        editing.forEach((row, i) => {
+                          row.tasks.forEach((task, j) => {
+                            if (task.children.length > 0) allTaskKeys.add(`${i}-${j}`)
+                          })
+                        })
+                        setExpandedTasks(allTaskKeys)
+                      }
+                    }}
+                  >
+                    <ChevronsUpDown className="h-3 w-3" />
+                    {editing.every((_, i) => expanded.has(i)) ? '全部收合' : '全部展開'}
+                  </Button>
                   {detail?.isCustomized && (
                     <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={reset} disabled={saving}>
                       <RotateCcw className="h-3 w-3" />重設為預設
@@ -685,10 +709,10 @@ export default function AdminProjectSettingsPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                                    className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
                                     onClick={() => addSubtask(i, j)}
                                   >
-                                    <Plus className="h-2.5 w-2.5" />新增子任務
+                                    <Plus className="h-3 w-3" />新增子任務
                                   </Button>
                                 </div>
                               )}
