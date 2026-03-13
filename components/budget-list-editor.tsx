@@ -21,6 +21,8 @@ export interface BudgetItem {
 interface BudgetListEditorProps {
   items: BudgetItem[]
   onChange: (items: BudgetItem[]) => void
+  /** Called when AI parsing extracts a total from the image's 合計 row */
+  onAITotal?: (total: number) => void
 }
 
 function emptyItem(): BudgetItem {
@@ -66,7 +68,7 @@ export function validateBudgetItems(items: BudgetItem[]): string[] {
   return errors
 }
 
-export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
+export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEditorProps) {
   const { toast } = useToast()
   const [parsing, setParsing] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -128,6 +130,7 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
 
       const data = await res.json()
       const parsedItems = data.items
+      const aiTotal: number | null = typeof data.total === 'number' ? data.total : null
       const validation = data._validation
       if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
         toast({ title: '未能從圖片中解析到設備資料', variant: 'destructive' })
@@ -163,11 +166,17 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
 
       onChange([...items, ...newItems])
 
+      // Set AI total as the budget (from the 合計 row — highly accurate)
+      if (aiTotal != null && aiTotal > 0 && onAITotal) {
+        onAITotal(aiTotal)
+      }
+
       // Build toast with validation info
+      const itemsSum = newItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
       const parts = [`已新增 ${newItems.length} 筆設備資料`]
-      if (validation?.expectedTotal && !validation?.totalMatch) {
-        const diff = Math.abs(validation.computedSum - validation.expectedTotal)
-        parts.push(`⚠️ 合計差額 ${diff.toLocaleString('zh-TW')}，請逐筆確認`)
+      if (aiTotal != null && Math.abs(itemsSum - aiTotal) >= 1) {
+        const diff = aiTotal - itemsSum
+        parts.push(`⚠️ 清單加總與圖片合計差 ${diff.toLocaleString('zh-TW')}，請確認是否有遺漏`)
       }
       parts.push('請確認並修正')
       toast({

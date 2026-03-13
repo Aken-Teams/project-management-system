@@ -212,6 +212,7 @@ ${transcription}
 
     return NextResponse.json({
       items,
+      total: expectedTotal,
       _validation: {
         expectedTotal,
         computedSum,

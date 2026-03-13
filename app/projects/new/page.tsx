@@ -510,13 +510,23 @@ export default function NewProjectPage() {
   // Project code preview
   const [previewCode, setPreviewCode] = useState<string>('')
 
-  // Auto-sync budget from budget items total
+  // Track whether budget was set by AI total (合計 row from image)
+  const [aiBudgetTotal, setAiBudgetTotal] = useState<number | null>(null)
+
+  // Auto-sync budget from budget items total (only when no AI total is set)
   useEffect(() => {
+    if (aiBudgetTotal != null) return // AI total takes priority — don't auto-sync
     const total = manualBudgetItems.reduce((sum, item) => sum + (item.estimatedCost ?? 0), 0)
     if (manualBudgetItems.some(i => i.estimatedCost != null)) {
       setManualData(prev => ({ ...prev, budget: String(total) }))
     }
-  }, [manualBudgetItems]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [manualBudgetItems, aiBudgetTotal]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handler: AI parsing sets the budget to the image's 合計 total
+  const handleAITotal = (total: number) => {
+    setAiBudgetTotal(total)
+    setManualData(prev => ({ ...prev, budget: String(total) }))
+  }
 
   // Load drafts from API on mount
   useEffect(() => {
@@ -902,10 +912,15 @@ export default function NewProjectPage() {
     setMembers(members.filter(m => m !== name))
   }
 
+  // Budget validation: if AI total is set and items sum doesn't match, block proceeding
+  const budgetItemsTotal = manualBudgetItems.reduce((sum, item) => sum + (item.estimatedCost ?? 0), 0)
+  const hasBudgetMismatch = aiBudgetTotal != null && manualBudgetItems.length > 0
+    && Math.abs(budgetItemsTotal - aiBudgetTotal) >= 1
+
   // Step navigation
   const canProceed = (step: number) => {
     switch (step) {
-      case 0: return !!manualProjectType && !!manualProjectTier && !!manualDemandSource && !!manualData.name.trim() && !!manualData.createdReason.trim()
+      case 0: return !!manualProjectType && !!manualProjectTier && !!manualDemandSource && !!manualData.name.trim() && !!manualData.createdReason.trim() && !hasBudgetMismatch
       case 1: return !!smartObjective.specific.trim() && !!smartObjective.measurable.trim() && !!smartObjective.achievable.trim() && !!smartObjective.relevant.trim() && !!smartObjective.timeBound.trim()
       case 2: return !!manualData.purpose.trim() // 專案定義至少要有目的
       case 3: return manualTeamDetails.length > 0 // 團隊至少一人
@@ -2283,8 +2298,8 @@ export default function NewProjectPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between min-h-[20px]">
                         <Label htmlFor="budget">投資預算 (NT$)</Label>
-                        {manualBudgetItems.some(i => i.estimatedCost != null) && (
-                          <span className="text-xs text-muted-foreground">由設備清單自動帶入，不可手動修改</span>
+                        {aiBudgetTotal != null && (
+                          <span className="text-xs text-muted-foreground">由 AI 解析合計帶入</span>
                         )}
                       </div>
                       <Input
@@ -2293,20 +2308,27 @@ export default function NewProjectPage() {
                         placeholder="5000000"
                         value={manualData.budget}
                         onChange={(e) => setManualData({ ...manualData, budget: e.target.value })}
-                        readOnly={manualBudgetItems.some(i => i.estimatedCost != null)}
-                        className={manualBudgetItems.some(i => i.estimatedCost != null) ? 'bg-muted/60 cursor-not-allowed' : ''}
+                        readOnly={aiBudgetTotal != null}
+                        className={aiBudgetTotal != null ? 'bg-muted/60 cursor-not-allowed' : ''}
                       />
                     </div>
                   </div>
+                  {hasBudgetMismatch && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      清單合計 NT$ {budgetItemsTotal.toLocaleString('zh-TW')} 與預算 NT$ {aiBudgetTotal!.toLocaleString('zh-TW')} 不符（差 {Math.abs(budgetItemsTotal - aiBudgetTotal!).toLocaleString('zh-TW')}），請修正設備清單後才能繼續
+                    </p>
+                  )}
 
                   <div className="space-y-2">
                     <Label>投資設備清單（選填）</Label>
                     <p className="text-xs text-muted-foreground -mt-1">
-                      有設備清單時，預算由清單預估合計自動填入
+                      有設備清單時，預算由 AI 解析的合計金額帶入
                     </p>
                     <BudgetListEditor
                       items={manualBudgetItems}
                       onChange={setManualBudgetItems}
+                      onAITotal={handleAITotal}
                     />
                   </div>
 

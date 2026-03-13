@@ -165,14 +165,29 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       .catch(() => setBudgetItemsLoaded(true))
   }, [open, project.id])
 
-  // Auto-sync budget from items total
+  // Track whether budget was set by AI total (合計 row from image)
+  const [aiBudgetTotal, setAiBudgetTotal] = useState<number | null>(null)
+
+  // Auto-sync budget from items total (only when no AI total is set)
   useEffect(() => {
     if (!budgetItemsLoaded) return
+    if (aiBudgetTotal != null) return // AI total takes priority — don't auto-sync
     const total = budgetItems.reduce((sum, item) => sum + (item.estimatedCost ?? 0), 0)
     if (budgetItems.some(i => i.estimatedCost != null)) {
       update('budget', total)
     }
-  }, [budgetItems, budgetItemsLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [budgetItems, budgetItemsLoaded, aiBudgetTotal]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handler: AI parsing sets the budget to the image's 合計 total
+  const handleAITotal = (total: number) => {
+    setAiBudgetTotal(total)
+    update('budget', total)
+  }
+
+  // Budget validation: items sum must match AI total
+  const budgetItemsTotal = budgetItems.reduce((sum, item) => sum + (item.estimatedCost ?? 0), 0)
+  const hasBudgetMismatch = aiBudgetTotal != null && budgetItems.length > 0
+    && Math.abs(budgetItemsTotal - aiBudgetTotal) >= 1
 
   // ─── Risk state ─────────────────────────────────────────
   const [risks, setRisks] = useState<Risk[]>(project.risks ?? [])
@@ -855,8 +870,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="edit-budget">投資預算 (NTD)</Label>
-                {budgetItems.some(i => i.estimatedCost != null) && (
-                  <span className="text-xs text-muted-foreground">由設備清單自動帶入，不可手動修改</span>
+                {aiBudgetTotal != null && (
+                  <span className="text-xs text-muted-foreground">由 AI 解析合計帶入</span>
                 )}
               </div>
               <Input
@@ -864,15 +879,21 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                 type="number"
                 value={form.budget}
                 onChange={e => update('budget', Number(e.target.value) || 0)}
-                readOnly={budgetItems.some(i => i.estimatedCost != null)}
-                className={budgetItems.some(i => i.estimatedCost != null) ? 'bg-muted/60 cursor-not-allowed' : ''}
+                readOnly={aiBudgetTotal != null}
+                className={aiBudgetTotal != null ? 'bg-muted/60 cursor-not-allowed' : ''}
               />
+              {hasBudgetMismatch && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  清單合計 NT$ {budgetItemsTotal.toLocaleString('zh-TW')} 與預算 NT$ {aiBudgetTotal!.toLocaleString('zh-TW')} 不符（差 {Math.abs(budgetItemsTotal - aiBudgetTotal!).toLocaleString('zh-TW')}），請修正設備清單後再儲存
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
               <Label>投資設備清單</Label>
               <p className="text-xs text-muted-foreground -mt-0.5">
-                有設備清單時，預算由清單預估合計自動填入
+                有設備清單時，預算由 AI 解析的合計金額帶入
               </p>
               {!budgetItemsLoaded ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
@@ -880,7 +901,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                   載入中...
                 </div>
               ) : (
-                <BudgetListEditor items={budgetItems} onChange={setBudgetItems} />
+                <BudgetListEditor items={budgetItems} onChange={setBudgetItems} onAITotal={handleAITotal} />
               )}
             </div>
 
@@ -1252,7 +1273,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             取消
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || hasBudgetMismatch}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             儲存變更
           </Button>
