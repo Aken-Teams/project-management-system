@@ -126,13 +126,15 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
         throw new Error(err.error || 'AI 解析失敗')
       }
 
-      const { items: parsed } = await res.json()
-      if (!Array.isArray(parsed) || parsed.length === 0) {
+      const data = await res.json()
+      const parsedItems = data.items
+      const validation = data._validation
+      if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
         toast({ title: '未能從圖片中解析到設備資料', variant: 'destructive' })
         return
       }
 
-      const newItems: BudgetItem[] = parsed.map((p: Partial<BudgetItem>) => {
+      const newItems: BudgetItem[] = parsedItems.map((p: Partial<BudgetItem>) => {
         const unitPrice = typeof p.unitPrice === 'number' ? p.unitPrice : null
         const qty = typeof p.quantity === 'number' ? p.quantity : 1
         const estimatedCost =
@@ -141,12 +143,18 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
             : unitPrice != null
             ? unitPrice * qty
             : null
+        // Clean up vendor: if it's a column header or placeholder, treat as empty
+        const rawVendor = typeof p.vendor === 'string' ? p.vendor.trim() : ''
+        const vendor = ['廠商', '廠牌', '空白', '-'].includes(rawVendor) ? '' : rawVendor
+        // Clean up purchaseType
+        const rawPurchaseType = typeof p.purchaseType === 'string' ? p.purchaseType.trim() : ''
+        const purchaseType = ['空白', '-'].includes(rawPurchaseType) ? '' : (rawPurchaseType || '新購')
         return {
           station: p.station ?? '',
-          vendor: p.vendor ?? '',
+          vendor,
           equipment: p.equipment ?? '',
           quantity: qty,
-          purchaseType: p.purchaseType ?? '新購',
+          purchaseType,
           unitPrice,
           estimatedCost,
           actualCost: null,
@@ -154,9 +162,18 @@ export function BudgetListEditor({ items, onChange }: BudgetListEditorProps) {
       })
 
       onChange([...items, ...newItems])
+
+      // Build toast with validation info
+      const parts = [`已新增 ${newItems.length} 筆設備資料`]
+      if (validation?.expectedTotal && !validation?.totalMatch) {
+        const diff = Math.abs(validation.computedSum - validation.expectedTotal)
+        parts.push(`⚠️ 合計差額 ${diff.toLocaleString('zh-TW')}，請逐筆確認`)
+      }
+      parts.push('請確認並修正')
       toast({
         title: `AI 解析完成`,
-        description: `已新增 ${newItems.length} 筆設備資料，請確認並修正`,
+        description: parts.join('。'),
+        ...(validation && !validation.totalMatch ? { variant: 'destructive' as const } : {}),
       })
     } catch (err) {
       toast({
