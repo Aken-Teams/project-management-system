@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Trash2, ImageUp, Loader2, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, ImageUp, Loader2, ChevronDown, ChevronRight, AlertTriangle, ClipboardPaste } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 export interface BudgetItem {
@@ -68,6 +68,128 @@ export function validateBudgetItems(items: BudgetItem[]): string[] {
   return errors
 }
 
+/** Header keywords used to detect and skip header rows */
+const HEADER_KEYWORDS = ['站別', '設備', '機型', '單價', '費用', '廠商', '廠牌', '組數', '選購']
+/** Summary row keywords to detect totals */
+const SUMMARY_KEYWORDS = ['合計', '小計', 'total', 'TOTAL', '瓶頸', '平衡率']
+
+function cleanCell(val: string): string {
+  return val.trim().replace(/^["']|["']$/g, '')
+}
+
+function isHeaderRow(cols: string[]): boolean {
+  const text = cols.join('')
+  return HEADER_KEYWORDS.filter(k => text.includes(k)).length >= 2
+}
+
+function isSummaryRow(cols: string[]): boolean {
+  const text = cols.join('').toLowerCase()
+  return SUMMARY_KEYWORDS.some(k => text.toLowerCase().includes(k.toLowerCase()))
+}
+
+/** Known field types for header-based column detection */
+type FieldType = 'station' | 'vendor' | 'equipment' | 'quantity' | 'skip' | 'purchaseType' | 'unitPrice' | 'estimatedCost'
+
+const HEADER_PATTERNS: [RegExp, FieldType][] = [
+  [/站別/, 'station'],
+  [/廠商|廠牌/, 'vendor'],
+  [/設備|機型|名稱/, 'equipment'],
+  [/組數|數量/, 'quantity'],
+  [/產能|K\/D|K\/M|瓶頸/, 'skip'],
+  [/選購|購買|方式/, 'purchaseType'],
+  [/單價/, 'unitPrice'],
+  [/預估費用|費用|金額/, 'estimatedCost'],
+  [/備註/, 'skip'],
+]
+
+function detectColumnMapping(headerCols: string[]): FieldType[] | null {
+  const mapping: FieldType[] = []
+  let matched = 0
+  for (const col of headerCols) {
+    const text = col.trim()
+    let found: FieldType = 'skip'
+    for (const [pattern, field] of HEADER_PATTERNS) {
+      if (pattern.test(text)) { found = field; matched++; break }
+    }
+    mapping.push(found)
+  }
+  return matched >= 3 ? mapping : null
+}
+
+/** Fallback column mapping when no header row is present */
+function fallbackMapping(colCount: number): FieldType[] {
+  if (colCount >= 10) return ['station', 'vendor', 'equipment', 'quantity', 'skip', 'skip', 'purchaseType', 'unitPrice', 'estimatedCost', 'skip']
+  if (colCount === 9) return ['station', 'vendor', 'equipment', 'quantity', 'skip', 'skip', 'purchaseType', 'unitPrice', 'estimatedCost']
+  if (colCount === 8) return ['station', 'vendor', 'equipment', 'quantity', 'skip', 'purchaseType', 'unitPrice', 'estimatedCost']
+  if (colCount === 7) return ['station', 'vendor', 'equipment', 'quantity', 'purchaseType', 'unitPrice', 'estimatedCost']
+  if (colCount === 6) return ['station', 'vendor', 'equipment', 'quantity', 'unitPrice', 'estimatedCost']
+  return ['equipment', 'quantity', 'unitPrice', 'estimatedCost', 'skip']
+}
+
+function rowToItem(cols: string[], mapping: FieldType[]): BudgetItem {
+  let station = '', vendor = '', equipment = '', quantity = 1
+  let purchaseType = '', unitPrice: number | null = null, estimatedCost: number | null = null
+
+  for (let i = 0; i < mapping.length && i < cols.length; i++) {
+    const val = cols[i] ?? ''
+    switch (mapping[i]) {
+      case 'station': station = val; break
+      case 'vendor': vendor = val; break
+      case 'equipment': equipment = val; break
+      case 'quantity': quantity = parseFloat(val.replace(/,/g, '')) || 1; break
+      case 'purchaseType': purchaseType = val; break
+      case 'unitPrice': unitPrice = parseNumber(val); break
+      case 'estimatedCost': estimatedCost = parseNumber(val); break
+    }
+  }
+
+  // Clean vendor
+  if (['廠商', '廠牌', '空白', '-', ''].includes(vendor.trim())) vendor = ''
+  // Clean purchaseType
+  if (['空白', '-'].includes(purchaseType.trim())) purchaseType = ''
+  // Auto-calc estimatedCost if missing
+  if (estimatedCost == null && unitPrice != null) estimatedCost = unitPrice * quantity
+
+  return { station, vendor, equipment, quantity, purchaseType, unitPrice, estimatedCost, actualCost: null }
+}
+
+function parseTsvToBudgetItems(text: string): { items: BudgetItem[]; total: number | null } {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length === 0) return { items: [], total: null }
+
+  let total: number | null = null
+  let mapping: FieldType[] | null = null
+  const dataRows: string[][] = []
+
+  for (const line of lines) {
+    const cols = line.split('\t').map(cleanCell)
+    // Try to detect header row and build column mapping
+    if (!mapping && isHeaderRow(cols)) {
+      mapping = detectColumnMapping(cols)
+      continue
+    }
+    if (isSummaryRow(cols)) {
+      for (let j = cols.length - 1; j >= 0; j--) {
+        const n = parseNumber(cols[j])
+        if (n != null && n > 0) { total = n; break }
+      }
+      continue
+    }
+    dataRows.push(cols)
+  }
+
+  // If no header was found, use fallback based on column count
+  if (!mapping && dataRows.length > 0) {
+    mapping = fallbackMapping(dataRows[0].length)
+  }
+  if (!mapping) return { items: [], total }
+
+  const items = dataRows.map(cols => rowToItem(cols, mapping!))
+
+  // Filter out empty rows (no equipment name)
+  return { items: items.filter(i => i.equipment.trim()), total }
+}
+
 export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEditorProps) {
   const { toast } = useToast()
   const [parsing, setParsing] = useState(false)
@@ -97,6 +219,57 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
 
   const removeRow = (index: number) => {
     onChange(items.filter((_, i) => i !== index))
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData('text/plain')
+    // Only intercept multi-cell paste (contains tabs = Excel/spreadsheet data)
+    if (!text.includes('\t')) return
+    e.preventDefault()
+
+    const { items: newItems, total } = parseTsvToBudgetItems(text)
+    if (newItems.length === 0) {
+      toast({ title: '無法解析貼上內容', description: '請確認是從 Excel 複製的表格資料', variant: 'destructive' })
+      return
+    }
+
+    onChange([...items, ...newItems])
+    setExpanded(true)
+
+    if (total != null && total > 0 && onAITotal) {
+      onAITotal(total)
+    }
+
+    const sum = newItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
+    toast({
+      title: `已貼上 ${newItems.length} 筆設備資料`,
+      description: `預估合計 NT$ ${sum.toLocaleString('zh-TW')}${total != null ? `，表格合計 NT$ ${total.toLocaleString('zh-TW')}` : ''}。請確認並修正`,
+    })
+  }
+
+  const handlePasteButton = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text.includes('\t')) {
+        toast({ title: '剪貼簿中沒有表格資料', description: '請先從 Excel 複製設備清單', variant: 'destructive' })
+        return
+      }
+      const { items: newItems, total } = parseTsvToBudgetItems(text)
+      if (newItems.length === 0) {
+        toast({ title: '無法解析貼上內容', variant: 'destructive' })
+        return
+      }
+      onChange([...items, ...newItems])
+      setExpanded(true)
+      if (total != null && total > 0 && onAITotal) onAITotal(total)
+      const sum = newItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
+      toast({
+        title: `已貼上 ${newItems.length} 筆設備資料`,
+        description: `預估合計 NT$ ${sum.toLocaleString('zh-TW')}。請確認並修正`,
+      })
+    } catch {
+      toast({ title: '無法讀取剪貼簿', description: '請改用 Ctrl+V 貼上', variant: 'destructive' })
+    }
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -201,7 +374,7 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
   const mismatchCount = items.filter(hasCostMismatch).length
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border" onPaste={handlePaste}>
       {/* ─── Header (always visible) ─── */}
       <div
         className="flex items-center justify-between px-3 py-2 cursor-pointer select-none hover:bg-muted/40 transition-colors"
@@ -241,6 +414,9 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
               : <ImageUp className="h-3 w-3 mr-1" />
             }
             {parsing ? 'AI 解析中...' : 'AI 解析'}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={handlePasteButton}>
+            <ClipboardPaste className="h-3 w-3 mr-1" />貼上
           </Button>
           <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={addRow}>
             <Plus className="h-3 w-3 mr-1" />新增
@@ -359,7 +535,7 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
             </div>
           ) : (
             <div className="text-center py-6 text-sm text-muted-foreground">
-              點擊「新增」手動輸入設備，或點擊「AI 解析」上傳截圖自動填入
+              點擊「新增」手動輸入、「AI 解析」上傳截圖、或從 Excel 複製後「貼上」/ Ctrl+V
             </div>
           )}
         </div>
