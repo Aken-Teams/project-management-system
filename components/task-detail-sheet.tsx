@@ -770,119 +770,136 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         onChange={setSelectedWeekStart}
                       />
 
-                      {/* Log entry rows */}
-                      <div className="space-y-3">
-                        {logRows.map((row, idx) => {
-                          const isOverdue = row.date && row.date > task.endDate && row.content.trim()
-                          const hasAttachments = row.attachments && row.attachments.length > 0
-                          return (
-                            <div key={idx} className={cn(
-                              'rounded-lg border p-3 space-y-2',
-                              isOverdue && 'border-red-300 bg-red-50/30 dark:bg-red-950/10',
-                            )}>
-                              {/* Row header: date + delete */}
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="date"
-                                  value={row.date}
-                                  onChange={e => {
-                                    const updated = [...logRows]
-                                    updated[idx] = { ...updated[idx], date: e.target.value }
-                                    setLogRows(updated)
-                                  }}
-                                  className={cn(
-                                    'text-sm border rounded-md px-2.5 py-1.5 bg-background w-[160px]',
-                                    isOverdue && 'border-red-300 text-red-600',
-                                    !row.date && 'text-muted-foreground',
-                                  )}
-                                />
-                                {row.existingLogId && (
-                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/30 rounded">已有紀錄</span>
-                                )}
-                                <div className="flex-1" />
-                                {logRows.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setLogRows(logRows.filter((_, i) => i !== idx))}
-                                    className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                    title="移除此列"
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
+                      {/* Log entry table (Proposal A: 日期 | 工作內容 | 附件 side-by-side) */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-medium text-muted-foreground">本周工作紀錄</span>
+                          <span className="text-[10px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
+                        </div>
+                        <div className="rounded-lg border overflow-hidden">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="bg-muted/40">
+                                <th className="text-[11px] font-medium text-muted-foreground text-left px-2 py-1.5 w-[120px] border-b">日期</th>
+                                <th className="text-[11px] font-medium text-muted-foreground text-left px-2 py-1.5 border-b">工作內容</th>
+                                <th className="text-[11px] font-medium text-muted-foreground text-center px-1 py-1.5 w-[36px] border-b">附件</th>
+                                <th className="w-[28px] border-b"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {logRows.map((row, idx) => {
+                                const isOverdue = row.date && row.date > task.endDate && row.content.trim()
+                                const attCount = row.attachments?.length || 0
+                                return (
+                                  <tr key={idx} className="border-b border-border/30 last:border-b-0">
+                                    <td className="px-1.5 py-1.5 align-top">
+                                      <input
+                                        type="date"
+                                        value={row.date}
+                                        onChange={e => {
+                                          const updated = [...logRows]
+                                          updated[idx] = { ...updated[idx], date: e.target.value }
+                                          setLogRows(updated)
+                                        }}
+                                        className={cn(
+                                          'w-full text-xs border rounded-md h-[34px] px-1.5 bg-background',
+                                          isOverdue && 'border-red-300 text-red-600',
+                                        )}
+                                      />
+                                      {row.existingLogId && (
+                                        <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
+                                      )}
+                                      {/* Attachment thumbnails under date */}
+                                      {attCount > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {row.attachments!.map((att, ai) => att.type === 'image' ? (
+                                            <a key={ai} href={att.url} target="_blank" rel="noopener">
+                                              <img src={att.url} alt={att.name} className="h-7 w-7 rounded object-cover border hover:opacity-80" />
+                                            </a>
+                                          ) : (
+                                            <a key={ai} href={att.url} target="_blank" rel="noopener"
+                                              className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px] hover:bg-muted/80"
+                                            >
+                                              <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                                              <span className="truncate max-w-[50px]">{att.name}</span>
+                                            </a>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="px-1.5 py-1.5 align-top">
+                                      <textarea
+                                        placeholder="工作內容..."
+                                        value={row.content}
+                                        onChange={e => {
+                                          const updated = [...logRows]
+                                          updated[idx] = { ...updated[idx], content: e.target.value }
+                                          setLogRows(updated)
+                                          // Auto-resize height
+                                          e.target.style.height = '34px'
+                                          e.target.style.height = e.target.scrollHeight + 'px'
+                                        }}
+                                        rows={1}
+                                        className="w-full min-h-[34px] text-xs resize-none border rounded-md bg-background px-2 py-[7px] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
+                                        style={{ overflow: 'hidden' }}
+                                      />
+                                    </td>
+                                    <td className="px-0.5 py-1.5 align-top text-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setUploadingRowIdx(idx)
+                                          rowFileInputRef.current?.click()
+                                        }}
+                                        className={cn(
+                                          'inline-flex items-center justify-center w-[34px] h-[34px] border rounded-md bg-background hover:bg-muted transition-colors',
+                                          attCount > 0 ? 'text-primary border-primary/30' : 'text-muted-foreground/40',
+                                        )}
+                                        title="上傳附件"
+                                      >
+                                        {uploadingRowIdx === idx
+                                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          : <Paperclip className="h-3.5 w-3.5" />
+                                        }
+                                      </button>
+                                    </td>
+                                    <td className="px-0 py-1.5 align-top text-center">
+                                      {logRows.length > 1 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setLogRows(logRows.filter((_, i) => i !== idx))}
+                                          className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                          title="移除此列"
+                                        >
+                                          <X className="h-3.5 w-3.5" />
+                                        </button>
+                                      ) : <div className="w-[34px] h-[34px]" />}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
 
-                              {/* Content */}
-                              <Textarea
-                                placeholder="工作內容..."
-                                value={row.content}
-                                onChange={e => {
-                                  const updated = [...logRows]
-                                  updated[idx] = { ...updated[idx], content: e.target.value }
-                                  setLogRows(updated)
-                                }}
-                                rows={2}
-                                className="min-h-[48px] text-sm resize-y"
-                              />
+                          {/* Hidden file input */}
+                          <input
+                            ref={rowFileInputRef}
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                            className="hidden"
+                            onChange={handleRowFileSelect}
+                          />
 
-                              {/* Attachments display */}
-                              {hasAttachments && (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {row.attachments!.filter(a => a.type === 'image').map((att, ai) => (
-                                    <a key={ai} href={att.url} target="_blank" rel="noopener" className="block">
-                                      <img src={att.url} alt={att.name} className="h-12 w-12 rounded object-cover border hover:opacity-80 transition-opacity" />
-                                    </a>
-                                  ))}
-                                  {row.attachments!.filter(a => a.type === 'file').map((att, ai) => (
-                                    <a key={ai} href={att.url} target="_blank" rel="noopener"
-                                      className="flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs hover:bg-muted/80 transition-colors"
-                                    >
-                                      <Paperclip className="h-3 w-3" />
-                                      <span className="truncate max-w-[120px]">{att.name}</span>
-                                    </a>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Attachment button */}
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setUploadingRowIdx(idx)
-                                    rowFileInputRef.current?.click()
-                                  }}
-                                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-                                >
-                                  <Paperclip className="h-3 w-3" />
-                                  附件
-                                </button>
-                                {uploadingRowIdx === idx && (
-                                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-
-                        {/* Hidden file input shared by all rows */}
-                        <input
-                          ref={rowFileInputRef}
-                          type="file"
-                          multiple
-                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
-                          className="hidden"
-                          onChange={handleRowFileSelect}
-                        />
-
-                        {/* Add new row */}
-                        <button
-                          type="button"
-                          className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2.5 border border-dashed border-primary/20 rounded-lg"
-                          onClick={() => setLogRows([...logRows, { date: '', content: '' }])}
-                        >
-                          + 新增一列
-                        </button>
+                          <button
+                            type="button"
+                            className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2 border-t border-dashed border-primary/20"
+                            onClick={() => setLogRows([...logRows, { date: '', content: '' }])}
+                          >
+                            + 新增一列
+                          </button>
+                        </div>
                       </div>
 
                       {/* Import subtask logs (if applicable) */}
@@ -936,6 +953,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           </div>
                         </div>
                       )}
+
+                      {/* Divider */}
+                      <div className="border-t border-dashed border-border/60" />
 
                       {/* Next week plan (optional, simple textarea) */}
                       <div className="space-y-1.5">
