@@ -14,6 +14,8 @@ interface WeekPickerProps {
   /** The Monday date string (YYYY-MM-DD) of the selected week */
   value: string
   onChange: (mondayStr: string) => void
+  /** Optional warning suffix shown after the week label (e.g. "已超過截止日") */
+  warningLabel?: string
   className?: string
 }
 
@@ -28,7 +30,7 @@ function getMondayOfWeek(d: Date): Date {
   return startOfWeek(d, { weekStartsOn: 1 })
 }
 
-export function WeekPicker({ value, onChange, className }: WeekPickerProps) {
+export function WeekPicker({ value, onChange, warningLabel, className }: WeekPickerProps) {
   const [open, setOpen] = React.useState(false)
 
   // Parse selected week from value string
@@ -119,12 +121,14 @@ export function WeekPicker({ value, onChange, className }: WeekPickerProps) {
               type="button"
               className={cn(
                 'flex-1 flex items-center justify-between gap-2 text-sm border rounded-lg px-3 py-2 bg-background hover:bg-muted/50 transition-colors min-w-0',
-                isThisWeek && 'border-primary/30',
+                isThisWeek && !warningLabel && 'border-primary/30',
+                warningLabel && 'border-red-300 bg-red-50/30 dark:bg-red-950/10',
               )}
             >
               <span className="truncate font-medium">
                 {displayLabel}
-                {isThisWeek && <span className="text-primary ml-1.5 text-xs font-normal">本周</span>}
+                {isThisWeek && !warningLabel && <span className="text-primary ml-1.5 text-xs font-normal">本周</span>}
+                {warningLabel && <span className="text-red-500 ml-1.5 text-xs font-normal">- {warningLabel}</span>}
               </span>
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             </button>

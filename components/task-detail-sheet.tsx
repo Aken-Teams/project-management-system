@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Ban,
   Calendar,
   CalendarClock,
   CheckCircle2,
@@ -391,6 +392,13 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       .filter(r => r.content.trim() && r.date > task.endDate)
       .map(r => r.date)
   }, [logRows, task])
+
+  // Check if selected week is beyond task endDate (week-level blocking)
+  const isWeekOverdue = useMemo(() => {
+    if (!task || !selectedWeekStart) return false
+    // The week starts on Monday (selectedWeekStart). If Monday > endDate, the entire week is past deadline.
+    return selectedWeekStart > task.endDate
+  }, [selectedWeekStart, task])
 
   // ── Log editing ──
   const handleStartEditLog = (log: TaskLog) => {
@@ -768,7 +776,42 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       <WeekPicker
                         value={selectedWeekStart}
                         onChange={setSelectedWeekStart}
+                        warningLabel={isWeekOverdue ? '已超過截止日' : undefined}
                       />
+
+                      {/* Week overdue blocking */}
+                      {isWeekOverdue ? (
+                        <div className="rounded-xl border-2 border-red-200 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900 p-4 space-y-3">
+                          <div className="flex items-start gap-2.5">
+                            <Ban className="h-4.5 w-4.5 text-red-500 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-semibold text-red-700 dark:text-red-400">無法填寫週報</p>
+                              <p className="text-xs text-red-600/80 dark:text-red-400/70 mt-1">
+                                任務預計截止日為 {new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}，目前已超過。請先申請延期後才能繼續填寫。
+                              </p>
+                            </div>
+                          </div>
+                          {hasPendingDelay ? (
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+                              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <p className="text-xs text-amber-700 dark:text-amber-400">延期申請審核中，請等待主管核准</p>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              className="w-full gap-2 border-red-200 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                              onClick={() => {
+                                setShowExtensionForm(true)
+                                setShowActions(false)
+                              }}
+                            >
+                              <CalendarClock className="h-4 w-4" />
+                              申請延期
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                      <>
 
                       {/* Log entry table (Proposal A: 日期 | 工作內容 | 附件 side-by-side) */}
                       <div className="space-y-1.5">
@@ -997,6 +1040,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           )}
                         </Button>
                       </div>
+                    </>
+                      )}
                     </>
                   ) : (
                     /* Step 2: Action buttons */
