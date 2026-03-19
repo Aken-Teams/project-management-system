@@ -4,11 +4,11 @@ import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Slider } from '@/components/ui/slider'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { WeekPicker } from '@/components/ui/week-picker'
 import {
   Sheet,
   SheetContent,
@@ -105,22 +105,63 @@ function getComputedStatusBadge(status: ComputedTaskStatus) {
 export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, onSelectTask, onTaskUpdate, readOnly }: TaskDetailSheetProps) {
   const { user } = useAuth()
 
-  // Progress slider
+  // Progress (for optimistic updates on complete/uncomplete)
   const [editProgress, setEditProgress] = useState<number>(0)
-  const [savingProgress, setSavingProgress] = useState(false)
 
   // Completion date
-  const [completedDate, setCompletedDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [completedDate, setCompletedDate] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
 
-  // Log submission
-  const [logContent, setLogContent] = useState('')
-  const [logNextPlans, setLogNextPlans] = useState<NextPlanItem[]>([{ content: '', date: '' }])
-  const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [existingLogId, setExistingLogId] = useState<string | null>(null)
+  // Helper: format local Date → "YYYY-MM-DD" (avoids toISOString UTC offset issues)
+  const fmtLocalDate = useCallback((d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }, [])
+
+  // Weekly batch log submission — flexible rows (not fixed Mon-Sun grid)
+  interface LogRow { date: string; content: string; existingLogId?: string; attachments?: TaskLogAttachment[] }
+  const [selectedWeekStart, setSelectedWeekStart] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+    return fmtLocalDate(new Date(now.getFullYear(), now.getMonth(), diff))
+  })
+  const [logRows, setLogRows] = useState<LogRow[]>([{ date: '', content: '' }])
+  const [uploadingRowIdx, setUploadingRowIdx] = useState<number | null>(null)
+  const [logNextWeekPlan, setLogNextWeekPlan] = useState('')
   const [showActions, setShowActions] = useState(false)
-  const [logContentInterim, setLogContentInterim] = useState('')
-  const [attachments, setAttachments] = useState<TaskLogAttachment[]>([])
-  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [submittingBatch, setSubmittingBatch] = useState(false)
+
+  // Backward compat: logDate used by subtask import and edit flows
+  const logDate = useMemo(() => {
+    const filledDates = logRows.filter(r => r.content.trim()).map(r => r.date).sort()
+    return filledDates[filledDates.length - 1] || fmtLocalDate(new Date())
+  }, [logRows, fmtLocalDate])
+
+  // Auto-calculated progress display
+  const autoProgress = useMemo(() => {
+    if (!task) return null
+    const taskStart = new Date(task.startDate)
+    const taskEnd = new Date(task.endDate)
+    const totalSpan = taskEnd.getTime() - taskStart.getTime()
+    if (totalSpan <= 0) return null
+    // Find latest logDate across all existing logs + current entries
+    const existingLogDates = project.taskLogs
+      .filter(l => l.taskId === task.id)
+      .map(l => l.logDate)
+    const currentEntryDates = logRows.filter(r => r.content.trim()).map(r => r.date)
+    const allDates = [...existingLogDates, ...currentEntryDates].sort()
+    const latestDate = allDates[allDates.length - 1]
+    if (!latestDate) return { percent: 0, latestDate: null, totalDays: Math.round(totalSpan / 86400000) }
+    const elapsed = new Date(latestDate).getTime() - taskStart.getTime()
+    const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
+    const totalDays = Math.round(totalSpan / 86400000)
+    return { percent, latestDate, totalDays }
+  }, [task, project.taskLogs, logRows])
 
   // Extension/delay request
   const [showExtensionForm, setShowExtensionForm] = useState(false)
@@ -148,8 +189,6 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [importSubLogsOpen, setImportSubLogsOpen] = useState(false)
   const [importSubLogsLoading, setImportSubLogsLoading] = useState(false)
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
   const editFileInputRef = useRef<HTMLInputElement>(null)
   const editImageInputRef = useRef<HTMLInputElement>(null)
 
@@ -164,97 +203,85 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   // Reset state when opening a new task
   useEffect(() => {
     if (open && task) {
-      setLogContent('')
-      setLogNextPlans([{ content: '', date: '' }])
-      setLogDate(new Date().toISOString().split('T')[0])
-      setCompletedDate(new Date().toISOString().split('T')[0])
+      const now = new Date()
+      const day = now.getDay()
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+      setSelectedWeekStart(fmtLocalDate(new Date(now.getFullYear(), now.getMonth(), diff)))
+      setLogRows([{ date: '', content: '' }])
+      setLogNextWeekPlan('')
+      // Default completion date = latest log date (if any), otherwise today
+      const latestLog = project.taskLogs
+        .filter(l => l.taskId === task.id)
+        .sort((a, b) => b.logDate.localeCompare(a.logDate))[0]
+      setCompletedDate(latestLog?.logDate || fmtLocalDate(now))
       setShowActions(false)
       setShowCompleteDateStep(false)
       setShowExtensionForm(false)
       setExtensionReason('')
       setExtensionDate('')
       setExtensionSupport('')
-      setLogContentInterim('')
-      setAttachments([])
-      setUploadingFiles(false)
       setEditingLogId(null)
       setOptimisticCompleted(null)
     }
   }, [open, task?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Prefill from existing log when logDate matches
+  // Prefill logRows from existing logs within selected week range
   useEffect(() => {
     if (!task || !open) return
-    const logs = project.taskLogs.filter(l => l.taskId === task.id)
-    const existing = logs.find(l => l.logDate === logDate)
-    if (existing) {
-      setExistingLogId(existing.id)
-      setLogContent(existing.content)
-      setLogNextPlans(existing.nextPlans?.length ? [...existing.nextPlans] : [{ content: '', date: '' }])
-      setAttachments(existing.attachments ? [...existing.attachments] : [])
-    } else {
-      setExistingLogId(null)
-      setLogContent('')
-      setLogNextPlans([{ content: '', date: '' }])
-      setAttachments([])
-    }
-  }, [logDate, task?.id, open, project.taskLogs]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const hasProgressChange = task ? editProgress !== task.progress : false
-
-  // ── Progress save ──
-  const handleSaveProgress = async () => {
-    if (!task || !hasProgressChange) return
-    setSavingProgress(true)
-    try {
-      const body: Record<string, unknown> = { progress: editProgress }
-      if (editProgress >= 100) {
-        body.status = 'done'
-        body.completedBy = user?.name ?? ''
-        body.completedAt = completedDate
-      } else if (editProgress > 0 && task.status === 'todo') {
-        body.status = 'in_progress'
+    const [y, m, d] = selectedWeekStart.split('-').map(Number)
+    const weekStart = fmtLocalDate(new Date(y, m - 1, d))
+    const weekEnd = fmtLocalDate(new Date(y, m - 1, d + 6))
+    const logs = project.taskLogs
+      .filter(l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd)
+      .sort((a, b) => a.logDate.localeCompare(b.logDate))
+    if (logs.length > 0) {
+      setLogRows(logs.map(l => ({
+        date: l.logDate,
+        content: l.content,
+        existingLogId: l.id,
+        attachments: l.attachments?.length ? [...l.attachments] : undefined,
+      })))
+      // Prefill nextWeekPlan from the latest log's nextPlans
+      const latestWithPlans = [...logs].reverse().find(l => l.nextPlans?.length)
+      if (latestWithPlans?.nextPlans) {
+        setLogNextWeekPlan(latestWithPlans.nextPlans.map(p => p.content).join('\n'))
+      } else {
+        setLogNextWeekPlan('')
       }
-      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      onTaskUpdate?.()
-    } finally {
-      setSavingProgress(false)
+    } else {
+      setLogRows([{ date: '', content: '' }])
+      setLogNextWeekPlan('')
     }
-  }
+  }, [selectedWeekStart, task?.id, open, project.taskLogs, fmtLocalDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── File/image select ──
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File upload for batch log rows
+  const rowFileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleRowFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (!files || files.length === 0) return
-    // Copy to array BEFORE clearing input (clearing value may empty the FileList reference)
+    if (!files || files.length === 0 || uploadingRowIdx === null) return
+    const idx = uploadingRowIdx
     const fileArray = Array.from(files)
     e.target.value = ''
-    setUploadingFiles(true)
     try {
       const uploaded: TaskLogAttachment[] = []
       for (const file of fileArray) {
         const fd = new FormData()
         fd.append('file', file)
         const res = await fetch('/api/upload', { method: 'POST', body: fd })
-        if (res.ok) {
-          uploaded.push(await res.json())
-        } else {
-          const err = await res.json().catch(() => ({}))
-          alert(`上傳失敗：${err.error || res.status}`)
-        }
+        if (res.ok) uploaded.push(await res.json())
       }
-      if (uploaded.length > 0) setAttachments(prev => [...prev, ...uploaded])
-    } catch (err) {
-      console.error('Upload error:', err)
-      alert('上傳失敗，請確認網路連線')
+      if (uploaded.length > 0) {
+        setLogRows(prev => prev.map((r, i) =>
+          i === idx ? { ...r, attachments: [...(r.attachments || []), ...uploaded] } : r
+        ))
+      }
+    } catch {
+      // ignore
     } finally {
-      setUploadingFiles(false)
+      setUploadingRowIdx(null)
     }
-  }, [])
+  }
 
   // ── Subtask log import ──
   const getSubtaskLogsContent = useCallback(() => {
@@ -275,11 +302,24 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     return entries.length > 0 ? entries : null
   }, [task, project.taskLogs, logDate])
 
+  // Helper: append imported text to the first empty row or add a new row
+  const appendToLogRows = useCallback((text: string) => {
+    setLogRows(prev => {
+      const emptyIdx = prev.findIndex(r => !r.content.trim())
+      if (emptyIdx >= 0) {
+        const updated = [...prev]
+        updated[emptyIdx] = { ...updated[emptyIdx], content: text }
+        return updated
+      }
+      return [...prev, { date: fmtLocalDate(new Date()), content: text }]
+    })
+  }, [fmtLocalDate])
+
   const handleImportSubLogsRaw = () => {
     const entries = getSubtaskLogsContent()
     if (!entries) return
     const text = entries.map(e => `【${e.title}】(${e.progress}%)\n${e.content}`).join('\n\n')
-    setLogContent(prev => prev ? `${prev}\n\n${text}` : text)
+    appendToLogRows(text)
     setImportSubLogsOpen(false)
   }
 
@@ -298,7 +338,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       })
       if (!res.ok) throw new Error()
       const { summary } = await res.json()
-      setLogContent(prev => prev ? `${prev}\n\n${summary}` : summary)
+      appendToLogRows(summary)
     } catch {
       handleImportSubLogsRaw()
     }
@@ -306,53 +346,51 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     setImportSubLogsOpen(false)
   }
 
-  // ── Log submission (create or update) ──
-  const handleSubmitLog = async () => {
-    if (!task || !logContent.trim() || !user) return
+  // ── Batch log submission (weekly) ──
+  const handleBatchSubmitLogs = async () => {
+    if (!task || !user) return
+    const entries = logRows
+      .filter(r => r.content.trim() && r.date)
+      .map(r => ({
+        logDate: r.date,
+        content: r.content.trim(),
+        existingLogId: r.existingLogId,
+        attachments: r.attachments?.length ? r.attachments : undefined,
+      }))
+    if (entries.length === 0) return
 
-    const content = logContent.trim()
-    const validPlans = logNextPlans.filter(p => p.content.trim())
-
+    setSubmittingBatch(true)
     try {
-      if (existingLogId) {
-        const res = await fetch(`/api/projects/${project.id}/task-logs/${existingLogId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content,
-            logDate,
-            nextPlans: validPlans.length > 0 ? validPlans : null,
-            attachments: attachments.length > 0 ? attachments : null,
-          }),
-        })
-        if (!res.ok) throw new Error()
-      } else {
-        const res = await fetch(`/api/projects/${project.id}/task-logs`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            taskId: task.id,
-            userId: user.id,
-            logDate,
-            content,
-            ...(validPlans.length > 0 ? { nextPlans: validPlans } : {}),
-            ...(attachments.length > 0 ? { attachments } : {}),
-          }),
-        })
-        if (!res.ok) throw new Error()
-      }
+      const nextPlans = logNextWeekPlan.trim()
+        ? [{ content: logNextWeekPlan.trim() }]
+        : []
+      const res = await fetch(`/api/projects/${project.id}/task-logs/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          userId: user.id,
+          entries,
+          ...(nextPlans.length > 0 ? { nextPlans } : {}),
+        }),
+      })
+      if (!res.ok) throw new Error()
       onTaskUpdate?.()
+      setShowActions(true)
     } catch {
       // fail silently
+    } finally {
+      setSubmittingBatch(false)
     }
-
-    setLogContent('')
-    setLogNextPlans([{ content: '', date: '' }])
-    setLogContentInterim('')
-    setExistingLogId(null)
-    setAttachments([])
-    setShowActions(true)
   }
+
+  // Check if any row's date exceeds task endDate (overdue blocking)
+  const overdueEntryDates = useMemo(() => {
+    if (!task) return [] as string[]
+    return logRows
+      .filter(r => r.content.trim() && r.date > task.endDate)
+      .map(r => r.date)
+  }, [logRows, task])
 
   // ── Log editing ──
   const handleStartEditLog = (log: TaskLog) => {
@@ -661,61 +699,19 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </Badge>
               )}
             </div>
-            {readOnly || isCompleted || hasSubtasks ? (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-3">
-                  <Progress value={task.progress} className="h-2 flex-1" />
-                  <span className="text-sm font-medium tabular-nums">{task.progress}%</span>
-                </div>
-                {hasSubtasks && !readOnly && !isCompleted && (
-                  <p className="text-xs text-muted-foreground">
-                    進度由子任務自動計算
-                  </p>
-                )}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <Progress value={autoProgress?.percent ?? task.progress} className="h-2 flex-1" />
+                <span className="text-sm font-medium tabular-nums">{autoProgress?.percent ?? task.progress}%</span>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <Slider
-                    value={[editProgress]}
-                    onValueChange={([v]) => setEditProgress(v)}
-                    max={100}
-                    step={5}
-                    className="flex-1"
-                  />
-                  <span className="text-sm font-bold tabular-nums w-[40px] text-right">{editProgress}%</span>
-                  {hasProgressChange && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 shrink-0"
-                      onClick={handleSaveProgress}
-                      disabled={savingProgress}
-                    >
-                      {savingProgress ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    </Button>
-                  )}
-                </div>
-                {hasProgressChange && editProgress >= 100 && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">完成日期</span>
-                    <input
-                      type="date"
-                      value={completedDate}
-                      min={(() => {
-                        const earliestLog = taskLogs.length > 0
-                          ? taskLogs.reduce((min, l) => l.logDate < min ? l.logDate : min, taskLogs[0].logDate)
-                          : null
-                        return earliestLog || task.startDate
-                      })()}
-                      onChange={e => setCompletedDate(e.target.value)}
-                      className="text-sm border rounded-lg px-2.5 py-1.5 bg-background"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+              <p className="text-[11px] text-muted-foreground">
+                {hasSubtasks
+                  ? '進度由子任務自動計算'
+                  : autoProgress?.latestDate
+                    ? `自動計算：最晚工作日 ${autoProgress.latestDate.slice(5).replace('-', '/')} / 總天數 ${autoProgress.totalDays} 天`
+                    : '自動計算：尚無工作紀錄'}
+              </p>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -766,210 +762,203 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       )}
                     </div>
                   ) : !showActions ? (
-                    /* Step 1: Input form */
+                    /* Step 1: Weekly batch input form (matching Proposal A mockup) */
                     <>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">填寫日期</span>
-                        <input
-                          type="date"
-                          value={logDate}
-                          onChange={e => setLogDate(e.target.value)}
-                          className="text-sm border rounded-lg px-2.5 py-1.5 bg-background"
-                        />
-                        {existingLogId && (
-                          <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                            此日期已有紀錄，將更新該筆資料
-                          </span>
-                        )}
-                      </div>
+                      {/* Week selector */}
+                      <WeekPicker
+                        value={selectedWeekStart}
+                        onChange={setSelectedWeekStart}
+                      />
 
-                      <div className={cn(
-                        'rounded-xl border bg-muted/30 transition-colors overflow-hidden',
-                        'border-muted-foreground/20 focus-within:border-primary/40 focus-within:bg-background'
-                      )}>
-                        {/* Import subtask logs */}
-                        {(task.subtasks || []).length > 0 && (
-                          <div className="flex justify-end px-3 pt-2">
-                            <Popover open={importSubLogsOpen} onOpenChange={setImportSubLogsOpen}>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
-                                >
-                                  <FileText className="h-3 w-3" />
-                                  帶入子任務紀錄
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent align="end" className="w-52 p-1.5">
-                                <button
-                                  onClick={handleImportSubLogsRaw}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left"
-                                >
-                                  <FileText className="h-4 w-4 text-muted-foreground" />
-                                  原始資料
-                                </button>
-                                <button
-                                  onClick={handleImportSubLogsAI}
-                                  disabled={importSubLogsLoading}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left disabled:opacity-50"
-                                >
-                                  {importSubLogsLoading
-                                    ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                    : <Sparkles className="h-4 w-4 text-amber-500" />
-                                  }
-                                  AI 彙整
-                                </button>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        )}
-                        <Textarea
-                          placeholder="描述您今天做了什麼..."
-                          value={logContent + (logContentInterim ? (logContent ? ' ' : '') + logContentInterim : '')}
-                          onChange={e => { setLogContent(e.target.value); setLogContentInterim('') }}
-                          rows={5}
-                          className="text-sm resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 rounded-none"
-                        />
-
-                        {/* Attachments inside box */}
-                        {attachments.length > 0 && (
-                          <div className="px-3 pb-2 space-y-1.5">
-                            {attachments.filter(a => a.type === 'image').length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {attachments.filter(a => a.type === 'image').map((att) => (
-                                  <div key={att.url} className="relative group/img">
-                                    <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded-lg border border-border" />
-                                    <button
-                                      onClick={() => setAttachments(prev => prev.filter(a => a.url !== att.url))}
-                                      className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-background border border-border shadow-sm text-muted-foreground hover:text-destructive flex items-center justify-center"
-                                    >
-                                      <X className="h-2.5 w-2.5" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {attachments.filter(a => a.type === 'file').length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                {attachments.filter(a => a.type === 'file').map((att) => (
-                                  <div key={att.url} className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg border border-border/70 bg-muted/50 text-xs">
-                                    <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                                    <span className="max-w-[120px] truncate">{att.name}</span>
-                                    <button
-                                      onClick={() => setAttachments(prev => prev.filter(a => a.url !== att.url))}
-                                      className="ml-0.5 text-muted-foreground hover:text-destructive"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Toolbar */}
-                        <div className="flex items-center justify-between px-2 py-1.5 border-t border-border/40">
-                          <div className="flex items-center gap-0.5">
-                            <VoiceInputButton
-                              className="h-7 w-7"
-                              onTranscript={(text) => { setLogContent(prev => prev ? `${prev} ${text}` : text); setLogContentInterim('') }}
-                              onInterimTranscript={setLogContentInterim}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => imageInputRef.current?.click()}
-                              disabled={uploadingFiles}
-                              className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-                              title="上傳圖片"
-                            >
-                              <ImagePlus className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              disabled={uploadingFiles}
-                              className="p-1.5 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
-                              title="上傳檔案"
-                            >
-                              <Paperclip className="h-4 w-4" />
-                            </button>
-                            {uploadingFiles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Hidden file inputs */}
-                      <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
-                      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
-
-                      {/* Next plans (optional, multiple items) */}
-                      <div className="rounded-lg border border-dashed border-border p-3 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs font-medium text-muted-foreground">預計後續工作</span>
-                            <span className="text-[10px] text-muted-foreground/50">選填</span>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {logNextPlans.map((item, idx) => (
-                            <div key={idx} className="flex gap-2 items-start">
-                              <div className="flex-1 space-y-1.5">
+                      {/* Log entry rows */}
+                      <div className="space-y-3">
+                        {logRows.map((row, idx) => {
+                          const isOverdue = row.date && row.date > task.endDate && row.content.trim()
+                          const hasAttachments = row.attachments && row.attachments.length > 0
+                          return (
+                            <div key={idx} className={cn(
+                              'rounded-lg border p-3 space-y-2',
+                              isOverdue && 'border-red-300 bg-red-50/30 dark:bg-red-950/10',
+                            )}>
+                              {/* Row header: date + delete */}
+                              <div className="flex items-center gap-2">
                                 <input
                                   type="date"
-                                  value={item.date || ''}
-                                  min={(() => {
-                                    const d = new Date(logDate)
-                                    d.setDate(d.getDate() + 1)
-                                    return d.toISOString().split('T')[0]
-                                  })()}
+                                  value={row.date}
                                   onChange={e => {
-                                    const updated = [...logNextPlans]
+                                    const updated = [...logRows]
                                     updated[idx] = { ...updated[idx], date: e.target.value }
-                                    setLogNextPlans(updated)
+                                    setLogRows(updated)
                                   }}
-                                  className="h-7 text-xs border rounded px-2 bg-background text-muted-foreground w-full"
+                                  className={cn(
+                                    'text-sm border rounded-md px-2.5 py-1.5 bg-background w-[160px]',
+                                    isOverdue && 'border-red-300 text-red-600',
+                                    !row.date && 'text-muted-foreground',
+                                  )}
                                 />
-                                <Textarea
-                                  placeholder="預計要做什麼事項..."
-                                  className="min-h-[60px] text-sm resize-none border-0 bg-muted/30 shadow-none focus-visible:ring-0"
-                                  value={item.content}
-                                  onChange={e => {
-                                    const updated = [...logNextPlans]
-                                    updated[idx] = { ...updated[idx], content: e.target.value }
-                                    setLogNextPlans(updated)
-                                  }}
-                                />
+                                {row.existingLogId && (
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/30 rounded">已有紀錄</span>
+                                )}
+                                <div className="flex-1" />
+                                {logRows.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setLogRows(logRows.filter((_, i) => i !== idx))}
+                                    className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                    title="移除此列"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </div>
-                              {logNextPlans.length > 1 && (
+
+                              {/* Content */}
+                              <Textarea
+                                placeholder="工作內容..."
+                                value={row.content}
+                                onChange={e => {
+                                  const updated = [...logRows]
+                                  updated[idx] = { ...updated[idx], content: e.target.value }
+                                  setLogRows(updated)
+                                }}
+                                rows={2}
+                                className="min-h-[48px] text-sm resize-y"
+                              />
+
+                              {/* Attachments display */}
+                              {hasAttachments && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {row.attachments!.filter(a => a.type === 'image').map((att, ai) => (
+                                    <a key={ai} href={att.url} target="_blank" rel="noopener" className="block">
+                                      <img src={att.url} alt={att.name} className="h-12 w-12 rounded object-cover border hover:opacity-80 transition-opacity" />
+                                    </a>
+                                  ))}
+                                  {row.attachments!.filter(a => a.type === 'file').map((att, ai) => (
+                                    <a key={ai} href={att.url} target="_blank" rel="noopener"
+                                      className="flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs hover:bg-muted/80 transition-colors"
+                                    >
+                                      <Paperclip className="h-3 w-3" />
+                                      <span className="truncate max-w-[120px]">{att.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Attachment button */}
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
-                                  className="mt-1 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                                  onClick={() => setLogNextPlans(logNextPlans.filter((_, i) => i !== idx))}
+                                  onClick={() => {
+                                    setUploadingRowIdx(idx)
+                                    rowFileInputRef.current?.click()
+                                  }}
+                                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
                                 >
-                                  <X className="h-3.5 w-3.5" />
+                                  <Paperclip className="h-3 w-3" />
+                                  附件
                                 </button>
-                              )}
+                                {uploadingRowIdx === idx && (
+                                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                )}
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                          )
+                        })}
+
+                        {/* Hidden file input shared by all rows */}
+                        <input
+                          ref={rowFileInputRef}
+                          type="file"
+                          multiple
+                          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                          className="hidden"
+                          onChange={handleRowFileSelect}
+                        />
+
+                        {/* Add new row */}
                         <button
                           type="button"
-                          className="text-xs text-primary hover:text-primary/80 transition-colors flex items-center gap-1"
-                          onClick={() => setLogNextPlans([...logNextPlans, { content: '', date: '' }])}
+                          className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2.5 border border-dashed border-primary/20 rounded-lg"
+                          onClick={() => setLogRows([...logRows, { date: '', content: '' }])}
                         >
-                          <span className="text-sm leading-none">+</span> 新增一筆
+                          + 新增一列
                         </button>
                       </div>
 
+                      {/* Import subtask logs (if applicable) */}
+                      {(task.subtasks || []).length > 0 && (
+                        <div className="flex justify-end">
+                          <Popover open={importSubLogsOpen} onOpenChange={setImportSubLogsOpen}>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
+                              >
+                                <FileText className="h-3 w-3" />
+                                帶入子任務紀錄
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-52 p-1.5">
+                              <button
+                                onClick={handleImportSubLogsRaw}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left"
+                              >
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                原始資料
+                              </button>
+                              <button
+                                onClick={handleImportSubLogsAI}
+                                disabled={importSubLogsLoading}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left disabled:opacity-50"
+                              >
+                                {importSubLogsLoading
+                                  ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                  : <Sparkles className="h-4 w-4 text-amber-500" />
+                                }
+                                AI 彙整
+                              </button>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      )}
+
+                      {/* Overdue warning */}
+                      {overdueEntryDates.length > 0 && (
+                        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-800">
+                          <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                          <div className="text-sm">
+                            <p className="font-medium text-red-700 dark:text-red-400">
+                              {overdueEntryDates.length} 筆工作日期超過任務預計結束日（{task.endDate}）
+                            </p>
+                            <p className="text-red-600/70 dark:text-red-400/70 mt-0.5">
+                              請先提出延期申請，或移除超過截止日的內容
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Next week plan (optional, simple textarea) */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-medium text-muted-foreground">預計下周工作</span>
+                          <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">選填</span>
+                        </div>
+                        <Textarea
+                          placeholder="預計下周要做什麼..."
+                          value={logNextWeekPlan}
+                          onChange={e => setLogNextWeekPlan(e.target.value)}
+                          rows={2}
+                          className="min-h-[60px] text-sm resize-y"
+                        />
+                      </div>
+
                       {/* Submit + Skip */}
-                      <div className="flex items-center justify-between">
+                      <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="gap-1.5 text-sm"
+                          className="flex-1 gap-1.5 text-sm"
                           onClick={() => setShowActions(true)}
                         >
                           跳過，直接操作
@@ -977,14 +966,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         </Button>
                         <Button
                           size="sm"
-                          className="gap-1.5 rounded-lg shadow-sm px-4 text-sm"
-                          disabled={!logContent.trim()}
-                          onClick={handleSubmitLog}
+                          className="flex-1 gap-1.5 rounded-lg shadow-sm text-sm"
+                          disabled={!logRows.some(r => r.content.trim() && r.date) || logRows.some(r => r.content.trim() && !r.date) || overdueEntryDates.length > 0 || submittingBatch}
+                          onClick={handleBatchSubmitLogs}
                         >
-                          {existingLogId ? (
-                            <><Save className="h-3.5 w-3.5" />更新</>
+                          {submittingBatch ? (
+                            <><Loader2 className="h-3.5 w-3.5 animate-spin" />儲存中...</>
                           ) : (
-                            <><Send className="h-3.5 w-3.5" />提交</>
+                            <><Send className="h-3.5 w-3.5" />提交週報</>
                           )}
                         </Button>
                       </div>
@@ -1025,16 +1014,16 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             className="w-full text-sm border rounded-lg px-3 py-2.5 bg-background"
                           />
                           <p className="text-[11px] text-muted-foreground">
-                            預設為今天，不可早於實際開始日期
+                            預設為最晚工作紀錄日，不可早於實際開始日期
                           </p>
                         </div>
 
                         {/* Progress warning */}
-                        {editProgress < 100 && (
+                        {(autoProgress?.percent ?? task.progress) < 100 && (
                           <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
                             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                             <p className="text-sm text-amber-700 dark:text-amber-400">
-                              目前進度為 <span className="font-semibold">{editProgress}%</span>，標記完成後將自動更新為 100%
+                              目前進度為 <span className="font-semibold">{autoProgress?.percent ?? task.progress}%</span>，標記完成後將自動更新為 100%
                             </p>
                           </div>
                         )}

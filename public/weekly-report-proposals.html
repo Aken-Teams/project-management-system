@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>週報填寫方案比較</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 24px; }
+
+  .header { text-align: center; margin-bottom: 32px; }
+  .header h1 { font-size: 22px; margin-bottom: 6px; font-weight: 600; }
+  .header p { color: #666; font-size: 13px; }
+
+  .proposals { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+
+  .proposal {
+    background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    width: 420px; overflow: hidden; display: flex; flex-direction: column;
+    border: 1px solid #e5e7eb;
+  }
+
+  .proposal-header {
+    padding: 14px 20px; color: white; font-weight: 600; font-size: 15px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .proposal-header .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.25);
+  }
+  .proposal-a .proposal-header { background: #3b82f6; }
+  .proposal-b .proposal-header { background: #8b5cf6; }
+  .proposal-c .proposal-header { background: #f59e0b; }
+
+  .task-info {
+    padding: 10px 20px; background: #fafafa; border-bottom: 1px solid #eee;
+    font-size: 12px; color: #666;
+  }
+  .task-info strong { color: #333; }
+
+  .ui-mock { padding: 20px; flex: 1; }
+
+  /* Form elements */
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    font-size: 12px; color: #64748b; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; font-weight: 500;
+  }
+  .form-label svg { width: 14px; height: 14px; color: #94a3b8; }
+
+  select, input[type="date"], input[type="text"], textarea {
+    width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px;
+    font-size: 13px; font-family: inherit; background: white; color: #333;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  select:focus, input:focus, textarea:focus { outline: none; border-color: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,0.12); }
+  textarea { resize: vertical; min-height: 70px; }
+
+  .date-range { display: flex; gap: 8px; align-items: center; }
+  .date-range span { font-size: 12px; color: #94a3b8; }
+  .date-range input { flex: 1; }
+
+  /* Textarea container with toolbar */
+  .textarea-wrap {
+    border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .textarea-wrap:focus-within { border-color: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,0.12); }
+  .textarea-wrap textarea {
+    border: none; border-radius: 0; resize: vertical; min-height: 80px; padding: 10px 12px;
+  }
+  .textarea-wrap textarea:focus { box-shadow: none; }
+  .textarea-toolbar {
+    display: flex; align-items: center; gap: 2px; padding: 6px 8px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .toolbar-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border: none; background: none; border-radius: 6px;
+    cursor: pointer; color: #64748b; transition: background 0.15s, color 0.15s;
+  }
+  .toolbar-btn:hover { background: #f1f5f9; color: #334155; }
+  .toolbar-btn svg { width: 16px; height: 16px; }
+
+  /* Table style for Plan A */
+  .log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .log-table th {
+    background: #f8fafc; padding: 6px 8px; text-align: left; font-weight: 500;
+    color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;
+  }
+  .log-table td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  .log-table input, .log-table textarea {
+    border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 8px; font-size: 12px;
+    width: 100%;
+  }
+  .log-table textarea { min-height: 36px; resize: none; }
+  .log-table .date-col { width: 115px; }
+  .log-table .attach-col { width: 44px; text-align: center; }
+  .log-table .tbl-attach-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border: 1px solid #e2e8f0; border-radius: 6px;
+    background: white; cursor: pointer; color: #94a3b8; transition: all 0.15s;
+  }
+  .log-table .tbl-attach-btn:hover { background: #f1f5f9; color: #64748b; }
+  .log-table .tbl-attach-btn svg { width: 14px; height: 14px; }
+  .add-row-btn {
+    font-size: 12px; color: #3b82f6; background: none; border: 1px dashed #bfdbfe;
+    border-radius: 8px; padding: 7px; width: 100%; cursor: pointer; margin-top: 6px;
+    transition: background 0.15s;
+  }
+  .add-row-btn:hover { background: #eff6ff; }
+
+  /* Section divider */
+  .section-divider {
+    border-top: 1px dashed #e2e8f0; margin: 14px 0; padding-top: 14px;
+  }
+  .section-title {
+    font-size: 12px; color: #94a3b8; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-weight: 500;
+  }
+  .section-title svg { width: 14px; height: 14px; }
+  .optional-tag {
+    font-size: 10px; color: #94a3b8; background: #f1f5f9; padding: 1px 6px; border-radius: 4px; font-weight: 400;
+  }
+
+  /* Progress bar */
+  .progress-section { margin-bottom: 14px; }
+  .progress-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .progress-bar { flex: 1; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 3px; }
+  .progress-pct { font-size: 13px; font-weight: 600; min-width: 40px; text-align: right; }
+  .progress-note { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+  .btn {
+    flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-skip { background: #f1f5f9; color: #64748b; }
+  .btn-submit { background: #3b82f6; color: white; }
+  .proposal-b .btn-submit { background: #8b5cf6; }
+  .proposal-c .btn-submit { background: #f59e0b; color: #fff; }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* Pros & Cons */
+  .eval { padding: 16px 20px; border-top: 1px solid #eee; background: #fafbfc; }
+  .eval h4 { font-size: 13px; margin-bottom: 8px; color: #333; font-weight: 600; }
+  .eval ul { list-style: none; font-size: 12px; line-height: 1.9; }
+  .eval .pro { color: #166534; }
+  .eval .pro::before { content: '+ '; font-weight: 700; }
+  .eval .con { color: #991b1b; }
+  .eval .con::before { content: '- '; font-weight: 700; }
+
+  /* Overdue warning */
+  .overdue-warning {
+    background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+    padding: 10px 14px; font-size: 12px; color: #dc2626; margin-bottom: 12px;
+    display: flex; align-items: flex-start; gap: 8px;
+  }
+  .overdue-warning svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  .disabled-overlay { position: relative; }
+  .disabled-overlay::after {
+    content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.6);
+    border-radius: 8px; pointer-events: none;
+  }
+
+  /* Actual date display for Plan C */
+  .actual-dates { display: flex; gap: 10px; font-size: 12px; }
+  .actual-date-item {
+    flex: 1; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  }
+  .actual-date-label { color: #64748b; font-size: 11px; margin-bottom: 2px; }
+  .actual-date-value { font-weight: 600; color: #334155; display: flex; align-items: center; gap: 4px; }
+  .actual-date-value svg { width: 12px; height: 12px; color: #94a3b8; }
+  .actual-date-item.editable { border-color: #fbbf24; background: #fffbeb; cursor: pointer; }
+  .actual-date-item.editable .actual-date-label { color: #92400e; }
+
+  .progress-input {
+    width: 52px; text-align: center; font-weight: 600; font-size: 13px;
+    border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px 4px;
+  }
+
+  /* Summary section */
+  .summary-box {
+    margin-top: 32px; max-width: 1320px; margin-left: auto; margin-right: auto;
+    background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 24px; border: 1px solid #e5e7eb;
+  }
+  .summary-box h3 { margin-bottom: 16px; font-size: 16px; font-weight: 600; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .compare-table th { background: #f8fafc; padding: 10px 12px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600; color: #334155; }
+  .compare-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  .compare-table tr:hover td { background: #fafbfc; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+  .tag-easy { background: #dcfce7; color: #166534; }
+  .tag-medium { background: #fef9c3; color: #854d0e; }
+  .tag-hard { background: #fee2e2; color: #991b1b; }
+  .tag-high { background: #dcfce7; color: #166534; }
+  .tag-low { background: #fee2e2; color: #991b1b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>週報填寫方案比較</h1>
+  <p>任務範例：供應商報價評估（3/1 ~ 3/30，共 30 天）｜目前日期 3/19</p>
+</div>
+
+<!-- ═══ SVG icon defs (reusable) ═══ -->
+<svg style="display:none">
+  <symbol id="ico-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="ico-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="ico-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="ico-paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="ico-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="ico-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="ico-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="ico-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+  <symbol id="ico-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="ico-ban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="ico-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="ico-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></symbol>
+  <symbol id="ico-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="ico-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+</svg>
+
+<div class="proposals">
+
+  <!-- ═══════════════ 方案 A ═══════════════ -->
+  <div class="proposal proposal-a">
+    <div class="proposal-header">
+      方案 A：按日期記錄工作
+      <span class="badge">彈性 + 可追溯</span>
+    </div>
+    <div class="task-info">
+      <strong>供應商報價評估</strong> ｜ 預計 3/1 ~ 3/30（30天）
+    </div>
+    <div class="ui-mock">
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-calendar"/></svg> 週報周別</div>
+        <select>
+          <option>W12 (3/17 ~ 3/23)</option>
+          <option>W11 (3/10 ~ 3/16)</option>
+          <option>W10 (3/3 ~ 3/9)</option>
+        </select>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar"><div class="progress-bar-fill" style="width:63%; background:#3b82f6;"></div></div>
+          <span class="progress-pct" style="color:#3b82f6;">63%</span>
+        </div>
+        <div class="progress-note">自動計算：最晚工作日 3/19 / 總天數 30 天</div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-file-text"/></svg> 本周工作紀錄 <span style="font-weight:400;color:#94a3b8;font-size:11px;">（不限每天都要填，日期也不限當周）</span></div>
+        <table class="log-table">
+          <thead>
+            <tr><th class="date-col">日期</th><th>工作內容</th><th class="attach-col">附件</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="date" value="2026-03-17" style="font-size:11px;padding:4px 6px;"></td>
+              <td><textarea placeholder="工作內容...">聯繫廠商 A 確認報價單</textarea></td>
+              <td><button class="tbl-attach-btn"><svg><use href="#ico-paperclip"/></svg></button></td>
+            </tr>
+            <tr>
+              <td><input type="date" value="2026-03-18" style="font-size:11px;padding:4px 6px;"></td>
+              <td><textarea placeholder="工作內容...">比較 3 家廠商規格差異</textarea></td>
+              <td><button class="tbl-attach-btn"><svg><use href="#ico-paperclip"/></svg></button></td>
+            </tr>
+            <tr>
+              <td><input type="date" value="2026-03-19" style="font-size:11px;padding:4px 6px;"></td>
+              <td><textarea placeholder="工作內容...">製作報價比較表</textarea></td>
+              <td><button class="tbl-attach-btn"><svg><use href="#ico-paperclip"/></svg></button></td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="add-row-btn">+ 新增一列</button>
+      </div>
+
+      <div class="section-divider"></div>
+      <div class="form-group">
+        <div class="section-title"><svg><use href="#ico-clock"/></svg> 預計下周工作 <span class="optional-tag">選填</span></div>
+        <textarea placeholder="預計下周要做什麼...">提交報價比較表給主管審核，安排廠商 B 二次議價</textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-skip">跳過，直接操作 <svg><use href="#ico-arrow-right"/></svg></button>
+        <button class="btn btn-submit"><svg><use href="#ico-send"/></svg> 提交週報</button>
+      </div>
+    </div>
+
+    <div class="eval">
+      <h4>評估</h4>
+      <ul>
+        <li class="pro">不限每天都要填，想填幾天就幾天，日期也不限當周</li>
+        <li class="pro">有填的日期都清楚可追溯，管理層看得到做了什麼</li>
+        <li class="pro">進度自動算（看最晚工作日），有管理依據</li>
+        <li class="pro">延期卡控精確：工作日 > 截止日就擋</li>
+        <li class="con">工作描述需按日期分開填寫，無法像 Excel 整段貼上</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ═══════════════ 方案 B ═══════════════ -->
+  <div class="proposal proposal-b">
+    <div class="proposal-header">
+      方案 B：周別 + 工作日期區間
+      <span class="badge">平衡方案</span>
+    </div>
+    <div class="task-info">
+      <strong>供應商報價評估</strong> ｜ 預計 3/1 ~ 3/30（30天）
+    </div>
+    <div class="ui-mock">
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-calendar"/></svg> 週報周別</div>
+        <select>
+          <option>W12 (3/17 ~ 3/23)</option>
+          <option>W11 (3/10 ~ 3/16)</option>
+          <option>W10 (3/3 ~ 3/9)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-wrench"/></svg> 本周實際工作日期</div>
+        <div class="date-range">
+          <input type="date" value="2026-03-14">
+          <span>~</span>
+          <input type="date" value="2026-03-19">
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar"><div class="progress-bar-fill" style="width:63%; background:#8b5cf6;"></div></div>
+          <span class="progress-pct" style="color:#8b5cf6;">63%</span>
+        </div>
+        <div class="progress-note">自動計算：工作結束日 3/19 / 總天數 30 天</div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-file-text"/></svg> 本周工作內容</div>
+        <div class="textarea-wrap">
+          <textarea rows="4" placeholder="描述本周做了什麼...">1. 聯繫廠商 A 確認報價單
+2. 比較 3 家廠商規格差異
+3. 製作報價比較表</textarea>
+          <div class="textarea-toolbar">
+            <button class="toolbar-btn" title="語音輸入"><svg><use href="#ico-mic"/></svg></button>
+            <button class="toolbar-btn" title="上傳圖片"><svg><use href="#ico-image"/></svg></button>
+            <button class="toolbar-btn" title="上傳附件"><svg><use href="#ico-paperclip"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+      <div class="form-group">
+        <div class="section-title"><svg><use href="#ico-clock"/></svg> 預計下周工作 <span class="optional-tag">選填</span></div>
+        <textarea placeholder="預計下周要做什麼...">提交報價比較表給主管審核，安排廠商 B 二次議價</textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-skip">跳過，直接操作 <svg><use href="#ico-arrow-right"/></svg></button>
+        <button class="btn btn-submit" style="background:#8b5cf6;"><svg><use href="#ico-send"/></svg> 提交週報</button>
+      </div>
+    </div>
+
+    <div class="eval">
+      <h4>評估</h4>
+      <ul>
+        <li class="pro">填寫簡單：一個日期區間 + 一段文字就好</li>
+        <li class="pro">進度自動算（看工作結束日），有管理依據</li>
+        <li class="pro">可以補填上周（W12 填 3/14 的工作結束日，合理）</li>
+        <li class="pro">延期卡控：工作結束日 > 截止日就擋</li>
+        <li class="con">每次都要選工作日期區間，有些人覺得多此一舉</li>
+        <li class="con">工作日期跟周別可能差很多，看的人需理解</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ═══════════════ 方案 C ═══════════════ -->
+  <div class="proposal proposal-c">
+    <div class="proposal-header">
+      方案 C：純周別 + 甘特圖實際日期
+      <span class="badge">最像 Excel</span>
+    </div>
+    <div class="task-info">
+      <strong>供應商報價評估</strong> ｜ 預計 3/1 ~ 3/30（30天）
+    </div>
+    <div class="ui-mock">
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-calendar"/></svg> 週報周別</div>
+        <select>
+          <option>W12 (3/17 ~ 3/23)</option>
+          <option>W11 (3/10 ~ 3/16)</option>
+          <option>W10 (3/3 ~ 3/9)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-chart"/></svg> 甘特圖實際日期（可直接修改）</div>
+        <div class="actual-dates">
+          <div class="actual-date-item editable">
+            <div class="actual-date-label">實際開始</div>
+            <div class="actual-date-value">3/3 <svg><use href="#ico-edit"/></svg></div>
+          </div>
+          <div class="actual-date-item editable">
+            <div class="actual-date-label">實際結束</div>
+            <div class="actual-date-value">-- <svg><use href="#ico-edit"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar"><div class="progress-bar-fill" style="width:70%; background:#f59e0b;"></div></div>
+          <input type="number" value="70" min="0" max="100" class="progress-input" style="border-color:#fbbf24;">
+          <span style="font-size:12px; color:#94a3b8;">%</span>
+        </div>
+        <div class="progress-note">手動填寫百分比（如同 Excel）</div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><svg><use href="#ico-file-text"/></svg> 本周工作內容</div>
+        <div class="textarea-wrap">
+          <textarea rows="4" placeholder="描述本周做了什麼...">1. 聯繫廠商 A 確認報價單
+2. 比較 3 家廠商規格差異
+3. 製作報價比較表</textarea>
+          <div class="textarea-toolbar">
+            <button class="toolbar-btn" title="語音輸入"><svg><use href="#ico-mic"/></svg></button>
+            <button class="toolbar-btn" title="上傳圖片"><svg><use href="#ico-image"/></svg></button>
+            <button class="toolbar-btn" title="上傳附件"><svg><use href="#ico-paperclip"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+      <div class="form-group">
+        <div class="section-title"><svg><use href="#ico-clock"/></svg> 預計下周工作 <span class="optional-tag">選填</span></div>
+        <textarea placeholder="預計下周要做什麼...">提交報價比較表給主管審核，安排廠商 B 二次議價</textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-skip">跳過，直接操作 <svg><use href="#ico-arrow-right"/></svg></button>
+        <button class="btn btn-submit" style="background:#f59e0b;"><svg><use href="#ico-send"/></svg> 提交週報</button>
+      </div>
+    </div>
+
+    <div class="eval">
+      <h4>評估</h4>
+      <ul>
+        <li class="pro">最接近 Excel 習慣：進度自己填、日期自己改</li>
+        <li class="pro">填寫最簡單：選周別 + 寫內容 + 填 % 就好</li>
+        <li class="pro">使用者自由度最高，不會覺得被系統卡</li>
+        <li class="con">進度 % 手動填，數字沒有依據可能亂填</li>
+        <li class="con">實際日期可隨意改，失去管理卡控意義</li>
+        <li class="con">延期判定困難：可以把結束日一直往後改，不需要申請</li>
+        <li class="con">管理者很難驗證進度真實性</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ 超過截止日 ═══════════════ -->
+<div class="summary-box" style="margin-top:32px;">
+  <h3>超過截止日的情境（方案 A & B 共用）</h3>
+  <p style="color:#64748b; font-size:13px; margin-bottom:16px;">當選擇的周別結束日 > 任務截止日時，擋住填寫，要求先申請延期</p>
+
+  <div style="max-width:420px; background:#fff; border:2px solid #fecaca; border-radius:12px; padding:20px;">
+    <div class="form-group">
+      <div class="form-label"><svg><use href="#ico-calendar"/></svg> 週報周別</div>
+      <select style="border-color:#fca5a5;">
+        <option>W14 (3/31 ~ 4/6) - 已超過截止日</option>
+      </select>
+    </div>
+
+    <div class="overdue-warning">
+      <svg><use href="#ico-ban"/></svg>
+      <div>
+        <strong>無法填寫週報</strong><br>
+        任務預計截止日為 3/30，目前已超過。請先申請延期後才能繼續填寫。
+      </div>
+    </div>
+
+    <div class="disabled-overlay" style="border-radius:8px;">
+      <textarea disabled style="opacity:0.4;" rows="3">工作內容...</textarea>
+    </div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca;">
+        <svg><use href="#ico-file-text"/></svg> 申請延期
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 完成標記情境 ═══════════════ -->
+<div class="summary-box">
+  <h3>標記完成的情境（三方案比較）</h3>
+  <p style="color:#64748b; font-size:13px; margin-bottom:20px;">使用者按「跳過，直接操作」後可選擇標記完成或申請延期，以下為標記完成的流程差異</p>
+
+  <div style="display:flex; gap:20px; flex-wrap:wrap;">
+
+    <!-- 共用：選擇下一步（現有設計） -->
+    <div style="width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin-bottom:4px;">
+      <div style="font-size:13px; font-weight:600; color:#22c55e; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+        <svg style="width:16px;height:16px;"><use href="#ico-chart"/></svg>
+        共用流程：請選擇下一步操作（現有設計，三方案皆同）
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:180px; border:2px solid #bbf7d0; border-radius:10px; padding:14px; text-align:center; cursor:pointer;">
+          <div style="font-size:14px; font-weight:600; color:#166534;">標記完成</div>
+          <div style="font-size:11px; color:#64748b; margin-top:2px;">請先填寫至少一筆紀錄</div>
+        </div>
+        <div style="flex:1; min-width:180px; border:2px solid #fde68a; border-radius:10px; padding:14px; text-align:center; cursor:pointer;">
+          <div style="font-size:14px; font-weight:600; color:#92400e;">申請延期</div>
+          <div style="font-size:11px; color:#64748b; margin-top:2px;">需要更多時間</div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:10px; font-size:12px; color:#94a3b8;">← 返回繼續填寫</div>
+    </div>
+
+    <!-- 方案 A 完成 -->
+    <div style="flex:1; min-width:300px; background:#fff; border:2px solid #bbf7d0; border-radius:12px; padding:20px;">
+      <div style="font-size:13px; font-weight:600; color:#3b82f6; margin-bottom:14px;">方案 A：按日期記錄工作</div>
+
+      <div style="font-size:13px; font-weight:500; color:#334155; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+        <svg style="width:14px;height:14px;color:#94a3b8;"><use href="#ico-chart"/></svg>
+        標記任務完成
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-bottom:10px;">請確認實際完成日期</div>
+
+      <div class="form-group">
+        <input type="date" value="2026-03-19" style="font-size:13px;">
+        <div style="font-size:11px; color:#3b82f6; margin-top:4px;">自動帶入最晚工作日（3/19），可手動調整</div>
+      </div>
+
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:12px; color:#92400e; margin-bottom:12px; display:flex; align-items:flex-start; gap:8px;">
+        <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;"><use href="#ico-alert"/></svg>
+        <div>目前進度為 63%，標記完成後將自動更新為 100%</div>
+      </div>
+
+      <div style="font-size:11px; color:#64748b; background:#f8fafc; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
+        完成日期將作為甘特圖的<strong>實際結束日</strong>，進度自動歸 100%
+      </div>
+
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-skip" style="flex:0;">← 返回</button>
+        <button class="btn btn-submit" style="background:#22c55e;"><svg><use href="#ico-send"/></svg> 確認完成</button>
+      </div>
+    </div>
+
+    <!-- 方案 B 完成 -->
+    <div style="flex:1; min-width:300px; background:#fff; border:2px solid #bbf7d0; border-radius:12px; padding:20px;">
+      <div style="font-size:13px; font-weight:600; color:#8b5cf6; margin-bottom:14px;">方案 B：周別 + 工作日期區間</div>
+
+      <div style="font-size:13px; font-weight:500; color:#334155; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+        <svg style="width:14px;height:14px;color:#94a3b8;"><use href="#ico-chart"/></svg>
+        標記任務完成
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-bottom:10px;">請確認實際完成日期</div>
+
+      <div class="form-group">
+        <input type="date" value="2026-03-19" style="font-size:13px;">
+        <div style="font-size:11px; color:#8b5cf6; margin-top:4px;">自動帶入最近一筆工作結束日（3/19），可手動調整</div>
+      </div>
+
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:12px; color:#92400e; margin-bottom:12px; display:flex; align-items:flex-start; gap:8px;">
+        <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;"><use href="#ico-alert"/></svg>
+        <div>目前進度為 63%，標記完成後將自動更新為 100%</div>
+      </div>
+
+      <div style="font-size:11px; color:#64748b; background:#f8fafc; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
+        完成日期將作為甘特圖的<strong>實際結束日</strong>，進度自動歸 100%
+      </div>
+
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-skip" style="flex:0;">← 返回</button>
+        <button class="btn btn-submit" style="background:#22c55e;"><svg><use href="#ico-send"/></svg> 確認完成</button>
+      </div>
+    </div>
+
+    <!-- 方案 C 完成 -->
+    <div style="flex:1; min-width:300px; background:#fff; border:2px solid #bbf7d0; border-radius:12px; padding:20px;">
+      <div style="font-size:13px; font-weight:600; color:#f59e0b; margin-bottom:14px;">方案 C：純周別 + 手動進度</div>
+
+      <div style="font-size:13px; font-weight:500; color:#334155; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+        <svg style="width:14px;height:14px;color:#94a3b8;"><use href="#ico-chart"/></svg>
+        標記任務完成
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-bottom:10px;">請選擇實際完成日期</div>
+
+      <div class="form-group">
+        <input type="date" value="2026-03-19" style="font-size:13px;">
+        <div style="font-size:11px; color:#94a3b8; margin-top:4px;">預設為今天，不可早於實際開始日期</div>
+      </div>
+
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:12px; color:#92400e; margin-bottom:12px; display:flex; align-items:flex-start; gap:8px;">
+        <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;"><use href="#ico-alert"/></svg>
+        <div>目前進度為 70%（手動填寫），標記完成後將自動更新為 100%</div>
+      </div>
+
+      <div style="font-size:11px; color:#64748b; background:#f8fafc; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
+        完成日期將作為甘特圖的<strong>實際結束日</strong>，進度自動歸 100%<br>
+        <span style="color:#92400e;">注意：方案 C 的進度為手動填寫，系統無法驗證完成前的進度是否真實</span>
+      </div>
+
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-skip" style="flex:0;">← 返回</button>
+        <button class="btn btn-submit" style="background:#22c55e;"><svg><use href="#ico-send"/></svg> 確認完成</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════ 甘特圖超前/落後呈現 ═══════════════ -->
+<div class="summary-box">
+  <h3>甘特圖如何呈現超前 / 落後（方案 A & B 共用）</h3>
+  <p style="color:#64748b; font-size:13px; margin-bottom:20px;">透過顏色區分原始計畫、延期區間、實際執行，一眼看出任務是否如期完成</p>
+
+  <!-- 圖例 -->
+  <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; font-size:12px;">
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div style="width:24px; height:10px; background:#fbbf24; border-radius:3px;"></div>
+      <span>原始預計期間</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div style="width:24px; height:10px; background:#fca5a5; border-radius:3px;"></div>
+      <span>延期申請區間</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div style="width:24px; height:6px; background:#3b82f6; border-radius:3px;"></div>
+      <span>實際執行期間</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <div style="width:10px; height:10px; background:#22c55e; border-radius:50%;"></div>
+      <span>標記完成</span>
+    </div>
+  </div>
+
+  <!-- 時間軸刻度 -->
+  <div style="margin-left:160px; display:flex; font-size:10px; color:#94a3b8; margin-bottom:4px;">
+    <span style="width:0;">3/1</span>
+    <span style="flex:1;"></span>
+    <span style="width:0; text-align:center; position:relative; left:-8px;">3/15</span>
+    <span style="flex:1;"></span>
+    <span style="width:0; text-align:right; position:relative; left:-14px;">3/30</span>
+    <span style="flex:0.5;"></span>
+    <span style="width:0; text-align:right; position:relative; left:-14px;">4/15</span>
+  </div>
+
+  <!-- 情境 1: 超前完成 -->
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+    <div style="width:148px; text-align:right; flex-shrink:0;">
+      <div style="font-size:13px; font-weight:600; color:#22c55e;">超前完成</div>
+      <div style="font-size:11px; color:#64748b;">完成日 3/17</div>
+    </div>
+    <div style="flex:1; position:relative; height:28px;">
+      <!-- 原始計畫 3/1~3/30 (full width = 45 days for scale, 30 days = 66.7%) -->
+      <div style="position:absolute; top:2px; left:0; width:66.7%; height:10px; background:#fbbf24; border-radius:3px; opacity:0.5;"></div>
+      <!-- 實際 3/1~3/17 (17/45 = 37.8%) -->
+      <div style="position:absolute; top:11px; left:0; width:35.6%; height:6px; background:#3b82f6; border-radius:3px;"></div>
+      <!-- 完成標記 -->
+      <div style="position:absolute; top:8px; left:35.6%; width:10px; height:10px; background:#22c55e; border-radius:50%; transform:translateX(-5px);"></div>
+      <!-- 標籤 -->
+      <div style="position:absolute; top:-1px; left:36%; font-size:10px; color:#22c55e; font-weight:600; padding-left:8px;">提前 13 天</div>
+    </div>
+  </div>
+
+  <!-- 情境 2: 準時完成 -->
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+    <div style="width:148px; text-align:right; flex-shrink:0;">
+      <div style="font-size:13px; font-weight:600; color:#3b82f6;">準時完成</div>
+      <div style="font-size:11px; color:#64748b;">完成日 3/28</div>
+    </div>
+    <div style="flex:1; position:relative; height:28px;">
+      <!-- 原始計畫 -->
+      <div style="position:absolute; top:2px; left:0; width:66.7%; height:10px; background:#fbbf24; border-radius:3px; opacity:0.5;"></div>
+      <!-- 實際 3/1~3/28 (28/45 = 62.2%) -->
+      <div style="position:absolute; top:11px; left:0; width:60%; height:6px; background:#3b82f6; border-radius:3px;"></div>
+      <!-- 完成標記 -->
+      <div style="position:absolute; top:8px; left:60%; width:10px; height:10px; background:#22c55e; border-radius:50%; transform:translateX(-5px);"></div>
+    </div>
+  </div>
+
+  <!-- 情境 3: 延期（落後） -->
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+    <div style="width:148px; text-align:right; flex-shrink:0;">
+      <div style="font-size:13px; font-weight:600; color:#dc2626;">延期完成</div>
+      <div style="font-size:11px; color:#64748b;">延期至 4/15，完成日 4/12</div>
+    </div>
+    <div style="flex:1; position:relative; height:28px;">
+      <!-- 原始計畫 3/1~3/30 -->
+      <div style="position:absolute; top:2px; left:0; width:66.7%; height:10px; background:#fbbf24; border-radius:3px; opacity:0.5;"></div>
+      <!-- 延期區間 3/31~4/15 (15/45 = 33.3%) -->
+      <div style="position:absolute; top:2px; left:66.7%; width:33.3%; height:10px; background:#fca5a5; border-radius:3px; opacity:0.6;"></div>
+      <!-- 實際 3/1~4/12 (42/45 = 93.3%) -->
+      <div style="position:absolute; top:11px; left:0; width:93.3%; height:6px; background:#3b82f6; border-radius:3px;"></div>
+      <!-- 完成標記 -->
+      <div style="position:absolute; top:8px; left:93.3%; width:10px; height:10px; background:#22c55e; border-radius:50%; transform:translateX(-5px);"></div>
+      <!-- 延期標籤 -->
+      <div style="position:absolute; top:-1px; left:67%; font-size:10px; color:#dc2626; font-weight:600; padding-left:2px;">延期 +16 天</div>
+    </div>
+  </div>
+
+  <!-- 情境 4: 多次延期 -->
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+    <div style="width:148px; text-align:right; flex-shrink:0;">
+      <div style="font-size:13px; font-weight:600; color:#991b1b;">多次延期</div>
+      <div style="font-size:11px; color:#64748b;">延期 2 次，仍未完成</div>
+    </div>
+    <div style="flex:1; position:relative; height:28px;">
+      <!-- 原始計畫 3/1~3/30 (30/60 = 50%) -->
+      <div style="position:absolute; top:2px; left:0; width:50%; height:10px; background:#fbbf24; border-radius:3px; opacity:0.5;"></div>
+      <!-- 延期 1: 3/31~4/15 (15/60 = 25%) -->
+      <div style="position:absolute; top:2px; left:50%; width:25%; height:10px; background:#fca5a5; border-radius:3px; opacity:0.5;"></div>
+      <!-- 延期 2: 4/16~4/30 (15/60 = 25%) -->
+      <div style="position:absolute; top:2px; left:75%; width:25%; height:10px; background:#fca5a5; border-radius:3px; opacity:0.8;"></div>
+      <!-- 實際進行中 3/1~4/25 (55/60 = 91.7%) -->
+      <div style="position:absolute; top:11px; left:0; width:91.7%; height:6px; background:#3b82f6; border-radius:3px;">
+        <div style="position:absolute; right:0; top:-2px; width:6px; height:10px; background:#3b82f6; border-radius:0 3px 3px 0; opacity:0.4; animation:none;"></div>
+      </div>
+      <!-- 標籤 -->
+      <div style="position:absolute; top:-1px; left:50%; font-size:10px; color:#991b1b; font-weight:600; padding-left:2px;">延期 x2</div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px; padding:12px 16px; background:#f8fafc; border-radius:8px; font-size:12px; color:#64748b; border:1px solid #e2e8f0;">
+    <strong style="color:#334155;">管理者一眼就能看出：</strong><br>
+    黃色短於藍色 → 正常或超前 ｜ 出現紅色段 → 曾經延期 ｜ 紅色越多段 → 延期越多次<br>
+    <span style="color:#94a3b8; font-size:11px;">注意：方案 C 因為日期可自由修改，無法在甘特圖產生可靠的延期區間</span>
+  </div>
+</div>
+
+<!-- ═══════════════ 比較表 ═══════════════ -->
+<div class="summary-box">
+  <h3>三方案比較總表</h3>
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th style="width:140px;">比較項目</th>
+        <th>方案 A：按日期記錄工作</th>
+        <th>方案 B：周別 + 工作日期區間</th>
+        <th>方案 C：純周別 + 手動進度</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>填寫方式</strong></td>
+        <td>按日期分開填（不限每天，想填幾天就幾天）</td>
+        <td>一個日期區間 + 一段文字</td>
+        <td>只寫文字 + 手動填 %</td>
+      </tr>
+      <tr>
+        <td><strong>進度計算</strong></td>
+        <td>自動（最晚工作日 / 總天數）</td>
+        <td>自動（工作結束日 / 總天數）</td>
+        <td>手動填 %（如 Excel）</td>
+      </tr>
+      <tr>
+        <td><strong>填寫負擔</strong></td>
+        <td><span class="tag tag-medium">中</span> 內容需按日期分開</td>
+        <td><span class="tag tag-medium">中</span> 選日期 + 寫內容</td>
+        <td><span class="tag tag-easy">低</span> 寫內容 + 填數字</td>
+      </tr>
+      <tr>
+        <td><strong>管理可信度</strong></td>
+        <td><span class="tag tag-high">高</span> 每日可追溯</td>
+        <td><span class="tag tag-high">高</span> 有日期依據</td>
+        <td><span class="tag tag-low">低</span> 數字可能亂填</td>
+      </tr>
+      <tr>
+        <td><strong>延期卡控</strong></td>
+        <td><span class="tag tag-high">嚴格</span> 工作日 > 截止日則擋</td>
+        <td><span class="tag tag-high">嚴格</span> 結束日 > 截止日則擋</td>
+        <td><span class="tag tag-low">無法卡控</span> 日期可自由改</td>
+      </tr>
+      <tr>
+        <td><strong>補填上周</strong></td>
+        <td>可以，日期不限當周，隨時補填</td>
+        <td>可以，選過去周別 + 填過去日期區間</td>
+        <td>可以，選過去周別即可</td>
+      </tr>
+      <tr>
+        <td><strong>開發改動量</strong></td>
+        <td><span class="tag tag-hard">大</span> TaskLog 結構大改</td>
+        <td><span class="tag tag-medium">中</span> 加 2 個日期欄位</td>
+        <td><span class="tag tag-easy">小</span> 加周別 + 進度欄位</td>
+      </tr>
+      <tr>
+        <td><strong>推薦程度</strong></td>
+        <td>彈性填寫 + 每日可追溯</td>
+        <td>填寫簡單 + 有日期依據</td>
+        <td>最像 Excel，自由度最高</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

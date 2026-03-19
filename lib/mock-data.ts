@@ -130,6 +130,8 @@ export interface Task {
   progress: number
   completedAt?: string
   completedBy?: string
+  originalStartDate?: string
+  originalEndDate?: string
   parentId?: string | null
   subtasks?: SubTask[]
 }

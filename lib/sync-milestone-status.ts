@@ -166,9 +166,10 @@ export async function autoProgressTasks(
 }
 
 /**
- * Compute task progress from task-log coverage:
- *   progress = uniqueLogDates / taskDurationDays × 100  (capped at 100)
+ * Compute task progress from time-position of latest log:
+ *   progress = (latestLogDate - startDate) / (endDate - startDate) × 100  (capped at 100)
  * Completed tasks (completedAt set) are forced to 100%.
+ * No logs → 0%. latestLogDate before startDate → 0%.
  * Parent tasks with subtasks: progress = weighted avg of subtask progress (by durationDays).
  * Works on in-memory arrays; updates DB + patches objects in place.
  */
@@ -178,7 +179,16 @@ export async function syncTaskProgressFromLogs(
 ): Promise<void> {
   const msPerDay = 1000 * 60 * 60 * 24
 
-  // First pass: compute progress for leaf tasks (subtasks + tasks without subtasks)
+  // Build map: taskId → latest logDate
+  const latestLogByTask = new Map<string, Date>()
+  for (const log of taskLogs) {
+    const existing = latestLogByTask.get(log.taskId)
+    if (!existing || log.logDate > existing) {
+      latestLogByTask.set(log.taskId, log.logDate)
+    }
+  }
+
+  // Group subtasks by parent
   const subtasksByParent = new Map<string, typeof tasks>()
   for (const t of tasks) {
     if (t.parentId) {
@@ -201,14 +211,24 @@ export async function syncTaskProgressFromLogs(
         ? Math.round(subtasks.reduce((sum, s) => sum + s.progress * (s.durationDays || 1), 0) / totalDays)
         : 0
     } else {
-      // Leaf task: compute from log coverage
-      const durationDays = Math.max(1, Math.round((task.endDate.getTime() - task.startDate.getTime()) / msPerDay) + 1)
-      const logDates = new Set(
-        taskLogs
-          .filter(l => l.taskId === task.id)
-          .map(l => l.logDate.toISOString().split('T')[0]),
-      )
-      target = Math.min(100, Math.round((logDates.size / durationDays) * 100))
+      // Leaf task: time-position based progress
+      const latestLog = latestLogByTask.get(task.id)
+      if (!latestLog) {
+        target = 0
+      } else {
+        const totalSpan = task.endDate.getTime() - task.startDate.getTime()
+        if (totalSpan <= 0) {
+          // Same-day task: any log = 100%
+          target = 100
+        } else {
+          const elapsed = latestLog.getTime() - task.startDate.getTime()
+          if (elapsed <= 0) {
+            target = 0 // Log before start date = prep work, no progress
+          } else {
+            target = Math.min(100, Math.round((elapsed / totalSpan) * 100))
+          }
+        }
+      }
     }
 
     if (target !== task.progress) {

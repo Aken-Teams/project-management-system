@@ -45,6 +45,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 
 // Plan bar colors (upper bar — planned schedule)
 const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 — neutral, clearly "plan"
+const EXTENSION_COLOR = { bg: '#fee2e2', border: '#fca5a5' }   // red-100/300 — delay extension segment
 
 export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, onMilestoneClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, expandedTaskIds, onExpandedTaskIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -631,20 +632,38 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         {showBaseline ? (() => {
                           const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt)
                           const taskIsDone = effectiveStatus(task) === 'done'
+                          const hasExtension = task.originalEndDate && task.endDate > task.originalEndDate
+                          const planEnd = hasExtension ? task.originalEndDate! : task.endDate
                           return (
                           <>
-                            {/* Plan bar (upper — colored by timing status) */}
+                            {/* Plan bar (upper — original plan portion) */}
                             <div
                               className="absolute h-3.5 rounded-sm"
                               style={{
-                                ...barStyle(task.startDate, task.endDate),
+                                ...barStyle(task.startDate, planEnd),
                                 top: 4,
                                 backgroundColor: taskPlanColors.bg,
                                 border: taskIsDone
                                   ? `1px dashed ${taskPlanColors.border}`
                                   : `1px solid ${taskPlanColors.border}`,
+                                ...(hasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}),
                               }}
                             />
+                            {/* Extension segment (delay period — light red) */}
+                            {hasExtension && (
+                              <div
+                                className="absolute h-3.5 rounded-r-sm"
+                                style={{
+                                  ...barStyle(task.originalEndDate!, task.endDate),
+                                  top: 4,
+                                  backgroundColor: EXTENSION_COLOR.bg,
+                                  border: taskIsDone
+                                    ? `1px dashed ${EXTENSION_COLOR.border}`
+                                    : `1px solid ${EXTENSION_COLOR.border}`,
+                                  borderLeft: 'none',
+                                }}
+                              />
+                            )}
                             {/* Actual bar (lower — uses actual start date from earliest log) */}
                             {taskIsDone && task.completedAt ? (
                               <div
@@ -667,7 +686,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 }}
                               />
                             ) : null}
-                            {/* Percentage + time diff label */}
+                            {/* Percentage + time diff label (after full bar including extension) */}
                             <span
                               className="absolute text-[10px] font-medium whitespace-nowrap"
                               style={{
@@ -683,17 +702,21 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             </span>
                           </>
                           )
-                        })() : (
-                          /* Non-baseline: simple single bar with progress fill */
+                        })() : (() => {
+                          /* Non-baseline: single bar with progress fill + optional extension segment */
+                          const nbHasExtension = task.originalEndDate && task.endDate > task.originalEndDate
+                          const nbBarEnd = nbHasExtension ? task.originalEndDate! : task.endDate
+                          return (
                           <>
                             <div
                               className="absolute h-3.5 rounded-sm border"
                               style={{
-                                ...barStyle(task.startDate, task.endDate),
+                                ...barStyle(task.startDate, nbBarEnd),
                                 top: 12,
                                 backgroundColor: `${taskColors.bg}30`,
                                 borderColor: isCritical ? '#64748b' : `${taskColors.border}50`,
                                 ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
+                                ...(nbHasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}),
                               }}
                             >
                               {task.progress > 0 && (
@@ -702,11 +725,24 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                   style={{
                                     width: `${Math.min(task.progress, 100)}%`,
                                     backgroundColor: taskColors.bg,
-                                    borderRadius: task.progress >= 100 ? '0.125rem' : undefined,
+                                    borderRadius: task.progress >= 100 && !nbHasExtension ? '0.125rem' : undefined,
                                   }}
                                 />
                               )}
                             </div>
+                            {/* Extension segment (delay period — light red) */}
+                            {nbHasExtension && (
+                              <div
+                                className="absolute h-3.5 rounded-r-sm border"
+                                style={{
+                                  ...barStyle(task.originalEndDate!, task.endDate),
+                                  top: 12,
+                                  backgroundColor: `${EXTENSION_COLOR.bg}`,
+                                  borderColor: EXTENSION_COLOR.border,
+                                  borderLeft: 'none',
+                                }}
+                              />
+                            )}
                             {/* Percentage label + time diff */}
                             <span
                               className="absolute text-[10px] font-medium whitespace-nowrap"
@@ -722,7 +758,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               })()}
                             </span>
                           </>
-                        )}
+                          )
+                        })()}
                         <TodayLine />
                       </div>
                     </div>
@@ -1063,6 +1100,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
               <div className="flex items-center gap-1.5">
                 <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: PLAN_COLOR.bg, borderColor: PLAN_COLOR.border }} />
                 <span>Plan</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: EXTENSION_COLOR.bg, borderColor: EXTENSION_COLOR.border }} />
+                <span>延期</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3.5 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />

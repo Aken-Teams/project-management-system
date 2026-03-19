@@ -256,6 +256,8 @@ model Task {
   sortOrder      Int        @default(0) @map("sort_order")
   completedAt DateTime?  @map("completed_at")
   completedBy String?    @map("completed_by")
+  originalStartDate DateTime? @map("original_start_date")
+  originalEndDate   DateTime? @map("original_end_date")
   parentId    String?    @map("parent_id")
 
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)

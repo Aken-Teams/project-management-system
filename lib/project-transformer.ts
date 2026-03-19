@@ -235,6 +235,8 @@ export function dbProjectToFrontend(
     progress: t.progress,
     ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
     ...(t.completedBy ? { completedBy: t.completedBy } : {}),
+    ...(t.originalStartDate ? { originalStartDate: t.originalStartDate.toISOString().split('T')[0] } : {}),
+    ...(t.originalEndDate ? { originalEndDate: t.originalEndDate.toISOString().split('T')[0] } : {}),
     ...(t.parentId ? { parentId: t.parentId } : {}),
     ...(t.children && t.children.length > 0 ? {
       subtasks: t.children.map((c) => ({

@@ -159,11 +159,16 @@ export async function PATCH(
 
             if (task.startDate.getTime() !== taskStart.getTime() ||
                 task.endDate.getTime() !== taskEnd.getTime()) {
+              // Preserve original dates (first delay = snapshot current dates)
+              const preserveOriginal = (task as any).originalStartDate == null
+                ? { originalStartDate: task.startDate, originalEndDate: task.endDate }
+                : {}
               await tx.task.update({
                 where: { id: task.id },
                 data: {
                   startDate: taskStart,
                   endDate: taskEnd,
+                  ...preserveOriginal,
                 },
               })
             }
