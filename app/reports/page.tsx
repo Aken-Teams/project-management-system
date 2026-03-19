@@ -1238,24 +1238,6 @@ export default function ReportsPage() {
                         <div className="font-medium">{selectedProject.teamSize} 人</div>
                       </div>
                     </div>
-
-                    {selectedProject.risks.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        <div className="text-sm font-medium text-muted-foreground mb-2">未解決風險</div>
-                        {selectedProject.risks.map(r => (
-                          <div key={r.id} className="flex items-center gap-2 p-2 rounded border text-sm">
-                            <AlertTriangle className={cn(
-                              'h-3.5 w-3.5 shrink-0',
-                              r.impact === 'high' ? 'text-red-500' : r.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
-                            )} />
-                            <span className="truncate">{r.title}</span>
-                            <Badge variant="outline" className="text-[10px] shrink-0 ml-auto">
-                              {r.impact === 'high' ? '高' : r.impact === 'medium' ? '中' : '低'}影響
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -1270,28 +1252,24 @@ export default function ReportsPage() {
                 </Card>
               ) : detailProject && (
                 <Collapsible open={ganttExpanded} onOpenChange={setGanttExpanded}>
-                  <Card>
-                    <CollapsibleTrigger asChild>
-                      <CardHeader className="pb-2 cursor-pointer hover:bg-muted/50 transition-colors">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
-                          甘特圖
-                        </CardTitle>
-                      </CardHeader>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <CardContent className="pt-0">
-                        <GanttChart
-                          tasks={detailProject.tasks}
-                          milestones={detailProject.milestones}
-                          startDate={detailProject.startDate}
-                          endDate={detailProject.endDate}
-                          showBaseline={true}
-                          taskLogs={detailProject.taskLogs}
-                        />
-                      </CardContent>
-                    </CollapsibleContent>
-                  </Card>
+                  <CollapsibleTrigger asChild>
+                    <div className="flex items-center gap-2 text-sm font-semibold cursor-pointer hover:text-foreground/80 transition-colors py-1">
+                      <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
+                      甘特圖
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="overflow-hidden min-w-0">
+                      <GanttChart
+                        tasks={detailProject.tasks}
+                        milestones={detailProject.milestones}
+                        startDate={detailProject.startDate}
+                        endDate={detailProject.endDate}
+                        showBaseline={true}
+                        taskLogs={detailProject.taskLogs}
+                      />
+                    </div>
+                  </CollapsibleContent>
                 </Collapsible>
               )}
 
