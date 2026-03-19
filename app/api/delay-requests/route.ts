@@ -11,6 +11,7 @@ interface CreateDelayRequestBody {
   canCatchUp: boolean
   supportNeeded?: string
   type?: 'delay' | 'date_change'
+  taskId?: string       // which task triggered the delay (optional)
   affectedMilestones: {
     milestoneId: string
     originalDate: string
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
           canCatchUp: body.canCatchUp ?? false,
           supportNeeded: body.supportNeeded?.trim() || '',
           type: body.type || 'delay',
+          taskId: body.taskId || null,
           status: 'pending',
           affectedMilestones: {
             create: body.affectedMilestones.map((am) => ({
@@ -157,6 +159,7 @@ export async function GET(request: NextRequest) {
         requester: { select: { name: true } },
         reviewer: { select: { name: true } },
         supportResolvedBy: { select: { name: true } },
+        task: { select: { id: true, title: true } },
         affectedMilestones: {
           include: { milestone: { select: { name: true } } },
         },
@@ -192,6 +195,7 @@ export async function GET(request: NextRequest) {
       },
       requestedBy: dr.requester.name,
       requestedAt: dr.createdAt.toISOString(),
+      ...(dr.taskId ? { taskId: dr.taskId, taskTitle: dr.task?.title } : {}),
       reason: dr.reason,
       canCatchUp: dr.canCatchUp,
       supportNeeded: dr.supportNeeded,

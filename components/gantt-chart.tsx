@@ -44,7 +44,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 }
 
 // Plan bar colors (upper bar — planned schedule)
-const PLAN_COLOR = { bg: '#e2e8f0', border: '#cbd5e1' }       // slate-200/300 — neutral, clearly "plan"
+const PLAN_COLOR = { bg: '#fef3c7', border: '#f59e0b' }       // amber-100/500 — warm yellow, matches mockup
 const EXTENSION_COLOR = { bg: '#fee2e2', border: '#fca5a5' }   // red-100/300 — delay extension segment
 
 export function GanttChart({ tasks = [], milestones = [], startDate, endDate, onTaskClick, onMilestoneClick, expandedMilestoneIds, onExpandedMilestoneIdsChange, expandedTaskIds, onExpandedTaskIdsChange, showDependencies, showBaseline, nodeMap, selectedTaskId, onTaskHover, noActivityMilestoneIds, overdueNotStartedTaskIds, taskLogs = [] }: GanttChartProps) {
@@ -447,17 +447,27 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         : null
                       const msPlanColors = getPlanBarColors(milestone.dueDate, milestone.progress, msCompletedAt, milestone.status)
                       const msDone = milestone.progress >= 100
-                      // Derive milestone original range from tasks' original dates
-                      const msOrigStart = msTasks.reduce<string | null>((e, t) => {
-                        const o = t.originalStartDate || t.startDate
-                        return !e || o < e ? o : e
-                      }, null) || msBar.start
-                      const msOrigEnd = msTasks.reduce<string | null>((l, t) => {
-                        const o = t.originalEndDate || t.endDate
-                        return !l || o > l ? o : l
-                      }, null)
-                      const msHasExtension = msOrigEnd && milestone.dueDate > msOrigEnd
-                      const msPlanEnd = msHasExtension ? msOrigEnd! : milestone.dueDate
+                      // Milestone has extension only if any task's duration actually increased
+                      const msHasExtension = msTasks.some(t => {
+                        if (!t.originalEndDate || !t.originalStartDate) return false
+                        const origSpan = new Date(t.originalEndDate).getTime() - new Date(t.originalStartDate).getTime()
+                        const curSpan = new Date(t.endDate).getTime() - new Date(t.startDate).getTime()
+                        return curSpan > origSpan
+                      })
+                      // If extension exists, derive original range from tasks' original dates
+                      const msOrigStart = msHasExtension
+                        ? (msTasks.reduce<string | null>((e, t) => {
+                            const o = t.originalStartDate || t.startDate
+                            return !e || o < e ? o : e
+                          }, null) || msBar.start)
+                        : msBar.start
+                      const msOrigEnd = msHasExtension
+                        ? msTasks.reduce<string | null>((l, t) => {
+                            const o = t.originalEndDate || t.endDate
+                            return !l || o > l ? o : l
+                          }, null)
+                        : null
+                      const msPlanEnd = msHasExtension && msOrigEnd ? msOrigEnd : milestone.dueDate
                       return (
                       <>
                         {/* Plan bar (upper — original plan portion) */}
@@ -505,39 +515,33 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       )
                     })() : msTasks.length > 0 ? (() => {
                       /* Non-baseline milestone: plan bar + extension + actual bar */
-                      const nbMsOrigStart = msTasks.reduce<string | null>((e, t) => {
-                        const o = t.originalStartDate || t.startDate
-                        return !e || o < e ? o : e
-                      }, null) || msBar.start
-                      const nbMsOrigEnd = msTasks.reduce<string | null>((l, t) => {
-                        const o = t.originalEndDate || t.endDate
-                        return !l || o > l ? o : l
-                      }, null)
-                      const nbMsHasExtension = nbMsOrigEnd && milestone.dueDate > nbMsOrigEnd
-                      const nbMsPlanEnd = nbMsHasExtension ? nbMsOrigEnd! : milestone.dueDate
+                      // Milestone has extension only if any task's duration actually increased
+                      const nbMsHasExtension = msTasks.some(t => {
+                        if (!t.originalEndDate || !t.originalStartDate) return false
+                        const origSpan = new Date(t.originalEndDate).getTime() - new Date(t.originalStartDate).getTime()
+                        const curSpan = new Date(t.endDate).getTime() - new Date(t.startDate).getTime()
+                        return curSpan > origSpan
+                      })
+                      const nbMsOrigEnd = nbMsHasExtension
+                        ? msTasks.reduce<string | null>((l, t) => {
+                            const o = t.originalEndDate || t.endDate
+                            return !l || o > l ? o : l
+                          }, null)
+                        : null
+                      const nbMsPlanEnd = nbMsHasExtension && nbMsOrigEnd ? nbMsOrigEnd : milestone.dueDate
                       return (
                       <>
+                        {/* Milestone plan bar (original portion — solid amber) */}
                         <div
-                          className="absolute h-3.5 rounded-sm border"
+                          className="absolute h-3.5 rounded-sm"
                           style={{
-                            ...barStyle(nbMsOrigStart, nbMsPlanEnd),
+                            ...barStyle(msBar.start, nbMsPlanEnd),
                             top: 12,
-                            backgroundColor: `${colors.bg}30`,
-                            borderColor: `${colors.border}50`,
+                            backgroundColor: PLAN_COLOR.bg,
+                            border: `1px solid ${PLAN_COLOR.border}60`,
                             ...(nbMsHasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}),
                           }}
-                        >
-                          {milestone.progress > 0 && (
-                            <div
-                              className="absolute inset-y-0 left-0 rounded-l-sm"
-                              style={{
-                                width: `${Math.min(milestone.progress, 100)}%`,
-                                backgroundColor: colors.bg,
-                                borderRadius: milestone.progress >= 100 && !nbMsHasExtension ? '0.125rem' : undefined,
-                              }}
-                            />
-                          )}
-                        </div>
+                        />
                         {nbMsHasExtension && (
                           <div
                             className="absolute h-3.5 rounded-r-sm border"
@@ -700,8 +704,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         {showBaseline ? (() => {
                           const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt, task.status)
                           const taskIsDone = effectiveStatus(task) === 'done'
-                          const hasExtension = task.originalEndDate && task.endDate > task.originalEndDate
-                          const planStart = hasExtension && task.originalStartDate ? task.originalStartDate : task.startDate
+                          // Extension = task duration actually increased (not just shifted)
+                          const hasExtension = task.originalEndDate && task.originalStartDate && (() => {
+                            const origSpan = new Date(task.originalEndDate!).getTime() - new Date(task.originalStartDate!).getTime()
+                            const curSpan = new Date(task.endDate).getTime() - new Date(task.startDate).getTime()
+                            return curSpan > origSpan
+                          })()
+                          // Extended task: plan = original dates; shifted/normal: plan = current dates
+                          const planStart = hasExtension ? task.originalStartDate! : task.startDate
                           const planEnd = hasExtension ? task.originalEndDate! : task.endDate
                           return (
                           <>
@@ -773,33 +783,29 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           )
                         })() : (() => {
                           /* Non-baseline: single bar with progress fill + optional extension segment */
-                          const nbHasExtension = task.originalEndDate && task.endDate > task.originalEndDate
-                          const nbPlanStart = nbHasExtension && task.originalStartDate ? task.originalStartDate : task.startDate
+                          // Extension = task duration actually increased (not just shifted)
+                          const nbHasExtension = task.originalEndDate && task.originalStartDate && (() => {
+                            const origSpan = new Date(task.originalEndDate!).getTime() - new Date(task.originalStartDate!).getTime()
+                            const curSpan = new Date(task.endDate).getTime() - new Date(task.startDate).getTime()
+                            return curSpan > origSpan
+                          })()
+                          // Extended task: plan = original dates; shifted/normal: plan = current dates
+                          const nbPlanStart = nbHasExtension ? task.originalStartDate! : task.startDate
                           const nbBarEnd = nbHasExtension ? task.originalEndDate! : task.endDate
                           return (
                           <>
+                            {/* Plan bar (original plan portion — solid amber) */}
                             <div
-                              className="absolute h-3.5 rounded-sm border"
+                              className="absolute h-3.5 rounded-sm"
                               style={{
                                 ...barStyle(nbPlanStart, nbBarEnd),
                                 top: 12,
-                                backgroundColor: `${taskColors.bg}30`,
-                                borderColor: isCritical ? '#64748b' : `${taskColors.border}50`,
+                                backgroundColor: PLAN_COLOR.bg,
+                                border: `1px solid ${PLAN_COLOR.border}60`,
                                 ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                                 ...(nbHasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}),
                               }}
-                            >
-                              {task.progress > 0 && (
-                                <div
-                                  className="absolute inset-y-0 left-0 rounded-l-sm"
-                                  style={{
-                                    width: `${Math.min(task.progress, 100)}%`,
-                                    backgroundColor: taskColors.bg,
-                                    borderRadius: task.progress >= 100 && !nbHasExtension ? '0.125rem' : undefined,
-                                  }}
-                                />
-                              )}
-                            </div>
+                            />
                             {/* Extension segment (delay period — light red) */}
                             {nbHasExtension && (
                               <div
@@ -1184,23 +1190,19 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             <div className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
             <span>受阻</span>
           </div>
-          {showBaseline && (
-            <>
-              <span className="text-muted-foreground">|</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: PLAN_COLOR.bg, borderColor: PLAN_COLOR.border }} />
-                <span>Plan</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: EXTENSION_COLOR.bg, borderColor: EXTENSION_COLOR.border }} />
-                <span>延期</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3.5 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
-                <span>Actual</span>
-              </div>
-            </>
-          )}
+          <span className="text-muted-foreground">|</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: PLAN_COLOR.bg, borderColor: PLAN_COLOR.border }} />
+            <span>原始計畫</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3.5 h-2 rounded-sm border" style={{ backgroundColor: EXTENSION_COLOR.bg, borderColor: EXTENSION_COLOR.border }} />
+            <span>延期</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3.5 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+            <span>實際執行</span>
+          </div>
           {showToday && (
             <>
               <span className="text-muted-foreground">|</span>

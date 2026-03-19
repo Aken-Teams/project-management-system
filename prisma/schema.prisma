@@ -269,7 +269,8 @@ model Task {
   dependsOn   TaskDependency[] @relation("DependentTask")
   dependedBy  TaskDependency[] @relation("PrerequisiteTask")
 
-  taskLogs    TaskLog[]
+  taskLogs      TaskLog[]
+  delayRequests DelayRequest[]
 
   @@index([projectId, milestoneId, sortOrder])
   @@index([assignee])
@@ -379,6 +380,7 @@ model DelayRequest {
   supportResolvedAt    DateTime?          @map("support_resolved_at")
   supportResolvedById  String?            @map("support_resolved_by_id")
   supportResolvedNotes String?            @db.Text @map("support_resolved_notes")
+  taskId               String?            @map("task_id")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
@@ -386,11 +388,13 @@ model DelayRequest {
   requester            User               @relation("DelayRequester", fields: [requesterId], references: [id])
   reviewer             User?              @relation("DelayReviewer", fields: [reviewerId], references: [id])
   supportResolvedBy    User?              @relation("DelaySupportResolver", fields: [supportResolvedById], references: [id])
+  task                 Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   affectedMilestones   AffectedMilestone[]
 
   @@index([projectId])
   @@index([requesterId])
+  @@index([taskId])
   @@map("delay_requests")
 }
 

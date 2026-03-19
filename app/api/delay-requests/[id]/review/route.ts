@@ -91,7 +91,30 @@ export async function PATCH(
           })
         }
 
-        // 3. Cascade: recalculate subsequent milestones & all task dates
+        // 3. If a specific task triggered the delay, extend its durationDays
+        //    so the Gantt chart correctly shows which task actually got extended.
+        const triggerTaskId = delayRequest.taskId
+        if (triggerTaskId) {
+          // Calculate how many days the milestone was extended
+          const am = delayRequest.affectedMilestones[0]
+          if (am) {
+            const delayDays = daysBetween(am.originalDate, am.proposedDate)
+            if (delayDays > 0) {
+              const triggerTask = await tx.task.findUnique({
+                where: { id: triggerTaskId },
+                select: { durationDays: true },
+              })
+              if (triggerTask) {
+                await tx.task.update({
+                  where: { id: triggerTaskId },
+                  data: { durationDays: triggerTask.durationDays + delayDays },
+                })
+              }
+            }
+          }
+        }
+
+        // 4. Cascade: recalculate subsequent milestones & all task dates
         const project = await tx.project.findUnique({
           where: { id: delayRequest.projectId },
           include: {
@@ -109,18 +132,15 @@ export async function PATCH(
         for (const ms of project.milestones) {
           const msStart = new Date(currentStart)
           const msTasks = project.tasks
-            .filter(t => t.milestoneId === ms.id)
+            .filter(t => t.milestoneId === ms.id && t.parentId == null)
             .sort((a, b) => a.sortOrder - b.sortOrder)
 
-          // Compute task-based duration (in days)
+          // Compute task-based duration (in days) — uses updated durationDays
           const totalTaskDays = msTasks.reduce(
             (sum, t) => sum + Math.max(t.durationDays, 1), 0
           )
 
           // Check if this milestone's dueDate needs to be pushed forward
-          // Applies to ALL milestones (including affected ones) — if an upstream
-          // milestone was extended so much that this one's computed start is past
-          // its dueDate, we must push it forward to keep dates consistent.
           const msDueDate = new Date(ms.dueDate)
           let newDueDate = msDueDate
 
@@ -142,16 +162,9 @@ export async function PATCH(
             })
           }
 
-          // Recalculate task dates within this milestone
-          // For affected milestones: position tasks at the END of the milestone window
-          // so the last task ends at the new dueDate (avoids tasks showing as "overdue")
-          let taskCurrent: Date
-          if (affectedMsIds.has(ms.id) && totalTaskDays > 0) {
-            const adjustedStart = addDays(newDueDate, -totalTaskDays + 1)
-            taskCurrent = adjustedStart > msStart ? new Date(adjustedStart) : new Date(msStart)
-          } else {
-            taskCurrent = new Date(msStart)
-          }
+          // Recalculate task dates: lay out tasks sequentially from milestone start
+          let taskCurrent = new Date(msStart)
+
           for (const task of msTasks) {
             const taskDurationDays = Math.max(task.durationDays, 1)
             const taskStart = new Date(taskCurrent)

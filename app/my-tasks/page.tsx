@@ -730,6 +730,7 @@ export default function MyTasksPage() {
           reason: extensionReason.trim(),
           canCatchUp: false,
           supportNeeded: extensionSupport.trim() || '',
+          taskId: task.id,
           affectedMilestones: [{
             milestoneId: milestone.id,
             originalDate: milestone.dueDate,
