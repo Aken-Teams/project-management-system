@@ -633,6 +633,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt, task.status)
                           const taskIsDone = effectiveStatus(task) === 'done'
                           const hasExtension = task.originalEndDate && task.endDate > task.originalEndDate
+                          const planStart = hasExtension && task.originalStartDate ? task.originalStartDate : task.startDate
                           const planEnd = hasExtension ? task.originalEndDate! : task.endDate
                           return (
                           <>
@@ -640,7 +641,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             <div
                               className="absolute h-3.5 rounded-sm"
                               style={{
-                                ...barStyle(task.startDate, planEnd),
+                                ...barStyle(planStart, planEnd),
                                 top: 4,
                                 backgroundColor: taskPlanColors.bg,
                                 border: taskIsDone
@@ -705,13 +706,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         })() : (() => {
                           /* Non-baseline: single bar with progress fill + optional extension segment */
                           const nbHasExtension = task.originalEndDate && task.endDate > task.originalEndDate
+                          const nbPlanStart = nbHasExtension && task.originalStartDate ? task.originalStartDate : task.startDate
                           const nbBarEnd = nbHasExtension ? task.originalEndDate! : task.endDate
                           return (
                           <>
                             <div
                               className="absolute h-3.5 rounded-sm border"
                               style={{
-                                ...barStyle(task.startDate, nbBarEnd),
+                                ...barStyle(nbPlanStart, nbBarEnd),
                                 top: 12,
                                 backgroundColor: `${taskColors.bg}30`,
                                 borderColor: isCritical ? '#64748b' : `${taskColors.border}50`,
