@@ -177,6 +177,8 @@ export function dbProjectToFrontend(
       supportResolvedAt: Date | null
       supportResolvedBy: { name: string } | null
       supportResolvedNotes: string | null
+      taskId: string | null
+      task: { id: string; title: string } | null
       affectedMilestones: {
         milestoneId: string
         originalDate: Date
@@ -303,6 +305,8 @@ export function dbProjectToFrontend(
     requestedBy: dr.requester.name,
     requestedAt: dr.createdAt.toISOString(),
     reason: dr.reason,
+    ...(dr.taskId ? { taskId: dr.taskId } : {}),
+    ...(dr.task ? { taskTitle: dr.task.title } : {}),
     affectedMilestones: dr.affectedMilestones.map((am) => ({
       milestoneId: am.milestoneId,
       originalDate: am.originalDate.toISOString().split('T')[0],
@@ -410,6 +414,7 @@ export const projectFullInclude = {
       reviewer: true,
       supportResolvedBy: true,
       affectedMilestones: true,
+      task: { select: { id: true, title: true } },
     },
     orderBy: { createdAt: 'desc' as const },
   },

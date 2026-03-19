@@ -39,6 +39,8 @@ export interface DelayRequest {
   requestedAt: string
   reason: string
   type?: 'delay' | 'date_change'
+  taskId?: string
+  taskTitle?: string
   affectedMilestones: {
     milestoneId: string
     originalDate: string

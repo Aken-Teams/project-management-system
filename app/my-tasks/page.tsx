@@ -715,10 +715,29 @@ export default function MyTasksPage() {
   }
 
   const handleSubmitExtension = async () => {
-    if (!dialogTask || !user) return
+    if (!dialogTask || !user || !extensionDate) return
     const { task, project } = dialogTask
     const milestone = project.milestones.find(m => m.id === task.milestoneId)
     if (!milestone) return
+
+    // Compute milestone impact from task extension
+    const currentTaskEnd = new Date(task.endDate)
+    const proposedTaskEnd = new Date(extensionDate)
+    const extraDays = Math.round((proposedTaskEnd.getTime() - currentTaskEnd.getTime()) / 86400000)
+    if (extraDays <= 0) { alert('新完成日必須晚於目前截止日'); return }
+
+    const msTasks = project.tasks.filter(t => t.milestoneId === milestone.id && !t.parentId)
+    const currentTotal = msTasks.reduce((sum, t) => sum + Math.max(t.durationDays, 1), 0)
+    const newTotal = currentTotal + extraDays
+    const msDueDate = new Date(milestone.dueDate)
+    const effectiveStart = new Date(msDueDate)
+    effectiveStart.setDate(effectiveStart.getDate() - currentTotal + 1)
+    const newMsEnd = new Date(effectiveStart)
+    newMsEnd.setDate(newMsEnd.getDate() + newTotal - 1)
+    const milestoneDelta = Math.max(0, Math.round((newMsEnd.getTime() - msDueDate.getTime()) / 86400000))
+    const proposedMilestoneDate = milestoneDelta > 0
+      ? newMsEnd.toISOString().split('T')[0]
+      : milestone.dueDate.split('T')[0]
 
     try {
       const res = await fetch('/api/delay-requests', {
@@ -734,7 +753,7 @@ export default function MyTasksPage() {
           affectedMilestones: [{
             milestoneId: milestone.id,
             originalDate: milestone.dueDate,
-            proposedDate: extensionDate || milestone.dueDate,
+            proposedDate: proposedMilestoneDate,
           }],
         }),
       })
@@ -743,7 +762,7 @@ export default function MyTasksPage() {
         throw new Error(data.error || '送出失敗')
       }
       // Update local state to mark milestone as pending delay
-      const proposedDate = extensionDate || milestone.dueDate
+      const proposedDate = proposedMilestoneDate
       setApiProjects(prev => prev.map(p =>
         p.id === project.id
           ? {
@@ -1582,6 +1601,12 @@ export default function MyTasksPage() {
                               <button
                                 className="group flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 transition-all text-left"
                                 onClick={() => {
+                                  // Pre-fill with task end date + 7 days
+                                  if (dialogTask) {
+                                    const d = new Date(dialogTask.task.endDate)
+                                    d.setDate(d.getDate() + 7)
+                                    setExtensionDate(d.toISOString().split('T')[0])
+                                  }
                                   setShowActions(false)
                                   setShowExtensionForm(true)
                                 }}
@@ -1886,10 +1911,11 @@ export default function MyTasksPage() {
                       />
                     </div>
                     <div>
-                      <Label className="text-sm text-muted-foreground">建議新日期</Label>
+                      <Label className="text-sm text-muted-foreground">任務預計完成日 <span className="text-red-500">*</span></Label>
                       <input
                         type="date"
                         value={extensionDate}
+                        min={dialogTask ? (() => { const d = new Date(dialogTask.task.endDate); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })() : undefined}
                         onChange={e => setExtensionDate(e.target.value)}
                         className="w-full text-sm border rounded-lg px-2.5 py-1.5 mt-1.5 bg-background"
                       />
@@ -1920,7 +1946,7 @@ export default function MyTasksPage() {
                       <Button
                         size="sm"
                         className="gap-1.5 flex-1 rounded-lg shadow-sm"
-                        disabled={!extensionReason.trim()}
+                        disabled={!extensionReason.trim() || !extensionDate}
                         onClick={handleSubmitExtension}
                       >
                         <Send className="h-3.5 w-3.5" />

@@ -73,6 +73,7 @@ interface WeekDelayRequest {
   reason: string
   type?: 'delay' | 'date_change'
   status: 'pending' | 'approved' | 'rejected'
+  taskTitle?: string
   affectedMilestones: { milestoneName: string; originalDate: string; proposedDate: string; delayDays: number }[]
 }
 
@@ -143,6 +144,7 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
       reason: dr.reason,
       type: dr.type,
       status: dr.status,
+      taskTitle: dr.taskTitle,
       affectedMilestones: dr.affectedMilestones.map(am => {
         const ms = project.milestones.find(m => m.id === am.milestoneId)
         const days = Math.ceil((new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24))
@@ -1124,6 +1126,11 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                             </Badge>
                             <span className="text-sm text-foreground/80">{dr.reason}</span>
                           </div>
+                          {dr.taskTitle && (
+                            <div className="text-xs pl-1 text-amber-700 dark:text-amber-400">
+                              延期任務：{dr.taskTitle}
+                            </div>
+                          )}
                           {dr.affectedMilestones.map((am, ai) => (
                             <div key={ai} className="flex items-center gap-2 text-xs pl-1">
                               <span className="font-medium truncate">{am.milestoneName}</span>

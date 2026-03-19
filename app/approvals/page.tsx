@@ -45,6 +45,8 @@ interface DelayRequestItem {
   supportNeeded: string
   status: 'pending' | 'approved' | 'rejected'
   affectedMilestones: AffectedMilestone[]
+  taskId?: string
+  taskTitle?: string
   reviewedBy?: string
   reviewedAt?: string
   reviewNotes?: string
@@ -376,6 +378,18 @@ export default function ApprovalsPage() {
                       {request.reason}
                     </div>
                   </div>
+
+                  {/* Trigger task (if delay was from a specific task) */}
+                  {request.taskId && request.taskTitle && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                        <FileText className="h-4 w-4 text-muted-foreground" /> 延期任務
+                      </h4>
+                      <div className="p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/10 border-amber-200 dark:border-amber-800">
+                        <div className="font-medium text-sm">{request.taskTitle}</div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Affected milestones */}
                   <div>

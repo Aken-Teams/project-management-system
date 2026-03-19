@@ -578,6 +578,13 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                         <p className="text-sm">{request.reason}</p>
                       </div>
 
+                      {request.taskTitle && (
+                        <div>
+                          <div className="text-sm font-medium text-muted-foreground mb-1">延期任務</div>
+                          <p className="text-sm font-medium">{request.taskTitle}</p>
+                        </div>
+                      )}
+
                       <div>
                         <div className="text-sm font-medium text-muted-foreground mb-2">受影響里程碑</div>
                         <div className="space-y-1.5">

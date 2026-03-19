@@ -528,11 +528,49 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     }
   }
 
+  // ── Delay request: compute milestone impact from task extension ──
+  const delayImpact = useMemo(() => {
+    if (!task || !extensionDate) return null
+    const milestone = project.milestones.find(m => m.id === task.milestoneId)
+    if (!milestone) return null
+
+    const currentTaskEnd = new Date(task.endDate)
+    const proposedTaskEnd = new Date(extensionDate)
+    const extraDays = Math.round((proposedTaskEnd.getTime() - currentTaskEnd.getTime()) / 86400000)
+    if (extraDays <= 0) return null
+
+    // Calculate new total task days for this milestone
+    const msTasks = project.tasks
+      .filter(t => t.milestoneId === milestone.id && !t.parentId)
+    const currentTotal = msTasks.reduce((sum, t) => sum + Math.max(t.durationDays, 1), 0)
+    const newTotal = currentTotal + extraDays
+
+    // Compute milestone effective start & new end
+    const msDueDate = new Date(milestone.dueDate)
+    const effectiveStart = new Date(msDueDate)
+    effectiveStart.setDate(effectiveStart.getDate() - currentTotal + 1)
+    const newMsEnd = new Date(effectiveStart)
+    newMsEnd.setDate(newMsEnd.getDate() + newTotal - 1)
+
+    const milestoneDelta = Math.max(0, Math.round((newMsEnd.getTime() - msDueDate.getTime()) / 86400000))
+    const proposedMilestoneDate = milestoneDelta > 0
+      ? newMsEnd.toISOString().split('T')[0]
+      : milestone.dueDate.split('T')[0]
+
+    return { extraDays, milestoneDelta, proposedMilestoneDate }
+  }, [task, extensionDate, project])
+
   // ── Delay request submission ──
   const handleSubmitExtension = async () => {
     if (!task || !user) return
     const milestone = project.milestones.find(m => m.id === task.milestoneId)
     if (!milestone) return
+
+    const impact = delayImpact
+    if (!impact || impact.extraDays <= 0) {
+      alert('新完成日必須晚於目前截止日')
+      return
+    }
 
     try {
       const res = await fetch('/api/delay-requests', {
@@ -548,7 +586,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
           affectedMilestones: [{
             milestoneId: milestone.id,
             originalDate: milestone.dueDate,
-            proposedDate: extensionDate || milestone.dueDate,
+            proposedDate: impact.proposedMilestoneDate,
           }],
         }),
       })
@@ -823,6 +861,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                               variant="outline"
                               className="w-full gap-2 border-red-200 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
                               onClick={() => {
+                                // Pre-fill with task end date + 7 days
+                                const d = new Date(task.endDate)
+                                d.setDate(d.getDate() + 7)
+                                setExtensionDate(d.toISOString().split('T')[0])
                                 setShowExtensionForm(true)
                                 setShowActions(false)
                               }}
@@ -1189,6 +1231,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             <button
                               className="group flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-950/20 dark:hover:bg-amber-950/40 transition-all text-left"
                               onClick={() => {
+                                // Pre-fill with task end date + 7 days
+                                const d = new Date(task.endDate)
+                                d.setDate(d.getDate() + 7)
+                                setExtensionDate(d.toISOString().split('T')[0])
                                 setShowActions(false)
                                 setShowExtensionForm(true)
                               }}
@@ -1819,6 +1865,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </div>
                 <span className="text-sm font-medium">申請延期</span>
               </div>
+              {/* Current task dates */}
+              <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                目前任務期間：{new Date(task.startDate).toLocaleDateString('zh-TW')} ~ {new Date(task.endDate).toLocaleDateString('zh-TW')}（{task.durationDays} 天）
+              </div>
               <div>
                 <Label className="text-sm text-muted-foreground">延遲原因 <span className="text-red-500">*</span></Label>
                 <Textarea
@@ -1830,14 +1880,34 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 />
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground">建議新日期</Label>
+                <Label className="text-sm text-muted-foreground">任務預計完成日 <span className="text-red-500">*</span></Label>
                 <input
                   type="date"
                   value={extensionDate}
+                  min={(() => { const d = new Date(task.endDate); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0] })()}
                   onChange={e => setExtensionDate(e.target.value)}
                   className="w-full text-sm border rounded-lg px-2.5 py-1.5 mt-1.5 bg-background"
                 />
               </div>
+              {/* Impact preview */}
+              {delayImpact && (
+                <div className="text-xs space-y-1 bg-amber-100/60 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+                  <div className="font-medium text-amber-800 dark:text-amber-300">影響預估：</div>
+                  <div className="text-amber-700 dark:text-amber-400">
+                    任務延長 +{delayImpact.extraDays} 天
+                    （{new Date(task.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} → {new Date(extensionDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}）
+                  </div>
+                  {delayImpact.milestoneDelta > 0 ? (
+                    <div className="text-amber-700 dark:text-amber-400">
+                      里程碑延後 +{delayImpact.milestoneDelta} 天
+                    </div>
+                  ) : (
+                    <div className="text-green-700 dark:text-green-400">
+                      里程碑不受影響（仍有餘裕）
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <Label className="text-sm text-muted-foreground">需要協助</Label>
                 <Textarea
@@ -1864,7 +1934,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 <Button
                   size="sm"
                   className="gap-1.5 flex-1 rounded-lg shadow-sm"
-                  disabled={!extensionReason.trim()}
+                  disabled={!extensionReason.trim() || !delayImpact}
                   onClick={handleSubmitExtension}
                 >
                   <Send className="h-3.5 w-3.5" />
