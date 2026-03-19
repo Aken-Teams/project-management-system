@@ -259,24 +259,12 @@ export function RoiSection({
       {/* ─── Section header ─── */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-muted-foreground">投資報酬 (ROI)</span>
-        {!editing ? (
+        {!editing && (
           <Button type="button" variant="ghost" size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-foreground"
             onClick={startEdit} title="編輯 ROI 數據與實際費用">
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-        ) : (
-          <div className="flex gap-1">
-            <Button type="button" variant="ghost" size="icon"
-              className="h-6 w-6 text-muted-foreground"
-              onClick={() => setEditing(false)} disabled={saving}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-            <Button type="button" size="icon" className="h-6 w-6"
-              onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-            </Button>
-          </div>
         )}
       </div>
 
@@ -375,6 +363,19 @@ export function RoiSection({
               </table>
             </div>
           )}
+
+          {/* Save / Cancel */}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="ghost" size="sm"
+              onClick={() => setEditing(false)} disabled={saving}>
+              取消
+            </Button>
+            <Button type="button" size="sm"
+              onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+              儲存
+            </Button>
+          </div>
         </div>
       )}
 
