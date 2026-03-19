@@ -55,12 +55,28 @@ export async function POST(request: NextRequest) {
       include: {
         owner: { select: { name: true } },
         milestones: { orderBy: { sortOrder: 'asc' } },
-        tasks: { orderBy: { sortOrder: 'asc' } },
+        tasks: {
+          include: { children: true },
+          orderBy: { sortOrder: 'asc' },
+        },
         risks: { where: { status: 'open' } },
         teamMembers: {
           include: {
             user: { select: { name: true, email: true } },
           },
+        },
+        delayRequests: {
+          include: {
+            requester: { select: { name: true } },
+            reviewer: { select: { name: true } },
+            affectedMilestones: true,
+            task: { select: { id: true, title: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        taskLogs: {
+          include: { author: { select: { name: true } } },
+          orderBy: { logDate: 'desc' },
         },
       },
     })
@@ -375,6 +391,95 @@ export async function POST(request: NextRequest) {
     tbody tr:nth-child(even) {
       background: #f8fafc !important;
     }
+    .task-status {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    .task-status-done { background: #d1fae5 !important; color: #065f46 !important; }
+    .task-status-inprogress { background: #dbeafe !important; color: #1e40af !important; }
+    .task-status-blocked { background: #fee2e2 !important; color: #991b1b !important; }
+    .task-status-todo { background: #f1f5f9 !important; color: #475569 !important; }
+    .task-priority-high { color: #dc2626; font-weight: 600; }
+    .task-priority-medium { color: #d97706; }
+    .task-priority-low { color: #64748b; }
+    .subtask-row td { padding-left: 24px !important; color: #64748b; }
+    .workload-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .workload-name {
+      width: 80px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+    }
+    .workload-bar {
+      flex: 1;
+      height: 14px;
+      background: #e2e8f0 !important;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .workload-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .workload-count {
+      width: 40px;
+      text-align: right;
+      font-size: 10px;
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .activity-item {
+      display: flex;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 10px;
+    }
+    .activity-date {
+      color: #64748b;
+      white-space: nowrap;
+      flex-shrink: 0;
+      width: 70px;
+    }
+    .activity-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .activity-author {
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .delay-item {
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 6px;
+    }
+    .delay-status {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 600;
+    }
+    .delay-pending { background: #fef3c7 !important; color: #92400e !important; }
+    .delay-approved { background: #d1fae5 !important; color: #065f46 !important; }
+    .delay-rejected { background: #fee2e2 !important; color: #991b1b !important; }
   </style>
 </head>
 <body>
@@ -627,7 +732,7 @@ export async function POST(request: NextRequest) {
         ${project.milestones.length > 0 ? `
           <div class="card" style="margin-bottom: 12px;">
             <div class="card-title">里程碑進度（${project.milestones.filter(m => m.status === 'done').length}/${project.milestones.length} 已完成）</div>
-            ${project.milestones.slice(0, 5).map(m => {
+            ${project.milestones.map(m => {
               const statusColor =
                 m.status === 'done' ? '#10b981' :
                 m.status === 'in_progress' ? '#3b82f6' :
@@ -654,51 +759,214 @@ export async function POST(request: NextRequest) {
                 </div>
               `
             }).join('')}
-            ${project.milestones.length > 5 ? `<div style="text-align: center; color: #64748b; font-size: 10px; margin-top: 8px;">僅顯示前 5 個里程碑</div>` : ''}
           </div>
         ` : ''}
 
-        ${project.tasks.length > 0 ? `
-          <div class="card" style="margin-bottom: 12px;">
-            <div class="card-title">任務摘要（${project.tasks.filter(t => t.status === 'done').length}/${project.tasks.length} 已完成）</div>
-            <div class="grid grid-4">
-              <div class="stat-card">
-                <span class="stat-label">已完成</span>
-                <div class="stat-value" style="font-size: 18px;">${project.tasks.filter(t => t.status === 'done').length}</div>
+        ${(() => {
+          const parentTasks = project.tasks.filter(t => !t.parentId)
+          if (parentTasks.length === 0) return ''
+
+          const fmtStatus = (s: string) => {
+            if (s === 'done') return '<span class="task-status task-status-done">完成</span>'
+            if (s === 'in_progress') return '<span class="task-status task-status-inprogress">進行中</span>'
+            if (s === 'blocked') return '<span class="task-status task-status-blocked">受阻</span>'
+            return '<span class="task-status task-status-todo">待辦</span>'
+          }
+          const fmtPriority = (p: string) => {
+            if (p === 'high') return '<span class="task-priority-high">高</span>'
+            if (p === 'medium') return '<span class="task-priority-medium">中</span>'
+            return '<span class="task-priority-low">低</span>'
+          }
+          const fmtDate = (d: Date) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+
+          return project.milestones.map(ms => {
+            const msTasks = parentTasks.filter(t => t.milestoneId === ms.id)
+            if (msTasks.length === 0) return ''
+
+            const msStatusColor =
+              ms.status === 'done' ? '#10b981' :
+              ms.status === 'in_progress' ? '#3b82f6' :
+              ms.status === 'blocked' ? '#ef4444' : '#94a3b8'
+
+            return `
+              <div class="card" style="margin-bottom: 12px;">
+                <div class="card-title" style="display: flex; align-items: center; gap: 6px;">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: ${msStatusColor}; flex-shrink: 0;"></span>
+                  ${ms.name}
+                  <span style="font-weight: 400; color: #64748b; margin-left: auto; font-size: 10px;">${ms.progress}% · 到期 ${fmtDate(ms.dueDate)}</span>
+                </div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 30%;">任務名稱</th>
+                      <th style="width: 10%;">負責人</th>
+                      <th style="width: 10%;">狀態</th>
+                      <th style="width: 8%;">優先</th>
+                      <th style="width: 18%;">起迄</th>
+                      <th style="width: 24%;">進度</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${msTasks.map(task => {
+                      const subtasks = (task as typeof task & { children?: typeof project.tasks }).children || []
+                      return `
+                        <tr>
+                          <td style="font-weight: 600;">${task.title}</td>
+                          <td>${task.assignee}</td>
+                          <td>${fmtStatus(task.status)}</td>
+                          <td>${fmtPriority(task.priority)}</td>
+                          <td style="white-space: nowrap;">${fmtDate(task.startDate)} ~ ${fmtDate(task.endDate)}</td>
+                          <td>
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                              <div class="progress-bar" style="flex: 1; height: 6px; margin: 0;">
+                                <div class="progress-fill" style="width: ${task.progress}%; background: #3b82f6;"></div>
+                              </div>
+                              <span style="font-size: 9px; color: #64748b; width: 28px; text-align: right;">${task.progress}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                        ${subtasks.map(sub => `
+                          <tr class="subtask-row">
+                            <td>└ ${sub.title}</td>
+                            <td>${sub.assignee}</td>
+                            <td>${fmtStatus(sub.status)}</td>
+                            <td>${fmtPriority(sub.priority)}</td>
+                            <td style="white-space: nowrap;">${fmtDate(sub.startDate)} ~ ${fmtDate(sub.endDate)}</td>
+                            <td>
+                              <div style="display: flex; align-items: center; gap: 4px;">
+                                <div class="progress-bar" style="flex: 1; height: 6px; margin: 0;">
+                                  <div class="progress-fill" style="width: ${sub.progress}%; background: #93c5fd;"></div>
+                                </div>
+                                <span style="font-size: 9px; color: #64748b; width: 28px; text-align: right;">${sub.progress}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        `).join('')}
+                      `
+                    }).join('')}
+                  </tbody>
+                </table>
               </div>
-              <div class="stat-card">
-                <span class="stat-label">進行中</span>
-                <div class="stat-value" style="font-size: 18px;">${project.tasks.filter(t => t.status === 'in_progress').length}</div>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">受阻</span>
-                <div class="stat-value" style="font-size: 18px;">${project.tasks.filter(t => t.status === 'blocked').length}</div>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">待辦</span>
-                <div class="stat-value" style="font-size: 18px;">${project.tasks.filter(t => t.status === 'todo').length}</div>
+            `
+          }).join('')
+        })()}
+
+        ${(() => {
+          const parentTasks = project.tasks.filter(t => !t.parentId)
+          if (parentTasks.length === 0) return ''
+          const memberMap = new Map<string, { total: number; done: number }>()
+          parentTasks.forEach(t => {
+            const entry = memberMap.get(t.assignee) || { total: 0, done: 0 }
+            entry.total++
+            if (t.status === 'done') entry.done++
+            memberMap.set(t.assignee, entry)
+          })
+          const members = [...memberMap.entries()]
+            .sort((a, b) => b[1].total - a[1].total)
+          const maxTasks = Math.max(...members.map(m => m[1].total), 1)
+
+          return `
+            <div class="card" style="margin-bottom: 12px;">
+              <div class="card-title">團隊工作量</div>
+              ${members.map(([name, { total, done }]) => `
+                <div class="workload-bar-container">
+                  <span class="workload-name">${name}</span>
+                  <div class="workload-bar">
+                    <div class="workload-bar-fill" style="width: ${(total / maxTasks) * 100}%; background: #93c5fd !important;"></div>
+                    <div class="workload-bar-fill" style="width: ${(done / maxTasks) * 100}%; background: #10b981 !important;"></div>
+                  </div>
+                  <span class="workload-count">${done}/${total}</span>
+                </div>
+              `).join('')}
+              <div style="display: flex; gap: 12px; font-size: 9px; color: #64748b; margin-top: 4px;">
+                <span><span style="display: inline-block; width: 10px; height: 6px; border-radius: 2px; background: #10b981; vertical-align: middle;"></span> 已完成</span>
+                <span><span style="display: inline-block; width: 10px; height: 6px; border-radius: 2px; background: #93c5fd; vertical-align: middle;"></span> 總任務</span>
               </div>
             </div>
-          </div>
-        ` : ''}
+          `
+        })()}
+
+        ${(() => {
+          const logs = project.taskLogs || []
+          const twoWeeksAgo = new Date()
+          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+          const recentLogs = logs.filter(l => new Date(l.logDate) >= twoWeeksAgo).slice(0, 30)
+          if (recentLogs.length === 0) return ''
+
+          const taskMap = new Map(project.tasks.map(t => [t.id, t]))
+
+          return `
+            <div class="card" style="margin-bottom: 12px;">
+              <div class="card-title">近期活動記錄（最近兩週）</div>
+              ${recentLogs.map(log => {
+                const task = taskMap.get(log.taskId)
+                const isDone = task && task.status === 'done'
+                return `
+                  <div class="activity-item" ${isDone ? 'style="background: #f0fdf4 !important;"' : ''}>
+                    <span class="activity-date">${new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
+                    <div class="activity-content">
+                      <span style="font-weight: 600;">${task ? task.title : '(未知任務)'}</span>
+                      ${isDone ? '<span class="task-status task-status-done" style="margin-left: 4px;">完成</span>' : ''}
+                      <div style="color: #64748b; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.content.length > 100 ? log.content.slice(0, 100) + '...' : log.content}</div>
+                    </div>
+                    <span class="activity-author">${log.author.name}</span>
+                  </div>
+                `
+              }).join('')}
+            </div>
+          `
+        })()}
 
         ${project.risks.length > 0 ? `
           <div class="card" style="margin-bottom: 12px;">
             <div class="card-title">未解決風險（${project.risks.length} 個）</div>
-            ${project.risks.slice(0, 3).map(r => `
+            ${project.risks.map(r => `
               <div class="risk-item">
                 <div class="risk-title">${r.title}</div>
                 <div class="risk-meta">
                   影響程度：${r.impact === 'high' ? '高' : r.impact === 'medium' ? '中' : '低'} |
                   發生機率：${r.probability === 'high' ? '高' : r.probability === 'medium' ? '中' : '低'}
+                  ${r.mitigation ? ` | 緩解措施：${r.mitigation.length > 60 ? r.mitigation.slice(0, 60) + '...' : r.mitigation}` : ''}
                 </div>
               </div>
             `).join('')}
-            ${project.risks.length > 3 ? `<div style="text-align: center; color: #64748b; font-size: 10px; margin-top: 8px;">僅顯示前 3 個風險</div>` : ''}
           </div>
         ` : '<div class="card" style="margin-bottom: 12px;"><div style="color: #10b981; font-size: 12px;">✓ 無未解決風險</div></div>'}
 
-        ${project.teamMembers.length > 0 && project.teamMembers.length <= 6 ? `
+        ${(() => {
+          const delays = project.delayRequests || []
+          if (delays.length === 0) return ''
+
+          return `
+            <div class="card" style="margin-bottom: 12px;">
+              <div class="card-title">延期申請（${delays.length} 筆）</div>
+              ${delays.map(dr => {
+                const statusClass = dr.status === 'pending' ? 'delay-pending' : dr.status === 'approved' ? 'delay-approved' : 'delay-rejected'
+                const statusText = dr.status === 'pending' ? '待審' : dr.status === 'approved' ? '已核准' : '已拒絕'
+                return `
+                  <div class="delay-item">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                      <span class="delay-status ${statusClass}">${statusText}</span>
+                      ${dr.task ? `<span style="font-weight: 600; font-size: 11px;">${dr.task.title}</span>` : ''}
+                      <span style="color: #64748b; font-size: 9px; margin-left: auto;">${dr.requester.name} · ${new Date(dr.createdAt).toLocaleDateString('zh-TW')}</span>
+                    </div>
+                    <div style="font-size: 10px; color: #475569; margin-bottom: 4px;">${dr.reason.length > 120 ? dr.reason.slice(0, 120) + '...' : dr.reason}</div>
+                    ${dr.affectedMilestones.length > 0 ? `
+                      <div style="font-size: 9px; color: #64748b;">
+                        ${dr.affectedMilestones.map(am => {
+                          const msName = project.milestones.find(m => m.id === am.milestoneId)?.name || am.milestoneId
+                          return `${msName}: <span style="text-decoration: line-through;">${new Date(am.originalDate).toLocaleDateString('zh-TW')}</span> → <span style="font-weight: 600;">${new Date(am.proposedDate).toLocaleDateString('zh-TW')}</span>`
+                        }).join(' | ')}
+                      </div>
+                    ` : ''}
+                  </div>
+                `
+              }).join('')}
+            </div>
+          `
+        })()}
+
+        ${project.teamMembers.length > 0 ? `
           <div class="card">
             <div class="card-title">團隊成員（${project.teamMembers.length} 人）</div>
             <table>
@@ -723,11 +991,6 @@ export async function POST(request: NextRequest) {
                 `).join('')}
               </tbody>
             </table>
-          </div>
-        ` : project.teamMembers.length > 6 ? `
-          <div class="card">
-            <div class="card-title">團隊成員（${project.teamMembers.length} 人）</div>
-            <div style="color: #64748b; font-size: 11px;">團隊成員眾多，詳細資訊請查看系統</div>
           </div>
         ` : ''}
       </div>

@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { GanttChart } from '@/components/gantt-chart'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { useAuth } from '@/lib/auth-context'
@@ -40,6 +41,7 @@ import {
   Users,
   Loader2,
   Search,
+  Calendar,
   ChevronDown,
   Clock,
   FileText,
@@ -239,6 +241,7 @@ export default function ReportsPage() {
   const [detailProject, setDetailProject] = useState<Project | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [ganttExpanded, setGanttExpanded] = useState(true)
+  const [activeTab, setActiveTab] = useState('overview')
 
   // ── Fetch reports data from API ──
   useEffect(() => {
@@ -277,6 +280,7 @@ export default function ReportsPage() {
       setDetailProject(null)
       return
     }
+    setActiveTab('overview')
     const controller = new AbortController()
     const fetchDetail = async () => {
       setDetailLoading(true)
@@ -1023,73 +1027,38 @@ export default function ReportsPage() {
             </Card>
           </div>
 
-          {/* Donut Charts — 3-col */}
-          <div className="grid gap-4 lg:grid-cols-3">
-            {/* Task Status Donut */}
-            <Card>
-              <CardHeader className="pb-0">
-                <CardTitle className="text-sm">任務狀態分佈</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center py-5 gap-4">
-                <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold">{displayStats.totalTasks}</div>
-                    <div className="text-xs text-muted-foreground">總任務</div>
-                  </div>
-                </DonutChart>
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-                  {taskSegments.filter(s => s.value > 0).map(seg => (
-                    <div key={seg.label} className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                      <span className="text-sm text-muted-foreground">{seg.label}</span>
-                      <span className="text-sm font-semibold">{seg.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Project Health / Milestone Donut */}
-            <Card>
-              <CardHeader className="pb-0">
-                <CardTitle className="text-sm">
-                  {selectedProject ? '里程碑狀態' : '專案健康度'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center py-5 gap-4">
-                {selectedProject ? (
-                  <>
-                    <DonutChart
-                      segments={[
-                        { value: selectedProject.milestones.filter(m => m.status === 'done').length, color: '#10b981', label: '完成' },
-                        { value: selectedProject.milestones.filter(m => m.status === 'in-progress').length, color: '#3b82f6', label: '進行中' },
-                        { value: selectedProject.milestones.filter(m => m.status === 'todo').length, color: '#94a3b8', label: '待辦' },
-                        { value: selectedProject.milestones.filter(m => m.status === 'blocked').length, color: '#ef4444', label: '受阻' },
-                      ]}
-                      size={150} strokeWidth={22}
-                    >
+          {/* ══════ All projects view ══════ */}
+          {!selectedProject && (
+            <>
+              {/* Donut Charts — 3-col */}
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-0">
+                    <CardTitle className="text-sm">任務狀態分佈</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center py-5 gap-4">
+                    <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
                       <div className="text-center">
-                        <div className="text-2xl font-bold">{selectedProject.progress}%</div>
-                        <div className="text-xs text-muted-foreground">進度</div>
+                        <div className="text-2xl font-bold">{displayStats.totalTasks}</div>
+                        <div className="text-xs text-muted-foreground">總任務</div>
                       </div>
                     </DonutChart>
-                    <div className="w-full space-y-1.5 px-2">
-                      {selectedProject.milestones.map(m => (
-                        <div key={m.id} className="flex items-center gap-2">
-                          <span className={cn(
-                            'h-2 w-2 rounded-full shrink-0',
-                            m.status === 'done' ? 'bg-emerald-500' :
-                            m.status === 'in-progress' ? 'bg-blue-500' :
-                            m.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
-                          )} />
-                          <span className="text-[11px] truncate">{m.name}</span>
-                          <span className="text-[11px] font-semibold ml-auto">{m.progress}%</span>
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                      {taskSegments.filter(s => s.value > 0).map(seg => (
+                        <div key={seg.label} className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                          <span className="text-sm text-muted-foreground">{seg.label}</span>
+                          <span className="text-sm font-semibold">{seg.value}</span>
                         </div>
                       ))}
                     </div>
-                  </>
-                ) : (
-                  <>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-0">
+                    <CardTitle className="text-sm">專案健康度</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center py-5 gap-4">
                     <DonutChart segments={statusSegments} size={150} strokeWidth={22}>
                       <div className="text-center">
                         <div className="text-2xl font-bold">{data.projects.length}</div>
@@ -1105,48 +1074,41 @@ export default function ReportsPage() {
                         </div>
                       ))}
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-0">
+                    <CardTitle className="text-sm">預算執行</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center py-5 gap-4">
+                    <DonutChart
+                      segments={[
+                        { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
+                        { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
+                      ]}
+                      size={150} strokeWidth={22}
+                    >
+                      <div className="text-center">
+                        <div className={cn('text-2xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
+                        <div className="text-xs text-muted-foreground">執行率</div>
+                      </div>
+                    </DonutChart>
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
+                        <span className="text-sm text-muted-foreground">已使用</span>
+                        <span className="text-sm font-semibold">{fmtMoney(displayStats.budgetUsed)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
+                        <span className="text-sm text-muted-foreground">剩餘</span>
+                        <span className="text-sm font-semibold">{fmtMoney(Math.max(displayStats.budget - displayStats.budgetUsed, 0))}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-            {/* Budget Donut */}
-            <Card>
-              <CardHeader className="pb-0">
-                <CardTitle className="text-sm">預算執行</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center py-5 gap-4">
-                <DonutChart
-                  segments={[
-                    { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
-                    { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
-                  ]}
-                  size={150} strokeWidth={22}
-                >
-                  <div className="text-center">
-                    <div className={cn('text-2xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
-                    <div className="text-xs text-muted-foreground">執行率</div>
-                  </div>
-                </DonutChart>
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
-                    <span className="text-sm text-muted-foreground">已使用</span>
-                    <span className="text-sm font-semibold">{fmtMoney(displayStats.budgetUsed)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
-                    <span className="text-sm text-muted-foreground">剩餘</span>
-                    <span className="text-sm font-semibold">{fmtMoney(Math.max(displayStats.budget - displayStats.budgetUsed, 0))}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* All projects view */}
-          {!selectedProject && (
-            <>
               {/* Project Progress Cards — mini ring per project */}
               <Card>
                 <CardHeader className="pb-2">
@@ -1174,372 +1136,492 @@ export default function ReportsPage() {
                   </div>
                 </CardContent>
               </Card>
-
             </>
           )}
 
-          {/* Single project view */}
+          {/* ══════ Single project view — Tabs ══════ */}
           {selectedProject && (
-            <>
-              {/* Milestone progress + info in 2 cols */}
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">里程碑進度</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {selectedProject.milestones.map(m => (
-                      <div key={m.id} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium truncate mr-2">{m.name}</span>
-                          <span className="text-muted-foreground shrink-0">{m.progress}%</span>
-                        </div>
-                        <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{
-                            width: `${m.progress}%`,
-                            backgroundColor: m.status === 'done' ? '#10b981' : m.status === 'blocked' ? '#ef4444' : '#3b82f6',
-                          }} />
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="bg-transparent border-b rounded-none w-full justify-start h-auto p-0">
+                <TabsTrigger value="overview" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
+                  <BarChart3 className="h-3.5 w-3.5" /> 總覽
+                </TabsTrigger>
+                <TabsTrigger value="schedule" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" /> 時程
+                </TabsTrigger>
+                <TabsTrigger value="team" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
+                  <Users className="h-3.5 w-3.5" /> 團隊
+                </TabsTrigger>
+                <TabsTrigger value="risks" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
+                  <ShieldAlert className="h-3.5 w-3.5" /> 風險延期
+                </TabsTrigger>
+              </TabsList>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">專案資訊</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground mb-1.5">專案類型</div>
-                        <div className="font-medium">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground mb-1.5">負責人</div>
-                        <div className="font-medium">{selectedProject.owner}</div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground mb-1.5">專案期間</div>
-                        <div className="font-medium">
-                          {new Date(selectedProject.startDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })} ~ {new Date(selectedProject.endDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
-                        </div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground mb-1.5">預算</div>
-                        <div className="font-medium">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground mb-1.5">週報更新</div>
-                        <div className="font-medium">{selectedProject.weeklyUpdatesCount} 次</div>
-                      </div>
-                      <div className="p-3 rounded-lg bg-muted/50">
-                        <div className="text-xs text-muted-foreground mb-1.5">團隊</div>
-                        <div className="font-medium">{selectedProject.teamSize} 人</div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* ── Gantt Chart (read-only) ── */}
-              {detailLoading ? (
-                <Card>
-                  <CardContent className="flex items-center justify-center py-16">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    <span className="ml-2 text-sm text-muted-foreground">載入詳細資料...</span>
-                  </CardContent>
-                </Card>
-              ) : detailProject && (
-                <Collapsible open={ganttExpanded} onOpenChange={setGanttExpanded}>
-                  <CollapsibleTrigger asChild>
-                    <div className="flex items-center gap-2 text-sm font-semibold cursor-pointer hover:text-foreground/80 transition-colors py-1">
-                      <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
-                      甘特圖
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="overflow-hidden min-w-0">
-                      <GanttChart
-                        tasks={detailProject.tasks}
-                        milestones={detailProject.milestones}
-                        startDate={detailProject.startDate}
-                        endDate={detailProject.endDate}
-                        showBaseline={true}
-                        taskLogs={detailProject.taskLogs}
-                      />
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
-
-              {/* ── Task Detail Table ── */}
-              {detailProject && tasksByMilestone.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <FileText className="h-3.5 w-3.5" /> 任務明細
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {tasksByMilestone.map(({ milestone, tasks: msTasks }) => (
-                      <div key={milestone.id}>
-                        <div className="flex items-center gap-2 mb-2 pb-1 border-b">
-                          <span className={cn(
-                            'h-2 w-2 rounded-full shrink-0',
-                            milestone.status === 'done' ? 'bg-emerald-500' :
-                            milestone.status === 'in-progress' ? 'bg-blue-500' :
-                            milestone.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
-                          )} />
-                          <span className="text-sm font-semibold">{milestone.name}</span>
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            {milestone.progress}% &middot; 到期 {milestone.dueDate}
-                          </span>
-                        </div>
-                        {msTasks.length === 0 ? (
-                          <p className="text-xs text-muted-foreground pl-4">無任務</p>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm table-fixed">
-                              <colgroup>
-                                <col className="w-[35%]" />
-                                <col className="w-[12%]" />
-                                <col className="w-[10%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[22%]" />
-                                <col className="w-[13%]" />
-                              </colgroup>
-                              <thead>
-                                <tr className="text-xs text-muted-foreground border-b">
-                                  <th className="text-left py-1 pl-4 font-medium">任務名稱</th>
-                                  <th className="text-left py-1 font-medium">負責人</th>
-                                  <th className="text-left py-1 font-medium">狀態</th>
-                                  <th className="text-left py-1 font-medium">優先</th>
-                                  <th className="text-left py-1 font-medium">起迄</th>
-                                  <th className="text-left py-1 font-medium">進度</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {msTasks.map(task => (
-                                  <React.Fragment key={task.id}>
-                                    <tr className="border-b border-dashed hover:bg-muted/30">
-                                      <td className="py-1.5 pl-4 font-medium truncate">{task.title}</td>
-                                      <td className="py-1.5 text-muted-foreground truncate">{task.assignee}</td>
-                                      <td className="py-1.5">{getStatusBadge(task.status)}</td>
-                                      <td className="py-1.5">{getPriorityBadge(task.priority)}</td>
-                                      <td className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
-                                        {task.startDate} ~ {task.endDate}
-                                      </td>
-                                      <td className="py-1.5 pr-2">
-                                        <div className="flex items-center gap-1.5">
-                                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                                            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${task.progress}%` }} />
-                                          </div>
-                                          <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{task.progress}%</span>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                    {task.subtasks?.map(sub => (
-                                      <tr key={sub.id} className="border-b border-dashed hover:bg-muted/20">
-                                        <td className="py-1 pl-8 text-muted-foreground truncate">
-                                          <span className="text-xs">└ </span>{sub.title}
-                                        </td>
-                                        <td className="py-1 text-xs text-muted-foreground truncate">{sub.assignee}</td>
-                                        <td className="py-1">{getStatusBadge(sub.status)}</td>
-                                        <td className="py-1">{getPriorityBadge(sub.priority)}</td>
-                                        <td className="py-1 text-xs text-muted-foreground whitespace-nowrap">
-                                          {sub.startDate} ~ {sub.endDate}
-                                        </td>
-                                        <td className="py-1 pr-2">
-                                          <div className="flex items-center gap-1.5">
-                                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                                              <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${sub.progress}%` }} />
-                                            </div>
-                                            <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{sub.progress}%</span>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </React.Fragment>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Single project: team workload bar chart */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5" /> 團隊工作量
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {displayTeamWorkload.map(m => (
-                    <div key={m.name} className="flex items-center gap-3">
-                      <span className="text-sm font-medium w-[72px] truncate shrink-0">{m.name}</span>
-                      <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
-                        <div
-                          className="h-full rounded bg-primary/80 transition-all"
-                          style={{ width: `${(m.total / maxMemberTasks) * 100}%` }}
-                        />
-                        <div
-                          className="h-full rounded bg-emerald-500 absolute top-0 left-0 transition-all"
-                          style={{ width: `${(m.done / maxMemberTasks) * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-sm text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
-                    </div>
-                  ))}
-                  {displayTeamWorkload.length > 0 && (
-                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
-                      <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-emerald-500 inline-block" />已完成</span>
-                      <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-primary/80 inline-block" />總任務</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* ── Recent Activity Summary (last 2 weeks) ── */}
-              {detailProject && recentActivity.length > 0 && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Clock className="h-3.5 w-3.5" /> 近期活動記錄（最近兩週）
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {recentActivity.map(({ weekStart, items }) => (
-                      <div key={weekStart}>
-                        <div className="text-xs font-semibold text-muted-foreground mb-2">
-                          {weekStart} 起的一週
-                        </div>
-                        <div className="space-y-1.5">
-                          {items.slice(0, 20).map(({ log, task }) => (
-                            <div
-                              key={log.id}
-                              className={cn(
-                                'flex items-start gap-3 text-sm py-1.5 px-2 rounded',
-                                task?.status === 'done' && 'bg-emerald-50 dark:bg-emerald-950/20',
-                              )}
-                            >
-                              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
-                                {log.logDate}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <span className="font-medium">{task?.title || '(未知任務)'}</span>
-                                {task?.status === 'done' && (
-                                  <Badge className="text-[10px] px-1 py-0 bg-emerald-100 text-emerald-700 ml-1.5">完成</Badge>
-                                )}
-                                <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                  {log.content.length > 80 ? log.content.slice(0, 80) + '...' : log.content}
-                                </p>
-                              </div>
-                              <span className="text-xs text-muted-foreground shrink-0">{log.author}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* ── Risks & Delays (side by side) ── */}
-              {detailProject && (detailProject.risks.length > 0 || detailProject.delayRequests.length > 0) && (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {/* Left: Unresolved Risks */}
+              {/* ── Tab: 總覽 ── */}
+              <TabsContent value="overview" className="space-y-4 mt-4">
+                {/* Donut Charts — 3-col */}
+                <div className="grid gap-4 lg:grid-cols-3">
                   <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <ShieldAlert className="h-3.5 w-3.5" /> 未解決風險
-                      </CardTitle>
+                    <CardHeader className="pb-0">
+                      <CardTitle className="text-sm">任務狀態分佈</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                      {detailProject.risks.filter(r => r.status === 'open').length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">目前無未解決風險</p>
-                      ) : (
-                        detailProject.risks.filter(r => r.status === 'open').map(risk => (
-                          <div key={risk.id} className="p-3 rounded-lg border space-y-1">
-                            <div className="flex items-center gap-2">
-                              <AlertTriangle className={cn(
-                                'h-3.5 w-3.5 shrink-0',
-                                risk.impact === 'high' ? 'text-red-500' :
-                                risk.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
-                              )} />
-                              <span className="text-sm font-medium">{risk.title}</span>
-                              <Badge variant="outline" className="text-[10px] ml-auto shrink-0">
-                                {risk.impact === 'high' ? '高' : risk.impact === 'medium' ? '中' : '低'}影響
-                              </Badge>
-                            </div>
-                            {risk.description && (
-                              <p className="text-xs text-muted-foreground pl-5">
-                                {risk.description.length > 120 ? risk.description.slice(0, 120) + '...' : risk.description}
-                              </p>
-                            )}
+                    <CardContent className="flex flex-col items-center py-5 gap-4">
+                      <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">{displayStats.totalTasks}</div>
+                          <div className="text-xs text-muted-foreground">總任務</div>
+                        </div>
+                      </DonutChart>
+                      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                        {taskSegments.filter(s => s.value > 0).map(seg => (
+                          <div key={seg.label} className="flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                            <span className="text-sm text-muted-foreground">{seg.label}</span>
+                            <span className="text-sm font-semibold">{seg.value}</span>
                           </div>
-                        ))
-                      )}
+                        ))}
+                      </div>
                     </CardContent>
                   </Card>
-
-                  {/* Right: Delay Requests */}
                   <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <Timer className="h-3.5 w-3.5" /> 延期申請
-                      </CardTitle>
+                    <CardHeader className="pb-0">
+                      <CardTitle className="text-sm">里程碑狀態</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2">
-                      {detailProject.delayRequests.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">目前無延期申請</p>
-                      ) : (
-                        detailProject.delayRequests.map(dr => (
-                          <div key={dr.id} className="p-3 rounded-lg border space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <Badge className={cn(
-                                'text-[10px] px-1.5 py-0',
-                                dr.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-300' :
-                                dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
-                                'bg-red-100 text-red-700 border-red-300',
-                              )}>
-                                {dr.status === 'pending' ? '待審' : dr.status === 'approved' ? '已核准' : '已拒絕'}
-                              </Badge>
-                              {dr.taskTitle && (
-                                <span className="text-sm font-medium truncate">{dr.taskTitle}</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {dr.reason.length > 100 ? dr.reason.slice(0, 100) + '...' : dr.reason}
-                            </p>
-                            {dr.affectedMilestones.length > 0 && (
-                              <div className="text-xs text-muted-foreground space-y-0.5">
-                                {dr.affectedMilestones.map((am, i) => {
-                                  const msName = detailProject.milestones.find(m => m.id === am.milestoneId)?.name || am.milestoneId
-                                  return (
-                                    <div key={i} className="flex items-center gap-1">
-                                      <span className="truncate">{msName}:</span>
-                                      <span className="line-through">{am.originalDate}</span>
-                                      <span>→</span>
-                                      <span className="font-medium">{am.proposedDate}</span>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
+                    <CardContent className="flex flex-col items-center py-5 gap-4">
+                      <DonutChart
+                        segments={[
+                          { value: selectedProject.milestones.filter(m => m.status === 'done').length, color: '#10b981', label: '完成' },
+                          { value: selectedProject.milestones.filter(m => m.status === 'in-progress').length, color: '#3b82f6', label: '進行中' },
+                          { value: selectedProject.milestones.filter(m => m.status === 'todo').length, color: '#94a3b8', label: '待辦' },
+                          { value: selectedProject.milestones.filter(m => m.status === 'blocked').length, color: '#ef4444', label: '受阻' },
+                        ]}
+                        size={150} strokeWidth={22}
+                      >
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">{selectedProject.progress}%</div>
+                          <div className="text-xs text-muted-foreground">進度</div>
+                        </div>
+                      </DonutChart>
+                      <div className="w-full space-y-1.5 px-2">
+                        {selectedProject.milestones.map(m => (
+                          <div key={m.id} className="flex items-center gap-2">
+                            <span className={cn(
+                              'h-2 w-2 rounded-full shrink-0',
+                              m.status === 'done' ? 'bg-emerald-500' :
+                              m.status === 'in-progress' ? 'bg-blue-500' :
+                              m.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
+                            )} />
+                            <span className="text-[11px] truncate">{m.name}</span>
+                            <span className="text-[11px] font-semibold ml-auto">{m.progress}%</span>
                           </div>
-                        ))
-                      )}
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-0">
+                      <CardTitle className="text-sm">預算執行</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center py-5 gap-4">
+                      <DonutChart
+                        segments={[
+                          { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
+                          { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
+                        ]}
+                        size={150} strokeWidth={22}
+                      >
+                        <div className="text-center">
+                          <div className={cn('text-2xl font-bold', budgetPct > 100 && 'text-destructive')}>{budgetPct}%</div>
+                          <div className="text-xs text-muted-foreground">執行率</div>
+                        </div>
+                      </DonutChart>
+                      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
+                          <span className="text-sm text-muted-foreground">已使用</span>
+                          <span className="text-sm font-semibold">{fmtMoney(displayStats.budgetUsed)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
+                          <span className="text-sm text-muted-foreground">剩餘</span>
+                          <span className="text-sm font-semibold">{fmtMoney(Math.max(displayStats.budget - displayStats.budgetUsed, 0))}</span>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>
-              )}
-            </>
+
+                {/* Milestone progress + Project info */}
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">里程碑進度</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {selectedProject.milestones.map(m => (
+                        <div key={m.id} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium truncate mr-2">{m.name}</span>
+                            <span className="text-muted-foreground shrink-0">{m.progress}%</span>
+                          </div>
+                          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{
+                              width: `${m.progress}%`,
+                              backgroundColor: m.status === 'done' ? '#10b981' : m.status === 'blocked' ? '#ef4444' : '#3b82f6',
+                            }} />
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">專案資訊</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground mb-1.5">專案類型</div>
+                          <div className="font-medium">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground mb-1.5">負責人</div>
+                          <div className="font-medium">{selectedProject.owner}</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground mb-1.5">專案期間</div>
+                          <div className="font-medium">
+                            {new Date(selectedProject.startDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })} ~ {new Date(selectedProject.endDate).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground mb-1.5">預算</div>
+                          <div className="font-medium">{fmtMoney(selectedProject.budgetUsed)} / {fmtMoney(selectedProject.budget)}</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground mb-1.5">週報更新</div>
+                          <div className="font-medium">{selectedProject.weeklyUpdatesCount} 次</div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="text-xs text-muted-foreground mb-1.5">團隊</div>
+                          <div className="font-medium">{selectedProject.teamSize} 人</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              {/* ── Tab: 時程 ── */}
+              <TabsContent value="schedule" className="space-y-4 mt-4">
+                {detailLoading ? (
+                  <Card>
+                    <CardContent className="flex items-center justify-center py-16">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-sm text-muted-foreground">載入詳細資料...</span>
+                    </CardContent>
+                  </Card>
+                ) : detailProject ? (
+                  <>
+                    <Collapsible open={ganttExpanded} onOpenChange={setGanttExpanded}>
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center gap-2 text-sm font-semibold cursor-pointer hover:text-foreground/80 transition-colors py-1">
+                          <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
+                          甘特圖
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="overflow-hidden min-w-0">
+                          <GanttChart
+                            tasks={detailProject.tasks}
+                            milestones={detailProject.milestones}
+                            startDate={detailProject.startDate}
+                            endDate={detailProject.endDate}
+                            showBaseline={true}
+                            taskLogs={detailProject.taskLogs}
+                          />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+
+                    {tasksByMilestone.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <FileText className="h-3.5 w-3.5" /> 任務明細
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {tasksByMilestone.map(({ milestone, tasks: msTasks }) => (
+                            <div key={milestone.id}>
+                              <div className="flex items-center gap-2 mb-2 pb-1 border-b">
+                                <span className={cn(
+                                  'h-2 w-2 rounded-full shrink-0',
+                                  milestone.status === 'done' ? 'bg-emerald-500' :
+                                  milestone.status === 'in-progress' ? 'bg-blue-500' :
+                                  milestone.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
+                                )} />
+                                <span className="text-sm font-semibold">{milestone.name}</span>
+                                <span className="text-xs text-muted-foreground ml-auto">
+                                  {milestone.progress}% &middot; 到期 {milestone.dueDate}
+                                </span>
+                              </div>
+                              {msTasks.length === 0 ? (
+                                <p className="text-xs text-muted-foreground pl-4">無任務</p>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm table-fixed">
+                                    <colgroup>
+                                      <col className="w-[35%]" />
+                                      <col className="w-[12%]" />
+                                      <col className="w-[10%]" />
+                                      <col className="w-[8%]" />
+                                      <col className="w-[22%]" />
+                                      <col className="w-[13%]" />
+                                    </colgroup>
+                                    <thead>
+                                      <tr className="text-xs text-muted-foreground border-b">
+                                        <th className="text-left py-1 pl-4 font-medium">任務名稱</th>
+                                        <th className="text-left py-1 font-medium">負責人</th>
+                                        <th className="text-left py-1 font-medium">狀態</th>
+                                        <th className="text-left py-1 font-medium">優先</th>
+                                        <th className="text-left py-1 font-medium">起迄</th>
+                                        <th className="text-left py-1 font-medium">進度</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {msTasks.map(task => (
+                                        <React.Fragment key={task.id}>
+                                          <tr className="border-b border-dashed hover:bg-muted/30">
+                                            <td className="py-1.5 pl-4 font-medium truncate">{task.title}</td>
+                                            <td className="py-1.5 text-muted-foreground truncate">{task.assignee}</td>
+                                            <td className="py-1.5">{getStatusBadge(task.status)}</td>
+                                            <td className="py-1.5">{getPriorityBadge(task.priority)}</td>
+                                            <td className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                                              {task.startDate} ~ {task.endDate}
+                                            </td>
+                                            <td className="py-1.5 pr-2">
+                                              <div className="flex items-center gap-1.5">
+                                                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${task.progress}%` }} />
+                                                </div>
+                                                <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{task.progress}%</span>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                          {task.subtasks?.map(sub => (
+                                            <tr key={sub.id} className="border-b border-dashed hover:bg-muted/20">
+                                              <td className="py-1 pl-8 text-muted-foreground truncate">
+                                                <span className="text-xs">└ </span>{sub.title}
+                                              </td>
+                                              <td className="py-1 text-xs text-muted-foreground truncate">{sub.assignee}</td>
+                                              <td className="py-1">{getStatusBadge(sub.status)}</td>
+                                              <td className="py-1">{getPriorityBadge(sub.priority)}</td>
+                                              <td className="py-1 text-xs text-muted-foreground whitespace-nowrap">
+                                                {sub.startDate} ~ {sub.endDate}
+                                              </td>
+                                              <td className="py-1 pr-2">
+                                                <div className="flex items-center gap-1.5">
+                                                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                                    <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${sub.progress}%` }} />
+                                                  </div>
+                                                  <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{sub.progress}%</span>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </React.Fragment>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                ) : null}
+              </TabsContent>
+
+              {/* ── Tab: 團隊 ── */}
+              <TabsContent value="team" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" /> 團隊工作量
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {displayTeamWorkload.map(m => (
+                      <div key={m.name} className="flex items-center gap-3">
+                        <span className="text-sm font-medium w-[72px] truncate shrink-0">{m.name}</span>
+                        <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
+                          <div
+                            className="h-full rounded bg-primary/80 transition-all"
+                            style={{ width: `${(m.total / maxMemberTasks) * 100}%` }}
+                          />
+                          <div
+                            className="h-full rounded bg-emerald-500 absolute top-0 left-0 transition-all"
+                            style={{ width: `${(m.done / maxMemberTasks) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
+                      </div>
+                    ))}
+                    {displayTeamWorkload.length > 0 && (
+                      <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
+                        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-emerald-500 inline-block" />已完成</span>
+                        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-primary/80 inline-block" />總任務</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {detailProject && recentActivity.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5" /> 近期活動記錄（最近兩週）
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {recentActivity.map(({ weekStart, items }) => (
+                        <div key={weekStart}>
+                          <div className="text-xs font-semibold text-muted-foreground mb-2">
+                            {weekStart} 起的一週
+                          </div>
+                          <div className="space-y-1.5">
+                            {items.slice(0, 20).map(({ log, task }) => (
+                              <div
+                                key={log.id}
+                                className={cn(
+                                  'flex items-start gap-3 text-sm py-1.5 px-2 rounded',
+                                  task?.status === 'done' && 'bg-emerald-50 dark:bg-emerald-950/20',
+                                )}
+                              >
+                                <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
+                                  {log.logDate}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium">{task?.title || '(未知任務)'}</span>
+                                  {task?.status === 'done' && (
+                                    <Badge className="text-[10px] px-1 py-0 bg-emerald-100 text-emerald-700 ml-1.5">完成</Badge>
+                                  )}
+                                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                    {log.content.length > 80 ? log.content.slice(0, 80) + '...' : log.content}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-muted-foreground shrink-0">{log.author}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* ── Tab: 風險延期 ── */}
+              <TabsContent value="risks" className="space-y-4 mt-4">
+                {detailLoading ? (
+                  <Card>
+                    <CardContent className="flex items-center justify-center py-16">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-sm text-muted-foreground">載入詳細資料...</span>
+                    </CardContent>
+                  </Card>
+                ) : detailProject ? (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <ShieldAlert className="h-3.5 w-3.5" /> 未解決風險
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {detailProject.risks.filter(r => r.status === 'open').length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-2">目前無未解決風險</p>
+                        ) : (
+                          detailProject.risks.filter(r => r.status === 'open').map(risk => (
+                            <div key={risk.id} className="p-3 rounded-lg border space-y-1">
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle className={cn(
+                                  'h-3.5 w-3.5 shrink-0',
+                                  risk.impact === 'high' ? 'text-red-500' :
+                                  risk.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
+                                )} />
+                                <span className="text-sm font-medium">{risk.title}</span>
+                                <Badge variant="outline" className="text-[10px] ml-auto shrink-0">
+                                  {risk.impact === 'high' ? '高' : risk.impact === 'medium' ? '中' : '低'}影響
+                                </Badge>
+                              </div>
+                              {risk.description && (
+                                <p className="text-xs text-muted-foreground pl-5">
+                                  {risk.description.length > 120 ? risk.description.slice(0, 120) + '...' : risk.description}
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Timer className="h-3.5 w-3.5" /> 延期申請
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {detailProject.delayRequests.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-2">目前無延期申請</p>
+                        ) : (
+                          detailProject.delayRequests.map(dr => (
+                            <div key={dr.id} className="p-3 rounded-lg border space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge className={cn(
+                                  'text-[10px] px-1.5 py-0',
+                                  dr.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-300' :
+                                  dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
+                                  'bg-red-100 text-red-700 border-red-300',
+                                )}>
+                                  {dr.status === 'pending' ? '待審' : dr.status === 'approved' ? '已核准' : '已拒絕'}
+                                </Badge>
+                                {dr.taskTitle && (
+                                  <span className="text-sm font-medium truncate">{dr.taskTitle}</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {dr.reason.length > 100 ? dr.reason.slice(0, 100) + '...' : dr.reason}
+                              </p>
+                              {dr.affectedMilestones.length > 0 && (
+                                <div className="text-xs text-muted-foreground space-y-0.5">
+                                  {dr.affectedMilestones.map((am, i) => {
+                                    const msName = detailProject.milestones.find(m => m.id === am.milestoneId)?.name || am.milestoneId
+                                    return (
+                                      <div key={i} className="flex items-center gap-1">
+                                        <span className="truncate">{msName}:</span>
+                                        <span className="line-through">{am.originalDate}</span>
+                                        <span>→</span>
+                                        <span className="font-medium">{am.proposedDate}</span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground py-4">尚無風險或延期資料</p>
+                )}
+              </TabsContent>
+            </Tabs>
           )}
         </div>
     </DashboardLayout>
