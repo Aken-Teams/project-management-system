@@ -621,7 +621,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         </div>
                       </div>
                       <div
-                        className={cn('flex-1 relative cursor-pointer hover:bg-accent/50 transition-colors', showBaseline ? 'h-14' : 'h-10')}
+                        className={cn('flex-1 relative cursor-pointer hover:bg-accent/50 transition-colors', 'h-14')}
                         data-timeline-area
                         onClick={(e) => handleTaskClick(task, e)}
                         onMouseMove={(e) => {
@@ -676,7 +676,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                   ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                                 }}
                               />
-                            ) : task.progress > 0 ? (
+                            ) : earliestLogDateMap.has(task.id) ? (
                               <div
                                 className="absolute h-3.5 rounded-sm"
                                 style={{
@@ -745,6 +745,26 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 }}
                               />
                             )}
+                            {/* Actual bar (below plan bar — shows where work actually happened) */}
+                            {effectiveStatus(task) === 'done' && task.completedAt ? (
+                              <div
+                                className="absolute h-2.5 rounded-sm"
+                                style={{
+                                  ...barStyle(getActualStart(task.id, task.startDate), task.completedAt),
+                                  top: 30,
+                                  backgroundColor: taskColors.bg,
+                                }}
+                              />
+                            ) : earliestLogDateMap.has(task.id) ? (
+                              <div
+                                className="absolute h-2.5 rounded-sm"
+                                style={{
+                                  ...barStyle(getActualStart(task.id, task.startDate), todayStr),
+                                  top: 30,
+                                  backgroundColor: taskColors.bg,
+                                }}
+                              />
+                            ) : null}
                             {/* Percentage label + time diff */}
                             <span
                               className="absolute text-[10px] font-medium whitespace-nowrap"
