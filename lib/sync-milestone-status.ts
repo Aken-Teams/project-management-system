@@ -179,7 +179,7 @@ export async function autoProgressTasks(
  * Works on in-memory arrays; updates DB + patches objects in place.
  */
 export async function syncTaskProgressFromLogs(
-  tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; progress: number; completedAt: Date | null }[],
+  tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; originalStartDate?: Date | null; progress: number; completedAt: Date | null }[],
   taskLogs: { taskId: string; logDate: Date }[],
 ): Promise<void> {
   const msPerDay = 1000 * 60 * 60 * 24
@@ -217,22 +217,24 @@ export async function syncTaskProgressFromLogs(
     } else {
       // Leaf task: time-position based progress
       // IMPORTANT: Only completedAt grants 100%. Auto-calc caps at 99%.
-      // Only logs within [startDate, endDate] count toward progress.
+      // effectiveStart = min(originalStartDate, startDate) — so logs from the
+      // original period still count even after delay shifts dates forward.
       // Logs past endDate = overdue work, don't inflate progress.
+      const effectiveStart = task.originalStartDate && task.originalStartDate < task.startDate
+        ? task.originalStartDate : task.startDate
       const allLogs = logsByTask.get(task.id) || []
-      const validLogs = allLogs.filter(d => d >= task.startDate && d <= task.endDate)
+      const validLogs = allLogs.filter(d => d >= effectiveStart && d <= task.endDate)
       const latestLog = validLogs.length > 0
         ? validLogs.reduce((a, b) => (a > b ? a : b))
         : null
       if (!latestLog) {
         target = 0
       } else {
-        const totalSpan = task.endDate.getTime() - task.startDate.getTime()
+        const totalSpan = task.endDate.getTime() - effectiveStart.getTime()
         if (totalSpan <= 0) {
-          // Same-day task: any log on that day = 99% (only completedAt → 100%)
           target = 99
         } else {
-          const elapsed = latestLog.getTime() - task.startDate.getTime()
+          const elapsed = latestLog.getTime() - effectiveStart.getTime()
           target = Math.min(99, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
         }
       }

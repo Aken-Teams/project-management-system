@@ -148,25 +148,28 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     if (!task) return null
     const taskStart = new Date(task.startDate)
     const taskEnd = new Date(task.endDate)
-    const totalSpan = taskEnd.getTime() - taskStart.getTime()
+    // effectiveStart: use originalStartDate if it's earlier (delay shifted dates forward)
+    const origStart = task.originalStartDate ? new Date(task.originalStartDate) : null
+    const effectiveStart = origStart && origStart < taskStart ? origStart : taskStart
+    const totalSpan = taskEnd.getTime() - effectiveStart.getTime()
     if (totalSpan <= 0) return null
     const totalDays = Math.round(totalSpan / 86400000)
     // Completed tasks are always 100%
     if (task.completedAt) return { percent: 100, latestDate: task.completedAt, totalDays, hasOverdueLogs: false }
-    // Find latest logDate across all existing logs + current entries
-    // ONLY count logs within [startDate, endDate] — overdue logs don't count as progress
-    const taskEndStr = task.endDate.slice(0, 10) // YYYY-MM-DD
-    const taskStartStr = task.startDate.slice(0, 10)
+    // Valid logs: [effectiveStart, endDate] — includes original period + extension
+    // Logs past endDate = overdue work, don't inflate progress
+    const taskEndStr = task.endDate.slice(0, 10)
+    const effectiveStartStr = effectiveStart.toISOString().slice(0, 10)
     const existingLogDates = project.taskLogs
       .filter(l => l.taskId === task.id)
       .map(l => l.logDate.slice(0, 10))
     const currentEntryDates = logRows.filter(r => r.content.trim() && r.date).map(r => r.date)
     const allRawDates = [...existingLogDates, ...currentEntryDates]
-    const validDates = allRawDates.filter(d => d >= taskStartStr && d <= taskEndStr).sort()
+    const validDates = allRawDates.filter(d => d >= effectiveStartStr && d <= taskEndStr).sort()
     const hasOverdueLogs = allRawDates.some(d => d > taskEndStr)
     const latestDate = validDates[validDates.length - 1]
     if (!latestDate) return { percent: 0, latestDate: null, totalDays, hasOverdueLogs }
-    const elapsed = new Date(latestDate).getTime() - taskStart.getTime()
+    const elapsed = new Date(latestDate).getTime() - effectiveStart.getTime()
     const percent = Math.min(99, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
     return { percent, latestDate, totalDays, hasOverdueLogs }
   }, [task, project.taskLogs, logRows])
