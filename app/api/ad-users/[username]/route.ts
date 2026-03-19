@@ -24,7 +24,7 @@ export async function GET(
       id: u.username,
       name: u.displayName,
       email: u.mail || '',
-      jobTitle: '',
+      jobTitle: u.title || '',
       organization: u.department || '',
     })
   } catch (error) {

@@ -140,10 +140,21 @@ function NameAutocompleteInput({
     searchUsers(val)
   }
 
-  const selectUser = (user: SearchResult) => {
-    onSelect(user)
+  const selectUser = async (user: SearchResult) => {
     setShowDropdown(false)
     setResults([])
+    // Fetch full user detail (includes jobTitle from AD)
+    if (user.id) {
+      try {
+        const res = await fetch(`/api/ad-users/${encodeURIComponent(user.id)}`)
+        if (res.ok) {
+          const detail: SearchResult = await res.json()
+          onSelect({ ...user, jobTitle: detail.jobTitle || user.jobTitle, organization: detail.organization || user.organization })
+          return
+        }
+      } catch { /* fallback to search result */ }
+    }
+    onSelect(user)
   }
 
   const handleKeyDownInternal = (e: React.KeyboardEvent) => {

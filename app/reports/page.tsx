@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { PROJECT_TYPE_LABELS, type ProjectStatus } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
+import { GanttChart } from '@/components/gantt-chart'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { useAuth } from '@/lib/auth-context'
 import {
   Mail,
@@ -38,6 +40,11 @@ import {
   Users,
   Loader2,
   Search,
+  ChevronDown,
+  Clock,
+  FileText,
+  ShieldAlert,
+  Timer,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -228,6 +235,10 @@ export default function ReportsPage() {
   const [ccFetchingUsers, setCcFetchingUsers] = useState<Set<string>>(new Set())
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [isPreviewingPdf, setIsPreviewingPdf] = useState(false)
+  // Detail project data (fetched when single project selected)
+  const [detailProject, setDetailProject] = useState<Project | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [ganttExpanded, setGanttExpanded] = useState(true)
 
   // ── Fetch reports data from API ──
   useEffect(() => {
@@ -259,6 +270,30 @@ export default function ReportsPage() {
 
     fetchReports()
   }, [user])
+
+  // ── Fetch full project detail when single project selected ──
+  useEffect(() => {
+    if (selectedProjectId === 'all') {
+      setDetailProject(null)
+      return
+    }
+    const controller = new AbortController()
+    const fetchDetail = async () => {
+      setDetailLoading(true)
+      try {
+        const res = await fetch(`/api/projects/${selectedProjectId}`, { signal: controller.signal })
+        if (res.ok) {
+          setDetailProject(await res.json())
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') setDetailProject(null)
+      } finally {
+        setDetailLoading(false)
+      }
+    }
+    fetchDetail()
+    return () => controller.abort()
+  }, [selectedProjectId])
 
   // Calculate display stats based on selected project or all projects
   // Must be declared before any early returns to follow React Hooks rules
@@ -311,6 +346,43 @@ export default function ReportsPage() {
     return selectedProject.teamWorkload
   }, [data, selectedProjectId])
 
+  // ── Detail project computed data (must be before early returns) ──
+  const tasksByMilestone = useMemo(() => {
+    if (!detailProject) return []
+    return detailProject.milestones.map(ms => ({
+      milestone: ms,
+      tasks: detailProject.tasks.filter(t => t.milestoneId === ms.id && !t.parentId),
+    }))
+  }, [detailProject])
+
+  const recentActivity = useMemo(() => {
+    if (!detailProject) return []
+    const twoWeeksAgo = new Date()
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+    const cutoff = twoWeeksAgo.toISOString().split('T')[0]
+    const recentLogs = detailProject.taskLogs
+      .filter(log => log.logDate >= cutoff)
+      .sort((a, b) => b.logDate.localeCompare(a.logDate))
+
+    const taskMap = new Map(detailProject.tasks.map(t => [t.id, t]))
+    const weekGroups = new Map<string, Array<{ log: typeof recentLogs[0]; task: ReturnType<typeof taskMap.get> }>>()
+
+    for (const log of recentLogs) {
+      const date = new Date(log.logDate)
+      const dayOfWeek = date.getDay()
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+      const monday = new Date(date)
+      monday.setDate(date.getDate() + mondayOffset)
+      const weekKey = monday.toISOString().split('T')[0]
+      if (!weekGroups.has(weekKey)) weekGroups.set(weekKey, [])
+      weekGroups.get(weekKey)!.push({ log, task: taskMap.get(log.taskId) })
+    }
+
+    return [...weekGroups.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([weekStart, items]) => ({ weekStart, items }))
+  }, [detailProject])
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -354,6 +426,23 @@ export default function ReportsPage() {
   ]
 
   const maxMemberTasks = Math.max(...displayTeamWorkload.map(m => m.total), 1)
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'done': return <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">完成</Badge>
+      case 'in-progress': return <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300">進行中</Badge>
+      case 'blocked': return <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300">受阻</Badge>
+      default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300">待辦</Badge>
+    }
+  }
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'high': return <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300">高</Badge>
+      case 'medium': return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">中</Badge>
+      default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300">低</Badge>
+    }
+  }
 
   // ── Export handlers ──
   const handleOpenPdfDialog = () => {
@@ -1171,6 +1260,140 @@ export default function ReportsPage() {
                 </Card>
               </div>
 
+              {/* ── Gantt Chart (read-only) ── */}
+              {detailLoading ? (
+                <Card>
+                  <CardContent className="flex items-center justify-center py-16">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">載入詳細資料...</span>
+                  </CardContent>
+                </Card>
+              ) : detailProject && (
+                <Collapsible open={ganttExpanded} onOpenChange={setGanttExpanded}>
+                  <Card>
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="pb-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
+                          甘特圖
+                        </CardTitle>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="pt-0">
+                        <GanttChart
+                          tasks={detailProject.tasks}
+                          milestones={detailProject.milestones}
+                          startDate={detailProject.startDate}
+                          endDate={detailProject.endDate}
+                          showBaseline={true}
+                          taskLogs={detailProject.taskLogs}
+                        />
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              )}
+
+              {/* ── Task Detail Table ── */}
+              {detailProject && tasksByMilestone.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileText className="h-3.5 w-3.5" /> 任務明細
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {tasksByMilestone.map(({ milestone, tasks: msTasks }) => (
+                      <div key={milestone.id}>
+                        <div className="flex items-center gap-2 mb-2 pb-1 border-b">
+                          <span className={cn(
+                            'h-2 w-2 rounded-full shrink-0',
+                            milestone.status === 'done' ? 'bg-emerald-500' :
+                            milestone.status === 'in-progress' ? 'bg-blue-500' :
+                            milestone.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
+                          )} />
+                          <span className="text-sm font-semibold">{milestone.name}</span>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {milestone.progress}% &middot; 到期 {milestone.dueDate}
+                          </span>
+                        </div>
+                        {msTasks.length === 0 ? (
+                          <p className="text-xs text-muted-foreground pl-4">無任務</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm table-fixed">
+                              <colgroup>
+                                <col className="w-[35%]" />
+                                <col className="w-[12%]" />
+                                <col className="w-[10%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[22%]" />
+                                <col className="w-[13%]" />
+                              </colgroup>
+                              <thead>
+                                <tr className="text-xs text-muted-foreground border-b">
+                                  <th className="text-left py-1 pl-4 font-medium">任務名稱</th>
+                                  <th className="text-left py-1 font-medium">負責人</th>
+                                  <th className="text-left py-1 font-medium">狀態</th>
+                                  <th className="text-left py-1 font-medium">優先</th>
+                                  <th className="text-left py-1 font-medium">起迄</th>
+                                  <th className="text-left py-1 font-medium">進度</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {msTasks.map(task => (
+                                  <React.Fragment key={task.id}>
+                                    <tr className="border-b border-dashed hover:bg-muted/30">
+                                      <td className="py-1.5 pl-4 font-medium truncate">{task.title}</td>
+                                      <td className="py-1.5 text-muted-foreground truncate">{task.assignee}</td>
+                                      <td className="py-1.5">{getStatusBadge(task.status)}</td>
+                                      <td className="py-1.5">{getPriorityBadge(task.priority)}</td>
+                                      <td className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                                        {task.startDate} ~ {task.endDate}
+                                      </td>
+                                      <td className="py-1.5 pr-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${task.progress}%` }} />
+                                          </div>
+                                          <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{task.progress}%</span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                    {task.subtasks?.map(sub => (
+                                      <tr key={sub.id} className="border-b border-dashed hover:bg-muted/20">
+                                        <td className="py-1 pl-8 text-muted-foreground truncate">
+                                          <span className="text-xs">└ </span>{sub.title}
+                                        </td>
+                                        <td className="py-1 text-xs text-muted-foreground truncate">{sub.assignee}</td>
+                                        <td className="py-1">{getStatusBadge(sub.status)}</td>
+                                        <td className="py-1">{getPriorityBadge(sub.priority)}</td>
+                                        <td className="py-1 text-xs text-muted-foreground whitespace-nowrap">
+                                          {sub.startDate} ~ {sub.endDate}
+                                        </td>
+                                        <td className="py-1 pr-2">
+                                          <div className="flex items-center gap-1.5">
+                                            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                              <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${sub.progress}%` }} />
+                                            </div>
+                                            <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{sub.progress}%</span>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </React.Fragment>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Single project: team workload bar chart */}
               <Card>
                 <CardHeader className="pb-2">
@@ -1203,6 +1426,141 @@ export default function ReportsPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* ── Recent Activity Summary (last 2 weeks) ── */}
+              {detailProject && recentActivity.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Clock className="h-3.5 w-3.5" /> 近期活動記錄（最近兩週）
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {recentActivity.map(({ weekStart, items }) => (
+                      <div key={weekStart}>
+                        <div className="text-xs font-semibold text-muted-foreground mb-2">
+                          {weekStart} 起的一週
+                        </div>
+                        <div className="space-y-1.5">
+                          {items.slice(0, 20).map(({ log, task }) => (
+                            <div
+                              key={log.id}
+                              className={cn(
+                                'flex items-start gap-3 text-sm py-1.5 px-2 rounded',
+                                task?.status === 'done' && 'bg-emerald-50 dark:bg-emerald-950/20',
+                              )}
+                            >
+                              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
+                                {log.logDate}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{task?.title || '(未知任務)'}</span>
+                                {task?.status === 'done' && (
+                                  <Badge className="text-[10px] px-1 py-0 bg-emerald-100 text-emerald-700 ml-1.5">完成</Badge>
+                                )}
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {log.content.length > 80 ? log.content.slice(0, 80) + '...' : log.content}
+                                </p>
+                              </div>
+                              <span className="text-xs text-muted-foreground shrink-0">{log.author}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Risks & Delays (side by side) ── */}
+              {detailProject && (detailProject.risks.length > 0 || detailProject.delayRequests.length > 0) && (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {/* Left: Unresolved Risks */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <ShieldAlert className="h-3.5 w-3.5" /> 未解決風險
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {detailProject.risks.filter(r => r.status === 'open').length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-2">目前無未解決風險</p>
+                      ) : (
+                        detailProject.risks.filter(r => r.status === 'open').map(risk => (
+                          <div key={risk.id} className="p-3 rounded-lg border space-y-1">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className={cn(
+                                'h-3.5 w-3.5 shrink-0',
+                                risk.impact === 'high' ? 'text-red-500' :
+                                risk.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
+                              )} />
+                              <span className="text-sm font-medium">{risk.title}</span>
+                              <Badge variant="outline" className="text-[10px] ml-auto shrink-0">
+                                {risk.impact === 'high' ? '高' : risk.impact === 'medium' ? '中' : '低'}影響
+                              </Badge>
+                            </div>
+                            {risk.description && (
+                              <p className="text-xs text-muted-foreground pl-5">
+                                {risk.description.length > 120 ? risk.description.slice(0, 120) + '...' : risk.description}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Right: Delay Requests */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Timer className="h-3.5 w-3.5" /> 延期申請
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {detailProject.delayRequests.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-2">目前無延期申請</p>
+                      ) : (
+                        detailProject.delayRequests.map(dr => (
+                          <div key={dr.id} className="p-3 rounded-lg border space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <Badge className={cn(
+                                'text-[10px] px-1.5 py-0',
+                                dr.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-300' :
+                                dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
+                                'bg-red-100 text-red-700 border-red-300',
+                              )}>
+                                {dr.status === 'pending' ? '待審' : dr.status === 'approved' ? '已核准' : '已拒絕'}
+                              </Badge>
+                              {dr.taskTitle && (
+                                <span className="text-sm font-medium truncate">{dr.taskTitle}</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {dr.reason.length > 100 ? dr.reason.slice(0, 100) + '...' : dr.reason}
+                            </p>
+                            {dr.affectedMilestones.length > 0 && (
+                              <div className="text-xs text-muted-foreground space-y-0.5">
+                                {dr.affectedMilestones.map((am, i) => {
+                                  const msName = detailProject.milestones.find(m => m.id === am.milestoneId)?.name || am.milestoneId
+                                  return (
+                                    <div key={i} className="flex items-center gap-1">
+                                      <span className="truncate">{msName}:</span>
+                                      <span className="line-through">{am.originalDate}</span>
+                                      <span>→</span>
+                                      <span className="font-medium">{am.proposedDate}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </>
           )}
         </div>

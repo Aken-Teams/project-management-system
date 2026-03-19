@@ -69,10 +69,21 @@ export function TeamMemberAutocomplete({
     }, 300)
   }, [])
 
-  const selectUser = useCallback((user: SearchResult) => {
-    onSelectRef.current(user)
+  const selectUser = useCallback(async (user: SearchResult) => {
     setShowDropdown(false)
     setResults([])
+    // Fetch full user detail (includes jobTitle from AD)
+    if (user.id) {
+      try {
+        const res = await fetch(`/api/ad-users/${encodeURIComponent(user.id)}`)
+        if (res.ok) {
+          const detail: SearchResult = await res.json()
+          onSelectRef.current({ ...user, jobTitle: detail.jobTitle || user.jobTitle, organization: detail.organization || user.organization })
+          return
+        }
+      } catch { /* fallback to search result */ }
+    }
+    onSelectRef.current(user)
   }, [])
 
   const handleKeyDownInternal = (e: React.KeyboardEvent) => {
