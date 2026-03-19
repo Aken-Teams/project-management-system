@@ -61,7 +61,7 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
 
 export function calculateTaskDates(
   tasks: TaskInput[],
-  milestones: { id: string; startDate?: string }[],
+  milestones: { id: string; startDate?: string; endDate?: string }[],
 ): Map<string, { startDate: string; endDate: string }> {
   const result = new Map<string, { startDate: string; endDate: string }>()
 
@@ -69,7 +69,26 @@ export function calculateTaskDates(
     if (!ms.startDate) continue
     // Only schedule parent tasks sequentially; subtasks inherit parent dates
     const msTasks = tasks.filter(t => t.milestoneId === ms.id && t.durationDays > 0 && !t.parentId)
-    let currentDate = new Date(ms.startDate)
+
+    const totalTaskDays = msTasks.reduce((sum, t) => sum + t.durationDays, 0)
+    const msStartDate = new Date(ms.startDate)
+
+    let currentDate: Date
+
+    // If tasks don't fill the full milestone span, position at END (delay shift behavior)
+    if (ms.endDate && totalTaskDays > 0) {
+      const msEndDate = new Date(ms.endDate)
+      const msSpan = Math.round((msEndDate.getTime() - msStartDate.getTime()) / 86400000) + 1
+      if (totalTaskDays < msSpan) {
+        const adjustedStart = new Date(msEndDate)
+        adjustedStart.setDate(adjustedStart.getDate() - totalTaskDays + 1)
+        currentDate = adjustedStart > msStartDate ? adjustedStart : msStartDate
+      } else {
+        currentDate = new Date(msStartDate)
+      }
+    } else {
+      currentDate = new Date(msStartDate)
+    }
 
     for (const task of msTasks) {
       const taskStart = new Date(currentDate)
@@ -121,9 +140,9 @@ export function autoExpandMilestones<T extends MilestoneInput>(
     const totalTaskDays = tasks
       .filter(t => t.milestoneId === ms.id && !t.parentId)
       .reduce((sum, t) => sum + (t.durationDays || 0), 0)
-    // When tasks exist, keep durationDays in sync with task total
-    // (both expand and shrink). When no tasks, leave duration as-is.
-    if (totalTaskDays > 0 && totalTaskDays !== (ms.durationDays || 0)) {
+    // Only EXPAND when tasks exceed milestone duration.
+    // Never shrink — this preserves delay gaps (milestone span > task sum).
+    if (totalTaskDays > 0 && totalTaskDays > (ms.durationDays || 0)) {
       changed = true
       return { ...ms, durationDays: totalTaskDays }
     }
@@ -163,25 +182,22 @@ export function dbToTimelineState(
   tasks: TimelineTask[]
 } {
   const milestones: TimelineMilestone[] = dbMilestones.map((ms, index) => {
+    // Always compute from actual date range (preserves delay gaps)
+    const msStart = index === 0
+      ? new Date(projectStartDate)
+      : (() => {
+          const prevDue = new Date(dbMilestones[index - 1].dueDate)
+          prevDue.setDate(prevDue.getDate() + 1)
+          return prevDue
+        })()
+    const msEnd = new Date(ms.dueDate)
+    const dateSpanDays = Math.max(1, Math.ceil((msEnd.getTime() - msStart.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+
+    // Use actual date span, but ensure tasks fit
     const msTasks = dbTasks.filter(t => t.milestoneId === ms.id && !t.parentId)
     const taskSumDays = msTasks.reduce((sum, t) => sum + (t.durationDays || 0), 0)
 
-    let durationDays: number
-    if (taskSumDays > 0) {
-      durationDays = taskSumDays
-    } else {
-      // Calculate from date range
-      const msStart = index === 0
-        ? new Date(projectStartDate)
-        : (() => {
-            const prevDue = new Date(dbMilestones[index - 1].dueDate)
-            prevDue.setDate(prevDue.getDate() + 1)
-            return prevDue
-          })()
-      const msEnd = new Date(ms.dueDate)
-      const diffDays = Math.max(0, Math.ceil((msEnd.getTime() - msStart.getTime()) / (1000 * 60 * 60 * 24))) + 1
-      durationDays = Math.max(1, diffDays)
-    }
+    const durationDays = Math.max(dateSpanDays, taskSumDays, 1)
 
     return { id: ms.id, name: ms.name, durationDays }
   })

@@ -290,13 +290,13 @@ export default function DashboardPage() {
         {/* Project List + Risk Summary */}
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Project List - Takes 2 columns */}
-          <Card className="lg:col-span-2">
-            <CardHeader className="py-3 px-4">
+          <Card className="lg:col-span-2 flex flex-col max-h-[480px]">
+            <CardHeader className="py-3 px-4 shrink-0">
               <CardTitle className="text-base">
                 {data.user.role === 'member' ? '我的專案' : '專案總覽'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-4 pb-3">
+            <CardContent className="px-4 pb-3 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-1.5">
                 {projects.map((project) => (
                   <Link key={project.id} href={`/projects/${project.id}`}>
@@ -333,8 +333,8 @@ export default function DashboardPage() {
           </Card>
 
           {/* Risk Summary - Takes 1 column */}
-          <Card>
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+          <Card className="flex flex-col max-h-[480px]">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning" />
                 風險摘要
@@ -343,14 +343,14 @@ export default function DashboardPage() {
                 <span className="text-sm text-muted-foreground">共 {openRisks.length} 項</span>
               )}
             </CardHeader>
-            <CardContent className="px-4 pb-3">
+            <CardContent className="px-4 pb-3 overflow-y-auto flex-1 min-h-0">
               {openRisks.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <CheckCircle2 className="h-8 w-8 mx-auto mb-1.5 text-success" />
                   <p className="text-sm">目前無風險</p>
                 </div>
               ) : (
-                <div className="max-h-[258px] overflow-y-auto space-y-2">
+                <div className="space-y-2">
                   {openRisks.map((risk) => (
                     <div key={risk.id} className="p-2.5 rounded-md border text-sm space-y-1">
                       <div className="flex items-center gap-2">
