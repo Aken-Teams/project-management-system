@@ -152,7 +152,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     if (totalSpan <= 0) return null
     const totalDays = Math.round(totalSpan / 86400000)
     // Completed tasks are always 100%
-    if (task.completedAt) return { percent: 100, latestDate: task.completedAt, totalDays }
+    if (task.completedAt) return { percent: 100, latestDate: task.completedAt, totalDays, hasOverdueLogs: false }
     // Find latest logDate across all existing logs + current entries
     // ONLY count logs within [startDate, endDate] — overdue logs don't count as progress
     const taskEndStr = task.endDate.slice(0, 10) // YYYY-MM-DD
@@ -161,14 +161,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       .filter(l => l.taskId === task.id)
       .map(l => l.logDate.slice(0, 10))
     const currentEntryDates = logRows.filter(r => r.content.trim() && r.date).map(r => r.date)
-    const allDates = [...existingLogDates, ...currentEntryDates]
-      .filter(d => d >= taskStartStr && d <= taskEndStr) // only in-period logs
-      .sort()
-    const latestDate = allDates[allDates.length - 1]
-    if (!latestDate) return { percent: 0, latestDate: null, totalDays }
+    const allRawDates = [...existingLogDates, ...currentEntryDates]
+    const validDates = allRawDates.filter(d => d >= taskStartStr && d <= taskEndStr).sort()
+    const hasOverdueLogs = allRawDates.some(d => d > taskEndStr)
+    const latestDate = validDates[validDates.length - 1]
+    if (!latestDate) return { percent: 0, latestDate: null, totalDays, hasOverdueLogs }
     const elapsed = new Date(latestDate).getTime() - taskStart.getTime()
     const percent = Math.min(99, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
-    return { percent, latestDate, totalDays }
+    return { percent, latestDate, totalDays, hasOverdueLogs }
   }, [task, project.taskLogs, logRows])
 
   // Extension/delay request
@@ -726,6 +726,17 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     ? `自動計算：最晚有效工作日 ${autoProgress.latestDate.slice(5).replace('-', '/')} / 總天數 ${autoProgress.totalDays} 天`
                     : '自動計算：任務期間內尚無工作紀錄'}
               </p>
+              {!hasSubtasks && isOverdue && !isCompleted && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                  {autoProgress?.percent === 0 && autoProgress?.hasOverdueLogs
+                    ? '提示：任務已逾期，期間內無工作紀錄。請申請延期以繼續回報，核准後進度將重新計算。'
+                    : (autoProgress?.percent ?? 0) >= 99
+                      ? '提示：進度已達計算上限 99%，請「標記完成」結案或「申請延期」調整時程。'
+                      : autoProgress?.hasOverdueLogs
+                        ? '提示：超過預計完成日的工作紀錄不計入進度，請申請延期以更新時程。'
+                        : '提示：任務已逾期，請申請延期或標記完成。'}
+                </p>
+              )}
             </div>
           </div>
 
