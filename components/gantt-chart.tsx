@@ -206,8 +206,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   }
 
   // Plan bar colors: visually indicate how reality compares to the plan
-  const getPlanBarColors = (planEnd: string, progress: number, completedAt?: string | null) => {
-    const isDone = progress >= 100
+  const getPlanBarColors = (planEnd: string, progress: number, completedAt?: string | null, status?: string) => {
+    const isDone = !!completedAt || status === 'done'
     const plannedEnd = new Date(planEnd)
     if (isDone && completedAt) {
       return new Date(completedAt) > plannedEnd
@@ -247,9 +247,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return cells
   }, [rangeStart, totalDays])
 
-  // Normalize: progress >= 100 → done, progress > 0 with todo → in-progress
+  // Normalize: completedAt or status=done → done, progress > 0 with todo → in-progress
   const effectiveStatus = (task: Task) => {
-    if (task.progress >= 100) return 'done' as const
+    if (task.completedAt || task.status === 'done') return 'done' as const
     if (task.progress > 0 && task.status === 'todo') return 'in-progress' as const
     return task.status
   }
@@ -445,7 +445,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       const msCompletedAt = milestone.progress >= 100
                         ? msTasks.reduce<string | null>((latest, t) => t.completedAt && (!latest || t.completedAt > latest) ? t.completedAt : latest, null)
                         : null
-                      const msPlanColors = getPlanBarColors(milestone.dueDate, milestone.progress, msCompletedAt)
+                      const msPlanColors = getPlanBarColors(milestone.dueDate, milestone.progress, msCompletedAt, milestone.status)
                       const msDone = milestone.progress >= 100
                       return (
                       <>
@@ -630,7 +630,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       >
                         <WeekGrid />
                         {showBaseline ? (() => {
-                          const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt)
+                          const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt, task.status)
                           const taskIsDone = effectiveStatus(task) === 'done'
                           const hasExtension = task.originalEndDate && task.endDate > task.originalEndDate
                           const planEnd = hasExtension ? task.originalEndDate! : task.endDate
@@ -806,7 +806,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           >
                             <WeekGrid />
                             {showBaseline ? (() => {
-                              const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt)
+                              const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt, sub.status)
                               const subIsDone = effectiveStatus(sub) === 'done'
                               return (
                               <>

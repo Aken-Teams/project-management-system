@@ -12,13 +12,18 @@ export async function syncMilestoneStatus(milestoneId: string, projectId: string
   // Exclude subtasks (parentId != null) to prevent double-counting
   const tasks = await prisma.task.findMany({
     where: { milestoneId, projectId, parentId: null },
-    select: { status: true, progress: true },
+    select: { status: true, progress: true, durationDays: true },
   })
 
   if (tasks.length === 0) return
 
   const status = computeMilestoneStatus(tasks)
-  const progress = Math.round(tasks.reduce((sum, t) => sum + t.progress, 0) / tasks.length)
+
+  // Weighted average by durationDays (e.g. A=10d@100% + B=20d@0% → 33%)
+  const totalDays = tasks.reduce((sum, t) => sum + (t.durationDays || 1), 0)
+  const progress = totalDays > 0
+    ? Math.round(tasks.reduce((sum, t) => sum + t.progress * (t.durationDays || 1), 0) / totalDays)
+    : 0
 
   await prisma.milestone.update({
     where: { id: milestoneId },
@@ -179,13 +184,12 @@ export async function syncTaskProgressFromLogs(
 ): Promise<void> {
   const msPerDay = 1000 * 60 * 60 * 24
 
-  // Build map: taskId → latest logDate
-  const latestLogByTask = new Map<string, Date>()
+  // Group all log dates by taskId (we'll filter per-task by endDate later)
+  const logsByTask = new Map<string, Date[]>()
   for (const log of taskLogs) {
-    const existing = latestLogByTask.get(log.taskId)
-    if (!existing || log.logDate > existing) {
-      latestLogByTask.set(log.taskId, log.logDate)
-    }
+    const list = logsByTask.get(log.taskId) || []
+    list.push(log.logDate)
+    logsByTask.set(log.taskId, list)
   }
 
   // Group subtasks by parent
@@ -212,21 +216,24 @@ export async function syncTaskProgressFromLogs(
         : 0
     } else {
       // Leaf task: time-position based progress
-      const latestLog = latestLogByTask.get(task.id)
+      // IMPORTANT: Only completedAt grants 100%. Auto-calc caps at 99%.
+      // Only logs within [startDate, endDate] count toward progress.
+      // Logs past endDate = overdue work, don't inflate progress.
+      const allLogs = logsByTask.get(task.id) || []
+      const validLogs = allLogs.filter(d => d >= task.startDate && d <= task.endDate)
+      const latestLog = validLogs.length > 0
+        ? validLogs.reduce((a, b) => (a > b ? a : b))
+        : null
       if (!latestLog) {
         target = 0
       } else {
         const totalSpan = task.endDate.getTime() - task.startDate.getTime()
         if (totalSpan <= 0) {
-          // Same-day task: any log = 100%
-          target = 100
+          // Same-day task: any log on that day = 99% (only completedAt → 100%)
+          target = 99
         } else {
           const elapsed = latestLog.getTime() - task.startDate.getTime()
-          if (elapsed <= 0) {
-            target = 0 // Log before start date = prep work, no progress
-          } else {
-            target = Math.min(100, Math.round((elapsed / totalSpan) * 100))
-          }
+          target = Math.min(99, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
         }
       }
     }

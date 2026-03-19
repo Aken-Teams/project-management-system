@@ -150,17 +150,24 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     const taskEnd = new Date(task.endDate)
     const totalSpan = taskEnd.getTime() - taskStart.getTime()
     if (totalSpan <= 0) return null
+    const totalDays = Math.round(totalSpan / 86400000)
+    // Completed tasks are always 100%
+    if (task.completedAt) return { percent: 100, latestDate: task.completedAt, totalDays }
     // Find latest logDate across all existing logs + current entries
+    // ONLY count logs within [startDate, endDate] — overdue logs don't count as progress
+    const taskEndStr = task.endDate.slice(0, 10) // YYYY-MM-DD
+    const taskStartStr = task.startDate.slice(0, 10)
     const existingLogDates = project.taskLogs
       .filter(l => l.taskId === task.id)
-      .map(l => l.logDate)
-    const currentEntryDates = logRows.filter(r => r.content.trim()).map(r => r.date)
-    const allDates = [...existingLogDates, ...currentEntryDates].sort()
+      .map(l => l.logDate.slice(0, 10))
+    const currentEntryDates = logRows.filter(r => r.content.trim() && r.date).map(r => r.date)
+    const allDates = [...existingLogDates, ...currentEntryDates]
+      .filter(d => d >= taskStartStr && d <= taskEndStr) // only in-period logs
+      .sort()
     const latestDate = allDates[allDates.length - 1]
-    if (!latestDate) return { percent: 0, latestDate: null, totalDays: Math.round(totalSpan / 86400000) }
+    if (!latestDate) return { percent: 0, latestDate: null, totalDays }
     const elapsed = new Date(latestDate).getTime() - taskStart.getTime()
-    const percent = Math.min(100, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
-    const totalDays = Math.round(totalSpan / 86400000)
+    const percent = Math.min(99, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
     return { percent, latestDate, totalDays }
   }, [task, project.taskLogs, logRows])
 
@@ -716,8 +723,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 {hasSubtasks
                   ? '進度由子任務自動計算'
                   : autoProgress?.latestDate
-                    ? `自動計算：最晚工作日 ${autoProgress.latestDate.slice(5).replace('-', '/')} / 總天數 ${autoProgress.totalDays} 天`
-                    : '自動計算：尚無工作紀錄'}
+                    ? `自動計算：最晚有效工作日 ${autoProgress.latestDate.slice(5).replace('-', '/')} / 總天數 ${autoProgress.totalDays} 天`
+                    : '自動計算：任務期間內尚無工作紀錄'}
               </p>
             </div>
           </div>
