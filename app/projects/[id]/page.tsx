@@ -56,6 +56,7 @@ import Link from 'next/link'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
 import { ProjectDeleteDialog } from '@/components/project-delete-dialog'
 import { ProjectRiskTab } from '@/components/project-risk-tab'
+import { ProjectDelayTab } from '@/components/project-delay-tab'
 import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
 import { RoiSection, type RoiParams } from '@/components/roi-section'
 
@@ -542,98 +543,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
           {/* Delays Tab */}
           <TabsContent value="delays" className="mt-0">
-            <div className="space-y-3">
-              {project.delayRequests.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
-                    <p className="text-sm text-muted-foreground">沒有延遲紀錄</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                project.delayRequests.map((request) => (
-                  <Card key={request.id} className={request.status === 'pending' ? 'border-warning/50' : ''}>
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <TimerReset className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium text-sm">延遲申請</span>
-                          <span className="text-sm text-muted-foreground">
-                            {request.requestedBy} · {new Date(request.requestedAt).toLocaleDateString('zh-TW')}
-                          </span>
-                        </div>
-                        <Badge variant={
-                          request.status === 'pending' ? 'secondary'
-                          : request.status === 'approved' ? 'default'
-                          : 'destructive'
-                        } className={`text-sm ${request.status === 'pending' ? 'bg-warning text-warning-foreground' : ''}`}>
-                          {request.status === 'pending' ? '待審核' : request.status === 'approved' ? '已核准' : '已駁回'}
-                        </Badge>
-                      </div>
-
-                      <Separator />
-
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-1">延遲原因</div>
-                        <p className="text-sm">{request.reason}</p>
-                      </div>
-
-                      {request.taskTitle && (
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground mb-1">延期任務</div>
-                          <p className="text-sm font-medium">{request.taskTitle}</p>
-                        </div>
-                      )}
-
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-2">受影響里程碑</div>
-                        <div className="space-y-1.5">
-                          {request.affectedMilestones.map((am) => {
-                            const ms = project.milestones.find(m => m.id === am.milestoneId)
-                            const days = Math.ceil(
-                              (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
-                            )
-                            return (
-                              <div key={am.milestoneId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
-                                <span className="font-medium">{ms?.name || am.milestoneId}</span>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-muted-foreground line-through">
-                                    {new Date(am.originalDate).toLocaleDateString('zh-TW')}
-                                  </span>
-                                  <span>→</span>
-                                  <span className="text-warning font-medium">
-                                    {new Date(am.proposedDate).toLocaleDateString('zh-TW')}
-                                  </span>
-                                  <Badge variant="outline" className="text-sm">{days >= 0 ? '+' : ''}{days}天</Badge>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {request.supportNeeded && (
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground mb-1">需要的支援</div>
-                          <p className="text-sm">{request.supportNeeded}</p>
-                        </div>
-                      )}
-
-                      {request.reviewedBy && (
-                        <div className="p-2.5 rounded-lg border bg-muted/50">
-                          <div className="text-sm text-muted-foreground mb-1">
-                            審核人：{request.reviewedBy} · {request.reviewedAt && new Date(request.reviewedAt).toLocaleDateString('zh-TW')}
-                          </div>
-                          {request.reviewNotes && (
-                            <p className="text-sm">{request.reviewNotes}</p>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
+            <ProjectDelayTab project={project} />
           </TabsContent>
 
           {/* Dependencies Tab */}
