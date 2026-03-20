@@ -207,6 +207,14 @@ function DonutChart({ segments, size = 180, strokeWidth = 26, children }: {
   )
 }
 
+// ── Week number helper ──
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+}
+
 // ── Mini ring (for project cards) ──
 function MiniRing({ value, size = 44, strokeWidth = 5, color }: {
   value: number; size?: number; strokeWidth?: number; color: string
@@ -1223,28 +1231,6 @@ export default function ReportsPage() {
               <div className="grid gap-4 lg:grid-cols-3">
                 <Card>
                   <CardHeader className="pb-0">
-                    <CardTitle className="text-sm">任務狀態分佈</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-col items-center py-5 gap-4">
-                    <DonutChart segments={taskSegments} size={150} strokeWidth={22}>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold">{displayStats.totalTasks}</div>
-                        <div className="text-xs text-muted-foreground">總任務</div>
-                      </div>
-                    </DonutChart>
-                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-                      {taskSegments.filter(s => s.value > 0).map(seg => (
-                        <div key={seg.label} className="flex items-center gap-1.5">
-                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                          <span className="text-sm text-muted-foreground">{seg.label}</span>
-                          <span className="text-sm font-semibold">{seg.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-0">
                     <CardTitle className="text-sm">專案健康度</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col items-center py-5 gap-4">
@@ -1263,6 +1249,40 @@ export default function ReportsPage() {
                         </div>
                       ))}
                     </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-0">
+                    <CardTitle className="text-sm">專案層級分佈</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center py-5 gap-4">
+                    {(() => {
+                      const tierSegments = [
+                        { value: tierCounts.T1, color: '#2563eb', label: 'T1' },
+                        { value: tierCounts.T2, color: '#059669', label: 'T2' },
+                        { value: tierCounts.T3, color: '#d97706', label: 'T3' },
+                        { value: tierCounts.CIP, color: '#9333ea', label: 'CIP' },
+                      ]
+                      return (
+                        <>
+                          <DonutChart segments={tierSegments} size={150} strokeWidth={22}>
+                            <div className="text-center">
+                              <div className="text-2xl font-bold">{filteredProjects.length}</div>
+                              <div className="text-xs text-muted-foreground">專案</div>
+                            </div>
+                          </DonutChart>
+                          <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                            {tierSegments.filter(s => s.value > 0).map(seg => (
+                              <div key={seg.label} className="flex items-center gap-1.5">
+                                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                                <span className="text-sm text-muted-foreground">{seg.label}</span>
+                                <span className="text-sm font-semibold">{seg.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )
+                    })()}
                   </CardContent>
                 </Card>
                 <Card>
@@ -1717,38 +1737,59 @@ export default function ReportsPage() {
                         <Clock className="h-3.5 w-3.5" /> 近期活動記錄（最近兩週）
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      {recentActivity.map(({ weekStart, items }) => (
-                        <div key={weekStart}>
-                          <div className="text-xs font-semibold text-muted-foreground mb-2">
-                            {weekStart} 起的一週
-                          </div>
-                          <div className="space-y-1.5">
-                            {items.slice(0, 20).map(({ log, task }) => (
-                              <div
-                                key={log.id}
-                                className={cn(
-                                  'flex items-start gap-3 text-sm py-1.5 px-2 rounded',
-                                  task?.status === 'done' && 'bg-emerald-50 dark:bg-emerald-950/20',
-                                )}
-                              >
-                                <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
-                                  {log.logDate}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <span className="font-medium">{task?.title || '(未知任務)'}</span>
-                                  {task?.status === 'done' && (
-                                    <Badge className="text-[10px] px-1 py-0 bg-emerald-100 text-emerald-700 ml-1.5">完成</Badge>
-                                  )}
-                                  <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                    {log.content.length > 80 ? log.content.slice(0, 80) + '...' : log.content}
-                                  </p>
-                                </div>
-                                <span className="text-xs text-muted-foreground shrink-0">{log.author}</span>
+                    <CardContent className="space-y-3">
+                      {recentActivity.map(({ weekStart, weekEnd, weekNumber, persons, totalLogs }) => (
+                        <Collapsible key={weekStart} defaultOpen>
+                          <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+                              <div className="flex items-center gap-2 text-sm font-semibold">
+                                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                W{weekNumber}：{weekStart.slice(5).replace('-', '/')} ~ {weekEnd.slice(5).replace('-', '/')}
                               </div>
-                            ))}
-                          </div>
-                        </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">{persons.length} 人 / {totalLogs} 筆紀錄</span>
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="space-y-2 mt-2">
+                              {persons.map(({ name, items, taskCount }) => (
+                                <div key={name} className="border rounded-lg overflow-hidden">
+                                  <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                                        {name.charAt(0)}
+                                      </div>
+                                      <span className="text-sm font-medium">{name}</span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{taskCount} 任務 / {items.length} 筆紀錄</span>
+                                  </div>
+                                  <div className="divide-y">
+                                    {items.map(({ log, task }) => (
+                                      <div key={log.id} className="flex items-start gap-3 px-3 py-2 text-sm hover:bg-muted/20 transition-colors">
+                                        <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0 pt-0.5 tabular-nums">
+                                          {log.logDate.slice(5).replace('-', '/')}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-medium truncate">{task?.title || '(未知任務)'}</span>
+                                            {task?.status === 'done' && (
+                                              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 shrink-0">完成</Badge>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                            {log.content}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       ))}
                     </CardContent>
                   </Card>
