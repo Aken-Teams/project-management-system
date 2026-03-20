@@ -716,10 +716,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       {badgeText}
                     </Badge>
                   </div>
-                  <SheetDescription className="text-left text-sm">
-                    <span className="text-muted-foreground">{project.name}</span>
-                    {milestone && <span className="text-muted-foreground"> · {milestone.name}</span>}
-                    <span className="text-muted-foreground"> · </span>
+                  <SheetDescription className="text-left text-sm space-y-0.5">
+                    <span className="text-muted-foreground">
+                      {project.name}
+                      {milestone && <> · {milestone.name}</>}
+                    </span>
+                    <br />
                     <span className="font-mono text-muted-foreground/80">
                       {new Date(task.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                       {' ~ '}
@@ -1529,64 +1531,49 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     </div>
                   )}
 
-                  {/* Info grid: Assignee + Dates */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                        <User className="h-3 w-3" />
+                  {/* Info card */}
+                  <div className="rounded-lg border divide-y">
+                    <div className="flex items-center justify-between py-2.5 px-3">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5" />
                         負責人
-                      </div>
+                      </span>
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className={cn('text-sm text-white', getAvatarColor(task.assignee))}>
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>
                             {task.assignee.split(' ').map(n => n[0]).join('')}
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-sm font-medium">{task.assignee}</span>
                       </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                        <Calendar className="h-3 w-3" />
-                        開始日期
-                      </div>
-                      <span className="text-sm font-medium">{new Date(task.startDate).toLocaleDateString('zh-TW')}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className={cn(
-                        'text-[11px] font-medium uppercase tracking-wider flex items-center gap-1.5',
-                        isOverdue ? 'text-destructive/70' : 'text-muted-foreground/70',
-                      )}>
-                        <Flag className="h-3 w-3" />
-                        結束日期
-                      </div>
-                      <span className={cn('text-sm font-medium', isOverdue && 'text-destructive')}>
-                        {new Date(task.endDate).toLocaleDateString('zh-TW')}
+                    <div className="flex items-center justify-between py-2.5 px-3">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" />
+                        時程
+                      </span>
+                      <span className="text-sm font-medium">
+                        {new Date(task.startDate).toLocaleDateString('zh-TW')}
+                        <span className="text-muted-foreground mx-1">→</span>
+                        <span className={cn(isOverdue && 'text-destructive')}>
+                          {new Date(task.endDate).toLocaleDateString('zh-TW')}
+                        </span>
+                        <span className="text-muted-foreground text-xs ml-1">（{task.durationDays} 天）</span>
                       </span>
                     </div>
-                  </div>
-                  {task.completedAt && (
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-wider flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3 w-3" />
-                          完成日期
-                        </div>
+                    {task.completedAt && (
+                      <div className="flex items-center justify-between py-2.5 px-3">
+                        <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          完成
+                        </span>
                         <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
                           {new Date(task.completedAt).toLocaleDateString('zh-TW')}
+                          {task.completedBy && <span className="text-muted-foreground font-normal ml-1.5">由 {task.completedBy}</span>}
                         </span>
                       </div>
-                      {task.completedBy && (
-                        <div className="space-y-1.5">
-                          <div className="text-[11px] font-medium text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-wider flex items-center gap-1.5">
-                            <User className="h-3 w-3" />
-                            完成者
-                          </div>
-                          <span className="text-sm font-medium">{task.completedBy}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Upstream tasks */}
                   {upstreamTasks.length > 0 && (
@@ -1595,7 +1582,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
                           <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                         </div>
-                        <span className="text-sm font-medium text-muted-foreground">前置任務</span>
+                        <span className="text-sm font-medium text-muted-foreground">需先完成</span>
                       </div>
                       <div className="space-y-1.5 ml-7">
                         {upstreamTasks.map(({ task: dep, status: depStatus }) => (
@@ -1620,7 +1607,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
                           <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" />
                         </div>
-                        <span className="text-sm font-medium text-muted-foreground">後續任務</span>
+                        <span className="text-sm font-medium text-muted-foreground">完成後開始</span>
                       </div>
                       <div className="space-y-1.5 ml-7">
                         {downstreamTasks.map(({ task: dep, status: depStatus }) => (
@@ -1642,14 +1629,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                   <div className="pt-2 border-t">
                     <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                      延遲影響分析
+                      延遲影響
                     </h4>
 
                     {impact.totalDelayChain === 0 ? (
                       <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
                         <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
                           <CheckCircle2 className="h-4 w-4" />
-                          <span className="font-medium">此任務延遲不會影響其他任務</span>
+                          <span className="font-medium">無連鎖影響，此任務延遲不會影響其他任務</span>
                         </div>
                       </div>
                     ) : (
@@ -1738,41 +1725,48 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                   </div>
                 )}
 
-                {/* Info grid */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                      <User className="h-3 w-3" />
+                {/* Info card */}
+                <div className="rounded-lg border divide-y">
+                  <div className="flex items-center justify-between py-2.5 px-3">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" />
                       負責人
-                    </div>
+                    </span>
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className={cn('text-sm text-white', getAvatarColor(task.assignee))}>
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>
                           {task.assignee.split(' ').map(n => n[0]).join('')}
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-sm font-medium">{task.assignee}</span>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                      <Calendar className="h-3 w-3" />
-                      開始日期
-                    </div>
-                    <span className="text-sm font-medium">{new Date(task.startDate).toLocaleDateString('zh-TW')}</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className={cn(
-                      'text-[11px] font-medium uppercase tracking-wider flex items-center gap-1.5',
-                      isOverdue ? 'text-destructive/70' : 'text-muted-foreground/70',
-                    )}>
-                      <Flag className="h-3 w-3" />
-                      結束日期
-                    </div>
-                    <span className={cn('text-sm font-medium', isOverdue && 'text-destructive')}>
-                      {new Date(task.endDate).toLocaleDateString('zh-TW')}
+                  <div className="flex items-center justify-between py-2.5 px-3">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      時程
+                    </span>
+                    <span className="text-sm font-medium">
+                      {new Date(task.startDate).toLocaleDateString('zh-TW')}
+                      <span className="text-muted-foreground mx-1">→</span>
+                      <span className={cn(isOverdue && 'text-destructive')}>
+                        {new Date(task.endDate).toLocaleDateString('zh-TW')}
+                      </span>
+                      <span className="text-muted-foreground text-xs ml-1">（{task.durationDays} 天）</span>
                     </span>
                   </div>
+                  {task.completedAt && (
+                    <div className="flex items-center justify-between py-2.5 px-3">
+                      <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        完成
+                      </span>
+                      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                        {new Date(task.completedAt).toLocaleDateString('zh-TW')}
+                        {task.completedBy && <span className="text-muted-foreground font-normal ml-1.5">由 {task.completedBy}</span>}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Dependencies */}
@@ -1782,7 +1776,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
                         <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                       </div>
-                      <span className="text-sm font-medium text-muted-foreground">前置任務</span>
+                      <span className="text-sm font-medium text-muted-foreground">需先完成</span>
                     </div>
                     <div className="space-y-1.5 ml-7">
                       {upstreamTasks.map(({ task: dep, status: depStatus }) => (
@@ -1802,7 +1796,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
                         <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" />
                       </div>
-                      <span className="text-sm font-medium text-muted-foreground">後續任務</span>
+                      <span className="text-sm font-medium text-muted-foreground">完成後開始</span>
                     </div>
                     <div className="space-y-1.5 ml-7">
                       {downstreamTasks.map(({ task: dep, status: depStatus }) => (
@@ -1820,14 +1814,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 <div className="pt-2 border-t">
                   <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                    延遲影響分析
+                    延遲影響
                   </h4>
 
                   {impact.totalDelayChain === 0 ? (
                     <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
                       <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
                         <CheckCircle2 className="h-4 w-4" />
-                        <span className="font-medium">此任務延遲不會影響其他任務</span>
+                        <span className="font-medium">無連鎖影響，此任務延遲不會影響其他任務</span>
                       </div>
                     </div>
                   ) : (
