@@ -7,6 +7,12 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
@@ -14,9 +20,16 @@ import {
   Search,
   Shield,
   Info,
+  Loader2,
+  Pencil,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Project, Risk } from '@/lib/mock-data'
+
+interface Props {
+  project: Project
+  onRefresh?: () => void
+}
 
 const PAGE_SIZE = 10
 
@@ -33,12 +46,13 @@ function getRiskLevelColor(level: string) {
   }
 }
 
-export function ProjectRiskTab({ project }: { project: Project }) {
+export function ProjectRiskTab({ project, onRefresh }: Props) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'mitigated' | 'closed'>('')
   const [filterImpact, setFilterImpact] = useState<'' | 'high' | 'medium' | 'low'>('')
   const [page, setPage] = useState(1)
   const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   const allRisks = project.risks
 
@@ -68,6 +82,26 @@ export function ProjectRiskTab({ project }: { project: Project }) {
   const handleFilterStatus = (v: '' | 'open' | 'mitigated' | 'closed') => { setFilterStatus(v); setPage(1) }
   const handleFilterImpact = (v: '' | 'high' | 'medium' | 'low') => { setFilterImpact(v); setPage(1) }
   const handleSearchChange = (v: string) => { setSearch(v); setPage(1) }
+
+  const handleChangeStatus = async (risk: Risk, newStatus: string) => {
+    setUpdatingId(risk.id)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/risks/${risk.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '操作失敗')
+      }
+      onRefresh?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '操作失敗')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   if (allRisks.length === 0) {
     return (
@@ -146,6 +180,7 @@ export function ProjectRiskTab({ project }: { project: Project }) {
                     <th className="text-center px-4 py-2.5 font-medium">影響程度</th>
                     <th className="text-center px-4 py-2.5 font-medium">發生機率</th>
                     <th className="text-left px-4 py-2.5 font-medium">緩解措施</th>
+                    <th className="text-center px-4 py-2.5 font-medium">操作</th>
                     <th className="text-right px-4 py-2.5 font-medium"></th>
                   </tr>
                 </thead>
@@ -182,6 +217,37 @@ export function ProjectRiskTab({ project }: { project: Project }) {
                       </td>
                       <td className="px-4 py-3 max-w-[200px]">
                         <span className="line-clamp-1 text-muted-foreground">{risk.mitigation || '-'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={updatingId === risk.id}>
+                              {updatingId === risk.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+                            {(['open', 'mitigated', 'closed'] as const).map(s => (
+                              <DropdownMenuItem
+                                key={s}
+                                disabled={risk.status === s}
+                                onClick={() => handleChangeStatus(risk, s)}
+                                className="gap-2"
+                              >
+                                <span className={cn('inline-block h-2 w-2 rounded-full shrink-0',
+                                  s === 'open' ? 'bg-red-500' :
+                                  s === 'mitigated' ? 'bg-amber-500' :
+                                  'bg-emerald-500',
+                                )} />
+                                {STATUS_LABELS[s]}
+                                {risk.status === s && <span className="text-muted-foreground ml-auto text-[10px]">目前</span>}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <ChevronRightIcon className="h-4 w-4 text-muted-foreground inline-block" />
@@ -275,6 +341,28 @@ export function ProjectRiskTab({ project }: { project: Project }) {
                     </div>
                   </div>
                 )}
+
+                {/* Status change in dialog */}
+                <div className="border-t pt-3">
+                  <h4 className="text-sm font-semibold mb-2">變更狀態</h4>
+                  <div className="flex items-center gap-2">
+                    {(['open', 'mitigated', 'closed'] as const).map(s => (
+                      <Button
+                        key={s}
+                        variant={selectedRisk.status === s ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 text-xs px-3"
+                        disabled={selectedRisk.status === s || updatingId === selectedRisk.id}
+                        onClick={() => handleChangeStatus(selectedRisk, s)}
+                      >
+                        {updatingId === selectedRisk.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : null}
+                        {STATUS_LABELS[s]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}

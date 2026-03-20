@@ -538,7 +538,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
           {/* Risks Tab — Static risks from project creation */}
           <TabsContent value="risks" className="mt-0">
-            <ProjectRiskTab project={project} />
+            <ProjectRiskTab project={project} onRefresh={() => {
+              fetch(`/api/projects/${id}`).then(r => r.ok ? r.json() : null).then(d => d && setProject(d))
+            }} />
           </TabsContent>
 
           {/* Delays Tab */}
