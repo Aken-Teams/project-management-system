@@ -209,8 +209,13 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
 
   // Available week numbers for filter dropdown
   const availableWeeks = useMemo(() => {
-    const weeks = allWeeks.map(w => ({ weekMonday: w.weekMonday, weekNum: getISOWeekNumber(w.weekMonday) }))
-    return [...new Map(weeks.map(w => [w.weekNum, w])).values()].sort((a, b) => a.weekNum - b.weekNum)
+    const weeks = allWeeks.map(w => {
+      const weekNum = getISOWeekNumber(w.weekMonday)
+      const year = new Date(w.weekMonday).getFullYear()
+      const key = `${year}W${String(weekNum).padStart(2, '0')}`
+      return { weekMonday: w.weekMonday, weekNum, year, key }
+    })
+    return [...new Map(weeks.map(w => [w.key, w])).values()].sort((a, b) => a.key.localeCompare(b.key))
   }, [allWeeks])
 
   // Date + week filtered weeks for matrix (no member/search filter)
@@ -218,7 +223,12 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     return allWeeks.filter(week => {
       if (dateFrom && getWeekSunday(week.weekMonday) < dateFrom) return false
       if (dateTo && week.weekMonday > dateTo) return false
-      if (weekFilter && getISOWeekNumber(week.weekMonday) !== Number(weekFilter)) return false
+      if (weekFilter) {
+        const wn = getISOWeekNumber(week.weekMonday)
+        const yr = new Date(week.weekMonday).getFullYear()
+        const key = `${yr}W${String(wn).padStart(2, '0')}`
+        if (key !== weekFilter) return false
+      }
       return true
     })
   }, [allWeeks, dateFrom, dateTo, weekFilter])
@@ -318,14 +328,14 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
 
         <div className="flex items-center gap-1.5">
           <Select value={weekFilter || '__all__'} onValueChange={v => { setWeekFilter(v === '__all__' ? '' : v); setPage(0) }}>
-            <SelectTrigger className="h-8 text-sm w-[130px] gap-1.5">
+            <SelectTrigger className="h-8 text-sm w-[140px] gap-1.5">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部週別</SelectItem>
               {availableWeeks.map(w => (
-                <SelectItem key={w.weekNum} value={String(w.weekNum)}>W{w.weekNum}</SelectItem>
+                <SelectItem key={w.key} value={w.key}>{w.key}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -933,7 +943,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                 >
                   <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isWeekCollapsed ? '-rotate-90' : ''}`} />
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium text-sm">W{weekNum}：{mondayLabel} ~ {sundayLabel}</span>
+                  <span className="font-medium text-sm">{new Date(week.weekMonday).getFullYear()}W{String(weekNum).padStart(2, '0')}：{mondayLabel} ~ {sundayLabel}</span>
                   <span className="text-xs text-muted-foreground ml-auto">
                     {filteredCompleted.length > 0 && `${filteredCompleted.length} 完成`}
                     {filteredCompleted.length > 0 && filteredLogs.length > 0 && '　'}
