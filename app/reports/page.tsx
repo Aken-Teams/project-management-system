@@ -51,6 +51,8 @@ import {
   TrendingUp,
   TrendingDown,
   Paperclip,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -283,6 +285,12 @@ export default function ReportsPage() {
   const [ganttMsExpanded, setGanttMsExpanded] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState('overview')
   const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
+  // Excel export
+  const [showExcelDialog, setShowExcelDialog] = useState(false)
+  const [excelExporting, setExcelExporting] = useState(false)
+  const [excelRangePreset, setExcelRangePreset] = useState('this_month')
+  const [excelCustomFrom, setExcelCustomFrom] = useState('')
+  const [excelCustomTo, setExcelCustomTo] = useState('')
 
   // ── Fetch reports data from API ──
   useEffect(() => {
@@ -808,6 +816,90 @@ export default function ReportsPage() {
     }
   }
 
+  // ── Excel export ──
+  const EXCEL_RANGE_PRESETS = [
+    { value: 'this_month', label: '本月' },
+    { value: 'last_month', label: '上月' },
+    { value: 'this_quarter', label: '本季' },
+    { value: 'last_quarter', label: '上季' },
+    { value: 'this_year', label: '今年' },
+    { value: 'all', label: '全部時間' },
+    { value: 'custom', label: '自訂區間' },
+  ]
+
+  function getExcelPresetRange(preset: string): { from: string; to: string } | null {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = now.getMonth()
+    switch (preset) {
+      case 'this_month':
+        return { from: `${y}-${String(m + 1).padStart(2, '0')}-01`, to: now.toISOString().split('T')[0] }
+      case 'last_month': {
+        const lm = m === 0 ? 11 : m - 1
+        const ly = m === 0 ? y - 1 : y
+        const lastDay = new Date(ly, lm + 1, 0).getDate()
+        return { from: `${ly}-${String(lm + 1).padStart(2, '0')}-01`, to: `${ly}-${String(lm + 1).padStart(2, '0')}-${lastDay}` }
+      }
+      case 'this_quarter': {
+        const qStart = Math.floor(m / 3) * 3
+        return { from: `${y}-${String(qStart + 1).padStart(2, '0')}-01`, to: now.toISOString().split('T')[0] }
+      }
+      case 'last_quarter': {
+        const cqStart = Math.floor(m / 3) * 3
+        const lqStart = cqStart - 3
+        const lqY = lqStart < 0 ? y - 1 : y
+        const lqM = lqStart < 0 ? lqStart + 12 : lqStart
+        const lqEndM = lqM + 2
+        const lqEndDay = new Date(lqY, lqEndM + 1, 0).getDate()
+        return { from: `${lqY}-${String(lqM + 1).padStart(2, '0')}-01`, to: `${lqY}-${String(lqEndM + 1).padStart(2, '0')}-${lqEndDay}` }
+      }
+      case 'this_year':
+        return { from: `${y}-01-01`, to: now.toISOString().split('T')[0] }
+      case 'all':
+        return null
+      default:
+        return null
+    }
+  }
+
+  const handleExportExcel = async () => {
+    setExcelExporting(true)
+    try {
+      const range = excelRangePreset === 'custom'
+        ? { from: excelCustomFrom || undefined, to: excelCustomTo || undefined }
+        : getExcelPresetRange(excelRangePreset)
+
+      const params = new URLSearchParams()
+      if (range?.from) params.set('from', range.from)
+      if (range?.to) params.set('to', range.to)
+
+      const res = await fetch(`/api/admin/export-excel?${params}`, {
+        headers: { 'x-user-email': user?.email ?? '' },
+      })
+      if (!res.ok) {
+        alert('匯出失敗')
+        return
+      }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const cd = res.headers.get('content-disposition')
+      const match = cd?.match(/filename\*?=(?:UTF-8'')?(.+)/i)
+      a.download = match ? decodeURIComponent(match[1]) : '專案清單.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setShowExcelDialog(false)
+    } catch {
+      alert('匯出失敗，請稍後再試')
+    } finally {
+      setExcelExporting(false)
+    }
+  }
+
   const getStatusRingColor = (status: ProjectStatus) => {
     if (status === 'green') return '#3b82f6'
     if (status === 'yellow') return '#f59e0b'
@@ -856,6 +948,9 @@ export default function ReportsPage() {
               </Button>
               <Button size="sm" className="gap-1.5" onClick={handleOpenPdfDialog}>
                 <FileDown className="h-3.5 w-3.5" /> 匯出 PDF
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowExcelDialog(true)}>
+                <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> 匯出 Excel
               </Button>
             </div>
           </div>
@@ -952,6 +1047,68 @@ export default function ReportsPage() {
                   </DialogFooter>
                 </>
               )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Excel Export Dialog */}
+          <Dialog open={showExcelDialog} onOpenChange={setShowExcelDialog}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5 text-green-600" />
+                  匯出專案清單 Excel
+                </DialogTitle>
+                <DialogDescription>
+                  依模板格式匯出，分為 T1、T2、T3、CIP 四個工作表
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">週報時間範圍</Label>
+                  <Select value={excelRangePreset} onValueChange={setExcelRangePreset}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {EXCEL_RANGE_PRESETS.map(p => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    篩選「當前進度」欄位中使用的最新週報資料
+                  </p>
+                </div>
+
+                {excelRangePreset === 'custom' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">開始日期</Label>
+                      <Input type="date" value={excelCustomFrom} onChange={e => setExcelCustomFrom(e.target.value)} className="h-9" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">結束日期</Label>
+                      <Input type="date" value={excelCustomTo} onChange={e => setExcelCustomTo(e.target.value)} className="h-9" />
+                    </div>
+                  </div>
+                )}
+
+                {excelRangePreset !== 'custom' && excelRangePreset !== 'all' && (() => {
+                  const r = getExcelPresetRange(excelRangePreset)
+                  return r ? (
+                    <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2.5 py-1.5">
+                      {r.from} ~ {r.to}
+                    </p>
+                  ) : null
+                })()}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowExcelDialog(false)}>取消</Button>
+                <Button onClick={handleExportExcel} disabled={excelExporting} className="gap-2">
+                  <Download className="h-4 w-4" />
+                  {excelExporting ? '匯出中...' : '下載 Excel'}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 
