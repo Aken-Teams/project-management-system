@@ -133,20 +133,25 @@ interface ReportsData {
   }>
 }
 
-// ── SVG Donut Chart ──
+// ── SVG Donut Chart with Tooltip ──
 function DonutChart({ segments, size = 180, strokeWidth = 26, children }: {
   segments: { value: number; color: string; label: string }[]
   size?: number
   strokeWidth?: number
   children?: React.ReactNode
 }) {
+  const [tooltip, setTooltip] = useState<{ label: string; value: number; pct: string; x: number; y: number } | null>(null)
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const total = segments.reduce((s, seg) => s + seg.value, 0)
   let accumulated = 0
 
   return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+    <div
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+      onMouseLeave={() => setTooltip(null)}
+    >
       <svg width={size} height={size} className="-rotate-90">
         {total === 0 ? (
           <circle
@@ -158,7 +163,11 @@ function DonutChart({ segments, size = 180, strokeWidth = 26, children }: {
             const pct = seg.value / total
             const dashLength = circumference * pct
             const dashOffset = circumference * (1 - accumulated / total)
+            // Calculate midpoint angle for tooltip positioning
+            const midAngle = ((accumulated + seg.value / 2) / total) * 2 * Math.PI - Math.PI / 2
             accumulated += seg.value
+            const tipX = size / 2 + Math.cos(midAngle) * radius
+            const tipY = size / 2 + Math.sin(midAngle) * radius
             return (
               <circle
                 key={i}
@@ -169,14 +178,31 @@ function DonutChart({ segments, size = 180, strokeWidth = 26, children }: {
                 strokeDasharray={`${dashLength} ${circumference - dashLength}`}
                 strokeDashoffset={dashOffset}
                 strokeLinecap="butt"
+                className="cursor-pointer"
+                style={{ transition: 'opacity 0.15s' }}
+                opacity={tooltip && tooltip.label !== seg.label ? 0.4 : 1}
+                onMouseEnter={() => setTooltip({ label: seg.label, value: seg.value, pct: `${Math.round(pct * 100)}%`, x: tipX, y: tipY })}
               />
             )
           })
         )}
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         {children}
       </div>
+      {tooltip && (
+        <div
+          className="absolute z-10 pointer-events-none bg-popover text-popover-foreground border rounded-md shadow-md px-2.5 py-1.5 text-xs whitespace-nowrap"
+          style={{
+            left: tooltip.x,
+            top: tooltip.y,
+            transform: 'translate(-50%, -130%)',
+          }}
+        >
+          <span className="font-medium">{tooltip.label}</span>
+          <span className="text-muted-foreground ml-1.5">{tooltip.value}（{tooltip.pct}）</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -1071,6 +1097,17 @@ export default function ReportsPage() {
                     <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                       <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${displayStats.progress}%` }} />
                     </div>
+                    {selectedProject?.projectTier && (
+                      <span className={cn(
+                        'inline-block mt-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none w-fit',
+                        selectedProject.projectTier === 'T1' ? 'bg-blue-100 text-blue-700' :
+                        selectedProject.projectTier === 'T2' ? 'bg-emerald-100 text-emerald-700' :
+                        selectedProject.projectTier === 'T3' ? 'bg-amber-100 text-amber-700' :
+                        'bg-purple-100 text-purple-700'
+                      )}>
+                        {selectedProject.projectTier}
+                      </span>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1121,24 +1158,42 @@ export default function ReportsPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                  {displayStatusDistribution.green >= displayStatusDistribution.red ? (
-                    <TrendingUp className="h-3.5 w-3.5" />
-                  ) : (
-                    <TrendingDown className="h-3.5 w-3.5" />
-                  )}
-                  健康度
-                </div>
-                <div className={cn('text-2xl font-bold', displayStatusDistribution.red > 0 ? 'text-destructive' : displayStatusDistribution.yellow > 0 ? 'text-amber-500' : 'text-emerald-600')}>
-                  {displayStatusDistribution.green}<span className="text-sm font-normal text-muted-foreground">/{displayStats.totalProjects}</span>
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {displayStatusDistribution.red > 0
-                    ? `${displayStatusDistribution.red} 個專案有風險`
-                    : displayStatusDistribution.yellow > 0
-                      ? `${displayStatusDistribution.yellow} 個專案需注意`
-                      : '專案運行正常'}
-                </div>
+                {selectedProject ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                      <AlertTriangle className="h-3.5 w-3.5" /> 風險 / 延期
+                    </div>
+                    <div className="flex items-baseline gap-3">
+                      <div className={cn('text-2xl font-bold', displayStats.openRisks > 0 ? 'text-destructive' : 'text-emerald-600')}>
+                        {displayStats.openRisks}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {displayStats.openRisks === 0 ? '無未解決風險' : `${displayStats.openRisks} 個未解決風險`}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                      {displayStatusDistribution.green >= displayStatusDistribution.red ? (
+                        <TrendingUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <TrendingDown className="h-3.5 w-3.5" />
+                      )}
+                      健康度
+                    </div>
+                    <div className={cn('text-2xl font-bold', displayStatusDistribution.red > 0 ? 'text-destructive' : displayStatusDistribution.yellow > 0 ? 'text-amber-500' : 'text-emerald-600')}>
+                      {displayStatusDistribution.green}<span className="text-sm font-normal text-muted-foreground">/{displayStats.totalProjects}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {displayStatusDistribution.red > 0
+                        ? `${displayStatusDistribution.red} 個專案有風險`
+                        : displayStatusDistribution.yellow > 0
+                          ? `${displayStatusDistribution.yellow} 個專案需注意`
+                          : '專案運行正常'}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -1290,6 +1345,40 @@ export default function ReportsPage() {
                 <div className="grid gap-4 lg:grid-cols-3">
                   <Card>
                     <CardHeader className="pb-0">
+                      <CardTitle className="text-sm">里程碑狀態</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center py-5 gap-4">
+                      {(() => {
+                        const msSegments = [
+                          { value: selectedProject.milestones.filter(m => m.status === 'done').length, color: '#10b981', label: '完成' },
+                          { value: selectedProject.milestones.filter(m => m.status === 'in-progress').length, color: '#3b82f6', label: '進行中' },
+                          { value: selectedProject.milestones.filter(m => m.status === 'todo').length, color: '#94a3b8', label: '待辦' },
+                          { value: selectedProject.milestones.filter(m => m.status === 'blocked').length, color: '#ef4444', label: '受阻' },
+                        ]
+                        return (
+                          <>
+                            <DonutChart segments={msSegments} size={150} strokeWidth={22}>
+                              <div className="text-center">
+                                <div className="text-2xl font-bold">{selectedProject.milestones.length}</div>
+                                <div className="text-xs text-muted-foreground">總里程碑</div>
+                              </div>
+                            </DonutChart>
+                            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                              {msSegments.filter(s => s.value > 0).map(seg => (
+                                <div key={seg.label} className="flex items-center gap-1.5">
+                                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                                  <span className="text-sm text-muted-foreground">{seg.label}</span>
+                                  <span className="text-sm font-semibold">{seg.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )
+                      })()}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-0">
                       <CardTitle className="text-sm">任務狀態分佈</CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-col items-center py-5 gap-4">
@@ -1305,41 +1394,6 @@ export default function ReportsPage() {
                             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
                             <span className="text-sm text-muted-foreground">{seg.label}</span>
                             <span className="text-sm font-semibold">{seg.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-0">
-                      <CardTitle className="text-sm">里程碑狀態</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center py-5 gap-4">
-                      <DonutChart
-                        segments={[
-                          { value: selectedProject.milestones.filter(m => m.status === 'done').length, color: '#10b981', label: '完成' },
-                          { value: selectedProject.milestones.filter(m => m.status === 'in-progress').length, color: '#3b82f6', label: '進行中' },
-                          { value: selectedProject.milestones.filter(m => m.status === 'todo').length, color: '#94a3b8', label: '待辦' },
-                          { value: selectedProject.milestones.filter(m => m.status === 'blocked').length, color: '#ef4444', label: '受阻' },
-                        ]}
-                        size={150} strokeWidth={22}
-                      >
-                        <div className="text-center">
-                          <div className="text-2xl font-bold">{selectedProject.progress}%</div>
-                          <div className="text-xs text-muted-foreground">進度</div>
-                        </div>
-                      </DonutChart>
-                      <div className="w-full space-y-1.5 px-2">
-                        {selectedProject.milestones.map(m => (
-                          <div key={m.id} className="flex items-center gap-2">
-                            <span className={cn(
-                              'h-2 w-2 rounded-full shrink-0',
-                              m.status === 'done' ? 'bg-emerald-500' :
-                              m.status === 'in-progress' ? 'bg-blue-500' :
-                              m.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
-                            )} />
-                            <span className="text-[11px] truncate">{m.name}</span>
-                            <span className="text-[11px] font-semibold ml-auto">{m.progress}%</span>
                           </div>
                         ))}
                       </div>
