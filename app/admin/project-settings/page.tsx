@@ -20,8 +20,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Trash2, Pencil, ChevronDown, ChevronRight, ListTodo, ChevronsUpDown } from 'lucide-react'
+import { Plus, Trash2, Pencil, ChevronDown, ChevronRight, ListTodo, ChevronsUpDown, GripVertical } from 'lucide-react'
 import { generateCodePrefix } from '@/lib/code-prefix'
+import {
+  DndContext,
+  closestCenter,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 interface ProjectTypeConfig {
   key: string
@@ -39,6 +54,7 @@ interface TemplateSummary {
 
 interface TemplateSubtaskRow {
   id?: string
+  _uid: string
   title: string
   durationDays: number
   priority: string
@@ -46,6 +62,7 @@ interface TemplateSubtaskRow {
 
 interface TemplateTaskRow {
   id?: string
+  _uid: string
   title: string
   durationDays: number
   priority: string
@@ -54,6 +71,7 @@ interface TemplateTaskRow {
 
 interface TemplateRow {
   id?: string
+  _uid: string
   name: string
   durationDays: number
   tasks: TemplateTaskRow[]
@@ -63,6 +81,47 @@ interface TypeDetail {
   projectType: string
   isCustomized: boolean
   templates: TemplateRow[]
+}
+
+const uid = () => Math.random().toString(36).slice(2, 9)
+
+/** Auto-recalculate parent durations from children */
+function autoSumDurations(rows: TemplateRow[]): TemplateRow[] {
+  return rows.map(ms => {
+    const tasks = ms.tasks.map(t => {
+      if (t.children.length > 0) {
+        return { ...t, durationDays: t.children.reduce((s, c) => s + (Number(c.durationDays) || 0), 0) }
+      }
+      return t
+    })
+    return {
+      ...ms,
+      tasks,
+      durationDays: tasks.length > 0
+        ? tasks.reduce((s, t) => s + (Number(t.durationDays) || 0), 0)
+        : ms.durationDays,
+    }
+  })
+}
+
+/** Sortable wrapper — render prop exposes drag handle props */
+function SortableRow({ id, children }: {
+  id: string
+  children: (props: { dragHandleProps: Record<string, unknown> }) => React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+    zIndex: isDragging ? 10 : ('auto' as const),
+  }
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ dragHandleProps: { ...attributes, ...listeners } })}
+    </div>
+  )
 }
 
 export default function AdminProjectSettingsPage() {
@@ -84,6 +143,11 @@ export default function AdminProjectSettingsPage() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   // Expanded task indices (for subtask editing), key = "milestoneIdx-taskIdx"
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  )
 
   // Clear confirm dialog
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
@@ -134,20 +198,22 @@ export default function AdminProjectSettingsPage() {
       const res = await fetch(`/api/admin/milestone-templates/${key}`, { headers: headers() })
       const data: TypeDetail = await res.json()
       setDetail(data)
-      setEditing(data.templates.map(t => ({
+      setEditing(autoSumDurations(data.templates.map(t => ({
         ...t,
+        _uid: uid(),
         tasks: t.tasks?.map(tk => ({
           ...tk,
-          children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c })) ?? [],
+          _uid: uid(),
+          children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c, _uid: uid() })) ?? [],
         })) ?? [],
-      })))
+      }))))
     } finally {
       setLoadingDetail(false)
     }
   }
 
   // ── Template row actions ──────────────────────────────
-  const addRow = () => setEditing(prev => [...prev, { name: '', durationDays: 14, tasks: [] }])
+  const addRow = () => setEditing(prev => [...prev, { _uid: uid(), name: '', durationDays: 14, tasks: [] }])
   const removeRow = (i: number) => {
     setEditing(prev => prev.filter((_, idx) => idx !== i))
     setExpanded(prev => {
@@ -157,7 +223,11 @@ export default function AdminProjectSettingsPage() {
     })
   }
   const updateRow = (i: number, field: 'name' | 'durationDays', value: string | number) =>
-    setEditing(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
+    setEditing(prev => {
+      const next = prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r)
+      // If durationDays changed manually but milestone has tasks, auto-sum will override — that's fine
+      return field === 'durationDays' ? autoSumDurations(next) : next
+    })
 
   // ── Task row actions ──────────────────────────────────
   const toggleExpand = (i: number) => {
@@ -169,28 +239,31 @@ export default function AdminProjectSettingsPage() {
   }
 
   const addTask = (milestoneIdx: number) => {
-    setEditing(prev => prev.map((r, idx) =>
+    setEditing(prev => autoSumDurations(prev.map((r, idx) =>
       idx === milestoneIdx
-        ? { ...r, tasks: [...r.tasks, { title: '', durationDays: 1, priority: 'medium', children: [] }] }
+        ? { ...r, tasks: [...r.tasks, { _uid: uid(), title: '', durationDays: 1, priority: 'medium', children: [] }] }
         : r
-    ))
+    )))
     setExpanded(prev => new Set(prev).add(milestoneIdx))
   }
 
   const removeTask = (milestoneIdx: number, taskIdx: number) => {
-    setEditing(prev => prev.map((r, idx) =>
+    setEditing(prev => autoSumDurations(prev.map((r, idx) =>
       idx === milestoneIdx
         ? { ...r, tasks: r.tasks.filter((_, ti) => ti !== taskIdx) }
         : r
-    ))
+    )))
   }
 
   const updateTask = (milestoneIdx: number, taskIdx: number, field: keyof TemplateTaskRow, value: string | number) => {
-    setEditing(prev => prev.map((r, idx) =>
-      idx === milestoneIdx
-        ? { ...r, tasks: r.tasks.map((t, ti) => ti === taskIdx ? { ...t, [field]: value } : t) }
-        : r
-    ))
+    setEditing(prev => {
+      const next = prev.map((r, idx) =>
+        idx === milestoneIdx
+          ? { ...r, tasks: r.tasks.map((t, ti) => ti === taskIdx ? { ...t, [field]: value } : t) }
+          : r
+      )
+      return field === 'durationDays' ? autoSumDurations(next) : next
+    })
   }
 
   // ── Subtask row actions ────────────────────────────────
@@ -204,21 +277,21 @@ export default function AdminProjectSettingsPage() {
   }
 
   const addSubtask = (milestoneIdx: number, taskIdx: number) => {
-    setEditing(prev => prev.map((r, mi) =>
+    setEditing(prev => autoSumDurations(prev.map((r, mi) =>
       mi === milestoneIdx
         ? { ...r, tasks: r.tasks.map((t, ti) =>
             ti === taskIdx
-              ? { ...t, children: [...t.children, { title: '', durationDays: 1, priority: 'medium' }] }
+              ? { ...t, children: [...t.children, { _uid: uid(), title: '', durationDays: 1, priority: 'medium' }] }
               : t
           )}
         : r
-    ))
+    )))
     setExpandedTasks(prev => new Set(prev).add(`${milestoneIdx}-${taskIdx}`))
     setExpanded(prev => new Set(prev).add(milestoneIdx))
   }
 
   const removeSubtask = (milestoneIdx: number, taskIdx: number, subtaskIdx: number) => {
-    setEditing(prev => prev.map((r, mi) =>
+    setEditing(prev => autoSumDurations(prev.map((r, mi) =>
       mi === milestoneIdx
         ? { ...r, tasks: r.tasks.map((t, ti) =>
             ti === taskIdx
@@ -226,15 +299,54 @@ export default function AdminProjectSettingsPage() {
               : t
           )}
         : r
-    ))
+    )))
   }
 
   const updateSubtask = (milestoneIdx: number, taskIdx: number, subtaskIdx: number, field: keyof TemplateSubtaskRow, value: string | number) => {
+    setEditing(prev => {
+      const next = prev.map((r, mi) =>
+        mi === milestoneIdx
+          ? { ...r, tasks: r.tasks.map((t, ti) =>
+              ti === taskIdx
+                ? { ...t, children: t.children.map((c, si) => si === subtaskIdx ? { ...c, [field]: value } : c) }
+                : t
+            )}
+          : r
+      )
+      return field === 'durationDays' ? autoSumDurations(next) : next
+    })
+  }
+
+  // ── Reorder functions ──────────────────────────────────
+  const reorderMilestones = (oldIndex: number, newIndex: number) => {
+    setEditing(prev => arrayMove(prev, oldIndex, newIndex))
+    setExpanded(prev => {
+      const arr = Array.from(prev)
+      const mapped = arr.map(idx => {
+        if (idx === oldIndex) return newIndex
+        if (oldIndex < newIndex) {
+          if (idx > oldIndex && idx <= newIndex) return idx - 1
+        } else {
+          if (idx >= newIndex && idx < oldIndex) return idx + 1
+        }
+        return idx
+      })
+      return new Set(mapped)
+    })
+  }
+
+  const reorderTasks = (milestoneIdx: number, oldIndex: number, newIndex: number) => {
+    setEditing(prev => prev.map((r, i) =>
+      i === milestoneIdx ? { ...r, tasks: arrayMove(r.tasks, oldIndex, newIndex) } : r
+    ))
+  }
+
+  const reorderSubtasks = (milestoneIdx: number, taskIdx: number, oldIndex: number, newIndex: number) => {
     setEditing(prev => prev.map((r, mi) =>
       mi === milestoneIdx
         ? { ...r, tasks: r.tasks.map((t, ti) =>
             ti === taskIdx
-              ? { ...t, children: t.children.map((c, si) => si === subtaskIdx ? { ...c, [field]: value } : c) }
+              ? { ...t, children: arrayMove(t.children, oldIndex, newIndex) }
               : t
           )}
         : r
@@ -285,13 +397,15 @@ export default function AdminProjectSettingsPage() {
       if (res.ok) {
         const data: TypeDetail = await res.json()
         setDetail(data)
-        setEditing(data.templates.map(t => ({
+        setEditing(autoSumDurations(data.templates.map(t => ({
           ...t,
+          _uid: uid(),
           tasks: t.tasks?.map(tk => ({
             ...tk,
-            children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c })) ?? [],
+            _uid: uid(),
+            children: tk.children?.map((c: TemplateSubtaskRow) => ({ ...c, _uid: uid() })) ?? [],
           })) ?? [],
-        })))
+        }))))
         const label = projectTypes.find(pt => pt.key === selected)?.label ?? selected
         setSummaries(prev => prev.map(s =>
           s.projectType === selected ? { ...s, isCustomized: data.isCustomized, count: data.templates.length } : s
@@ -545,219 +659,312 @@ export default function AdminProjectSettingsPage() {
                 <p className="text-sm text-muted-foreground py-4 text-center">載入中...</p>
               ) : (
                 <>
-                  <div className="grid grid-cols-[24px_1fr_80px_36px_36px] gap-2 text-xs text-muted-foreground px-1 mb-1">
+                  {/* Column headers */}
+                  <div className="grid grid-cols-[20px_24px_1fr_80px_36px_36px] gap-2 text-xs text-muted-foreground px-1 mb-1">
+                    <span />
                     <span />
                     <span>里程碑名稱</span>
-                    <span>天數</span>
+                    <span className="text-center">天數</span>
                     <span />
                     <span />
                   </div>
-                  {editing.map((row, i) => (
-                    <div key={i}>
-                      {/* Milestone row */}
-                      <div className="grid grid-cols-[24px_1fr_80px_36px_36px] gap-2 items-center bg-slate-50 rounded-md px-1 py-0.5">
-                        <button
-                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground"
-                          onClick={() => toggleExpand(i)}
-                          title={expanded.has(i) ? '收合任務' : '展開任務'}
-                        >
-                          {expanded.has(i) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                        </button>
-                        <Input
-                          value={row.name}
-                          onChange={e => updateRow(i, 'name', e.target.value)}
-                          placeholder="里程碑名稱"
-                          className="h-8 text-sm"
-                        />
-                        <Input
-                          type="number"
-                          min={1}
-                          value={row.durationDays}
-                          onChange={e => updateRow(i, 'durationDays', parseInt(e.target.value) || 1)}
-                          className="h-8 text-sm"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
-                          onClick={() => addTask(i)}
-                          title="新增任務"
-                        >
-                          <ListTodo className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => removeRow(i)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
 
-                      {/* Task count badge (when collapsed) */}
-                      {!expanded.has(i) && row.tasks.length > 0 && (
-                        <button
-                          className="ml-8 mt-0.5 mb-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                          onClick={() => toggleExpand(i)}
-                        >
-                          <ListTodo className="h-3 w-3" />
-                          {row.tasks.length} 個任務
-                        </button>
-                      )}
-
-                      {/* Expanded task list */}
-                      {expanded.has(i) && (
-                        <div className="ml-8 mt-1 mb-2 pl-3 border-l-2 border-blue-200 space-y-1">
-                          {row.tasks.length > 0 && (
-                            <div className="grid grid-cols-[20px_1fr_70px_90px_28px_28px] gap-1.5 text-[11px] text-muted-foreground px-0.5">
-                              <span />
-                              <span>任務名稱</span>
-                              <span>天數</span>
-                              <span>優先級</span>
-                              <span />
-                              <span />
-                            </div>
-                          )}
-                          {row.tasks.map((task, j) => (
-                            <div key={j}>
-                              {/* Task row */}
-                              <div className="grid grid-cols-[20px_1fr_70px_90px_28px_28px] gap-1.5 items-center bg-blue-50/60 rounded px-1 py-0.5">
-                                <button
-                                  className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground"
-                                  onClick={() => toggleExpandTask(i, j)}
-                                  title={expandedTasks.has(`${i}-${j}`) ? '收合子任務' : '展開子任務'}
-                                >
-                                  {expandedTasks.has(`${i}-${j}`) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                                </button>
-                                <Input
-                                  value={task.title}
-                                  onChange={e => updateTask(i, j, 'title', e.target.value)}
-                                  placeholder="任務名稱"
-                                  className="h-7 text-xs"
-                                />
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  value={task.durationDays}
-                                  onChange={e => updateTask(i, j, 'durationDays', parseInt(e.target.value) || 1)}
-                                  className="h-7 text-xs"
-                                />
-                                <Select
-                                  value={task.priority}
-                                  onValueChange={v => updateTask(i, j, 'priority', v)}
-                                >
-                                  <SelectTrigger className="h-7 text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="high">高</SelectItem>
-                                    <SelectItem value="medium">中</SelectItem>
-                                    <SelectItem value="low">低</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
-                                  onClick={() => addSubtask(i, j)}
-                                  title="新增子任務"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                  onClick={() => removeTask(i, j)}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-
-                              {/* Subtask count badge (when collapsed) */}
-                              {!expandedTasks.has(`${i}-${j}`) && task.children.length > 0 && (
-                                <button
-                                  className="ml-7 mt-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
-                                  onClick={() => toggleExpandTask(i, j)}
-                                >
-                                  {task.children.length} 個子任務
-                                </button>
-                              )}
-
-                              {/* Expanded subtask list */}
-                              {expandedTasks.has(`${i}-${j}`) && (
-                                <div className="ml-7 mt-1 mb-1 pl-3 border-l-2 border-muted space-y-1">
-                                  {task.children.length > 0 && (
-                                    <div className="grid grid-cols-[1fr_70px_90px_28px] gap-1.5 text-[11px] text-muted-foreground px-0.5">
-                                      <span>子任務名稱</span>
-                                      <span>天數</span>
-                                      <span>優先級</span>
-                                      <span />
-                                    </div>
+                  {/* Milestone list with DnD */}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event: DragEndEvent) => {
+                      const { active, over } = event
+                      if (!over || active.id === over.id) return
+                      const oldIdx = editing.findIndex(r => `ms-${r._uid}` === active.id)
+                      const newIdx = editing.findIndex(r => `ms-${r._uid}` === over.id)
+                      if (oldIdx !== -1 && newIdx !== -1) reorderMilestones(oldIdx, newIdx)
+                    }}
+                  >
+                    <SortableContext items={editing.map(r => `ms-${r._uid}`)} strategy={verticalListSortingStrategy}>
+                      {editing.map((row, i) => {
+                        const hasTasks = row.tasks.length > 0
+                        return (
+                          <SortableRow key={row._uid} id={`ms-${row._uid}`}>
+                            {({ dragHandleProps }) => (
+                              <>
+                                {/* Milestone row */}
+                                <div className="grid grid-cols-[20px_24px_1fr_80px_36px_36px] gap-2 items-center bg-slate-50 rounded-md px-1 py-0.5">
+                                  <div {...dragHandleProps} className="flex items-center justify-center cursor-grab active:cursor-grabbing">
+                                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                  </div>
+                                  <button
+                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground"
+                                    onClick={() => toggleExpand(i)}
+                                    title={expanded.has(i) ? '收合任務' : '展開任務'}
+                                  >
+                                    {expanded.has(i) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  </button>
+                                  <Input
+                                    value={row.name}
+                                    onChange={e => updateRow(i, 'name', e.target.value)}
+                                    placeholder="里程碑名稱"
+                                    className="h-8 text-sm"
+                                  />
+                                  {hasTasks ? (
+                                    <span className="h-8 flex items-center justify-center text-sm text-muted-foreground" title="由任務天數加總">
+                                      {row.durationDays}
+                                    </span>
+                                  ) : (
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      value={row.durationDays}
+                                      onChange={e => updateRow(i, 'durationDays', parseInt(e.target.value) || 1)}
+                                      className="h-8 text-sm text-center"
+                                    />
                                   )}
-                                  {task.children.map((subtask, k) => (
-                                    <div key={k} className="grid grid-cols-[1fr_70px_90px_28px] gap-1.5 items-center bg-amber-50/50 rounded px-1 py-0.5">
-                                      <Input
-                                        value={subtask.title}
-                                        onChange={e => updateSubtask(i, j, k, 'title', e.target.value)}
-                                        placeholder="子任務名稱"
-                                        className="h-7 text-xs"
-                                      />
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        value={subtask.durationDays}
-                                        onChange={e => updateSubtask(i, j, k, 'durationDays', parseInt(e.target.value) || 1)}
-                                        className="h-7 text-xs"
-                                      />
-                                      <Select
-                                        value={subtask.priority}
-                                        onValueChange={v => updateSubtask(i, j, k, 'priority', v)}
-                                      >
-                                        <SelectTrigger className="h-7 text-xs">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="high">高</SelectItem>
-                                          <SelectItem value="medium">中</SelectItem>
-                                          <SelectItem value="low">低</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                                        onClick={() => removeSubtask(i, j, k)}
-                                      >
-                                        <Trash2 className="h-2.5 w-2.5" />
-                                      </Button>
-                                    </div>
-                                  ))}
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                                    onClick={() => addSubtask(i, j)}
+                                    className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                                    onClick={() => addTask(i)}
+                                    title="新增任務"
                                   >
-                                    <Plus className="h-3 w-3" />新增子任務
+                                    <ListTodo className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => removeRow(i)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
                                 </div>
-                              )}
-                            </div>
-                          ))}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                            onClick={() => addTask(i)}
-                          >
-                            <Plus className="h-3 w-3" />新增任務
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+
+                                {/* Task count badge (when collapsed) */}
+                                {!expanded.has(i) && row.tasks.length > 0 && (
+                                  <button
+                                    className="ml-12 mt-0.5 mb-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                    onClick={() => toggleExpand(i)}
+                                  >
+                                    <ListTodo className="h-3 w-3" />
+                                    {row.tasks.length} 個任務
+                                  </button>
+                                )}
+
+                                {/* Expanded task list */}
+                                {expanded.has(i) && (
+                                  <div className="ml-12 mt-1 mb-2 pl-3 border-l-2 border-blue-200 space-y-1">
+                                    {row.tasks.length > 0 && (
+                                      <div className="grid grid-cols-[18px_20px_1fr_70px_90px_28px_28px] gap-1.5 text-[11px] text-muted-foreground px-0.5">
+                                        <span />
+                                        <span />
+                                        <span>任務名稱</span>
+                                        <span className="text-center">天數</span>
+                                        <span>優先級</span>
+                                        <span />
+                                        <span />
+                                      </div>
+                                    )}
+
+                                    {/* Tasks DnD */}
+                                    <DndContext
+                                      sensors={sensors}
+                                      collisionDetection={closestCenter}
+                                      onDragEnd={(event: DragEndEvent) => {
+                                        const { active, over } = event
+                                        if (!over || active.id === over.id) return
+                                        const oldIdx = row.tasks.findIndex(t => `task-${t._uid}` === active.id)
+                                        const newIdx = row.tasks.findIndex(t => `task-${t._uid}` === over.id)
+                                        if (oldIdx !== -1 && newIdx !== -1) reorderTasks(i, oldIdx, newIdx)
+                                      }}
+                                    >
+                                      <SortableContext items={row.tasks.map(t => `task-${t._uid}`)} strategy={verticalListSortingStrategy}>
+                                        {row.tasks.map((task, j) => {
+                                          const hasChildren = task.children.length > 0
+                                          return (
+                                            <SortableRow key={task._uid} id={`task-${task._uid}`}>
+                                              {({ dragHandleProps: taskDragProps }) => (
+                                                <>
+                                                  {/* Task row */}
+                                                  <div className="grid grid-cols-[18px_20px_1fr_70px_90px_28px_28px] gap-1.5 items-center bg-blue-50/60 rounded px-1 py-0.5">
+                                                    <div {...taskDragProps} className="flex items-center justify-center cursor-grab active:cursor-grabbing">
+                                                      <GripVertical className="h-3 w-3 text-muted-foreground/40" />
+                                                    </div>
+                                                    <button
+                                                      className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground"
+                                                      onClick={() => toggleExpandTask(i, j)}
+                                                      title={expandedTasks.has(`${i}-${j}`) ? '收合子任務' : '展開子任務'}
+                                                    >
+                                                      {expandedTasks.has(`${i}-${j}`) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                                    </button>
+                                                    <Input
+                                                      value={task.title}
+                                                      onChange={e => updateTask(i, j, 'title', e.target.value)}
+                                                      placeholder="任務名稱"
+                                                      className="h-7 text-xs"
+                                                    />
+                                                    {hasChildren ? (
+                                                      <span className="h-7 flex items-center justify-center text-xs text-muted-foreground" title="由子任務天數加總">
+                                                        {task.durationDays}
+                                                      </span>
+                                                    ) : (
+                                                      <Input
+                                                        type="number"
+                                                        min={1}
+                                                        value={task.durationDays}
+                                                        onChange={e => updateTask(i, j, 'durationDays', parseInt(e.target.value) || 1)}
+                                                        className="h-7 text-xs text-center"
+                                                      />
+                                                    )}
+                                                    <Select
+                                                      value={task.priority}
+                                                      onValueChange={v => updateTask(i, j, 'priority', v)}
+                                                    >
+                                                      <SelectTrigger className="h-7 text-xs">
+                                                        <SelectValue />
+                                                      </SelectTrigger>
+                                                      <SelectContent>
+                                                        <SelectItem value="high">高</SelectItem>
+                                                        <SelectItem value="medium">中</SelectItem>
+                                                        <SelectItem value="low">低</SelectItem>
+                                                      </SelectContent>
+                                                    </Select>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                                                      onClick={() => addSubtask(i, j)}
+                                                      title="新增子任務"
+                                                    >
+                                                      <Plus className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                                      onClick={() => removeTask(i, j)}
+                                                    >
+                                                      <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+
+                                                  {/* Subtask count badge (when collapsed) */}
+                                                  {!expandedTasks.has(`${i}-${j}`) && task.children.length > 0 && (
+                                                    <button
+                                                      className="ml-10 mt-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                      onClick={() => toggleExpandTask(i, j)}
+                                                    >
+                                                      {task.children.length} 個子任務
+                                                    </button>
+                                                  )}
+
+                                                  {/* Expanded subtask list */}
+                                                  {expandedTasks.has(`${i}-${j}`) && (
+                                                    <div className="ml-10 mt-1 mb-1 pl-3 border-l-2 border-muted space-y-1">
+                                                      {task.children.length > 0 && (
+                                                        <div className="grid grid-cols-[18px_1fr_70px_90px_28px] gap-1.5 text-[11px] text-muted-foreground px-0.5">
+                                                          <span />
+                                                          <span>子任務名稱</span>
+                                                          <span className="text-center">天數</span>
+                                                          <span>優先級</span>
+                                                          <span />
+                                                        </div>
+                                                      )}
+
+                                                      {/* Subtasks DnD */}
+                                                      <DndContext
+                                                        sensors={sensors}
+                                                        collisionDetection={closestCenter}
+                                                        onDragEnd={(event: DragEndEvent) => {
+                                                          const { active, over } = event
+                                                          if (!over || active.id === over.id) return
+                                                          const oldIdx = task.children.findIndex(c => `sub-${c._uid}` === active.id)
+                                                          const newIdx = task.children.findIndex(c => `sub-${c._uid}` === over.id)
+                                                          if (oldIdx !== -1 && newIdx !== -1) reorderSubtasks(i, j, oldIdx, newIdx)
+                                                        }}
+                                                      >
+                                                        <SortableContext items={task.children.map(c => `sub-${c._uid}`)} strategy={verticalListSortingStrategy}>
+                                                          {task.children.map((subtask, k) => (
+                                                            <SortableRow key={subtask._uid} id={`sub-${subtask._uid}`}>
+                                                              {({ dragHandleProps: subDragProps }) => (
+                                                                <div className="grid grid-cols-[18px_1fr_70px_90px_28px] gap-1.5 items-center bg-amber-50/50 rounded px-1 py-0.5">
+                                                                  <div {...subDragProps} className="flex items-center justify-center cursor-grab active:cursor-grabbing">
+                                                                    <GripVertical className="h-2.5 w-2.5 text-muted-foreground/30" />
+                                                                  </div>
+                                                                  <Input
+                                                                    value={subtask.title}
+                                                                    onChange={e => updateSubtask(i, j, k, 'title', e.target.value)}
+                                                                    placeholder="子任務名稱"
+                                                                    className="h-7 text-xs"
+                                                                  />
+                                                                  <Input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    value={subtask.durationDays}
+                                                                    onChange={e => updateSubtask(i, j, k, 'durationDays', parseInt(e.target.value) || 1)}
+                                                                    className="h-7 text-xs text-center"
+                                                                  />
+                                                                  <Select
+                                                                    value={subtask.priority}
+                                                                    onValueChange={v => updateSubtask(i, j, k, 'priority', v)}
+                                                                  >
+                                                                    <SelectTrigger className="h-7 text-xs">
+                                                                      <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                      <SelectItem value="high">高</SelectItem>
+                                                                      <SelectItem value="medium">中</SelectItem>
+                                                                      <SelectItem value="low">低</SelectItem>
+                                                                    </SelectContent>
+                                                                  </Select>
+                                                                  <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                                                    onClick={() => removeSubtask(i, j, k)}
+                                                                  >
+                                                                    <Trash2 className="h-2.5 w-2.5" />
+                                                                  </Button>
+                                                                </div>
+                                                              )}
+                                                            </SortableRow>
+                                                          ))}
+                                                        </SortableContext>
+                                                      </DndContext>
+
+                                                      <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => addSubtask(i, j)}
+                                                      >
+                                                        <Plus className="h-3 w-3" />新增子任務
+                                                      </Button>
+                                                    </div>
+                                                  )}
+                                                </>
+                                              )}
+                                            </SortableRow>
+                                          )
+                                        })}
+                                      </SortableContext>
+                                    </DndContext>
+
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                                      onClick={() => addTask(i)}
+                                    >
+                                      <Plus className="h-3 w-3" />新增任務
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </SortableRow>
+                        )
+                      })}
+                    </SortableContext>
+                  </DndContext>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t">
                     <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={addRow}>
                       <Plus className="h-3.5 w-3.5" />新增里程碑
