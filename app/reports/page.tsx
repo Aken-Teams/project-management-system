@@ -459,6 +459,7 @@ export default function ReportsPage() {
     }))
   }, [detailProject])
 
+  // Recent activity grouped by week → person → task logs
   const recentActivity = useMemo(() => {
     if (!detailProject) return []
     const twoWeeksAgo = new Date()
@@ -469,7 +470,10 @@ export default function ReportsPage() {
       .sort((a, b) => b.logDate.localeCompare(a.logDate))
 
     const taskMap = new Map(detailProject.tasks.map(t => [t.id, t]))
-    const weekGroups = new Map<string, Array<{ log: typeof recentLogs[0]; task: ReturnType<typeof taskMap.get> }>>()
+
+    // Group: week → person → logs
+    type LogItem = { log: typeof recentLogs[0]; task: ReturnType<typeof taskMap.get> }
+    const weekGroups = new Map<string, Map<string, LogItem[]>>()
 
     for (const log of recentLogs) {
       const date = new Date(log.logDate)
@@ -478,13 +482,26 @@ export default function ReportsPage() {
       const monday = new Date(date)
       monday.setDate(date.getDate() + mondayOffset)
       const weekKey = monday.toISOString().split('T')[0]
-      if (!weekGroups.has(weekKey)) weekGroups.set(weekKey, [])
-      weekGroups.get(weekKey)!.push({ log, task: taskMap.get(log.taskId) })
+      if (!weekGroups.has(weekKey)) weekGroups.set(weekKey, new Map())
+      const personMap = weekGroups.get(weekKey)!
+      const author = log.author
+      if (!personMap.has(author)) personMap.set(author, [])
+      personMap.get(author)!.push({ log, task: taskMap.get(log.taskId) })
     }
 
     return [...weekGroups.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([weekStart, items]) => ({ weekStart, items }))
+      .map(([weekStart, personMap]) => {
+        const sunday = new Date(weekStart)
+        sunday.setDate(sunday.getDate() + 6)
+        const weekEnd = sunday.toISOString().split('T')[0]
+        const wk = getWeekNumber(new Date(weekStart))
+        const persons = [...personMap.entries()]
+          .map(([name, items]) => ({ name, items, taskCount: new Set(items.map(i => i.log.taskId)).size }))
+          .sort((a, b) => b.items.length - a.items.length)
+        const totalLogs = persons.reduce((a, p) => a + p.items.length, 0)
+        return { weekStart, weekEnd, weekNumber: wk, persons, totalLogs }
+      })
   }, [detailProject])
 
   if (loading) {
@@ -533,18 +550,18 @@ export default function ReportsPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'done': return <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300">完成</Badge>
-      case 'in-progress': return <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300">進行中</Badge>
-      case 'blocked': return <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300">受阻</Badge>
-      default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300">待辦</Badge>
+      case 'done': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200">完成</Badge>
+      case 'in-progress': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200">進行中</Badge>
+      case 'blocked': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 hover:bg-red-200">受阻</Badge>
+      default: return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200">待辦</Badge>
     }
   }
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
-      case 'high': return <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300">高</Badge>
-      case 'medium': return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300">中</Badge>
-      default: return <Badge className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300">低</Badge>
+      case 'high': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 hover:bg-red-200">高</Badge>
+      case 'medium': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200">中</Badge>
+      default: return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200">低</Badge>
     }
   }
 
