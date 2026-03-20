@@ -627,9 +627,11 @@ ${projectsWithStatus.map(project => {
 
     return `
     <div class="page-break"></div>
-    <div style="padding:20px 32px 0;">
-      <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">${project.name}</div>
-      <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">里程碑與任務明細</div>
+    <div style="padding:14px 32px;background:linear-gradient(135deg,#1e3a5f 0%,#2d5a87 100%) !important;margin-bottom:16px;">
+      <div style="font-size:16px;font-weight:700;color:white !important;margin-bottom:2px;">${project.name}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.7) !important;">里程碑與任務明細</div>
+    </div>
+    <div style="padding:0 32px;">
       ${msWithTasks.map(ms => {
         const msTasks = parentTasks.filter(t => t.milestoneId === ms.id)
         const isOd = ms.status !== 'done' && new Date(ms.dueDate).toISOString().split('T')[0] < today
