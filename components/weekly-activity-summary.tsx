@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -174,6 +174,15 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set())
   const [expandedDelays, setExpandedDelays] = useState<Set<string>>(new Set())
+
+  // Default: only expand the newest week, collapse the rest
+  const [initializedCollapse, setInitializedCollapse] = useState(false)
+  useEffect(() => {
+    if (initializedCollapse || allWeeks.length === 0) return
+    const collapsed = new Set(allWeeks.slice(1).map(w => w.weekMonday))
+    setCollapsedWeeks(collapsed)
+    setInitializedCollapse(true)
+  }, [allWeeks, initializedCollapse])
 
   // Report dialog state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)

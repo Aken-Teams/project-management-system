@@ -1284,9 +1284,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     <p className="text-sm text-muted-foreground/60 mt-1">提交第一筆紀錄後會顯示在這裡</p>
                   </div>
                 ) : (
-                  <div className="py-4 space-y-3">
+                  <div className="py-4 divide-y divide-border">
                     {taskLogs.map((log) => (
-                      <div key={log.id} className="group rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
+                      <div key={log.id} className="group transition-colors hover:bg-muted/30">
                         {editingLogId === log.id ? (
                           /* ── Edit mode ── */
                           <div>
@@ -1435,68 +1435,65 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             </div>
                           </div>
                         ) : (
-                          /* ── Display mode ── */
-                          <>
-                            {/* Card header */}
-                            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/40">
+                          /* ── Display mode — timeline style ── */
+                          <div className="flex gap-3 px-4 py-3">
+                            {/* Timeline dot + line */}
+                            <div className="flex flex-col items-center pt-0.5">
                               <Avatar className="h-7 w-7 shrink-0">
                                 <AvatarFallback className={cn('text-[11px] font-semibold text-white', getAvatarColor(log.author))}>
                                   {log.author.split(' ').map(n => n[0]).join('').slice(0, 2)}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="flex-1 text-sm font-medium">{log.author}</span>
-                              <div className="flex items-center gap-1 shrink-0">
+                            </div>
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 space-y-1.5">
+                              {/* Header line */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-sm font-medium truncate">{log.author}</span>
+                                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                                    {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                  </span>
+                                </div>
                                 {user && log.author === user.name && (
-                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                      onClick={() => handleStartEditLog(log)}
-                                    >
+                                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => handleStartEditLog(log)}>
                                       <Pencil className="h-3 w-3" />
                                     </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                      onClick={() => setDeletingLog(log)}
-                                    >
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => setDeletingLog(log)}>
                                       <Trash2 className="h-3 w-3" />
                                     </Button>
                                   </div>
                                 )}
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(log.logDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'short', day: 'numeric' })}
-                                </span>
                               </div>
-                            </div>
-                            {/* Card body */}
-                            <div className="px-4 py-3 space-y-3">
-                              <p className="text-sm leading-relaxed">{log.content}</p>
+                              {/* Content text */}
+                              <p className="text-sm leading-relaxed whitespace-pre-line">{log.content}</p>
+                              {/* Attachments - images */}
                               {log.attachments && log.attachments.filter(a => a.type === 'image').length > 0 && (
-                                <div className="grid grid-cols-3 gap-1.5">
+                                <div className="flex flex-wrap gap-1.5 pt-1">
                                   {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
                                     <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer"
                                       className="block overflow-hidden rounded-lg border border-border/50 hover:opacity-90 transition-opacity">
-                                      <img src={att.url} alt={att.name} className="aspect-video w-full object-cover" />
+                                      <img src={att.url} alt={att.name} className="h-16 w-16 object-cover" />
                                     </a>
                                   ))}
                                 </div>
                               )}
+                              {/* Attachments - files */}
                               {log.attachments && log.attachments.filter(a => a.type === 'file').length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="flex flex-wrap gap-1.5 pt-1">
                                   {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
                                     <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer"
-                                      className="flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-lg border border-border/60 bg-muted/40 text-xs text-foreground hover:bg-muted transition-colors">
-                                      <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                      <span className="max-w-[140px] truncate">{att.name}</span>
+                                      className="flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-md border border-border/60 bg-muted/40 text-xs text-foreground hover:bg-muted transition-colors">
+                                      <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                                      <span className="max-w-[120px] truncate">{att.name}</span>
                                     </a>
                                   ))}
                                 </div>
                               )}
+                              {/* Next plans */}
                               {log.nextPlans && log.nextPlans.length > 0 && (
-                                <div className="pl-3 border-l-2 border-primary/20 space-y-1.5 pt-0.5">
+                                <div className="mt-1 pl-2.5 border-l-2 border-primary/20 space-y-1">
                                   <div className="flex items-center gap-1">
                                     <CalendarClock className="h-3 w-3 text-primary/60" />
                                     <span className="text-[11px] text-primary/60 font-medium">後續計畫</span>
@@ -1514,7 +1511,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                 </div>
                               )}
                             </div>
-                          </>
+                          </div>
                         )}
                       </div>
                     ))}
