@@ -453,17 +453,17 @@ export default function ApprovalsPage() {
 
           {/* Tab: 已審核紀錄 */}
           <TabsContent value="history" className="mt-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 max-w-xs">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="搜尋專案或申請人..." value={searchHistory} onChange={e => setSearchHistory(e.target.value)} className="pl-9 h-9" />
-              </div>
+            <div className="flex items-center gap-2 justify-end">
               <div className="flex items-center gap-1">
                 {(['', 'approved', 'rejected'] as const).map(s => (
                   <Button key={s} variant={filterResult === s ? 'default' : 'outline'} size="sm" className="h-9 text-xs" onClick={() => setFilterResult(s)}>
                     {s === '' ? '全部' : s === 'approved' ? '已核准' : '已駁回'}
                   </Button>
                 ))}
+              </div>
+              <div className="relative w-56">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="搜尋專案或申請人..." value={searchHistory} onChange={e => setSearchHistory(e.target.value)} className="pl-9 h-9" />
               </div>
             </div>
             {filteredHistory.length === 0 ? (
