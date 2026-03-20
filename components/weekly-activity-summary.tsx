@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,10 @@ import {
   X,
   Paperclip,
 } from 'lucide-react'
+import { DayPicker } from 'react-day-picker'
+import { startOfWeek, endOfWeek, isWithinInterval, getISOWeek } from 'date-fns'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { type Project, type TaskLogAttachment } from '@/lib/mock-data'
 
 // --- Helpers ---
@@ -49,6 +53,17 @@ function getISOWeekNumber(dateStr: string): number {
   utc.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7))
   const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1))
   return Math.ceil(((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+}
+
+function getMondayOfWeek(d: Date): Date {
+  return startOfWeek(d, { weekStartsOn: 1 })
+}
+
+function fmtLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function getWeekMonday(dateStr: string): string {
@@ -169,6 +184,8 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const [dateTo, setDateTo] = useState('')
   const [selectedWeekMonday, setSelectedWeekMonday] = useState<string | null>(null)
   const [weekFilter, setWeekFilter] = useState<string>('')
+  const [weekFilterOpen, setWeekFilterOpen] = useState(false)
+  const [weekFilterMonth, setWeekFilterMonth] = useState(new Date())
   const [viewMode, setViewMode] = useState<'matrix' | 'summary'>('summary')
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set())
   const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
@@ -327,18 +344,128 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Select value={weekFilter || '__all__'} onValueChange={v => { setWeekFilter(v === '__all__' ? '' : v); setPage(0) }}>
-            <SelectTrigger className="h-8 text-sm w-[140px] gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">全部週別</SelectItem>
-              {availableWeeks.map(w => (
-                <SelectItem key={w.key} value={w.key}>{w.key}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={weekFilterOpen} onOpenChange={setWeekFilterOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex items-center gap-1.5 text-sm border rounded-lg px-3 h-8 bg-background hover:bg-muted/50 transition-colors',
+                  weekFilter ? 'border-primary/30 font-medium' : '',
+                )}
+              >
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate">
+                  {weekFilter ? (() => {
+                    const w = availableWeeks.find(aw => aw.key === weekFilter)
+                    if (!w) return weekFilter
+                    const mon = new Date(w.weekMonday)
+                    const sun = endOfWeek(mon, { weekStartsOn: 1 })
+                    return `${w.key} (${mon.getMonth() + 1}/${mon.getDate()} ~ ${sun.getMonth() + 1}/${sun.getDate()})`
+                  })() : '全部週別'}
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <div className="p-2 pb-0">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <select
+                    value={weekFilterMonth.getFullYear()}
+                    onChange={e => setWeekFilterMonth(new Date(Number(e.target.value), weekFilterMonth.getMonth(), 1))}
+                    className="text-sm font-medium border rounded px-2 py-0.5 bg-background"
+                  >
+                    {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                      <option key={y} value={y}>{y}年</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <DayPicker
+                mode="default"
+                showOutsideDays
+                showWeekNumber
+                weekStartsOn={1}
+                month={weekFilterMonth}
+                onMonthChange={setWeekFilterMonth}
+                modifiers={weekFilter ? (() => {
+                  const w = availableWeeks.find(aw => aw.key === weekFilter)
+                  if (!w) return {}
+                  const mon = getMondayOfWeek(new Date(w.weekMonday))
+                  const sun = endOfWeek(mon, { weekStartsOn: 1 })
+                  return {
+                    selectedWeek: (day: Date) => { try { return isWithinInterval(day, { start: mon, end: sun }) } catch { return false } },
+                    weekStart: mon,
+                    weekEnd: sun,
+                  }
+                })() : {}}
+                modifiersClassNames={{
+                  selectedWeek: 'bg-primary/15 text-primary',
+                  weekStart: '!bg-primary !text-primary-foreground rounded-l-md',
+                  weekEnd: '!bg-primary !text-primary-foreground rounded-r-md',
+                }}
+                onDayClick={(day) => {
+                  const mon = getMondayOfWeek(day)
+                  const wn = getISOWeek(mon)
+                  const yr = mon.getFullYear()
+                  const key = `${yr}W${String(wn).padStart(2, '0')}`
+                  setWeekFilter(key)
+                  setPage(0)
+                  setWeekFilterOpen(false)
+                }}
+                className="p-3"
+                classNames={{
+                  months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
+                  month: 'space-y-4',
+                  caption: 'flex justify-center pt-1 relative items-center',
+                  caption_label: 'text-sm font-medium',
+                  nav: 'space-x-1 flex items-center',
+                  nav_button: cn(buttonVariants({ variant: 'outline' }), 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100'),
+                  nav_button_previous: 'absolute left-1',
+                  nav_button_next: 'absolute right-1',
+                  table: 'w-full border-collapse space-y-1',
+                  head_row: 'flex',
+                  head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
+                  row: 'flex w-full mt-2 cursor-pointer hover:bg-accent/50 rounded-md transition-colors',
+                  cell: 'h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20',
+                  day: cn(buttonVariants({ variant: 'ghost' }), 'h-9 w-9 p-0 font-normal'),
+                  day_today: 'bg-accent text-accent-foreground font-bold',
+                  day_outside: 'text-muted-foreground opacity-50',
+                  day_disabled: 'text-muted-foreground opacity-50',
+                  day_hidden: 'invisible',
+                }}
+                components={{
+                  IconLeft: () => <ChevronLeft className="h-4 w-4" />,
+                  IconRight: () => <ChevronRight className="h-4 w-4" />,
+                }}
+              />
+              <div className="border-t px-3 py-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const now = new Date()
+                    const mon = getMondayOfWeek(now)
+                    const wn = getISOWeek(mon)
+                    const yr = mon.getFullYear()
+                    setWeekFilter(`${yr}W${String(wn).padStart(2, '0')}`)
+                    setWeekFilterMonth(now)
+                    setPage(0)
+                    setWeekFilterOpen(false)
+                  }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  跳到本周 (W{String(getISOWeek(getMondayOfWeek(new Date()))).padStart(2, '0')})
+                </button>
+                {weekFilter && (
+                  <button
+                    type="button"
+                    onClick={() => { setWeekFilter(''); setPage(0); setWeekFilterOpen(false) }}
+                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    清除篩選
+                  </button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
           {weekFilter && (
             <Button
               variant="ghost"
