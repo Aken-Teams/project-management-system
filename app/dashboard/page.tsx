@@ -226,10 +226,10 @@ export default function DashboardPage() {
             </div>
             <div className="flex justify-between">
               {([
-                { tier: 'T1', color: 'text-blue-500' },
-                { tier: 'T2', color: 'text-violet-500' },
-                { tier: 'T3', color: 'text-slate-500' },
-                { tier: 'CIP', color: 'text-amber-500' },
+                { tier: 'T1', color: 'text-blue-600' },
+                { tier: 'T2', color: 'text-emerald-600' },
+                { tier: 'T3', color: 'text-amber-600' },
+                { tier: 'CIP', color: 'text-purple-600' },
               ] as const).map(({ tier, color }, i) => (
                 <div key={tier} className={`flex-1 text-center ${i < 3 ? 'border-r' : ''}`}>
                   <div className={`text-xl font-bold ${color}`}>{stats.tierCounts[tier]}</div>

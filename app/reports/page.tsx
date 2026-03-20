@@ -23,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { PROJECT_TYPE_LABELS, type ProjectStatus, type Project } from '@/lib/mock-data'
+import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier, type Project } from '@/lib/mock-data'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { GanttChart } from '@/components/gantt-chart'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -47,6 +47,9 @@ import {
   FileText,
   ShieldAlert,
   Timer,
+  Layers,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -86,6 +89,7 @@ interface ReportsData {
     projectCode: string
     name: string
     projectType: string
+    projectTier: ProjectTier | null
     status: ProjectStatus
     progress: number
     owner: string
@@ -242,6 +246,7 @@ export default function ReportsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [ganttExpanded, setGanttExpanded] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
 
   // ── Fetch reports data from API ──
   useEffect(() => {
@@ -274,6 +279,16 @@ export default function ReportsPage() {
     fetchReports()
   }, [user])
 
+  // Reset project selection when tier filter changes and current selection is not in filtered list
+  useEffect(() => {
+    if (selectedProjectId !== 'all' && tierFilter && data) {
+      const proj = data.projects.find(p => p.id === selectedProjectId)
+      if (proj && proj.projectTier !== tierFilter) {
+        setSelectedProjectId('all')
+      }
+    }
+  }, [tierFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Fetch full project detail when single project selected ──
   useEffect(() => {
     if (selectedProjectId === 'all') {
@@ -299,56 +314,114 @@ export default function ReportsPage() {
     return () => controller.abort()
   }, [selectedProjectId])
 
+  // Filtered projects by tier (for "all projects" mode)
+  const filteredProjects = useMemo(() => {
+    if (!data) return []
+    if (!tierFilter) return data.projects
+    return data.projects.filter(p => p.projectTier === tierFilter)
+  }, [data, tierFilter])
+
+  // Tier counts (computed from filtered projects so it reflects the active filter)
+  const tierCounts = useMemo(() => {
+    if (!data) return { T1: 0, T2: 0, T3: 0, CIP: 0 }
+    const src = filteredProjects
+    return {
+      T1: src.filter(p => p.projectTier === 'T1').length,
+      T2: src.filter(p => p.projectTier === 'T2').length,
+      T3: src.filter(p => p.projectTier === 'T3').length,
+      CIP: src.filter(p => p.projectTier === 'CIP').length,
+    }
+  }, [data, filteredProjects])
+
   // Calculate display stats based on selected project or all projects
   // Must be declared before any early returns to follow React Hooks rules
   const displayStats = useMemo(() => {
     if (!data) return null
 
     const selectedProject = selectedProjectId === 'all' ? null : data.projects.find(p => p.id === selectedProjectId)
-    if (!selectedProject) return data.stats
-
-    // Use actual task status counts from the project
-    return {
-      totalProjects: 1,
-      totalTasks: selectedProject.totalTasks,
-      doneTasks: selectedProject.doneTasks,
-      inProgressTasks: selectedProject.inProgressTasks,
-      blockedTasks: selectedProject.blockedTasks,
-      todoTasks: selectedProject.todoTasks,
-      totalMilestones: selectedProject.totalMilestones,
-      doneMilestones: selectedProject.doneMilestones,
-      budget: selectedProject.budget,
-      budgetUsed: selectedProject.budgetUsed,
-      openRisks: selectedProject.openRisks,
-      pendingDelays: 0, // Single project view doesn't show pending delays
-      teamSize: selectedProject.teamSize,
-      progress: selectedProject.progress,
+    if (selectedProject) {
+      return {
+        totalProjects: 1,
+        totalTasks: selectedProject.totalTasks,
+        doneTasks: selectedProject.doneTasks,
+        inProgressTasks: selectedProject.inProgressTasks,
+        blockedTasks: selectedProject.blockedTasks,
+        todoTasks: selectedProject.todoTasks,
+        totalMilestones: selectedProject.totalMilestones,
+        doneMilestones: selectedProject.doneMilestones,
+        budget: selectedProject.budget,
+        budgetUsed: selectedProject.budgetUsed,
+        openRisks: selectedProject.openRisks,
+        pendingDelays: 0,
+        teamSize: selectedProject.teamSize,
+        progress: selectedProject.progress,
+      }
     }
-  }, [data, selectedProjectId])
+
+    // "All projects" mode — aggregate from filtered projects
+    if (!tierFilter) return data.stats
+    const fp = filteredProjects
+    return {
+      totalProjects: fp.length,
+      totalTasks: fp.reduce((a, p) => a + p.totalTasks, 0),
+      doneTasks: fp.reduce((a, p) => a + p.doneTasks, 0),
+      inProgressTasks: fp.reduce((a, p) => a + p.inProgressTasks, 0),
+      blockedTasks: fp.reduce((a, p) => a + p.blockedTasks, 0),
+      todoTasks: fp.reduce((a, p) => a + p.todoTasks, 0),
+      totalMilestones: fp.reduce((a, p) => a + p.totalMilestones, 0),
+      doneMilestones: fp.reduce((a, p) => a + p.doneMilestones, 0),
+      budget: fp.reduce((a, p) => a + p.budget, 0),
+      budgetUsed: fp.reduce((a, p) => a + p.budgetUsed, 0),
+      openRisks: fp.reduce((a, p) => a + p.openRisks, 0),
+      pendingDelays: 0,
+      teamSize: new Set(fp.flatMap(p => p.teamWorkload.map(w => w.name))).size,
+      progress: fp.length > 0 ? Math.round(fp.reduce((a, p) => a + p.progress, 0) / fp.length) : 0,
+    }
+  }, [data, selectedProjectId, tierFilter, filteredProjects])
 
   const displayStatusDistribution = useMemo(() => {
     if (!data) return null
 
     const selectedProject = selectedProjectId === 'all' ? null : data.projects.find(p => p.id === selectedProjectId)
-    if (!selectedProject) return data.statusDistribution
-
-    // For single project, show count of 1 for the project's status
-    return {
-      green: selectedProject.status === 'green' ? 1 : 0,
-      yellow: selectedProject.status === 'yellow' ? 1 : 0,
-      red: selectedProject.status === 'red' ? 1 : 0,
+    if (selectedProject) {
+      return {
+        green: selectedProject.status === 'green' ? 1 : 0,
+        yellow: selectedProject.status === 'yellow' ? 1 : 0,
+        red: selectedProject.status === 'red' ? 1 : 0,
+      }
     }
-  }, [data, selectedProjectId])
+
+    if (!tierFilter) return data.statusDistribution
+    const fp = filteredProjects
+    return {
+      green: fp.filter(p => p.status === 'green').length,
+      yellow: fp.filter(p => p.status === 'yellow').length,
+      red: fp.filter(p => p.status === 'red').length,
+    }
+  }, [data, selectedProjectId, tierFilter, filteredProjects])
 
   const displayTeamWorkload = useMemo(() => {
     if (!data) return []
 
     const selectedProject = selectedProjectId === 'all' ? null : data.projects.find(p => p.id === selectedProjectId)
-    if (!selectedProject) return data.teamWorkload
+    if (selectedProject) return selectedProject.teamWorkload
 
-    // For single project, use the project's team workload
-    return selectedProject.teamWorkload
-  }, [data, selectedProjectId])
+    if (!tierFilter) return data.teamWorkload
+    // Aggregate team workload from filtered projects
+    const workloadMap = new Map<string, { total: number; done: number }>()
+    filteredProjects.forEach(p => {
+      p.teamWorkload.forEach(w => {
+        const entry = workloadMap.get(w.name) || { total: 0, done: 0 }
+        entry.total += w.total
+        entry.done += w.done
+        workloadMap.set(w.name, entry)
+      })
+    })
+    return [...workloadMap.entries()]
+      .map(([name, d]) => ({ name, total: d.total, done: d.done }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
+  }, [data, selectedProjectId, tierFilter, filteredProjects])
 
   // ── Detail project computed data (must be before early returns) ──
   const tasksByMilestone = useMemo(() => {
@@ -704,11 +777,27 @@ export default function ReportsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">所有專案（總覽）</SelectItem>
-                  {data.projects.map(p => (
+                  {filteredProjects.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {/* Tier filter — only show in all-projects mode */}
+              {selectedProjectId === 'all' && <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
+                {[{ value: null as ProjectTier | null, label: '全部' }, ...Object.keys(PROJECT_TIER_LABELS).map(t => ({ value: t as ProjectTier | null, label: PROJECT_TIER_LABELS[t as ProjectTier] }))].map(item => (
+                  <button
+                    key={item.label}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                      tierFilter === item.value
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-foreground/70 hover:text-foreground hover:bg-muted'
+                    }`}
+                    onClick={() => setTierFilter(item.value)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>}
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpenEmailDialog}>
                 <Mail className="h-3.5 w-3.5" /> Email
               </Button>
@@ -973,13 +1062,36 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Card>
               <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                  <Target className="h-3.5 w-3.5" /> 整體進度
-                </div>
-                <div className="text-2xl font-bold">{displayStats.progress}%</div>
-                <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${displayStats.progress}%` }} />
-                </div>
+                {selectedProject ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                      <Target className="h-3.5 w-3.5" /> 整體進度
+                    </div>
+                    <div className="text-2xl font-bold">{displayStats.progress}%</div>
+                    <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${displayStats.progress}%` }} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                      <Layers className="h-3.5 w-3.5" /> 專案層級
+                    </div>
+                    <div className="flex items-center justify-between">
+                      {([
+                        { tier: 'T1' as const, color: 'text-blue-600' },
+                        { tier: 'T2' as const, color: 'text-emerald-600' },
+                        { tier: 'T3' as const, color: 'text-amber-600' },
+                        { tier: 'CIP' as const, color: 'text-purple-600' },
+                      ] as const).map(({ tier, color }, i) => (
+                        <div key={tier} className={`flex-1 text-center ${i < 3 ? 'border-r' : ''}`}>
+                          <div className={`text-xl font-bold ${color}`}>{tierCounts[tier]}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{tier}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -1010,18 +1122,22 @@ export default function ReportsPage() {
             <Card>
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                  <AlertTriangle className="h-3.5 w-3.5" /> 風險 / 延期
-                </div>
-                <div className="flex items-baseline gap-3">
-                  <div className={cn('text-2xl font-bold', displayStats.openRisks > 0 ? 'text-destructive' : 'text-emerald-600')}>
-                    {displayStats.openRisks}
-                  </div>
-                  {displayStats.pendingDelays > 0 && (
-                    <Badge variant="destructive" className="text-xs">{displayStats.pendingDelays} 待審</Badge>
+                  {displayStatusDistribution.green >= displayStatusDistribution.red ? (
+                    <TrendingUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5" />
                   )}
+                  健康度
+                </div>
+                <div className={cn('text-2xl font-bold', displayStatusDistribution.red > 0 ? 'text-destructive' : displayStatusDistribution.yellow > 0 ? 'text-amber-500' : 'text-emerald-600')}>
+                  {displayStatusDistribution.green}<span className="text-sm font-normal text-muted-foreground">/{displayStats.totalProjects}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {displayStats.openRisks === 0 ? '無未解決風險' : `${displayStats.openRisks} 個未解決風險`}
+                  {displayStatusDistribution.red > 0
+                    ? `${displayStatusDistribution.red} 個專案有風險`
+                    : displayStatusDistribution.yellow > 0
+                      ? `${displayStatusDistribution.yellow} 個專案需注意`
+                      : '專案運行正常'}
                 </div>
               </CardContent>
             </Card>
@@ -1061,7 +1177,7 @@ export default function ReportsPage() {
                   <CardContent className="flex flex-col items-center py-5 gap-4">
                     <DonutChart segments={statusSegments} size={150} strokeWidth={22}>
                       <div className="text-center">
-                        <div className="text-2xl font-bold">{data.projects.length}</div>
+                        <div className="text-2xl font-bold">{filteredProjects.length}</div>
                         <div className="text-xs text-muted-foreground">專案</div>
                       </div>
                     </DonutChart>
@@ -1116,15 +1232,26 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    {data.projects.map(p => (
+                    {filteredProjects.map(p => (
                       <button
                         key={p.id}
                         onClick={() => setSelectedProjectId(p.id)}
-                        className="p-3 rounded-lg border hover:border-primary/40 hover:shadow-sm transition-all text-left flex items-center gap-3"
+                        className="relative p-3 rounded-lg border hover:border-primary/40 hover:shadow-sm transition-all text-left flex items-center gap-3"
                       >
+                        {p.projectTier && (
+                          <span className={cn(
+                            'absolute top-1.5 right-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none',
+                            p.projectTier === 'T1' ? 'bg-blue-100 text-blue-700' :
+                            p.projectTier === 'T2' ? 'bg-emerald-100 text-emerald-700' :
+                            p.projectTier === 'T3' ? 'bg-amber-100 text-amber-700' :
+                            'bg-purple-100 text-purple-700'
+                          )}>
+                            {p.projectTier}
+                          </span>
+                        )}
                         <MiniRing value={p.progress} color={getStatusRingColor(p.status)} />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{p.name}</div>
+                          <div className="text-sm font-medium truncate pr-8">{p.name}</div>
                           <div className="flex items-center gap-2 mt-1">
                             <StatusDot status={p.status} />
                             <span className="text-xs text-muted-foreground">{p.doneTasks}/{p.totalTasks} 任務</span>
@@ -1393,8 +1520,12 @@ export default function ReportsPage() {
                                       {msTasks.map(task => (
                                         <React.Fragment key={task.id}>
                                           <tr className="border-b border-dashed hover:bg-muted/30">
-                                            <td className="py-1.5 pl-4 font-medium truncate">{task.title}</td>
-                                            <td className="py-1.5 text-muted-foreground truncate">{task.assignee}</td>
+                                            <td className="py-1.5 pl-4 max-w-0 overflow-hidden">
+                                              <div className="font-medium truncate">{task.title}</div>
+                                            </td>
+                                            <td className="py-1.5 max-w-0 overflow-hidden">
+                                              <div className="text-muted-foreground truncate">{task.assignee}</div>
+                                            </td>
                                             <td className="py-1.5">{getStatusBadge(task.status)}</td>
                                             <td className="py-1.5">{getPriorityBadge(task.priority)}</td>
                                             <td className="py-1.5 text-xs text-muted-foreground whitespace-nowrap">
@@ -1411,10 +1542,14 @@ export default function ReportsPage() {
                                           </tr>
                                           {task.subtasks?.map(sub => (
                                             <tr key={sub.id} className="border-b border-dashed hover:bg-muted/20">
-                                              <td className="py-1 pl-8 text-muted-foreground truncate">
-                                                <span className="text-xs">└ </span>{sub.title}
+                                              <td className="py-1 pl-6 max-w-0 overflow-hidden">
+                                                <div className="text-muted-foreground truncate">
+                                                  <span className="text-xs">└ </span>{sub.title}
+                                                </div>
                                               </td>
-                                              <td className="py-1 text-xs text-muted-foreground truncate">{sub.assignee}</td>
+                                              <td className="py-1 max-w-0 overflow-hidden">
+                                                <div className="text-xs text-muted-foreground truncate">{sub.assignee}</div>
+                                              </td>
                                               <td className="py-1">{getStatusBadge(sub.status)}</td>
                                               <td className="py-1">{getPriorityBadge(sub.priority)}</td>
                                               <td className="py-1 text-xs text-muted-foreground whitespace-nowrap">

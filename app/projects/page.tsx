@@ -241,9 +241,9 @@ export default function ProjectsPage() {
                       </Badge>
                       <Badge variant="outline" className={`text-sm font-semibold ${
                         project.projectTier === 'T1' ? 'border-blue-400 text-blue-600' :
-                        project.projectTier === 'T2' ? 'border-violet-400 text-violet-600' :
-                        project.projectTier === 'T3' ? 'border-slate-400 text-slate-600' :
-                        'border-amber-400 text-amber-600'
+                        project.projectTier === 'T2' ? 'border-emerald-400 text-emerald-600' :
+                        project.projectTier === 'T3' ? 'border-amber-400 text-amber-600' :
+                        'border-purple-400 text-purple-600'
                       }`}>
                         {project.projectTier}
                       </Badge>
