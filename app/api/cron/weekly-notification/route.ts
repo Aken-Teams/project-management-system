@@ -17,11 +17,73 @@ function getWeekStart(): Date {
   return monday
 }
 
+/** ISO week number (1-53) */
+function getISOWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+}
+
 async function guardCron(request: NextRequest): Promise<boolean> {
   const secret = process.env.CRON_SECRET
   if (!secret) return true // no secret configured = allow in dev
   const auth = request.headers.get('authorization') ?? ''
   return auth === `Bearer ${secret}`
+}
+
+// Default template values (fallback if no profile exists at all)
+const FALLBACK_TEMPLATES = {
+  notifyTitle: '週報尚未上傳',
+  notifyMessage: '【{{projectName}}】本週進度尚未更新，請盡快上傳週報。',
+  uploadedTitle: '週報已產生',
+  uploadedMessage: '【{{projectName}}】本週週報已產生，請至更新紀錄確認。',
+  emailSubject: '【週報提醒】{{projectName}} 本週（{{weekOf}}）尚未上傳',
+  emailBody: '{{pmName}} 您好，\n\n【{{projectName}}】本週（{{weekOf}}）的進度週報尚未上傳，請盡快完成上傳。\n\n如已上傳請忽略此信。\n\n謝謝',
+}
+
+interface MergedProfile {
+  frequencyWeeks: number
+  dayOfWeek: number
+  hour: number
+  notifyTitle: string
+  notifyMessage: string
+  uploadedTitle: string
+  uploadedMessage: string
+  emailSubject: string
+  emailBody: string
+}
+
+/** Merge a tier-specific profile with the default profile, falling back for null fields */
+function mergeProfile(
+  tierProfile: {
+    frequencyWeeks: number; dayOfWeek: number; hour: number
+    notifyTitle: string | null; notifyMessage: string | null
+    uploadedTitle: string | null; uploadedMessage: string | null
+    emailSubject: string | null; emailBody: string | null
+  } | null,
+  defaultProfile: {
+    frequencyWeeks: number; dayOfWeek: number; hour: number
+    notifyTitle: string | null; notifyMessage: string | null
+    uploadedTitle: string | null; uploadedMessage: string | null
+    emailSubject: string | null; emailBody: string | null
+  } | null,
+): MergedProfile {
+  const base = defaultProfile ?? tierProfile
+  const over = tierProfile
+
+  return {
+    frequencyWeeks: over?.frequencyWeeks ?? base?.frequencyWeeks ?? 1,
+    dayOfWeek: over?.dayOfWeek ?? base?.dayOfWeek ?? 5,
+    hour: over?.hour ?? base?.hour ?? 9,
+    notifyTitle: over?.notifyTitle ?? base?.notifyTitle ?? FALLBACK_TEMPLATES.notifyTitle,
+    notifyMessage: over?.notifyMessage ?? base?.notifyMessage ?? FALLBACK_TEMPLATES.notifyMessage,
+    uploadedTitle: over?.uploadedTitle ?? base?.uploadedTitle ?? FALLBACK_TEMPLATES.uploadedTitle,
+    uploadedMessage: over?.uploadedMessage ?? base?.uploadedMessage ?? FALLBACK_TEMPLATES.uploadedMessage,
+    emailSubject: over?.emailSubject ?? base?.emailSubject ?? FALLBACK_TEMPLATES.emailSubject,
+    emailBody: over?.emailBody ?? base?.emailBody ?? FALLBACK_TEMPLATES.emailBody,
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -37,56 +99,37 @@ export async function POST(request: NextRequest) {
   const summaryParts: string[] = []
 
   try {
-    // Load all relevant settings
-    const settingRows = await prisma.systemSetting.findMany({
-      where: {
-        key: {
-          in: [
-            'notification.schedule.dayOfWeek',
-            'notification.schedule.hour',
-            'notification.template.weekly_upload_missing.title',
-            'notification.template.weekly_upload_missing.message',
-            'notification.template.weekly_upload_missing.email_subject',
-            'notification.template.weekly_upload_missing.email_body',
-          ],
-        },
-      },
-    })
-    const settings: Record<string, string> = Object.fromEntries(
-      settingRows.map(r => [r.key, r.value])
+    // ── Load all notification profiles ─────────────────────────────────────────
+    const allProfiles = await prisma.notificationProfile.findMany()
+    const defaultProfile = allProfiles.find(p => p.projectTier === null) ?? null
+    const tierProfileMap = new Map(
+      allProfiles.filter(p => p.projectTier !== null).map(p => [p.projectTier!, p])
     )
 
-    // ── Schedule gate (skip in preview mode) ──────────────────────────────────
-    if (!isPreview) {
-      const configDay = parseInt(settings['notification.schedule.dayOfWeek'] ?? '5')  // 0=Sun..6=Sat
-      const configHour = parseInt(settings['notification.schedule.hour'] ?? '9')
-      const now = new Date()
-      const nowDay = now.getDay()
-      const nowHour = now.getHours()
-      if (nowDay !== configDay || nowHour !== configHour) {
-        return NextResponse.json({
-          ok: false,
-          skipped: true,
-          reason: `非排程執行時間（設定：週${configDay} ${configHour}:00，現在：週${nowDay} ${nowHour}:00）`,
-        })
-      }
+    // Build merged profile per tier
+    const profileByTier = new Map<string, MergedProfile>()
+    for (const tier of ['T1', 'T2', 'T3', 'CIP'] as const) {
+      const tierProf = tierProfileMap.get(tier) ?? null
+      profileByTier.set(tier, mergeProfile(tierProf, defaultProfile))
     }
+    // Default merged profile for projects without a tier
+    const fallbackProfile = mergeProfile(null, defaultProfile)
 
-    // ── Template defaults ──────────────────────────────────────────────────────
-    const missingTitle    = settings['notification.template.weekly_upload_missing.title']          ?? '週報尚未上傳'
-    const missingMsg      = settings['notification.template.weekly_upload_missing.message']        ?? '【{{projectName}}】本週進度尚未更新，請盡快上傳週報。'
-    const emailSubjectTpl = settings['notification.template.weekly_upload_missing.email_subject']  ?? '【週報提醒】{{projectName}} 本週（{{weekOf}}）尚未上傳'
-    const emailBodyTpl    = settings['notification.template.weekly_upload_missing.email_body']     ?? '{{pmName}} 您好，\n\n【{{projectName}}】本週（{{weekOf}}）的進度週報尚未上傳，請盡快完成上傳。\n\n謝謝'
+    // ── Frequency gate: check ISO week number ──────────────────────────────────
+    const now = new Date()
+    const isoWeek = getISOWeekNumber(now)
+    const nowDay = now.getDay()
+    const nowHour = now.getHours()
 
     const weekStart = getWeekStart()
     const weekOf = weekStart.toISOString().split('T')[0]
 
-    // ── Fetch all projects with their full team ────────────────────────────────
-    // PM = team member with TeamRole 'A' (Accountable in RACI)
+    // ── Fetch all projects with team + projectTier ─────────────────────────────
     const projects = await prisma.project.findMany({
       select: {
         id: true,
         name: true,
+        projectTier: true,
         teamMembers: {
           select: {
             role: true,
@@ -100,14 +143,55 @@ export async function POST(request: NextRequest) {
     const previewResults: {
       projectId: string
       projectName: string
-      status: 'missing' | 'uploaded'
+      projectTier: string | null
+      status: 'missing' | 'uploaded' | 'skipped'
+      skipReason?: string
       pm: { name: string; email?: string | null } | null
       teamEmails: string[]
+      profile: MergedProfile
       emailPreview?: { subject: string; body: string; to: string[] }
       siteNotifications?: { userId: string; userName: string; title: string; message: string }[]
     }[] = []
 
+    // Per-tier summary for logging
+    const tierSummary: Record<string, { notified: number; skipped: number }> = {}
+
     for (const project of projects) {
+      const tier = project.projectTier ?? null
+      const profile = (tier ? profileByTier.get(tier) : null) ?? fallbackProfile
+
+      // Initialize tier summary
+      const tierKey = tier ?? '(default)'
+      if (!tierSummary[tierKey]) tierSummary[tierKey] = { notified: 0, skipped: 0 }
+
+      // ── Schedule gate: check dayOfWeek + hour (skip in preview) ─────────────
+      if (!isPreview) {
+        if (nowDay !== profile.dayOfWeek || nowHour !== profile.hour) {
+          tierSummary[tierKey].skipped++
+          continue
+        }
+      }
+
+      // ── Frequency gate: check ISO week vs frequencyWeeks ───────────────────
+      if (profile.frequencyWeeks > 1 && isoWeek % profile.frequencyWeeks !== 0) {
+        if (isPreview) {
+          const pmEntry = project.teamMembers.find(m => m.role === 'A')
+          const pm = pmEntry?.user ?? null
+          previewResults.push({
+            projectId: project.id,
+            projectName: project.name,
+            projectTier: tier,
+            status: 'skipped',
+            skipReason: `本週（第${isoWeek}週）非通知週（每${profile.frequencyWeeks}週通知一次）`,
+            pm: pm ? { name: pm.name, email: pm.email } : null,
+            teamEmails: project.teamMembers.map(m => m.user.email).filter((e): e is string => !!e),
+            profile,
+          })
+        }
+        tierSummary[tierKey].skipped++
+        continue
+      }
+
       // Identify PM = first member with role 'A'
       const pmEntry = project.teamMembers.find(m => m.role === 'A')
       const pm = pmEntry?.user ?? null
@@ -123,25 +207,27 @@ export async function POST(request: NextRequest) {
         pmName: pm?.name ?? '專案負責人',
       }
 
-      // Collect all team member emails for this project
+      // Collect all team member emails
       const teamEmails = project.teamMembers
         .map(m => m.user.email)
         .filter((e): e is string => !!e)
 
       if (updateCount === 0) {
-        // ── Missing: notify PM + all team members ────────────────────────────
-        const title   = replaceVars(missingTitle, vars)
-        const message = replaceVars(missingMsg, vars)
-        const emailSubject = replaceVars(emailSubjectTpl, vars)
-        const emailBody    = replaceVars(emailBodyTpl, vars)
+        // ── Missing: notify PM + all team members ──────────────────────────────
+        const title = replaceVars(profile.notifyTitle, vars)
+        const message = replaceVars(profile.notifyMessage, vars)
+        const emailSubject = replaceVars(profile.emailSubject, vars)
+        const emailBody = replaceVars(profile.emailBody, vars)
 
         if (isPreview) {
           previewResults.push({
             projectId: project.id,
             projectName: project.name,
+            projectTier: tier,
             status: 'missing',
             pm: pm ? { name: pm.name, email: pm.email } : null,
             teamEmails,
+            profile,
             emailPreview: { subject: emailSubject, body: emailBody, to: teamEmails },
             siteNotifications: project.teamMembers.map(m => ({
               userId: m.user.id,
@@ -179,15 +265,18 @@ export async function POST(request: NextRequest) {
         }
 
         affectedCount++
+        tierSummary[tierKey].notified++
         summaryParts.push(project.name)
       } else {
         if (isPreview) {
           previewResults.push({
             projectId: project.id,
             projectName: project.name,
+            projectTier: tier,
             status: 'uploaded',
             pm: pm ? { name: pm.name, email: pm.email } : null,
             teamEmails,
+            profile,
           })
         }
       }
@@ -195,35 +284,42 @@ export async function POST(request: NextRequest) {
 
     // ── Preview response ───────────────────────────────────────────────────────
     if (isPreview) {
-      const missing  = previewResults.filter(p => p.status === 'missing')
+      const missing = previewResults.filter(p => p.status === 'missing')
       const uploaded = previewResults.filter(p => p.status === 'uploaded')
+      const skipped = previewResults.filter(p => p.status === 'skipped')
       return NextResponse.json({
         preview: true,
         weekOf,
-        configuredSchedule: {
-          dayOfWeek: settings['notification.schedule.dayOfWeek'] ?? '5',
-          hour: settings['notification.schedule.hour'] ?? '9',
-        },
-        templates: {
-          siteTitle: missingTitle,
-          siteMessage: missingMsg,
-          emailSubject: emailSubjectTpl,
-          emailBody: emailBodyTpl,
+        isoWeek,
+        profiles: {
+          default: defaultProfile ? mergeProfile(null, defaultProfile) : fallbackProfile,
+          byTier: Object.fromEntries(profileByTier),
         },
         projects: previewResults,
-        summary: `${missing.length} 個專案未上傳（將發送通知 + Email），${uploaded.length} 個已上傳`,
+        tierSummary,
+        summary: [
+          `${missing.length} 個專案未上傳（將發送通知）`,
+          `${uploaded.length} 個已上傳`,
+          skipped.length > 0 ? `${skipped.length} 個因頻率設定跳過` : null,
+        ].filter(Boolean).join('，'),
       })
     }
 
+    // Build detailed summary with per-tier info
+    const tierDetails = Object.entries(tierSummary)
+      .filter(([, v]) => v.notified > 0 || v.skipped > 0)
+      .map(([tier, v]) => `${tier}: ${v.notified}通知/${v.skipped}跳過`)
+      .join(', ')
+
     const summary = summaryParts.length > 0
-      ? `${summaryParts.length} 個專案未上傳週報：${summaryParts.slice(0, 3).join('、')}${summaryParts.length > 3 ? '...' : ''}`
+      ? `${summaryParts.length} 個專案未上傳週報：${summaryParts.slice(0, 3).join('、')}${summaryParts.length > 3 ? '...' : ''}（${tierDetails}）`
       : `${projects.length} 個專案均已上傳週報`
 
     await prisma.cronJobLog.create({
       data: { jobType: 'weekly_notification', runAt, status: 'success', summary, affectedCount },
     })
 
-    return NextResponse.json({ ok: true, affectedCount, summary })
+    return NextResponse.json({ ok: true, affectedCount, summary, tierSummary })
   } catch (error) {
     console.error('weekly-notification cron error:', error)
     if (!isPreview) {

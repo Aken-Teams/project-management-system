@@ -501,6 +501,24 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+model NotificationProfile {
+  id              String       @id @default(cuid())
+  projectTier     ProjectTier? @unique @map("project_tier")
+  frequencyWeeks  Int          @default(1) @map("frequency_weeks")
+  dayOfWeek       Int          @default(5) @map("day_of_week")
+  hour            Int          @default(9)
+  notifyTitle     String?      @map("notify_title")
+  notifyMessage   String?      @map("notify_message") @db.Text
+  uploadedTitle   String?      @map("uploaded_title")
+  uploadedMessage String?      @map("uploaded_message") @db.Text
+  emailSubject    String?      @map("email_subject")
+  emailBody       String?      @map("email_body") @db.Text
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@map("notification_profiles")
+}
+
 model MilestoneTemplateConfig {
   id           String   @id @default(cuid())
   projectType  String   @map("project_type")
