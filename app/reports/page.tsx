@@ -963,7 +963,7 @@ export default function ReportsPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handleOpenPdfDialog} className="gap-2">
-                    <FileDown className="h-4 w-4" /> 匯出 PDF
+                    <FileDown className="h-4 w-4 text-orange-600" /> 匯出 PDF
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShowExcelDialog(true)} className="gap-2">
                     <FileSpreadsheet className="h-4 w-4 text-green-600" /> 匯出 Excel
