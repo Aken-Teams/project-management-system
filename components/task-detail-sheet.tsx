@@ -901,7 +901,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                 const isOverdue = row.date && row.date > task.endDate && row.content.trim()
                                 const attCount = row.attachments?.length || 0
                                 return (
-                                  <tr key={idx} className="border-b border-border/30 last:border-b-0">
+                                  <tr key={idx} className="border-b border-border last:border-b-0">
                                     <td className="px-1.5 py-1.5 align-top">
                                       <input
                                         type="date"
@@ -1064,7 +1064,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       )}
 
                       {/* Divider */}
-                      <div className="border-t border-dashed border-border/60" />
+                      <div className="border-t border-dashed border-border" />
 
                       {/* Next week plan (optional, simple textarea) */}
                       <div className="space-y-1.5">
