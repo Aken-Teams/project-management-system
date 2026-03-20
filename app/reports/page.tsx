@@ -54,6 +54,12 @@ import {
   FileSpreadsheet,
   Download,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 // ── Types ──
@@ -946,12 +952,22 @@ export default function ReportsPage() {
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpenEmailDialog}>
                 <Mail className="h-3.5 w-3.5" /> Email
               </Button>
-              <Button size="sm" className="gap-1.5" onClick={handleOpenPdfDialog}>
-                <FileDown className="h-3.5 w-3.5" /> 匯出 PDF
-              </Button>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowExcelDialog(true)}>
-                <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" /> 匯出 Excel
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <FileDown className="h-3.5 w-3.5" /> 匯出
+                    <ChevronDown className="h-3 w-3 ml-0.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleOpenPdfDialog} className="gap-2">
+                    <FileDown className="h-4 w-4" /> 匯出 PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowExcelDialog(true)} className="gap-2">
+                    <FileSpreadsheet className="h-4 w-4 text-green-600" /> 匯出 Excel
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
