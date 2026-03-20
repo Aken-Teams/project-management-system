@@ -30,6 +30,7 @@ interface RoiSectionProps {
   roiParams: RoiParams | null
   budgetItems: BudgetItemMin[]
   onSaved: (newBudgetItems: BudgetItemMin[], newRoiParams: RoiParams) => void
+  readOnly?: boolean
 }
 
 const fmtNT = (n: number) => `NT$ ${Math.round(n).toLocaleString('zh-TW')}`
@@ -199,6 +200,7 @@ export function RoiSection({
   roiParams: initialRoiParams,
   budgetItems: initialItems,
   onSaved,
+  readOnly,
 }: RoiSectionProps) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -259,7 +261,7 @@ export function RoiSection({
       {/* ─── Section header ─── */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-medium text-muted-foreground">投資報酬 (ROI)</span>
-        {!editing && (
+        {!editing && !readOnly && (
           <Button type="button" variant="ghost" size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-foreground"
             onClick={startEdit} title="編輯 ROI 數據與實際費用">
@@ -416,7 +418,7 @@ export function RoiSection({
           )}
 
           {/* Incomplete actual costs reminder */}
-          {initialItems.length > 0 && missingActualCount > 0 && (
+          {!readOnly && initialItems.length > 0 && missingActualCount > 0 && (
             <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <span>
@@ -427,7 +429,7 @@ export function RoiSection({
           )}
 
           {/* Hint when completely empty */}
-          {!roiText && initialItems.length === 0 && initialRoiParams == null && (
+          {!readOnly && !roiText && initialItems.length === 0 && initialRoiParams == null && (
             <p className="text-xs text-muted-foreground">
               點擊右上角鉛筆圖示填寫 ROI 參數與實際費用
             </p>

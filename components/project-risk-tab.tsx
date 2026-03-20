@@ -29,6 +29,7 @@ import type { Project, Risk } from '@/lib/mock-data'
 interface Props {
   project: Project
   onRefresh?: () => void
+  readOnly?: boolean
 }
 
 const PAGE_SIZE = 10
@@ -46,7 +47,7 @@ function getRiskLevelColor(level: string) {
   }
 }
 
-export function ProjectRiskTab({ project, onRefresh }: Props) {
+export function ProjectRiskTab({ project, onRefresh, readOnly }: Props) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'mitigated' | 'closed'>('')
   const [filterImpact, setFilterImpact] = useState<'' | 'high' | 'medium' | 'low'>('')
@@ -180,7 +181,7 @@ export function ProjectRiskTab({ project, onRefresh }: Props) {
                     <th className="text-center px-4 py-2.5 font-medium">影響程度</th>
                     <th className="text-center px-4 py-2.5 font-medium">發生機率</th>
                     <th className="text-left px-4 py-2.5 font-medium">緩解措施</th>
-                    <th className="text-center px-4 py-2.5 font-medium">操作</th>
+                    {!readOnly && <th className="text-center px-4 py-2.5 font-medium">操作</th>}
                     <th className="text-right px-4 py-2.5 font-medium"></th>
                   </tr>
                 </thead>
@@ -218,38 +219,40 @@ export function ProjectRiskTab({ project, onRefresh }: Props) {
                       <td className="px-4 py-3 max-w-[200px]">
                         <span className="line-clamp-1 text-muted-foreground">{risk.mitigation || '-'}</span>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs px-2 gap-1 text-muted-foreground" disabled={updatingId === risk.id}>
-                              {updatingId === risk.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Pencil className="h-3.5 w-3.5" />
-                              )}
-                              變更狀態
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                            {(['open', 'mitigated', 'closed'] as const).map(s => (
-                              <DropdownMenuItem
-                                key={s}
-                                disabled={risk.status === s}
-                                onClick={() => handleChangeStatus(risk, s)}
-                                className="gap-2"
-                              >
-                                <span className={cn('inline-block h-2 w-2 rounded-full shrink-0',
-                                  s === 'open' ? 'bg-red-500' :
-                                  s === 'mitigated' ? 'bg-amber-500' :
-                                  'bg-emerald-500',
-                                )} />
-                                {STATUS_LABELS[s]}
-                                {risk.status === s && <span className="text-muted-foreground ml-auto text-[10px]">目前</span>}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
+                      {!readOnly && (
+                        <td className="px-4 py-3 text-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm" className="h-7 text-xs px-2 gap-1 text-muted-foreground" disabled={updatingId === risk.id}>
+                                {updatingId === risk.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Pencil className="h-3.5 w-3.5" />
+                                )}
+                                變更狀態
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+                              {(['open', 'mitigated', 'closed'] as const).map(s => (
+                                <DropdownMenuItem
+                                  key={s}
+                                  disabled={risk.status === s}
+                                  onClick={() => handleChangeStatus(risk, s)}
+                                  className="gap-2"
+                                >
+                                  <span className={cn('inline-block h-2 w-2 rounded-full shrink-0',
+                                    s === 'open' ? 'bg-red-500' :
+                                    s === 'mitigated' ? 'bg-amber-500' :
+                                    'bg-emerald-500',
+                                  )} />
+                                  {STATUS_LABELS[s]}
+                                  {risk.status === s && <span className="text-muted-foreground ml-auto text-[10px]">目前</span>}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-right">
                         <ChevronRightIcon className="h-4 w-4 text-muted-foreground inline-block" />
                       </td>
@@ -344,26 +347,28 @@ export function ProjectRiskTab({ project, onRefresh }: Props) {
                 )}
 
                 {/* Status change in dialog */}
-                <div className="border-t pt-3">
-                  <h4 className="text-sm font-semibold mb-2">變更狀態</h4>
-                  <div className="flex items-center gap-2">
-                    {(['open', 'mitigated', 'closed'] as const).map(s => (
-                      <Button
-                        key={s}
-                        variant={selectedRisk.status === s ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-8 text-xs px-3"
-                        disabled={selectedRisk.status === s || updatingId === selectedRisk.id}
-                        onClick={() => handleChangeStatus(selectedRisk, s)}
-                      >
-                        {updatingId === selectedRisk.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        ) : null}
-                        {STATUS_LABELS[s]}
-                      </Button>
-                    ))}
+                {!readOnly && (
+                  <div className="border-t pt-3">
+                    <h4 className="text-sm font-semibold mb-2">變更狀態</h4>
+                    <div className="flex items-center gap-2">
+                      {(['open', 'mitigated', 'closed'] as const).map(s => (
+                        <Button
+                          key={s}
+                          variant={selectedRisk.status === s ? 'default' : 'outline'}
+                          size="sm"
+                          className="h-8 text-xs px-3"
+                          disabled={selectedRisk.status === s || updatingId === selectedRisk.id}
+                          onClick={() => handleChangeStatus(selectedRisk, s)}
+                        >
+                          {updatingId === selectedRisk.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : null}
+                          {STATUS_LABELS[s]}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </>
           )}

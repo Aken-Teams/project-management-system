@@ -29,11 +29,12 @@ import type { Project, DelayRequest } from '@/lib/mock-data'
 interface Props {
   project: Project
   onRefresh?: () => void
+  readOnly?: boolean
 }
 
 const PAGE_SIZE = 10
 
-export function ProjectDelayTab({ project, onRefresh }: Props) {
+export function ProjectDelayTab({ project, onRefresh, readOnly }: Props) {
   const { user } = useAuth()
   const [subTab, setSubTab] = useState('delays')
   const [search, setSearch] = useState('')
@@ -273,7 +274,7 @@ export function ProjectDelayTab({ project, onRefresh }: Props) {
                       <th className="text-left px-4 py-2.5 font-medium">需要的協助</th>
                       <th className="text-left px-4 py-2.5 font-medium">受影響里程碑</th>
                       <th className="text-left px-4 py-2.5 font-medium">核准時間</th>
-                      <th className="text-center px-4 py-2.5 font-medium">操作</th>
+                      {!readOnly && <th className="text-center px-4 py-2.5 font-medium">操作</th>}
                       <th className="text-right px-4 py-2.5 font-medium"></th>
                     </>
                   )}
@@ -341,20 +342,22 @@ export function ProjectDelayTab({ project, onRefresh }: Props) {
                           <td className="px-4 py-3 text-muted-foreground">
                             {r.reviewedAt ? formatDate(r.reviewedAt) : '-'}
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            {!r.supportResolved ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs px-2 gap-1"
-                                onClick={(e) => { e.stopPropagation(); setResolveTarget(r) }}
-                              >
-                                <CheckCircle2 className="h-3 w-3" /> 標記已解決
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
-                            )}
-                          </td>
+                          {!readOnly && (
+                            <td className="px-4 py-3 text-center">
+                              {!r.supportResolved ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs px-2 gap-1"
+                                  onClick={(e) => { e.stopPropagation(); setResolveTarget(r) }}
+                                >
+                                  <CheckCircle2 className="h-3 w-3" /> 標記已解決
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </td>
+                          )}
                           <td className="px-4 py-3 text-right">
                             <ChevronRight className="h-4 w-4 text-muted-foreground inline-block" />
                           </td>

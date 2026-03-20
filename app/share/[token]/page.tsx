@@ -10,7 +10,9 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { ProjectRiskTab } from '@/components/project-risk-tab'
+import { ProjectDelayTab } from '@/components/project-delay-tab'
 import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
+import { RoiSection, type RoiParams } from '@/components/roi-section'
 import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
 import {
   Calendar,
@@ -39,6 +41,7 @@ import {
 export default function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
   const [project, setProject] = useState<Project | null>(null)
+  const [roiParams, setRoiParams] = useState<RoiParams | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -48,7 +51,16 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
         if (!res.ok) throw new Error(res.status === 404 ? '分享連結無效' : res.status === 410 ? '分享連結已過期' : '讀取失敗')
         return res.json()
       })
-      .then(data => setProject(data))
+      .then(data => {
+        setProject(data)
+        if (data?.roiGrossMargin != null || data?.roiAvgPrice != null || data?.roiCapacity != null) {
+          setRoiParams({
+            grossMargin: data.roiGrossMargin ?? null,
+            avgPrice: data.roiAvgPrice ?? null,
+            capacity: data.roiCapacity ?? null,
+          })
+        }
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [token])
@@ -239,7 +251,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4 mt-0">
-            <div className="grid gap-4 lg:grid-cols-5">
+            <div className="grid gap-4 lg:grid-cols-5 items-start">
               {/* Project Info - Left 3 cols */}
               <Card className="lg:col-span-3">
                 <CardHeader className="pb-3">
@@ -271,12 +283,25 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                       </div>
                       <p className="text-sm">{project.scope}</p>
                     </div>
-                    <div className="py-3 last:pb-0">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-                        <TrendingUp className="h-3 w-3" />
-                        投資報酬 (ROI)
+                    {project.expectedBenefits && (
+                      <div className="py-3">
+                        <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                          <TrendingUp className="h-3 w-3" />
+                          預期效益
+                        </div>
+                        <p className="text-sm">{project.expectedBenefits}</p>
                       </div>
-                      <p className="text-sm">{project.roi}</p>
+                    )}
+                    <div className="py-3 last:pb-0">
+                      <RoiSection
+                        projectId={project.id}
+                        budget={project.budget ?? 0}
+                        roiText={project.roi ?? ''}
+                        roiParams={roiParams}
+                        budgetItems={[]}
+                        onSaved={() => {}}
+                        readOnly
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -357,7 +382,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                       團隊成員
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).map(member => {
+                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).slice().sort((a, b) => (a.role === 'A' ? -1 : b.role === 'A' ? 1 : 0)).map(member => {
                         const roleLabel = TEAM_ROLE_LABELS[member.role as TeamRole] || member.role
                         const isAccountable = member.role === 'A'
                         return (
@@ -390,96 +415,12 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
 
           {/* Risks Tab */}
           <TabsContent value="risks" className="mt-0">
-            <ProjectRiskTab project={project} />
+            <ProjectRiskTab project={project} readOnly />
           </TabsContent>
 
           {/* Delays Tab */}
           <TabsContent value="delays" className="mt-0">
-            <div className="space-y-3">
-              {project.delayRequests.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <CheckCircle2 className="h-10 w-10 mx-auto mb-2 text-success" />
-                    <p className="text-sm text-muted-foreground">沒有延遲紀錄</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                project.delayRequests.map((request) => (
-                  <Card key={request.id} className={request.status === 'pending' ? 'border-warning/50' : ''}>
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <TimerReset className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium text-sm">延遲申請</span>
-                          <span className="text-sm text-muted-foreground">
-                            {request.requestedBy} · {new Date(request.requestedAt).toLocaleDateString('zh-TW')}
-                          </span>
-                        </div>
-                        <Badge variant={
-                          request.status === 'pending' ? 'secondary'
-                          : request.status === 'approved' ? 'default'
-                          : 'destructive'
-                        } className={`text-sm ${request.status === 'pending' ? 'bg-warning text-warning-foreground' : ''}`}>
-                          {request.status === 'pending' ? '待審核' : request.status === 'approved' ? '已核准' : '已駁回'}
-                        </Badge>
-                      </div>
-
-                      <Separator />
-
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-1">延遲原因</div>
-                        <p className="text-sm">{request.reason}</p>
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-medium text-muted-foreground mb-2">受影響里程碑</div>
-                        <div className="space-y-1.5">
-                          {request.affectedMilestones.map((am) => {
-                            const ms = project.milestones.find(m => m.id === am.milestoneId)
-                            const days = Math.ceil(
-                              (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
-                            )
-                            return (
-                              <div key={am.milestoneId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
-                                <span className="font-medium">{ms?.name || am.milestoneId}</span>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-muted-foreground line-through">
-                                    {new Date(am.originalDate).toLocaleDateString('zh-TW')}
-                                  </span>
-                                  <span>→</span>
-                                  <span className="text-warning font-medium">
-                                    {new Date(am.proposedDate).toLocaleDateString('zh-TW')}
-                                  </span>
-                                  <Badge variant="outline" className="text-sm">{days >= 0 ? '+' : ''}{days}天</Badge>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {request.supportNeeded && (
-                        <div>
-                          <div className="text-sm font-medium text-muted-foreground mb-1">需要的支援</div>
-                          <p className="text-sm">{request.supportNeeded}</p>
-                        </div>
-                      )}
-
-                      {request.reviewedBy && (
-                        <div className="p-2.5 rounded-lg border bg-muted/50">
-                          <div className="text-sm text-muted-foreground mb-1">
-                            審核人：{request.reviewedBy} · {request.reviewedAt && new Date(request.reviewedAt).toLocaleDateString('zh-TW')}
-                          </div>
-                          {request.reviewNotes && (
-                            <p className="text-sm">{request.reviewNotes}</p>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
+            <ProjectDelayTab project={project} readOnly />
           </TabsContent>
         </Tabs>
 
