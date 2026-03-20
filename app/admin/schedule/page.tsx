@@ -12,11 +12,31 @@ import { cn } from '@/lib/utils'
 
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
 const DAY_NAMES_FULL = ['週日', '週一', '週二', '週三', '週四', '週五', '週六']
+const FREQ_LABEL: Record<number, string> = { 1: '每週', 2: '每2週', 4: '每4週' }
 
 const SETTING_KEYS = [
   'notification.schedule.dayOfWeek', 'notification.schedule.hour',
   'report.schedule.dayOfWeek', 'report.schedule.hour',
 ]
+
+/** ISO week number (1-53) */
+function getISOWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNum = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+}
+
+interface TierSchedule {
+  tier: string
+  frequencyWeeks: number
+  dayOfWeek: number
+  hour: number
+}
+
+/** Default suggested frequency per tier (used when no profile saved yet) */
+const DEFAULT_TIER_FREQ: Record<string, number> = { T1: 1, T2: 2, T3: 2, CIP: 2 }
 
 interface CronLog {
   id: string
@@ -300,6 +320,7 @@ export default function AdminSchedulePage() {
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [notifLogs, setNotifLogs] = useState<CronLog[]>([])
   const [reportLogs, setReportLogs] = useState<CronLog[]>([])
+  const [tierSchedules, setTierSchedules] = useState<TierSchedule[]>([])
   const [loading, setLoading] = useState(true)
   const [calendarDate, setCalendarDate] = useState(() => new Date())
 
@@ -318,14 +339,32 @@ export default function AdminSchedulePage() {
     if (!user) return
     setLoading(true)
     try {
-      const [settingsRes, notifRes, reportRes] = await Promise.all([
+      const [settingsRes, notifRes, reportRes, profilesRes] = await Promise.all([
         fetch(`/api/admin/settings?keys=${SETTING_KEYS.join(',')}`, { headers: headers() }),
         fetch('/api/admin/cron-logs?jobType=weekly_notification&limit=60', { headers: headers() }),
         fetch('/api/admin/cron-logs?jobType=weekly_report&limit=60', { headers: headers() }),
+        fetch('/api/admin/notification-profiles', { headers: headers() }),
       ])
       if (settingsRes.ok) setSettings(await settingsRes.json())
       if (notifRes.ok) setNotifLogs(await notifRes.json())
       if (reportRes.ok) setReportLogs(await reportRes.json())
+      if (profilesRes.ok) {
+        const pData = await profilesRes.json()
+        const defaultP = pData.defaultProfile
+        const tierPs = (pData.tierProfiles ?? []) as { projectTier: string; frequencyWeeks: number; dayOfWeek: number; hour: number }[]
+        // Build schedule per tier
+        const tiers = (pData.tiers ?? ['T1', 'T2', 'T3', 'CIP']) as string[]
+        const schedules: TierSchedule[] = tiers.map(tier => {
+          const tp = tierPs.find(p => p.projectTier === tier)
+          return {
+            tier,
+            frequencyWeeks: tp?.frequencyWeeks ?? DEFAULT_TIER_FREQ[tier] ?? defaultP?.frequencyWeeks ?? 1,
+            dayOfWeek: tp?.dayOfWeek ?? defaultP?.dayOfWeek ?? 5,
+            hour: tp?.hour ?? defaultP?.hour ?? 9,
+          }
+        })
+        setTierSchedules(schedules)
+      }
     } finally {
       setLoading(false)
     }
@@ -363,10 +402,16 @@ export default function AdminSchedulePage() {
     }
   }
 
-  const notifDay = parseInt(settings['notification.schedule.dayOfWeek'] ?? '5')
-  const notifHour = parseInt(settings['notification.schedule.hour'] ?? '9')
   const reportDay = parseInt(settings['report.schedule.dayOfWeek'] ?? '5')
   const reportHour = parseInt(settings['report.schedule.hour'] ?? '8')
+
+  // Group tiers by schedule for display
+  const scheduleGroups = tierSchedules.reduce<Record<string, { tiers: string[]; frequencyWeeks: number; dayOfWeek: number; hour: number }>>((acc, s) => {
+    const key = `${s.frequencyWeeks}-${s.dayOfWeek}-${s.hour}`
+    if (!acc[key]) acc[key] = { tiers: [], frequencyWeeks: s.frequencyWeeks, dayOfWeek: s.dayOfWeek, hour: s.hour }
+    acc[key].tiers.push(s.tier)
+    return acc
+  }, {})
 
   const year = calendarDate.getFullYear()
   const month = calendarDate.getMonth()
@@ -388,13 +433,15 @@ export default function AdminSchedulePage() {
 
       {/* Schedule summary badges */}
       <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-          <Bell className="h-4 w-4 text-amber-600" />
-          <span className="text-sm font-medium text-amber-700">週報通知</span>
-          <span className="text-xs text-amber-600">
-            每{DAY_NAMES_FULL[notifDay]} {String(notifHour).padStart(2, '0')}:00
-          </span>
-        </div>
+        {Object.values(scheduleGroups).map((g, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <Bell className="h-4 w-4 text-amber-600" />
+            <span className="text-sm font-medium text-amber-700">{g.tiers.join('/')}</span>
+            <span className="text-xs text-amber-600">
+              {FREQ_LABEL[g.frequencyWeeks] ?? `每${g.frequencyWeeks}週`}{DAY_NAMES_FULL[g.dayOfWeek]} {String(g.hour).padStart(2, '0')}:00
+            </span>
+          </div>
+        ))}
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
           <FileText className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-medium text-blue-700">週報郵件</span>
@@ -457,8 +504,18 @@ export default function AdminSchedulePage() {
 
               const isToday = isSameDate(day, today)
               const isPast = day < today && !isToday
-              const isNotifDay = day.getDay() === notifDay
               const isReportDay = day.getDay() === reportDay
+              const isoWeek = getISOWeekNumber(day)
+
+              // Check which tiers have a notification on this day
+              const notifTiersToday = tierSchedules.filter(s =>
+                day.getDay() === s.dayOfWeek &&
+                (s.frequencyWeeks <= 1 || isoWeek % s.frequencyWeeks === 0)
+              )
+              const isNotifDay = notifTiersToday.length > 0
+              const notifTooltip = notifTiersToday.length > 0
+                ? notifTiersToday.map(s => `${s.tier} ${String(s.hour).padStart(2, '0')}:00`).join(', ')
+                : ''
 
               const dayNotifLogs = notifLogs.filter(l => isSameDate(new Date(l.runAt), day))
               const dayReportLogs = reportLogs.filter(l => isSameDate(new Date(l.runAt), day))
@@ -488,7 +545,7 @@ export default function AdminSchedulePage() {
                     {isNotifDay && (
                       <span
                         className="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0"
-                        title={`通知 ${String(notifHour).padStart(2, '0')}:00`}
+                        title={`通知：${notifTooltip}`}
                       />
                     )}
                     {isReportDay && (
@@ -616,10 +673,10 @@ export default function AdminSchedulePage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">執行時間</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">類型</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">狀態</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">影響筆數</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">執行時間</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">類型</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">狀態</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground whitespace-nowrap">影響筆數</th>
                     <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">摘要</th>
                   </tr>
                 </thead>
@@ -631,7 +688,7 @@ export default function AdminSchedulePage() {
                         {' '}
                         {new Date(log.runAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         {log.jobType === 'weekly_notification' ? (
                           <span className="inline-flex items-center gap-1 text-xs text-amber-600">
                             <Bell className="h-3 w-3" />通知
@@ -642,7 +699,7 @@ export default function AdminSchedulePage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         {log.status === 'success' ? (
                           <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
                             <CheckCircle2 className="h-3 w-3" />成功
@@ -653,8 +710,10 @@ export default function AdminSchedulePage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-xs">{log.affectedCount}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{log.summary ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">{log.affectedCount}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        <div className="line-clamp-1 break-all" title={log.summary ?? ''}>{log.summary ?? '—'}</div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

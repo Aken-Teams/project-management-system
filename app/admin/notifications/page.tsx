@@ -197,9 +197,10 @@ export default function AdminNotificationsPage() {
         })
       } else {
         setIsCustom(false)
-        // Show default values (read-only preview)
+        // Show default values with tier-specific suggested frequency
+        const suggestedFrequency = selected === 'T1' ? 1 : 2
         setForm({
-          frequencyWeeks: defaultProfile.frequencyWeeks,
+          frequencyWeeks: suggestedFrequency,
           dayOfWeek: defaultProfile.dayOfWeek,
           hour: defaultProfile.hour,
           notifyTitle: defaultProfile.notifyTitle ?? DEFAULT_TEMPLATES.notifyTitle,
