@@ -33,6 +33,7 @@ export function ProjectDelayTab({ project }: Props) {
   const [subTab, setSubTab] = useState('delays')
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'pending' | 'approved' | 'rejected'>('')
+  const [filterResolved, setFilterResolved] = useState<'' | 'resolved' | 'unresolved'>('')
   const [page, setPage] = useState(1)
   const [selectedDr, setSelectedDr] = useState<DelayRequest | null>(null)
 
@@ -41,8 +42,9 @@ export function ProjectDelayTab({ project }: Props) {
   // Data sources
   const allDelays = project.delayRequests
   const allSupport = useMemo(() =>
-    allDelays.filter(r => r.status === 'approved' && r.supportNeeded && r.supportNeeded.trim() !== '' && !r.supportResolved),
+    allDelays.filter(r => r.status === 'approved' && r.supportNeeded && r.supportNeeded.trim() !== ''),
   [allDelays])
+  const unresolvedSupportCount = allSupport.filter(r => !r.supportResolved).length
 
   // Match search
   const match = (r: DelayRequest) => {
@@ -59,19 +61,25 @@ export function ProjectDelayTab({ project }: Props) {
 
   // Filtered data per sub-tab
   const filtered = useMemo(() => {
-    if (subTab === 'support') return allSupport.filter(match)
+    if (subTab === 'support') {
+      let list = allSupport.filter(match)
+      if (filterResolved === 'resolved') list = list.filter(r => r.supportResolved)
+      if (filterResolved === 'unresolved') list = list.filter(r => !r.supportResolved)
+      return list
+    }
     let list = allDelays.filter(match)
     if (filterStatus) list = list.filter(r => r.status === filterStatus)
     return list
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subTab, allDelays, allSupport, search, filterStatus])
+  }, [subTab, allDelays, allSupport, search, filterStatus, filterResolved])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   // Reset page on filter change
-  const handleTabChange = (v: string) => { setSubTab(v); setPage(1); setSearch(''); setFilterStatus('') }
+  const handleTabChange = (v: string) => { setSubTab(v); setPage(1); setSearch(''); setFilterStatus(''); setFilterResolved('') }
   const handleFilterChange = (v: '' | 'pending' | 'approved' | 'rejected') => { setFilterStatus(v); setPage(1) }
+  const handleFilterResolved = (v: '' | 'resolved' | 'unresolved') => { setFilterResolved(v); setPage(1) }
   const handleSearchChange = (v: string) => { setSearch(v); setPage(1) }
 
   const calcDays = (orig: string, proposed: string) =>
@@ -88,8 +96,9 @@ export function ProjectDelayTab({ project }: Props) {
             </TabsTrigger>
             <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-3 py-2 gap-1.5 text-sm">
               <Wrench className="h-3.5 w-3.5" /> 需要協助
-              {allSupport.length > 0 && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0 ml-0.5">{allSupport.length}</Badge>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-0.5">{allSupport.length}</Badge>
+              {unresolvedSupportCount > 0 && (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0">{unresolvedSupportCount} 待處理</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -100,6 +109,15 @@ export function ProjectDelayTab({ project }: Props) {
                 {(['', 'pending', 'approved', 'rejected'] as const).map(s => (
                   <Button key={s} variant={filterStatus === s ? 'default' : 'outline'} size="sm" className="h-8 text-xs px-2.5" onClick={() => handleFilterChange(s)}>
                     {s === '' ? '全部' : s === 'pending' ? '待審核' : s === 'approved' ? '已核准' : '已駁回'}
+                  </Button>
+                ))}
+              </div>
+            )}
+            {subTab === 'support' && (
+              <div className="flex items-center gap-1">
+                {(['', 'unresolved', 'resolved'] as const).map(s => (
+                  <Button key={s} variant={filterResolved === s ? 'default' : 'outline'} size="sm" className="h-8 text-xs px-2.5" onClick={() => handleFilterResolved(s)}>
+                    {s === '' ? '全部' : s === 'unresolved' ? '待處理' : '已解決'}
                   </Button>
                 ))}
               </div>
@@ -178,6 +196,7 @@ export function ProjectDelayTab({ project }: Props) {
                     </>
                   ) : (
                     <>
+                      <th className="text-left px-4 py-2.5 font-medium">狀態</th>
                       <th className="text-left px-4 py-2.5 font-medium">申請人</th>
                       <th className="text-left px-4 py-2.5 font-medium">需要的協助</th>
                       <th className="text-left px-4 py-2.5 font-medium">受影響里程碑</th>
@@ -230,8 +249,17 @@ export function ProjectDelayTab({ project }: Props) {
                         </>
                       ) : (
                         <>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0',
+                              r.supportResolved
+                                ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                                : 'bg-amber-100 text-amber-700 border-amber-300',
+                            )}>
+                              {r.supportResolved ? '已解決' : '待處理'}
+                            </Badge>
+                          </td>
                           <td className="px-4 py-3">{r.requestedBy}</td>
-                          <td className="px-4 py-3 max-w-[250px]">
+                          <td className="px-4 py-3 max-w-[220px]">
                             <span className="line-clamp-2">{r.supportNeeded}</span>
                           </td>
                           <td className="px-4 py-3 max-w-[160px]">
