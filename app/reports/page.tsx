@@ -271,6 +271,7 @@ export default function ReportsPage() {
   const [detailProject, setDetailProject] = useState<Project | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [ganttExpanded, setGanttExpanded] = useState(true)
+  const [ganttMsExpanded, setGanttMsExpanded] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState('overview')
   const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
 
@@ -1505,12 +1506,34 @@ export default function ReportsPage() {
                 ) : detailProject ? (
                   <>
                     <Collapsible open={ganttExpanded} onOpenChange={setGanttExpanded}>
-                      <CollapsibleTrigger asChild>
-                        <div className="flex items-center gap-2 text-sm font-semibold cursor-pointer hover:text-foreground/80 transition-colors py-1">
-                          <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
-                          甘特圖
-                        </div>
-                      </CollapsibleTrigger>
+                      <div className="flex items-center justify-between py-1">
+                        <CollapsibleTrigger asChild>
+                          <div className="flex items-center gap-2 text-sm font-semibold cursor-pointer hover:text-foreground/80 transition-colors">
+                            <ChevronDown className={cn('h-4 w-4 transition-transform', !ganttExpanded && '-rotate-90')} />
+                            甘特圖
+                          </div>
+                        </CollapsibleTrigger>
+                        {ganttExpanded && detailProject.milestones.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              onClick={() => setGanttMsExpanded(new Set(detailProject.milestones.map(m => m.id)))}
+                            >
+                              全部展開
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              onClick={() => setGanttMsExpanded(new Set())}
+                            >
+                              全部收起
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                       <CollapsibleContent>
                         <div className="overflow-hidden min-w-0">
                           <GanttChart
@@ -1520,6 +1543,8 @@ export default function ReportsPage() {
                             endDate={detailProject.endDate}
                             showBaseline={true}
                             taskLogs={detailProject.taskLogs}
+                            expandedMilestoneIds={ganttMsExpanded}
+                            onExpandedMilestoneIdsChange={setGanttMsExpanded}
                           />
                         </div>
                       </CollapsibleContent>
