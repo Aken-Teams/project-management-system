@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import {
   CheckCircle2,
@@ -19,23 +20,32 @@ import {
   TimerReset,
   FileText,
   User,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
 import type { Project, DelayRequest } from '@/lib/mock-data'
 
 interface Props {
   project: Project
+  onRefresh?: () => void
 }
 
 const PAGE_SIZE = 10
 
-export function ProjectDelayTab({ project }: Props) {
+export function ProjectDelayTab({ project, onRefresh }: Props) {
+  const { user } = useAuth()
   const [subTab, setSubTab] = useState('delays')
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'pending' | 'approved' | 'rejected'>('')
   const [filterResolved, setFilterResolved] = useState<'' | 'resolved' | 'unresolved'>('')
   const [page, setPage] = useState(1)
   const [selectedDr, setSelectedDr] = useState<DelayRequest | null>(null)
+
+  // Resolve support states
+  const [resolveTarget, setResolveTarget] = useState<DelayRequest | null>(null)
+  const [resolveNotes, setResolveNotes] = useState('')
+  const [resolving, setResolving] = useState(false)
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('zh-TW')
 
@@ -85,6 +95,33 @@ export function ProjectDelayTab({ project }: Props) {
   const calcDays = (orig: string, proposed: string) =>
     Math.ceil((new Date(proposed).getTime() - new Date(orig).getTime()) / (1000 * 60 * 60 * 24))
 
+  // Resolve support handler
+  const handleResolveSupport = async () => {
+    if (!user || !resolveTarget) return
+    setResolving(true)
+    try {
+      const res = await fetch(`/api/delay-requests/${resolveTarget.id}/resolve-support`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resolvedById: user.id,
+          notes: resolveNotes.trim() || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '操作失敗')
+      }
+      setResolveTarget(null)
+      setResolveNotes('')
+      onRefresh?.()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '操作失敗')
+    } finally {
+      setResolving(false)
+    }
+  }
+
   return (
     <>
       <Tabs value={subTab} onValueChange={handleTabChange}>
@@ -96,9 +133,10 @@ export function ProjectDelayTab({ project }: Props) {
             </TabsTrigger>
             <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-3 py-2 gap-1.5 text-sm">
               <Wrench className="h-3.5 w-3.5" /> 需要協助
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-0.5">{allSupport.length}</Badge>
-              {unresolvedSupportCount > 0 && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0">{unresolvedSupportCount} 待處理</Badge>
+              {unresolvedSupportCount > 0 ? (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0 ml-0.5">{unresolvedSupportCount}</Badge>
+              ) : (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-0.5">{allSupport.length}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -157,6 +195,40 @@ export function ProjectDelayTab({ project }: Props) {
           {selectedDr && renderDetail(selectedDr)}
         </DialogContent>
       </Dialog>
+
+      {/* Resolve Support Dialog */}
+      <Dialog open={!!resolveTarget} onOpenChange={open => { if (!open) { setResolveTarget(null); setResolveNotes('') } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>標記協助已解決</DialogTitle>
+            <DialogDescription>確認此協助需求已處理完成</DialogDescription>
+          </DialogHeader>
+          {resolveTarget && (
+            <div className="space-y-4">
+              <div className="bg-muted/50 border p-3 rounded-lg text-sm">
+                <div className="text-xs text-muted-foreground mb-1">需要的協助</div>
+                <p>{resolveTarget.supportNeeded}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">解決備註（選填）</label>
+                <Textarea
+                  placeholder="描述如何解決..."
+                  value={resolveNotes}
+                  onChange={e => setResolveNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setResolveTarget(null); setResolveNotes('') }}>取消</Button>
+                <Button onClick={handleResolveSupport} disabled={resolving} className="gap-1.5">
+                  {resolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  確認已解決
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 
@@ -201,6 +273,7 @@ export function ProjectDelayTab({ project }: Props) {
                       <th className="text-left px-4 py-2.5 font-medium">需要的協助</th>
                       <th className="text-left px-4 py-2.5 font-medium">受影響里程碑</th>
                       <th className="text-left px-4 py-2.5 font-medium">核准時間</th>
+                      <th className="text-center px-4 py-2.5 font-medium">操作</th>
                       <th className="text-right px-4 py-2.5 font-medium"></th>
                     </>
                   )}
@@ -267,6 +340,20 @@ export function ProjectDelayTab({ project }: Props) {
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">
                             {r.reviewedAt ? formatDate(r.reviewedAt) : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {!r.supportResolved ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs px-2 gap-1"
+                                onClick={(e) => { e.stopPropagation(); setResolveTarget(r) }}
+                              >
+                                <CheckCircle2 className="h-3 w-3" /> 標記已解決
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <ChevronRight className="h-4 w-4 text-muted-foreground inline-block" />

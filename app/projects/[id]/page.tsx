@@ -543,7 +543,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
           {/* Delays Tab */}
           <TabsContent value="delays" className="mt-0">
-            <ProjectDelayTab project={project} />
+            <ProjectDelayTab project={project} onRefresh={() => {
+              fetch(`/api/projects/${id}`).then(r => r.ok ? r.json() : null).then(d => d && setProject(d))
+            }} />
           </TabsContent>
 
           {/* Dependencies Tab */}
