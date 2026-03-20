@@ -476,7 +476,7 @@ export default function ReportsPage() {
     const cutoff = twoWeeksAgo.toISOString().split('T')[0]
     const recentLogs = detailProject.taskLogs
       .filter(log => log.logDate >= cutoff)
-      .sort((a, b) => b.logDate.localeCompare(a.logDate))
+      .sort((a, b) => a.logDate.localeCompare(b.logDate))
 
     const taskMap = new Map(detailProject.tasks.map(t => [t.id, t]))
 
@@ -499,7 +499,7 @@ export default function ReportsPage() {
     }
 
     return [...weekGroups.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([weekStart, personMap]) => {
         const sunday = new Date(weekStart)
         sunday.setDate(sunday.getDate() + 6)
@@ -1875,43 +1875,78 @@ export default function ReportsPage() {
                       <CardContent className="space-y-2">
                         {detailProject.delayRequests.length === 0 ? (
                           <p className="text-sm text-muted-foreground py-2">目前無延期申請</p>
-                        ) : (
-                          detailProject.delayRequests.map(dr => (
-                            <div key={dr.id} className="p-3 rounded-lg border space-y-1.5">
+                        ) : (() => {
+                          // Group by milestone → only show final approved result + pending
+                          const msMap = new Map<string, { msName: string; originalDate: string; finalDate: string; approvedAt: string; approvedBy?: string; pendingDate?: string }>()
+                          // Process oldest first so newer approved requests overwrite
+                          const sorted = [...detailProject.delayRequests].reverse()
+                          for (const dr of sorted) {
+                            for (const am of dr.affectedMilestones) {
+                              const msName = detailProject.milestones.find(m => m.id === am.milestoneId)?.name || am.milestoneId
+                              const existing = msMap.get(am.milestoneId)
+                              if (dr.status === 'approved') {
+                                msMap.set(am.milestoneId, {
+                                  msName,
+                                  originalDate: existing?.originalDate || am.originalDate,
+                                  finalDate: am.proposedDate,
+                                  approvedAt: dr.reviewedAt || dr.requestedAt,
+                                  approvedBy: dr.reviewedBy,
+                                  pendingDate: existing?.pendingDate,
+                                })
+                              } else if (dr.status === 'pending') {
+                                const prev = msMap.get(am.milestoneId)
+                                msMap.set(am.milestoneId, {
+                                  msName: prev?.msName || msName,
+                                  originalDate: prev?.originalDate || am.originalDate,
+                                  finalDate: prev?.finalDate || am.originalDate,
+                                  approvedAt: prev?.approvedAt || '',
+                                  approvedBy: prev?.approvedBy,
+                                  pendingDate: am.proposedDate,
+                                })
+                              }
+                            }
+                          }
+                          const entries = Array.from(msMap.values())
+                          return entries.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-2">目前無延期申請</p>
+                          ) : entries.map((entry, i) => (
+                            <div key={i} className="p-3 rounded-lg border space-y-1.5">
                               <div className="flex items-center gap-2">
-                                <Badge className={cn(
-                                  'text-[10px] px-1.5 py-0',
-                                  dr.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-300' :
-                                  dr.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
-                                  'bg-red-100 text-red-700 border-red-300',
-                                )}>
-                                  {dr.status === 'pending' ? '待審' : dr.status === 'approved' ? '已核准' : '已拒絕'}
-                                </Badge>
-                                {dr.taskTitle && (
-                                  <span className="text-sm font-medium truncate">{dr.taskTitle}</span>
+                                <span className="text-sm font-medium">{entry.msName}</span>
+                                {entry.pendingDate && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200">
+                                    待審中
+                                  </Badge>
                                 )}
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                {dr.reason.length > 100 ? dr.reason.slice(0, 100) + '...' : dr.reason}
-                              </p>
-                              {dr.affectedMilestones.length > 0 && (
-                                <div className="text-xs text-muted-foreground space-y-0.5">
-                                  {dr.affectedMilestones.map((am, i) => {
-                                    const msName = detailProject.milestones.find(m => m.id === am.milestoneId)?.name || am.milestoneId
-                                    return (
-                                      <div key={i} className="flex items-center gap-1">
-                                        <span className="truncate">{msName}:</span>
-                                        <span className="line-through">{am.originalDate}</span>
-                                        <span>→</span>
-                                        <span className="font-medium">{am.proposedDate}</span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )}
+                              <div className="text-xs text-muted-foreground space-y-1">
+                                {entry.approvedAt && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 shrink-0">
+                                      已核准
+                                    </Badge>
+                                    <span className="line-through">{entry.originalDate}</span>
+                                    <span>→</span>
+                                    <span className="font-medium text-foreground">{entry.finalDate}</span>
+                                    {entry.approvedBy && (
+                                      <span className="ml-auto text-[10px] shrink-0">by {entry.approvedBy}</span>
+                                    )}
+                                  </div>
+                                )}
+                                {entry.pendingDate && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200 shrink-0">
+                                      待審
+                                    </Badge>
+                                    <span className="line-through">{entry.finalDate}</span>
+                                    <span>→</span>
+                                    <span className="font-medium text-foreground">{entry.pendingDate}</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ))
-                        )}
+                        })()}
                       </CardContent>
                     </Card>
                   </div>
