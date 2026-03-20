@@ -50,6 +50,7 @@ import {
   Layers,
   TrendingUp,
   TrendingDown,
+  Paperclip,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -1781,6 +1782,31 @@ export default function ReportsPage() {
                                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                                             {log.content}
                                           </p>
+                                          {log.attachments && log.attachments.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mt-1.5">
+                                              {log.attachments.filter((a: { type: string }) => a.type === 'image').length > 0 && (
+                                                <div className="flex gap-1.5">
+                                                  {log.attachments.filter((a: { type: string }) => a.type === 'image').map((att: { name: string; url: string }, i: number) => (
+                                                    <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="block rounded overflow-hidden border hover:border-primary/50 transition-colors">
+                                                      <img src={att.url} alt={att.name} className="h-12 w-16 object-cover" />
+                                                    </a>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              {log.attachments.filter((a: { type: string }) => a.type === 'file').map((att: { name: string; url: string }, i: number) => (
+                                                <a
+                                                  key={i}
+                                                  href={att.url}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded px-1.5 py-0.5 transition-colors"
+                                                >
+                                                  <Paperclip className="h-3 w-3 shrink-0" />
+                                                  <span className="truncate max-w-[150px]">{att.name}</span>
+                                                </a>
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
