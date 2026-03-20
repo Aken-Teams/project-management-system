@@ -23,7 +23,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier, type Project } from '@/lib/mock-data'
+import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier, type Project } from '@/lib/mock-data'
+import { useProjectTypes } from '@/hooks/use-project-types'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { GanttChart } from '@/components/gantt-chart'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -261,6 +262,7 @@ function fmtMoney(n: number) {
 
 export default function ReportsPage() {
   const { user } = useAuth()
+  const { typeLabels } = useProjectTypes()
   const [data, setData] = useState<ReportsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1034,7 +1036,7 @@ export default function ReportsPage() {
                             <div className="flex items-center gap-3 text-sm text-muted-foreground">
                               <span>{project.progress}%</span>
                               <Badge variant="outline" className="text-sm">
-                                {PROJECT_TYPE_LABELS[project.projectType]}
+                                {typeLabels[project.projectType] || project.projectType}
                               </Badge>
                             </div>
                           </label>
@@ -1251,7 +1253,7 @@ export default function ReportsPage() {
                                 <StatusDot status={project.status} />
                                 <span className="font-medium">{project.name}</span>
                               </div>
-                              <Badge variant="outline" className="text-sm">{PROJECT_TYPE_LABELS[project.projectType]}</Badge>
+                              <Badge variant="outline" className="text-sm">{typeLabels[project.projectType] || project.projectType}</Badge>
                             </label>
                           </div>
                         ))}
@@ -1675,7 +1677,7 @@ export default function ReportsPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-3 rounded-lg bg-muted/50">
                           <div className="text-xs text-muted-foreground mb-1.5">專案類型</div>
-                          <div className="font-medium">{PROJECT_TYPE_LABELS[selectedProject.projectType]}</div>
+                          <div className="font-medium">{typeLabels[selectedProject.projectType] || selectedProject.projectType}</div>
                         </div>
                         <div className="p-3 rounded-lg bg-muted/50">
                           <div className="text-xs text-muted-foreground mb-1.5">負責人</div>

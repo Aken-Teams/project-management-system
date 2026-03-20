@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 export interface ProjectTypeOption {
   key: string
@@ -17,5 +17,15 @@ export function useProjectTypes() {
       .finally(() => setLoading(false))
   }, [])
 
-  return { projectTypes, loading }
+  // Lookup map: key → label (e.g. 'npi' → 'NPI-新產品開發')
+  const typeLabels = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const t of projectTypes) {
+      map[t.key] = t.label
+      map[t.key.replace(/-/g, '_')] = t.label // also map underscore variant
+    }
+    return map
+  }, [projectTypes])
+
+  return { projectTypes, typeLabels, loading }
 }

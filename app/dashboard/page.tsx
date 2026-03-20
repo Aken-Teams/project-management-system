@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/auth-context'
-import { PROJECT_TYPE_LABELS, PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier } from '@/lib/mock-data'
+import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier } from '@/lib/mock-data'
+import { useProjectTypes } from '@/hooks/use-project-types'
 import {
   TrendingUp,
   TrendingDown,
@@ -83,6 +84,7 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { typeLabels } = useProjectTypes()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -317,7 +319,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 <Badge variant="outline" className="text-sm shrink-0 hidden sm:flex">
-                        {PROJECT_TYPE_LABELS[project.projectType]}
+                        {typeLabels[project.projectType] || project.projectType}
                       </Badge>
                       <div className="flex items-center gap-2 shrink-0">
                         <div className="w-20 hidden md:block">

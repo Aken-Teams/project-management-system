@@ -14,7 +14,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useAuth } from '@/lib/auth-context'
 import { useNotificationStore } from '@/lib/notification-store'
-import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
+import { TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
+import { useProjectTypes } from '@/hooks/use-project-types'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -70,6 +71,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const { id } = use(params)
   const router = useRouter()
   const { user } = useAuth()
+  const { typeLabels } = useProjectTypes()
   const { refreshNotifications } = useNotificationStore()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -238,7 +240,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
                 <Badge variant="outline" className="text-sm">
                   <Tag className="h-3 w-3 mr-1" />
-                  {PROJECT_TYPE_LABELS[project.projectType]}
+                  {typeLabels[project.projectType] || project.projectType}
                 </Badge>
                 <Badge variant="secondary" className={getStatusColor(project.status)}>
                   <span className="flex items-center gap-1">

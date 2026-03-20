@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { PROJECT_TYPE_LABELS } from '@/lib/mock-data'
 
 // ─── Compute project status & progress from tasks/milestones (same logic as dashboard) ───
 function computeProjectProgress(milestones: { progress: number }[]): number {
@@ -81,6 +80,14 @@ export async function POST(request: NextRequest) {
 
     if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
       return NextResponse.json({ error: '請選擇至少一個專案' }, { status: 400 })
+    }
+
+    // Fetch project type labels from DB (dynamic, not hardcoded)
+    const typeConfigs = await prisma.projectTypeConfig.findMany({ where: { isActive: true } })
+    const TYPE_LABELS: Record<string, string> = {}
+    for (const tc of typeConfigs) {
+      TYPE_LABELS[tc.key] = tc.label
+      TYPE_LABELS[tc.key.replace(/_/g, '-')] = tc.label // also map hyphen-case
     }
 
     const projects = await prisma.project.findMany({
@@ -503,7 +510,7 @@ export async function POST(request: NextRequest) {
         <td><span class="status-dot ${sc}"></span></td>
         <td><div class="ov-pn">${p.name}</div><div class="ov-pm">${p.projectCode} · ${fmtDateFull(p.startDate)} ~ ${fmtDateFull(p.endDate)}</div></td>
         <td><span class="badge bb">${p.projectTier || '—'}</span></td>
-        <td><span class="badge bgr">${PROJECT_TYPE_LABELS[p.projectType as keyof typeof PROJECT_TYPE_LABELS] || p.projectType}</span></td>
+        <td><span class="badge bgr">${TYPE_LABELS[p.projectType] || p.projectType}</span></td>
         <td style="white-space:nowrap;">${p.owner.name}</td>
         <td><div class="pi"><div class="pb"><div class="pf" style="width:${p.actualProgress}%;background:${pc} !important;"></div></div><span class="pct">${p.actualProgress}%</span></div></td>
         <td style="white-space:nowrap;font-size:10px;">${p.milestones.filter(m => m.status === 'done').length}/${p.milestones.length}</td>
@@ -538,7 +545,7 @@ ${projectsWithStatus.map(project => {
     <h2>${project.name} <span class="badge ${sb}" style="vertical-align:middle;font-size:11px;margin-left:6px;">${st}</span></h2>
     <div class="meta-row">
       <span class="meta-item"><span class="meta-lbl">編碼</span> ${project.projectCode}</span>
-      <span class="meta-item"><span class="meta-lbl">類型</span> ${PROJECT_TYPE_LABELS[project.projectType as keyof typeof PROJECT_TYPE_LABELS] || project.projectType}</span>
+      <span class="meta-item"><span class="meta-lbl">類型</span> ${TYPE_LABELS[project.projectType] || project.projectType}</span>
       <span class="meta-item"><span class="meta-lbl">層級</span> ${project.projectTier || '—'}</span>
       <span class="meta-item"><span class="meta-lbl">負責人</span> ${project.owner.name}</span>
       <span class="meta-item"><span class="meta-lbl">團隊</span> ${project.teamMembers.length} 人</span>

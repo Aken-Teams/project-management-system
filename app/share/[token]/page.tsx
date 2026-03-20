@@ -13,7 +13,8 @@ import { ProjectRiskTab } from '@/components/project-risk-tab'
 import { ProjectDelayTab } from '@/components/project-delay-tab'
 import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
 import { RoiSection, type RoiParams } from '@/components/roi-section'
-import { PROJECT_TYPE_LABELS, TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
+import { TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
+import { useProjectTypes } from '@/hooks/use-project-types'
 import {
   Calendar,
   DollarSign,
@@ -40,6 +41,7 @@ import {
 
 export default function SharePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params)
+  const { typeLabels } = useProjectTypes()
   const [project, setProject] = useState<Project | null>(null)
   const [roiParams, setRoiParams] = useState<RoiParams | null>(null)
   const [loading, setLoading] = useState(true)
@@ -129,7 +131,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                 <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
                 <Badge variant="outline" className="text-sm">
                   <Tag className="h-3 w-3 mr-1" />
-                  {PROJECT_TYPE_LABELS[project.projectType]}
+                  {typeLabels[project.projectType] || project.projectType}
                 </Badge>
                 <Badge variant="secondary" className={getStatusColor(project.status)}>
                   <span className="flex items-center gap-1">
