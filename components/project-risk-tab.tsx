@@ -221,12 +221,13 @@ export function ProjectRiskTab({ project, onRefresh }: Props) {
                       <td className="px-4 py-3 text-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={updatingId === risk.id}>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs px-2 gap-1 text-muted-foreground" disabled={updatingId === risk.id}>
                               {updatingId === risk.id ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                <Pencil className="h-3.5 w-3.5" />
                               )}
+                              變更狀態
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
