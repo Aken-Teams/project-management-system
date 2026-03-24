@@ -645,12 +645,34 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
                 {/* Expanded task rows — lighter background for clear distinction */}
                 {expanded && msTasks.map((task, ti) => {
-                  const taskDisplayStatus = overdueNotStartedTaskIds?.has(task.id) ? 'overdue-not-started' : effectiveStatus(task)
+                  const subtasks = tasks.filter(t => t.parentId === task.id)
+                  const hasSubtasks = subtasks.length > 0
+
+                  // For parent tasks, aggregate progress from subtasks
+                  const aggregatedProgress = hasSubtasks
+                    ? Math.round(subtasks.reduce((sum, s) => sum + s.progress, 0) / subtasks.length)
+                    : task.progress
+                  const parentAllDone = hasSubtasks && subtasks.every(s => s.status === 'done' || s.progress >= 100)
+                  const parentHasActivity = hasSubtasks && subtasks.some(s => earliestLogDateMap.has(s.id) || !!s.completedAt)
+                  const parentActualStart = hasSubtasks
+                    ? subtasks.reduce<string | null>((earliest, s) => {
+                        const logStart = earliestLogDateMap.get(s.id) || s.completedAt || null
+                        return logStart && (!earliest || logStart < earliest) ? logStart : earliest
+                      }, null)
+                    : null
+                  const parentLatestCompletion = parentAllDone
+                    ? subtasks.reduce<string | null>((latest, s) => s.completedAt && (!latest || s.completedAt > latest) ? s.completedAt : latest, null)
+                    : null
+                  const displayProgress = hasSubtasks ? aggregatedProgress : task.progress
+                  const displayDone = parentAllDone || effectiveStatus(task) === 'done'
+
+                  const taskDisplayStatus = hasSubtasks
+                    ? (parentAllDone ? 'done' : aggregatedProgress > 0 ? 'in-progress' : (overdueNotStartedTaskIds?.has(task.id) ? 'overdue-not-started' : effectiveStatus(task)))
+                    : (overdueNotStartedTaskIds?.has(task.id) ? 'overdue-not-started' : effectiveStatus(task))
                   const taskColors = STATUS_COLORS[taskDisplayStatus] || STATUS_COLORS.todo
                   const taskOverdue = isTaskOverdue(task)
                   const isCritical = showDependencies && nodeMap?.get(task.id)?.isOnCriticalPath
                   const node = showDependencies ? nodeMap?.get(task.id) : undefined
-                  const subtasks = tasks.filter(t => t.parentId === task.id)
                   return (
                     <div key={task.id}>
                     <div
@@ -709,7 +731,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           />
                           <span className={cn(
                             'text-sm truncate',
-                            effectiveStatus(task) === 'done' && 'text-muted-foreground',
+                            displayDone && 'text-muted-foreground',
                             taskOverdue && 'text-red-600 dark:text-red-400',
                           )}>{task.title}</span>
                           {subtasks.length > 0 && (
@@ -740,8 +762,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       >
                         <WeekGrid />
                         {showBaseline ? (() => {
-                          const taskPlanColors = getPlanBarColors(task.endDate, task.progress, task.completedAt, task.status)
-                          const taskIsDone = effectiveStatus(task) === 'done'
+                          const taskPlanColors = getPlanBarColors(task.endDate, displayProgress, parentLatestCompletion || task.completedAt, displayDone ? 'done' : task.status)
+                          const taskIsDone = displayDone
                           // Extension = task duration actually increased (not just shifted)
                           const hasExtension = task.originalEndDate && task.originalStartDate && (() => {
                             const origSpan = new Date(task.originalEndDate!).getTime() - new Date(task.originalStartDate!).getTime()
@@ -781,22 +803,28 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 }}
                               />
                             )}
-                            {/* Actual bar (lower — uses actual start date from earliest log) */}
-                            {taskIsDone && task.completedAt ? (
+                            {/* Actual bar (lower — uses actual start date from earliest log; for parent tasks, aggregates subtask data) */}
+                            {(taskIsDone && (task.completedAt || parentLatestCompletion)) ? (
                               <div
                                 className="absolute h-3.5 rounded-sm"
                                 style={{
-                                  ...barStyle(getActualStart(task.id, task.startDate), task.completedAt),
+                                  ...barStyle(
+                                    hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
+                                    parentLatestCompletion || task.completedAt || todayStr,
+                                  ),
                                   top: 24,
                                   backgroundColor: taskColors.bg,
                                   ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
                                 }}
                               />
-                            ) : earliestLogDateMap.has(task.id) ? (
+                            ) : (earliestLogDateMap.has(task.id) || parentHasActivity) ? (
                               <div
                                 className="absolute h-3.5 rounded-sm"
                                 style={{
-                                  ...barStyle(getActualStart(task.id, task.startDate), todayStr),
+                                  ...barStyle(
+                                    hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
+                                    todayStr,
+                                  ),
                                   top: 24,
                                   backgroundColor: taskColors.bg,
                                   ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
@@ -811,9 +839,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 top: 5,
                               }}
                             >
-                              <span className="text-muted-foreground">{task.progress}%</span>
+                              <span className="text-muted-foreground">{displayProgress}%</span>
                               {(() => {
-                                const diff = getTimeDiffLabel(task)
+                                const diff = getTimeDiffLabel(hasSubtasks ? { ...task, progress: displayProgress, completedAt: parentLatestCompletion || task.completedAt, status: displayDone ? 'done' : task.status } : task)
                                 return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
                               })()}
                             </span>
@@ -857,21 +885,27 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 }}
                               />
                             )}
-                            {/* Actual bar (below plan bar — shows where work actually happened) */}
-                            {effectiveStatus(task) === 'done' && task.completedAt ? (
+                            {/* Actual bar (below plan bar — shows where work actually happened; for parent tasks, aggregates subtask data) */}
+                            {(displayDone && (task.completedAt || parentLatestCompletion)) ? (
                               <div
                                 className="absolute h-2.5 rounded-sm"
                                 style={{
-                                  ...barStyle(getActualStart(task.id, task.startDate), task.completedAt),
+                                  ...barStyle(
+                                    hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
+                                    parentLatestCompletion || task.completedAt || todayStr,
+                                  ),
                                   top: 30,
                                   backgroundColor: taskColors.bg,
                                 }}
                               />
-                            ) : earliestLogDateMap.has(task.id) ? (
+                            ) : (earliestLogDateMap.has(task.id) || parentHasActivity) ? (
                               <div
                                 className="absolute h-2.5 rounded-sm"
                                 style={{
-                                  ...barStyle(getActualStart(task.id, task.startDate), todayStr),
+                                  ...barStyle(
+                                    hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
+                                    todayStr,
+                                  ),
                                   top: 30,
                                   backgroundColor: taskColors.bg,
                                 }}
@@ -885,9 +919,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 top: 13,
                               }}
                             >
-                              <span className="text-muted-foreground">{task.progress}%</span>
+                              <span className="text-muted-foreground">{displayProgress}%</span>
                               {(() => {
-                                const diff = getTimeDiffLabel(task)
+                                const diff = getTimeDiffLabel(hasSubtasks ? { ...task, progress: displayProgress, completedAt: parentLatestCompletion || task.completedAt, status: displayDone ? 'done' : task.status } : task)
                                 return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
                               })()}
                             </span>

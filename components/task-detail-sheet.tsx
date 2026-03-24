@@ -45,6 +45,7 @@ import {
   Calendar,
   CalendarClock,
   CheckCircle2,
+  ChevronRight,
   CircleCheck,
   Clock,
   Flag,
@@ -941,6 +942,56 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         </Button>
                       )}
                     </div>
+                  ) : hasSubtasks && !readOnly ? (
+                    /* Parent task with subtasks — guide user to fill progress on subtasks */
+                    <div className="space-y-4">
+                      <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 dark:bg-blue-950/10 dark:border-blue-900 p-4 space-y-2">
+                        <div className="flex items-start gap-2.5">
+                          <Info className="h-4.5 w-4.5 text-blue-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">此任務包含子任務</p>
+                            <p className="text-xs text-blue-600/80 dark:text-blue-400/70 mt-1">
+                              進度由子任務自動彙整，請點擊下方子任務填寫工作紀錄。
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">子任務列表</span>
+                        <div className="rounded-lg border divide-y">
+                          {(task.subtasks || []).map(sub => {
+                            const subTask = project.tasks.find(t => t.id === sub.id)
+                            if (!subTask) return null
+                            const subStatus = computeTaskStatus(subTask, project.taskLogs)
+                            return (
+                              <button
+                                key={sub.id}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors text-left"
+                                onClick={() => onSelectTask?.(subTask)}
+                              >
+                                {getStatusDot(subStatus)}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm truncate">{subTask.title}</p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    {subTask.assignee || '未指派'} · {subTask.endDate}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className={cn('h-full rounded-full', subTask.status === 'done' ? 'bg-green-500' : 'bg-blue-500')}
+                                      style={{ width: `${subTask.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground w-8 text-right">{subTask.progress}%</span>
+                                </div>
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
                   ) : !showActions ? (
                     /* Step 1: Weekly batch input form (matching Proposal A mockup) */
                     <>
@@ -1369,7 +1420,69 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
               {/* Tab: 過往紀錄 */}
               <TabsContent value="history" className="flex-1 px-4 mt-0 overflow-y-auto">
-                {taskLogs.length === 0 ? (
+                {hasSubtasks ? (() => {
+                  // For parent tasks with subtasks: show aggregated subtask logs (read-only)
+                  const subIds = (task.subtasks || []).map(s => s.id)
+                  const subLogs = project.taskLogs
+                    .filter(l => subIds.includes(l.taskId))
+                    .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
+                  // Also include any legacy logs on this parent task
+                  const parentLogs = taskLogs
+                  const allLogs = [...subLogs, ...parentLogs]
+                    .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
+
+                  if (allLogs.length === 0) return (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                        <Clock className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">子任務尚無工作紀錄</p>
+                    </div>
+                  )
+
+                  return (
+                    <div className="py-4 divide-y divide-border">
+                      {allLogs.map((log) => {
+                        const subTask = project.tasks.find(t => t.id === log.taskId)
+                        const isParentLog = log.taskId === task.id
+                        return (
+                          <div key={log.id} className="flex gap-3 px-4 py-3">
+                            <div className="flex flex-col items-center pt-0.5">
+                              <Avatar className="h-7 w-7 shrink-0">
+                                <AvatarFallback className={cn('text-[11px] font-semibold text-white', getAvatarColor(log.author))}>
+                                  {log.author.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">{log.author}</span>
+                                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                                  {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+                                  {isParentLog ? '本任務（舊紀錄）' : subTask?.title || '子任務'}
+                                </Badge>
+                              </div>
+                              <p className="text-sm leading-relaxed whitespace-pre-line">{log.content}</p>
+                              {log.attachments && log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                    <a key={ai} href={att.url} target="_blank" rel="noopener">
+                                      <img src={att.url} alt={att.name} className="h-16 w-16 rounded-lg object-cover border hover:opacity-80 transition-opacity" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })() : taskLogs.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
                       <Clock className="h-5 w-5 text-muted-foreground" />
