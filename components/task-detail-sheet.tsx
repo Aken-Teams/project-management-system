@@ -853,7 +853,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             </thead>
                             <tbody>
                               {logRows.map((row, idx) => {
-                                const isOverdue = row.date && row.date > task.endDate && row.content.trim()
+                                const isOverdue = row.date && row.date > task.endDate
                                 const attCount = row.attachments?.length || 0
                                 return (
                                   <tr key={idx} className="border-b border-border last:border-b-0">
