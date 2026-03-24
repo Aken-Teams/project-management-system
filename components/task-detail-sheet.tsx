@@ -1166,7 +1166,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 text-left opacity-60">
                             <CircleCheck className="h-5 w-5 shrink-0 text-muted-foreground" />
                             <div>
-                              <p className="text-sm font-medium text-muted-foreground">標記完成</p>
+                              <p className="text-sm font-medium text-muted-foreground">此任務已完成</p>
                               <p className="text-[11px] text-muted-foreground">需完成所有子任務</p>
                             </div>
                           </div>
@@ -1179,7 +1179,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           >
                             <CircleCheck className="h-5 w-5 shrink-0 text-muted-foreground" />
                             <div>
-                              <p className="text-sm font-medium text-muted-foreground">標記完成</p>
+                              <p className="text-sm font-medium text-muted-foreground">此任務已完成</p>
                               <p className="text-[11px] text-amber-600 dark:text-amber-400">請先填寫至少一筆紀錄</p>
                             </div>
                           </button>
@@ -1190,7 +1190,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           >
                             <CircleCheck className="h-5 w-5 shrink-0 text-primary" />
                             <div>
-                              <p className="text-sm font-medium">標記完成</p>
+                              <p className="text-sm font-medium">此任務已完成</p>
                               <p className="text-[11px] text-muted-foreground">已完成所有工作</p>
                             </div>
                           </button>
