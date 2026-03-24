@@ -1462,7 +1462,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                 </span>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+                                <Badge variant="outline" className="text-xs px-2 py-0.5 h-5 font-normal">
                                   {isParentLog ? '本任務（舊紀錄）' : subTask?.title || '子任務'}
                                 </Badge>
                               </div>

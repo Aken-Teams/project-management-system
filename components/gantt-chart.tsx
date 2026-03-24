@@ -227,17 +227,32 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return earliestLogDateMap.get(t.id) || t.completedAt || null
   }, [earliestLogDateMap])
 
-  // Helper: compute milestone actual start (earliest actual start among its tasks)
+  // Helper: compute milestone actual start (earliest actual start among tasks + subtasks)
   const getMilestoneActualStart = useCallback((msTasks: Task[]) => {
     let earliest: string | null = null
     for (const t of msTasks) {
+      // Check task's own logs
       const actualStart = getTaskActualStart(t)
       if (actualStart && (!earliest || actualStart < earliest)) {
         earliest = actualStart
       }
+      // Also check subtask logs for parent tasks
+      const subs = tasks.filter(st => st.parentId === t.id)
+      for (const sub of subs) {
+        const subStart = earliestLogDateMap.get(sub.id) || sub.completedAt || null
+        if (subStart && (!earliest || subStart < earliest)) earliest = subStart
+      }
     }
     return earliest
-  }, [getTaskActualStart])
+  }, [getTaskActualStart, tasks, earliestLogDateMap])
+
+  // Helper: check if any task (or its subtasks) under a milestone has activity
+  const milestoneHasActivity = useCallback((msTasks: Task[]) => {
+    return msTasks.some(t => {
+      if (earliestLogDateMap.has(t.id)) return true
+      return tasks.some(st => st.parentId === t.id && (earliestLogDateMap.has(st.id) || !!st.completedAt))
+    })
+  }, [earliestLogDateMap, tasks])
 
   const formatDate = (d: string) => {
     return new Date(d).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })
@@ -422,7 +437,27 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           {tasksByMilestone.map(({ milestone, tasks: msTasks }, msIndex) => {
             const expanded = expandedMs.has(milestone.id)
             const msBar = getMilestoneBarRange(milestone, msTasks)
-            const colors = STATUS_COLORS[milestone.status] || STATUS_COLORS.todo
+
+            // Compute aggregated milestone progress from subtask-aware task progress
+            const msAggregatedProgress = (() => {
+              if (msTasks.length === 0) return milestone.progress
+              const total = msTasks.length
+              const sum = msTasks.reduce((acc, t) => {
+                const subs = tasks.filter(st => st.parentId === t.id)
+                const prog = subs.length > 0
+                  ? Math.round(subs.reduce((s, sub) => s + sub.progress, 0) / subs.length)
+                  : t.progress
+                return acc + prog
+              }, 0)
+              return Math.round(sum / total)
+            })()
+            const msAllDoneAgg = msTasks.every(t => {
+              const subs = tasks.filter(st => st.parentId === t.id)
+              if (subs.length > 0) return subs.every(s => s.status === 'done' || s.progress >= 100)
+              return t.status === 'done' || t.progress >= 100
+            })
+            const msDisplayStatus = msAllDoneAgg ? 'done' : msAggregatedProgress > 0 ? 'in-progress' : milestone.status
+            const colors = STATUS_COLORS[msDisplayStatus] || STATUS_COLORS.todo
 
             return (
               <div key={milestone.id}>
@@ -456,7 +491,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         className="text-[10px] px-1.5 py-0 shrink-0 text-white border-0"
                         style={{ backgroundColor: colors.bg }}
                       >
-                        {milestone.progress}%
+                        {msAggregatedProgress}%
                       </Badge>
                       {noActivityMilestoneIds?.has(milestone.id) && (
                         <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
@@ -480,11 +515,11 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     <WeekGrid />
                     {msTasks.length > 0 && showBaseline ? (() => {
                       const msActualStart = getMilestoneActualStart(msTasks) || msBar.start
-                      const msCompletedAt = milestone.progress >= 100
+                      const msCompletedAt = msAllDoneAgg
                         ? msTasks.reduce<string | null>((latest, t) => t.completedAt && (!latest || t.completedAt > latest) ? t.completedAt : latest, null)
                         : null
-                      const msPlanColors = getPlanBarColors(milestone.dueDate, milestone.progress, msCompletedAt, milestone.status)
-                      const msDone = milestone.progress >= 100
+                      const msPlanColors = getPlanBarColors(milestone.dueDate, msAggregatedProgress, msCompletedAt, msDisplayStatus)
+                      const msDone = msAllDoneAgg
                       // Milestone has extension only if any task's duration actually increased
                       const msHasExtension = msTasks.some(t => {
                         if (!t.originalEndDate || !t.originalStartDate) return false
@@ -537,11 +572,11 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           />
                         )}
                         {/* Actual bar (lower — extends to today for in-progress, to latest completion for done) */}
-                        {(milestone.progress > 0 || msTasks.some(t => earliestLogDateMap.has(t.id))) && (
+                        {(msAggregatedProgress > 0 || milestoneHasActivity(msTasks)) && (
                           <div
                             className="absolute h-3.5 rounded-sm"
                             style={{
-                              ...barStyle(msActualStart, milestone.progress >= 100
+                              ...barStyle(msActualStart, msAllDoneAgg
                                 ? (msTasks.reduce<string>((latest, t) => t.completedAt && t.completedAt > latest ? t.completedAt : latest, msActualStart) || todayStr)
                                 : todayStr),
                               top: 24,
@@ -593,10 +628,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           />
                         )}
                         {/* Milestone actual bar (below plan bar) */}
-                        {msTasks.some(t => earliestLogDateMap.has(t.id)) && (() => {
+                        {milestoneHasActivity(msTasks) && (() => {
                           const msActualStartNb = getMilestoneActualStart(msTasks) || msBar.start
                           const msLatestCompletion = msTasks.reduce<string | null>((latest, t) => t.completedAt && (!latest || t.completedAt > latest) ? t.completedAt : latest, null)
-                          const msAllDone = milestone.progress >= 100 && msLatestCompletion
+                          const msAllDone = msAllDoneAgg && msLatestCompletion
                           return (
                             <div
                               className="absolute h-2.5 rounded-sm"
@@ -616,10 +651,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             top: 13,
                           }}
                         >
-                          <span className="text-muted-foreground">{milestone.progress}%</span>
+                          <span className="text-muted-foreground">{msAggregatedProgress}%</span>
                           {(() => {
                             // Milestone time diff: check if all tasks done
-                            const msDone = milestone.progress >= 100
+                            const msDone = msAllDoneAgg
                             const latestCompletion = msTasks.reduce<string | null>((latest, t) => {
                               if (!t.completedAt) return latest
                               return !latest || t.completedAt > latest ? t.completedAt : latest
