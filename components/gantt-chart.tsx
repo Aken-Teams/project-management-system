@@ -57,7 +57,57 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
   const [taskTooltip, setTaskTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
   const [msTooltip, setMsTooltip] = useState<{ x: number; y: number; milestone: Milestone; msTasks: Task[] } | null>(null)
-  const [internalExpandedTasks, setInternalExpandedTasks] = useState<Set<string>>(new Set())
+  // Auto-expand: first incomplete milestone + any overdue-not-started milestones
+  const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(() => {
+    const set = new Set<string>()
+    const today = new Date().toISOString().split('T')[0]
+    let foundFirstIncomplete = false
+    for (const m of milestones) {
+      if (m.status === 'done' || m.progress >= 100) continue
+      const msTasks = tasks.filter(t => t.milestoneId === m.id && !t.parentId)
+      if (msTasks.length === 0) continue
+      if (!foundFirstIncomplete) {
+        set.add(m.id)
+        foundFirstIncomplete = true
+      } else {
+        const msStart = msTasks.reduce((min, t) => t.startDate < min ? t.startDate : min, msTasks[0].startDate)
+        if (msStart <= today) set.add(m.id)
+      }
+    }
+    return set
+  })
+  const expandedMs = expandedMilestoneIds ?? internalExpandedMs
+  const setExpandedMs = onExpandedMilestoneIdsChange ?? setInternalExpandedMs
+
+  const toggleMs = useCallback((msId: string) => {
+    const next = new Set(expandedMs)
+    if (next.has(msId)) next.delete(msId)
+    else next.add(msId)
+    setExpandedMs(next)
+  }, [expandedMs, setExpandedMs])
+
+  // Auto-expand tasks: first incomplete task per expanded milestone (sequential logic)
+  const [internalExpandedTasks, setInternalExpandedTasks] = useState<Set<string>>(() => {
+    const set = new Set<string>()
+    const today = new Date().toISOString().split('T')[0]
+    for (const msId of internalExpandedMs) {
+      const msTasks = tasks.filter(t => t.milestoneId === msId && !t.parentId)
+      let foundFirst = false
+      for (const t of msTasks) {
+        if (t.status === 'done') continue
+        const hasSubtasks = tasks.some(st => st.parentId === t.id)
+        if (!hasSubtasks) continue
+        if (!foundFirst) {
+          set.add(t.id)
+          foundFirst = true
+        } else if (t.startDate <= today) {
+          // Later tasks — only expand if should have started (overdue)
+          set.add(t.id)
+        }
+      }
+    }
+    return set
+  })
   const expandedTasks = expandedTaskIds ?? internalExpandedTasks
   const setExpandedTasks = onExpandedTaskIdsChange ?? setInternalExpandedTasks
 
@@ -77,18 +127,6 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   const getActualStart = useCallback((taskId: string, plannedStart: string) => {
     return earliestLogDateMap.get(taskId) || plannedStart
   }, [earliestLogDateMap])
-
-  // Use controlled state if provided, otherwise internal
-  const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(new Set())
-  const expandedMs = expandedMilestoneIds ?? internalExpandedMs
-  const setExpandedMs = onExpandedMilestoneIdsChange ?? setInternalExpandedMs
-
-  const toggleMs = useCallback((msId: string) => {
-    const next = new Set(expandedMs)
-    if (next.has(msId)) next.delete(msId)
-    else next.add(msId)
-    setExpandedMs(next)
-  }, [expandedMs, setExpandedMs])
 
   // Auto-detect date range from actual data (including actual start/end dates)
   const allDates = [
