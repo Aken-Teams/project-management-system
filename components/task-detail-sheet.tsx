@@ -174,6 +174,83 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     return { percent, latestDate, totalDays, hasOverdueLogs }
   }, [task, project.taskLogs, logRows])
 
+  // Preceding item check dialog (milestone or task level)
+  const [showPrecedingDialog, setShowPrecedingDialog] = useState(false)
+  const [showBatchCompleteConfirm, setShowBatchCompleteConfirm] = useState(false)
+  const [batchCompleting, setBatchCompleting] = useState(false)
+  const [precedingDismissed, setPrecedingDismissed] = useState(false)
+
+  // Find incomplete preceding item: check both preceding tasks (same milestone) and preceding milestones
+  const incompletePreceding = useMemo<{
+    type: 'task' | 'milestone'
+    name: string
+    id: string        // task id or milestone id
+    milestoneId: string
+    totalItems: number
+    incompleteItems: number
+  } | null>(() => {
+    if (!task) return null
+
+    // 1) Check preceding parent task within the same milestone
+    const parentTask = task.parentId
+      ? project.tasks.find(t => t.id === task.parentId)
+      : task
+    if (parentTask) {
+      const siblingParents = project.tasks
+        .filter(t => t.milestoneId === parentTask.milestoneId && !t.parentId)
+      const parentIdx = siblingParents.findIndex(t => t.id === parentTask.id)
+      // Walk backward to find nearest incomplete preceding sibling task
+      for (let i = parentIdx - 1; i >= 0; i--) {
+        const prev = siblingParents[i]
+        if (prev.status !== 'done') {
+          const prevSubtasks = project.tasks.filter(t => t.parentId === prev.id)
+          const allItems = [prev, ...prevSubtasks]
+          const incomplete = allItems.filter(t => t.status !== 'done')
+          return {
+            type: 'task',
+            name: prev.title,
+            id: prev.id,
+            milestoneId: prev.milestoneId,
+            totalItems: allItems.length,
+            incompleteItems: incomplete.length,
+          }
+        }
+      }
+    }
+
+    // 2) Check preceding milestone
+    const msIdx = project.milestones.findIndex(m => m.id === task.milestoneId)
+    if (msIdx > 0) {
+      for (let i = msIdx - 1; i >= 0; i--) {
+        const prev = project.milestones[i]
+        if (prev.status !== 'done' && prev.progress < 100) {
+          const prevTasks = project.tasks.filter(t => t.milestoneId === prev.id)
+          const incomplete = prevTasks.filter(t => t.status !== 'done')
+          return {
+            type: 'milestone',
+            name: prev.name,
+            id: prev.id,
+            milestoneId: prev.id,
+            totalItems: prevTasks.length,
+            incompleteItems: incomplete.length,
+          }
+        }
+      }
+    }
+
+    return null
+  }, [task, project.milestones, project.tasks])
+
+  // Trigger dialog when sheet opens on a task with incomplete preceding item
+  useEffect(() => {
+    if (open && task && incompletePreceding && !precedingDismissed) {
+      setShowPrecedingDialog(true)
+    }
+    if (!open) {
+      setPrecedingDismissed(false)
+    }
+  }, [open, task?.id, incompletePreceding, precedingDismissed])
+
   // Extension/delay request
   const [showExtensionForm, setShowExtensionForm] = useState(false)
   const [extensionReason, setExtensionReason] = useState('')
@@ -478,6 +555,45 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       onTaskUpdate?.()
     } catch {
       // fail silently
+    }
+  }
+
+  // ── Batch complete preceding item (task or milestone) ──
+  const handleBatchCompletePreceding = async () => {
+    if (!incompletePreceding || !user) return
+    setBatchCompleting(true)
+    try {
+      if (incompletePreceding.type === 'milestone') {
+        // Batch complete all tasks in the milestone
+        const res = await fetch(`/api/projects/${project.id}/milestones/${incompletePreceding.id}/batch-complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completedBy: user.name }),
+        })
+        if (!res.ok) throw new Error()
+      } else {
+        // Complete the parent task + all its subtasks
+        const taskAndSubs = project.tasks.filter(t => t.id === incompletePreceding.id || t.parentId === incompletePreceding.id)
+        const incomplete = taskAndSubs.filter(t => t.status !== 'done')
+        for (const t of incomplete) {
+          // Use last log date as completion date
+          const lastLog = project.taskLogs.filter(l => l.taskId === t.id).sort((a, b) => b.logDate.localeCompare(a.logDate))[0]
+          const completedAt = lastLog?.logDate || new Date().toISOString().split('T')[0]
+          await fetch(`/api/projects/${project.id}/tasks/${t.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'done', progress: 100, completedBy: user.name, completedAt }),
+          })
+        }
+      }
+      setShowBatchCompleteConfirm(false)
+      setShowPrecedingDialog(false)
+      setPrecedingDismissed(true)
+      onTaskUpdate?.()
+    } catch {
+      // ignore
+    } finally {
+      setBatchCompleting(false)
     }
   }
 
@@ -1937,6 +2053,109 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
             >
               刪除
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog 1: Preceding item incomplete reminder */}
+      <AlertDialog open={showPrecedingDialog} onOpenChange={setShowPrecedingDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              前序{incompletePreceding?.type === 'milestone' ? '里程碑' : '任務'}尚未完成
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  <span className="font-semibold text-foreground">{incompletePreceding?.name}</span>
+                  {' '}尚有{' '}
+                  <span className="font-semibold text-red-600">{incompletePreceding?.incompleteItems}</span>
+                  {' '}個{incompletePreceding?.type === 'milestone' ? '任務' : '項目'}未完成（共 {incompletePreceding?.totalItems} 個）。
+                </p>
+                <p>依據專案流程，建議先完成前序{incompletePreceding?.type === 'milestone' ? '里程碑' : '任務'}再進行後續工作。</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-2 mt-2">
+            <Button
+              className="w-full gap-2"
+              onClick={() => {
+                setShowPrecedingDialog(false)
+                setShowBatchCompleteConfirm(true)
+              }}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              前序{incompletePreceding?.type === 'milestone' ? '里程碑' : '任務'}皆已完成
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                setShowPrecedingDialog(false)
+                setPrecedingDismissed(true)
+              }}
+            >
+              繼續填寫目前任務
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full gap-2 text-muted-foreground"
+              onClick={() => {
+                setShowPrecedingDialog(false)
+                onOpenChange(false)
+              }}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              返回先完成前序{incompletePreceding?.type === 'milestone' ? '里程碑' : '任務'}
+            </Button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog 2: Confirm batch mark preceding item as complete */}
+      <AlertDialog open={showBatchCompleteConfirm} onOpenChange={setShowBatchCompleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認標記為已完成</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  此操作將把{' '}
+                  <span className="font-semibold text-foreground">{incompletePreceding?.name}</span>
+                  {' '}的所有未完成項目標記為 100% 完成：
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-sm">
+                  <li>共 <span className="font-semibold">{incompletePreceding?.incompleteItems}</span> 個項目將標記為已完成</li>
+                  <li>完成日期以各任務最後一筆工作紀錄日期為準</li>
+                  <li>若無工作紀錄，則以今日日期為完成日</li>
+                </ul>
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">
+                    標記完成後仍可透過任務面板調整狀態。
+                  </p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowBatchCompleteConfirm(false)
+              setShowPrecedingDialog(true)
+            }}>
+              返回
+            </AlertDialogCancel>
+            <Button
+              onClick={handleBatchCompletePreceding}
+              disabled={batchCompleting}
+              className="gap-2"
+            >
+              {batchCompleting ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />處理中...</>
+              ) : (
+                <><CheckCircle2 className="h-4 w-4" />確認全部完成</>
+              )}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
