@@ -71,6 +71,13 @@ export async function PUT(
     if (body.endDate !== undefined) data.endDate = new Date(body.endDate)
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
     if (body.durationDays !== undefined) data.durationDays = body.durationDays
+
+    // When dates or duration are manually changed, clear stale original dates
+    // (set by delay approval) so the Gantt chart no longer shows phantom extensions
+    if ((data.startDate || data.endDate || data.durationDays !== undefined) && task.originalStartDate) {
+      data.originalStartDate = null
+      data.originalEndDate = null
+    }
     if (body.milestoneId !== undefined) {
       const ms = await prisma.milestone.findFirst({ where: { id: body.milestoneId, projectId: id } })
       if (!ms) return NextResponse.json({ error: '找不到該里程碑' }, { status: 404 })
