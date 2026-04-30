@@ -412,6 +412,31 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                         <p className="text-sm">{project.expectedBenefits}</p>
                       </div>
                     )}
+                    {project.smartObjective && (
+                      <div className="py-3">
+                        <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <Target className="h-3 w-3" />
+                          SMART 目標
+                        </div>
+                        <div className="grid gap-2">
+                          {([
+                            { key: 'specific', label: 'S — 具體目標' },
+                            { key: 'measurable', label: 'M — 可衡量指標' },
+                            { key: 'achievable', label: 'A — 可達成性' },
+                            { key: 'relevant', label: 'R — 相關性' },
+                            { key: 'timeBound', label: 'T — 時限性' },
+                          ] as const)
+                            .filter(item => (project.smartObjective as Record<string, string>)?.[item.key])
+                            .map(item => (
+                              <div key={item.key}>
+                                <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                <p className="text-sm mt-0.5">{(project.smartObjective as Record<string, string>)[item.key]}</p>
+                              </div>
+                            ))
+                          }
+                        </div>
+                      </div>
+                    )}
                     <div className="py-3 last:pb-0">
                       <RoiSection
                         projectId={id}

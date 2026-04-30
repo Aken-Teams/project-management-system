@@ -55,9 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Always re-resolve DB user ID and role from email (localStorage may have stale data)
-    fetch(`/api/users/search?q=${encodeURIComponent(parsed.email)}&limit=1`)
+    // Use AbortController to avoid long waits when DB is slow (cold start)
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), 5000)
+    fetch(`/api/users/search?q=${encodeURIComponent(parsed.email)}&limit=1`, { signal: ac.signal })
       .then(res => res.ok ? res.json() : [])
       .then((users: { id: string; email: string; role?: string }[]) => {
+        clearTimeout(timer)
         const dbUser = users.find(u => u.email === parsed.email)
         if (dbUser && (dbUser.id !== parsed.id || dbUser.role !== parsed.role)) {
           const updated = { ...parsed, id: dbUser.id, role: (dbUser.role ?? parsed.role) as UserRole }
@@ -76,10 +80,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const foundUser = MOCK_USERS.find(u => u.email === email)
     if (!foundUser) throw new Error('Invalid credentials')
 
-    // Resolve real DB user ID and role
+    // Resolve real DB user ID and role (timeout after 5s to avoid blocking login)
     let resolvedUser = { ...foundUser }
     try {
-      const res = await fetch(`/api/users/search?q=${encodeURIComponent(email)}&limit=1`)
+      const loginAc = new AbortController()
+      const loginTimer = setTimeout(() => loginAc.abort(), 5000)
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(email)}&limit=1`, { signal: loginAc.signal })
+      clearTimeout(loginTimer)
       if (res.ok) {
         const users = await res.json()
         const dbUser = users.find((u: { email: string }) => u.email === email)

@@ -13,6 +13,9 @@ function createPrismaClient() {
     password: process.env.MYSQL_PASSWORD!,
     database: process.env.MYSQL_DB!,
     connectionLimit: 5,
+    connectTimeout: 5000,
+    acquireTimeout: 10000,
+    allowPublicKeyRetrieval: true,
   })
   return new PrismaClient({ adapter })
 }
