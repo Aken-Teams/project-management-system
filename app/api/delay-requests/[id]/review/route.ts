@@ -186,6 +186,30 @@ export async function PATCH(
               })
             }
 
+            // Schedule subtasks sequentially within parent's date range
+            const subtasks = project.tasks
+              .filter(t => t.parentId === task.id)
+              .sort((a, b) => a.sortOrder - b.sortOrder)
+            if (subtasks.length > 0) {
+              let subCurrent = new Date(taskStart)
+              for (const sub of subtasks) {
+                const subDays = Math.max(sub.durationDays || 1, 1)
+                const subStart = new Date(subCurrent)
+                const subEnd = addDays(subCurrent, subDays - 1)
+                if (sub.startDate.getTime() !== subStart.getTime() ||
+                    sub.endDate.getTime() !== subEnd.getTime()) {
+                  const subPreserve = (sub as any).originalStartDate == null
+                    ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
+                    : {}
+                  await tx.task.update({
+                    where: { id: sub.id },
+                    data: { startDate: subStart, endDate: subEnd, ...subPreserve },
+                  })
+                }
+                subCurrent = addDays(subEnd, 1)
+              }
+            }
+
             taskCurrent = addDays(taskEnd, 1)
           }
 

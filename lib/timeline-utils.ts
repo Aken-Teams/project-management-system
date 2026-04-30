@@ -64,8 +64,50 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
   })
 }
 
+// ─── Shared: schedule tasks sequentially from a start date ───
+// Used by calculateTaskDates (frontend), delay cascade (backend),
+// and date-repair (project load). Keeps all three in sync.
+
+export interface ScheduledDate { startDate: Date; endDate: Date }
+
+export function scheduleTasksFromStart(
+  parentTasks: { id: string; durationDays: number }[],
+  allTasks: { id: string; durationDays: number; parentId?: string | null }[],
+  msStart: Date,
+): Map<string, ScheduledDate> {
+  const result = new Map<string, ScheduledDate>()
+  let currentDate = new Date(msStart)
+
+  for (const task of parentTasks) {
+    const taskDays = Math.max(task.durationDays || 1, 1)
+    const taskStart = new Date(currentDate)
+    const taskEnd = new Date(currentDate)
+    taskEnd.setDate(taskEnd.getDate() + taskDays - 1)
+    result.set(task.id, { startDate: taskStart, endDate: taskEnd })
+
+    // Schedule subtasks sequentially within parent's date range
+    const subtasks = allTasks.filter(t => t.parentId === task.id)
+    if (subtasks.length > 0) {
+      let subCurrent = new Date(taskStart)
+      for (const sub of subtasks) {
+        const subDays = Math.max(sub.durationDays || 1, 1)
+        const subStart = new Date(subCurrent)
+        const subEnd = new Date(subCurrent)
+        subEnd.setDate(subEnd.getDate() + subDays - 1)
+        result.set(sub.id, { startDate: subStart, endDate: subEnd })
+        subCurrent = new Date(subEnd)
+        subCurrent.setDate(subCurrent.getDate() + 1)
+      }
+    }
+
+    currentDate = new Date(taskEnd)
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+  return result
+}
+
 // ─── Task date calculation ───────────────────────────────────
-// Tasks scheduled sequentially within their milestone's date range.
+// Tasks scheduled sequentially from milestone start (matches cascade behavior).
 
 export function calculateTaskDates(
   tasks: TaskInput[],
@@ -75,61 +117,15 @@ export function calculateTaskDates(
 
   for (const ms of milestones) {
     if (!ms.startDate) continue
-    // Only schedule parent tasks sequentially; subtasks inherit parent dates
     const msTasks = tasks.filter(t => t.milestoneId === ms.id && t.durationDays > 0 && !t.parentId)
-
-    const totalTaskDays = msTasks.reduce((sum, t) => sum + t.durationDays, 0)
     const msStartDate = new Date(ms.startDate)
 
-    let currentDate: Date
-
-    // If tasks don't fill the full milestone span, position at END (delay shift behavior)
-    if (ms.endDate && totalTaskDays > 0) {
-      const msEndDate = new Date(ms.endDate)
-      const msSpan = Math.round((msEndDate.getTime() - msStartDate.getTime()) / 86400000) + 1
-      if (totalTaskDays < msSpan) {
-        const adjustedStart = new Date(msEndDate)
-        adjustedStart.setDate(adjustedStart.getDate() - totalTaskDays + 1)
-        currentDate = adjustedStart > msStartDate ? adjustedStart : msStartDate
-      } else {
-        currentDate = new Date(msStartDate)
-      }
-    } else {
-      currentDate = new Date(msStartDate)
-    }
-
-    for (const task of msTasks) {
-      const taskStart = new Date(currentDate)
-      const daysToAdd = task.durationDays - 1
-      const taskEnd = new Date(currentDate)
-      taskEnd.setDate(taskEnd.getDate() + daysToAdd)
-
-      const dates = {
-        startDate: taskStart.toISOString().split('T')[0],
-        endDate: taskEnd.toISOString().split('T')[0],
-      }
-      result.set(task.id, dates)
-
-      // Schedule subtasks sequentially within parent's date range
-      const subtasks = tasks.filter(t => t.parentId === task.id)
-      if (subtasks.length > 0) {
-        let subCurrent = new Date(taskStart)
-        for (const sub of subtasks) {
-          const subDays = Math.max(sub.durationDays || 1, 1)
-          const subStart = new Date(subCurrent)
-          const subEnd = new Date(subCurrent)
-          subEnd.setDate(subEnd.getDate() + subDays - 1)
-          result.set(sub.id, {
-            startDate: subStart.toISOString().split('T')[0],
-            endDate: subEnd.toISOString().split('T')[0],
-          })
-          subCurrent = new Date(subEnd)
-          subCurrent.setDate(subCurrent.getDate() + 1)
-        }
-      }
-
-      currentDate = new Date(taskEnd)
-      currentDate.setDate(currentDate.getDate() + 1)
+    const scheduled = scheduleTasksFromStart(msTasks, tasks, msStartDate)
+    for (const [id, dates] of scheduled) {
+      result.set(id, {
+        startDate: dates.startDate.toISOString().split('T')[0],
+        endDate: dates.endDate.toISOString().split('T')[0],
+      })
     }
   }
   return result

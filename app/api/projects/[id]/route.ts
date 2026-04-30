@@ -57,6 +57,9 @@ export async function GET(
       fallbackOwnerId: project.ownerId,
     })
 
+    // ── Date consistency repair: fix tasks outside milestone range ──
+    await repairTaskDates(project)
+
     const feProject = dbProjectToFrontend(project as Parameters<typeof dbProjectToFrontend>[0])
 
     return NextResponse.json(feProject)
@@ -209,4 +212,140 @@ export async function DELETE(
       { status: 500 },
     )
   }
+}
+
+// ─── Date consistency repair ─────────────────────────────────
+// Fixes task dates that are outside their milestone's date range.
+// This self-heals data inconsistencies caused by sequential delay
+// approvals or edits that stripped task dates.
+
+async function repairTaskDates(project: {
+  startDate: Date
+  milestones: { id: string; dueDate: Date; sortOrder: number }[]
+  tasks: { id: string; milestoneId: string; durationDays: number; startDate: Date; endDate: Date; sortOrder: number; parentId: string | null; originalStartDate: Date | null; originalEndDate: Date | null }[]
+}) {
+  const sortedMs = [...project.milestones].sort((a, b) => a.sortOrder - b.sortOrder)
+  let msCurrentStart = new Date(project.startDate)
+
+  for (const ms of sortedMs) {
+    const msStart = new Date(msCurrentStart)
+    const msDueDate = new Date(ms.dueDate)
+
+    // Get parent tasks for this milestone (sorted)
+    const parentTasks = project.tasks
+      .filter(t => t.milestoneId === ms.id && t.parentId == null)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+
+    if (parentTasks.length === 0) {
+      msCurrentStart = addDay(msDueDate, 1)
+      continue
+    }
+
+    // Check if any task (parent OR subtask) has dates outside [msStart, msDueDate]
+    const allMsTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+    const needsRepair = allMsTasks.some(t =>
+      t.startDate.getTime() < msStart.getTime() - 86400000 ||
+      t.startDate.getTime() > msDueDate.getTime() + 86400000 ||
+      t.endDate.getTime() > msDueDate.getTime() + 86400000
+    )
+
+    // Also check subtasks outside their parent's date range
+    const needsSubRepair = !needsRepair && parentTasks.some(parent => {
+      const subs = project.tasks.filter(t => t.parentId === parent.id)
+      return subs.some(s =>
+        s.startDate.getTime() < parent.startDate.getTime() - 86400000 ||
+        s.endDate.getTime() > parent.endDate.getTime() + 86400000
+      )
+    })
+
+    if (!needsRepair && !needsSubRepair) {
+      msCurrentStart = addDay(msDueDate, 1)
+      continue
+    }
+
+    // Repair: schedule all tasks from milestone start
+    let taskCurrent = new Date(msStart)
+    for (const task of parentTasks) {
+      const days = Math.max(task.durationDays || 1, 1)
+      const taskStart = needsRepair ? new Date(taskCurrent) : new Date(task.startDate)
+      const taskEnd = needsRepair ? addDay(taskCurrent, days - 1) : new Date(task.endDate)
+
+      if (needsRepair && (task.startDate.getTime() !== taskStart.getTime() ||
+          task.endDate.getTime() !== taskEnd.getTime())) {
+        await prisma.task.update({
+          where: { id: task.id },
+          data: {
+            startDate: taskStart,
+            endDate: taskEnd,
+            originalStartDate: null,
+            originalEndDate: null,
+          },
+        })
+        ;(task as { startDate: Date }).startDate = taskStart
+        ;(task as { endDate: Date }).endDate = taskEnd
+        ;(task as { originalStartDate: Date | null }).originalStartDate = null
+        ;(task as { originalEndDate: Date | null }).originalEndDate = null
+      }
+
+      // Repair subtasks — always runs when needsRepair or needsSubRepair
+      const subtasks = project.tasks
+        .filter(t => t.parentId === task.id)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+      if (subtasks.length > 0) {
+        let subCurrent = new Date(taskStart)
+        for (const sub of subtasks) {
+          const subDays = Math.max(sub.durationDays || 1, 1)
+          const subStart = new Date(subCurrent)
+          const subEnd = addDay(subCurrent, subDays - 1)
+          if (sub.startDate.getTime() !== subStart.getTime() ||
+              sub.endDate.getTime() !== subEnd.getTime()) {
+            await prisma.task.update({
+              where: { id: sub.id },
+              data: {
+                startDate: subStart,
+                endDate: subEnd,
+                originalStartDate: null,
+                originalEndDate: null,
+              },
+            })
+            ;(sub as { startDate: Date }).startDate = subStart
+            ;(sub as { endDate: Date }).endDate = subEnd
+            ;(sub as { originalStartDate: Date | null }).originalStartDate = null
+            ;(sub as { originalEndDate: Date | null }).originalEndDate = null
+          }
+          subCurrent = addDay(subEnd, 1)
+        }
+      }
+
+      taskCurrent = addDay(taskEnd, 1)
+    }
+
+    msCurrentStart = addDay(msDueDate, 1)
+  }
+
+  // Broad cleanup: clear stale originalStartDate/originalEndDate.
+  // Originals are stale when they don't overlap with current dates
+  // (e.g., originals in April but task is now in December).
+  for (const task of project.tasks) {
+    if (task.originalStartDate && task.originalEndDate) {
+      // No overlap: original range is entirely before or after current range
+      const stale =
+        task.originalEndDate.getTime() < task.startDate.getTime() ||
+        task.originalStartDate.getTime() > task.endDate.getTime()
+      if (stale) {
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { originalStartDate: null, originalEndDate: null },
+        })
+        ;(task as { originalStartDate: Date | null }).originalStartDate = null
+        ;(task as { originalEndDate: Date | null }).originalEndDate = null
+      }
+    }
+  }
+}
+
+function addDay(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
 }
