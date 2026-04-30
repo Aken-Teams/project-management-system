@@ -356,7 +356,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
         <div ref={headerRef} className="overflow-hidden border-b">
           <div style={{ minWidth: Math.max(900, 260 + weekCells.length * 32) }}>
             <div className="flex">
-              <div className="w-[260px] shrink-0 border-r bg-muted flex flex-col justify-center px-3">
+              <div className="w-[320px] shrink-0 border-r bg-muted flex flex-col justify-center px-3">
                 <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -469,7 +469,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   )}
                 >
                   <div
-                    className="w-[260px] shrink-0 px-3 py-2 border-r cursor-pointer hover:bg-muted transition-colors sticky left-0 z-10 bg-card"
+                    className="w-[320px] shrink-0 px-3 py-2 border-r cursor-pointer hover:bg-muted transition-colors sticky left-0 z-10 bg-card"
                     onClick={() => msTasks.length > 0 && toggleMs(milestone.id)}
                   >
                     <div className="flex items-center gap-1.5">
@@ -732,7 +732,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     >
                       <div
                         className={cn(
-                          'w-[260px] shrink-0 px-3 py-1.5 border-r pl-10 transition-colors sticky left-0 z-10',
+                          'w-[320px] shrink-0 px-3 py-1.5 border-r pl-10 transition-colors sticky left-0 z-10',
                           selectedTaskId === task.id
                             ? 'bg-amber-50 dark:bg-amber-950'
                             : ti % 2 === 0 ? 'bg-card' : 'bg-muted',
@@ -980,7 +980,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           )}
                         >
                           <div className={cn(
-                            'w-[260px] shrink-0 px-3 py-1 border-r pl-14 sticky left-0 z-10',
+                            'w-[320px] shrink-0 px-3 py-1 border-r pl-14 sticky left-0 z-10',
                             selectedTaskId === sub.id ? 'bg-amber-50 dark:bg-amber-950' : 'bg-card',
                           )}>
                             <div className="flex items-center gap-1.5">
@@ -1110,7 +1110,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
                 {expanded && msTasks.length === 0 && (
                   <div className="flex items-center border-b bg-card">
-                    <div className="w-[260px] shrink-0 px-3 py-1.5 border-r pl-10 sticky left-0 z-10 bg-card">
+                    <div className="w-[320px] shrink-0 px-3 py-1.5 border-r pl-10 sticky left-0 z-10 bg-card">
                       <span className="text-sm text-muted-foreground italic">無任務</span>
                     </div>
                     <div className="flex-1 h-10" />
@@ -1257,7 +1257,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
         {/* Horizontal scrollbar — only under timeline area */}
         <div className="flex border-t">
-          <div className="w-[260px] shrink-0" />
+          <div className="w-[320px] shrink-0" />
           <div
             ref={xScrollRef}
             className="flex-1 overflow-x-auto scrollbar-thin"

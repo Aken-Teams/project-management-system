@@ -18,7 +18,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -65,14 +65,17 @@ export interface TimelineTableProps {
   onMilestoneRemove: (index: number) => void
   onMilestoneAdd: () => void
   onMilestoneReorder: (oldIndex: number, newIndex: number) => void
+  onMilestoneDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
   onTaskAdd: (task: TimelineTask) => void
   onTaskRemove: (taskId: string) => void
   onTaskUpdate: (taskId: string, field: keyof TimelineTask, value: string | number) => void
   onTaskReorder: (oldIndex: number, newIndex: number) => void
+  onTaskDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
+  onGanttPreview?: () => void
 }
 
 // ─── Column grid class (shared across all rows) ─────────────
-const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_100px_100px_88px_52px_28px] gap-0 items-center'
+const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_140px_140px_88px_52px_28px] gap-0 items-center'
 
 // ─── MilestoneRow ───────────────────────────────────────────
 function MilestoneRow({
@@ -84,6 +87,7 @@ function MilestoneRow({
   onUpdate,
   onRemove,
   onToggleCollapse,
+  onDateChange,
 }: {
   milestone: TimelineMilestone
   index: number
@@ -93,6 +97,7 @@ function MilestoneRow({
   onUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onRemove: (index: number) => void
   onToggleCollapse: () => void
+  onDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: milestone.id })
@@ -155,13 +160,31 @@ function MilestoneRow({
       </div>
 
       {/* Start date */}
-      <div className="text-center text-sm text-muted-foreground">
-        {milestone.startDate || '—'}
+      <div className="flex justify-center">
+        {onDateChange ? (
+          <Input
+            type="date"
+            value={milestone.startDate || ''}
+            onChange={(e) => onDateChange(index, 'startDate', e.target.value)}
+            className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{milestone.startDate || '—'}</span>
+        )}
       </div>
 
       {/* End date */}
-      <div className="text-center text-sm text-muted-foreground">
-        {milestone.endDate || '—'}
+      <div className="flex justify-center">
+        {onDateChange ? (
+          <Input
+            type="date"
+            value={milestone.endDate || ''}
+            onChange={(e) => onDateChange(index, 'endDate', e.target.value)}
+            className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{milestone.endDate || '—'}</span>
+        )}
       </div>
 
       {/* Assignee (empty for milestone) */}
@@ -197,6 +220,7 @@ function TaskRow({
   onRemove,
   onUpdate,
   onToggleAddSubtask,
+  onDateChange,
 }: {
   task: TimelineTask
   startDate?: string
@@ -206,6 +230,7 @@ function TaskRow({
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onToggleAddSubtask: () => void
+  onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
@@ -287,13 +312,31 @@ function TaskRow({
       </div>
 
       {/* Start date */}
-      <div className="text-center text-sm text-muted-foreground">
-        {startDate || '—'}
+      <div className="flex justify-center">
+        {onDateChange ? (
+          <Input
+            type="date"
+            value={startDate || ''}
+            onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{startDate || '—'}</span>
+        )}
       </div>
 
       {/* End date */}
-      <div className="text-center text-sm text-muted-foreground">
-        {endDate || '—'}
+      <div className="flex justify-center">
+        {onDateChange ? (
+          <Input
+            type="date"
+            value={endDate || ''}
+            onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{endDate || '—'}</span>
+        )}
       </div>
 
       {/* Assignee */}
@@ -498,6 +541,7 @@ function SubtaskRow({
   teamMembers,
   onRemove,
   onUpdate,
+  onDateChange,
 }: {
   task: TimelineTask
   startDate?: string
@@ -505,6 +549,7 @@ function SubtaskRow({
   teamMembers: TimelineTeamMember[]
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
+  onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
 }) {
   const cyclePriority = () => {
     const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
@@ -549,13 +594,31 @@ function SubtaskRow({
       </div>
 
       {/* Start date */}
-      <div className="text-center text-sm text-muted-foreground">
-        {startDate || ''}
+      <div className="flex justify-center">
+        {onDateChange ? (
+          <Input
+            type="date"
+            value={startDate || ''}
+            onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{startDate || ''}</span>
+        )}
       </div>
 
       {/* End date */}
-      <div className="text-center text-sm text-muted-foreground">
-        {endDate || ''}
+      <div className="flex justify-center">
+        {onDateChange ? (
+          <Input
+            type="date"
+            value={endDate || ''}
+            onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{endDate || ''}</span>
+        )}
       </div>
 
       {/* Assignee */}
@@ -774,10 +837,13 @@ export function TimelineTable({
   onMilestoneRemove,
   onMilestoneAdd,
   onMilestoneReorder,
+  onMilestoneDateChange,
   onTaskAdd,
   onTaskRemove,
   onTaskUpdate,
   onTaskReorder,
+  onTaskDateChange,
+  onGanttPreview,
 }: TimelineTableProps) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
@@ -850,8 +916,18 @@ export function TimelineTable({
 
   return (
     <div className="rounded-lg border overflow-hidden">
-      {/* Toolbar: expand/collapse all */}
-      <div className="flex items-center justify-end px-3 py-2 bg-muted/30 border-b">
+      {/* Toolbar: preview + expand/collapse all */}
+      <div className="flex items-center justify-end gap-3 px-3 py-2 bg-muted/30 border-b">
+        {onGanttPreview && (
+          <button
+            type="button"
+            onClick={onGanttPreview}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <BarChart3 className="h-4 w-4" />
+            預覽甘特圖
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleAll}
@@ -893,6 +969,7 @@ export function TimelineTable({
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
+                  onDateChange={onMilestoneDateChange}
                 />
                 {!isCollapsed && (
                   <>
@@ -911,6 +988,7 @@ export function TimelineTable({
                             onToggleAddSubtask={() =>
                               setAddingSubtaskForId(prev => prev === task.id ? null : task.id)
                             }
+                            onDateChange={onTaskDateChange}
                           />
                           {subtasks.map((st) => (
                             <SubtaskRow
@@ -921,6 +999,7 @@ export function TimelineTable({
                               teamMembers={teamMembers}
                               onRemove={onTaskRemove}
                               onUpdate={onTaskUpdate}
+                              onDateChange={onTaskDateChange}
                             />
                           ))}
                           {addingSubtaskForId === task.id && (

@@ -58,9 +58,11 @@ import {
   FolderOpen,
   Clock,
   Briefcase,
+  BarChart3,
 } from 'lucide-react'
 import { arrayMove } from '@dnd-kit/sortable'
-import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones } from '@/lib/timeline-utils'
+import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, daysBetween } from '@/lib/timeline-utils'
+import { GanttChart } from '@/components/gantt-chart'
 
 interface ManualMilestone {
   id: string
@@ -896,6 +898,124 @@ export default function NewProjectPage() {
     setAiMilestones(
       aiMilestones.map((m, i) => (i === index ? { ...m, [field]: value } : m))
     )
+  }
+
+  // ─── Gantt preview state ─────────────────────────────────────
+  const [ganttPreviewOpen, setGanttPreviewOpen] = useState(false)
+  const [ganttPreviewMode, setGanttPreviewMode] = useState<'manual' | 'ai'>('manual')
+
+  // ─── Date change handlers (manual mode) ──────────────────────
+  const handleManualMilestoneDateChange = (index: number, field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return
+    if (field === 'endDate') {
+      const ms = recalculatedMilestones[index]
+      if (!ms?.startDate) return
+      const newDuration = daysBetween(ms.startDate, value) + 1
+      if (newDuration < 1) return
+      setManualMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
+    } else {
+      if (index === 0) {
+        setManualData(prev => ({ ...prev, startDate: value }))
+      } else {
+        const prevMs = recalculatedMilestones[index - 1]
+        if (!prevMs?.startDate) return
+        const newPrevDuration = daysBetween(prevMs.startDate, value)
+        if (newPrevDuration < 1) return
+        setManualMilestones(prev => prev.map((m, i) => i === index - 1 ? { ...m, durationDays: newPrevDuration } : m))
+      }
+    }
+  }
+
+  const handleManualTaskDateChange = (taskId: string, field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return
+    const taskDates = manualTaskDates.get(taskId)
+    if (!taskDates) return
+    if (field === 'endDate') {
+      const newDuration = daysBetween(taskDates.startDate, value) + 1
+      if (newDuration < 1) return
+      setManualTasks(prev => prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t))
+    } else {
+      const task = manualTasks.find(t => t.id === taskId)
+      if (!task) return
+      const siblings = task.parentId
+        ? manualTasks.filter(t => t.parentId === task.parentId)
+        : manualTasks.filter(t => t.milestoneId === task.milestoneId && !t.parentId)
+      const taskIdx = siblings.findIndex(t => t.id === taskId)
+      if (taskIdx > 0) {
+        const prevSibling = siblings[taskIdx - 1]
+        const prevDates = manualTaskDates.get(prevSibling.id)
+        if (!prevDates) return
+        const newPrevDuration = daysBetween(prevDates.startDate, value)
+        if (newPrevDuration < 1) return
+        setManualTasks(prev => prev.map(t => t.id === prevSibling.id ? { ...t, durationDays: newPrevDuration } : t))
+      } else {
+        const msIdx = recalculatedMilestones.findIndex(m => m.id === task.milestoneId)
+        if (msIdx < 0) return
+        const ms = recalculatedMilestones[msIdx]
+        if (!ms?.startDate) return
+        const gapDays = daysBetween(ms.startDate, value)
+        const taskTotalDays = siblings.reduce((sum, t) => sum + (t.durationDays || 0), 0)
+        const newMsDuration = Math.max(gapDays + taskTotalDays, 1)
+        setManualMilestones(prev => prev.map((m, i) => i === msIdx ? { ...m, durationDays: newMsDuration } : m))
+      }
+    }
+  }
+
+  // ─── Date change handlers (AI mode) ──────────────────────────
+  const handleAiMilestoneDateChange = (index: number, field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return
+    if (field === 'endDate') {
+      const ms = recalculatedAiMilestones[index]
+      if (!ms?.startDate) return
+      const newDuration = daysBetween(ms.startDate, value) + 1
+      if (newDuration < 1) return
+      setAiMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
+    } else {
+      if (index === 0) {
+        setAiEditableData(prev => ({ ...prev, startDate: value }))
+      } else {
+        const prevMs = recalculatedAiMilestones[index - 1]
+        if (!prevMs?.startDate) return
+        const newPrevDuration = daysBetween(prevMs.startDate, value)
+        if (newPrevDuration < 1) return
+        setAiMilestones(prev => prev.map((m, i) => i === index - 1 ? { ...m, durationDays: newPrevDuration } : m))
+      }
+    }
+  }
+
+  const handleAiTaskDateChange = (taskId: string, field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return
+    const taskDates = aiTaskDates.get(taskId)
+    if (!taskDates) return
+    if (field === 'endDate') {
+      const newDuration = daysBetween(taskDates.startDate, value) + 1
+      if (newDuration < 1) return
+      setAiTasks(prev => prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t))
+    } else {
+      const task = aiTasks.find(t => t.id === taskId)
+      if (!task) return
+      const siblings = task.parentId
+        ? aiTasks.filter(t => t.parentId === task.parentId)
+        : aiTasks.filter(t => t.milestoneId === task.milestoneId && !t.parentId)
+      const taskIdx = siblings.findIndex(t => t.id === taskId)
+      if (taskIdx > 0) {
+        const prevSibling = siblings[taskIdx - 1]
+        const prevDates = aiTaskDates.get(prevSibling.id)
+        if (!prevDates) return
+        const newPrevDuration = daysBetween(prevDates.startDate, value)
+        if (newPrevDuration < 1) return
+        setAiTasks(prev => prev.map(t => t.id === prevSibling.id ? { ...t, durationDays: newPrevDuration } : t))
+      } else {
+        const msIdx = recalculatedAiMilestones.findIndex(m => m.id === task.milestoneId)
+        if (msIdx < 0) return
+        const ms = recalculatedAiMilestones[msIdx]
+        if (!ms?.startDate) return
+        const gapDays = daysBetween(ms.startDate, value)
+        const taskTotalDays = siblings.reduce((sum, t) => sum + (t.durationDays || 0), 0)
+        const newMsDuration = Math.max(gapDays + taskTotalDays, 1)
+        setAiMilestones(prev => prev.map((m, i) => i === msIdx ? { ...m, durationDays: newMsDuration } : m))
+      }
+    }
   }
 
   // Team member helpers
@@ -2011,10 +2131,13 @@ export default function NewProjectPage() {
                     onMilestoneRemove={removeAiMilestone}
                     onMilestoneAdd={addAiMilestone}
                     onMilestoneReorder={(oldIdx, newIdx) => setAiMilestones(arrayMove(aiMilestones, oldIdx, newIdx))}
+                    onMilestoneDateChange={handleAiMilestoneDateChange}
                     onTaskAdd={(task) => setAiTasks([...aiTasks, task])}
                     onTaskRemove={(id) => setAiTasks(aiTasks.filter(t => t.id !== id))}
                     onTaskUpdate={(id, field, value) => setAiTasks(aiTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
                     onTaskReorder={(oldIdx, newIdx) => setAiTasks(arrayMove(aiTasks, oldIdx, newIdx))}
+                    onTaskDateChange={handleAiTaskDateChange}
+                    onGanttPreview={() => { setGanttPreviewMode('ai'); setGanttPreviewOpen(true) }}
                   />
                 </CardContent>
               </Card>
@@ -2557,10 +2680,13 @@ export default function NewProjectPage() {
                     onMilestoneRemove={removeMilestone}
                     onMilestoneAdd={addMilestone}
                     onMilestoneReorder={(oldIdx, newIdx) => setManualMilestones(arrayMove(manualMilestones, oldIdx, newIdx))}
+                    onMilestoneDateChange={handleManualMilestoneDateChange}
                     onTaskAdd={(task) => setManualTasks([...manualTasks, task])}
                     onTaskRemove={(id) => setManualTasks(manualTasks.filter(t => t.id !== id))}
                     onTaskUpdate={(id, field, value) => setManualTasks(manualTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
                     onTaskReorder={(oldIdx, newIdx) => setManualTasks(arrayMove(manualTasks, oldIdx, newIdx))}
+                    onTaskDateChange={handleManualTaskDateChange}
+                    onGanttPreview={() => { setGanttPreviewMode('manual'); setGanttPreviewOpen(true) }}
                   />
                 </CardContent>
               </Card>
@@ -2760,6 +2886,57 @@ export default function NewProjectPage() {
           </TabsContent>
         </Tabs>
       </div>
+      {/* Gantt Preview Dialog */}
+      <Dialog open={ganttPreviewOpen} onOpenChange={setGanttPreviewOpen}>
+        <DialogContent className="sm:max-w-6xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-500" />
+              甘特圖預覽
+            </DialogTitle>
+            <DialogDescription>
+              根據目前編輯中的里程碑與任務產生的甘特圖預覽。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-auto">
+            {ganttPreviewOpen && (() => {
+              const isAi = ganttPreviewMode === 'ai'
+              const milestones = isAi ? recalculatedAiMilestones : recalculatedMilestones
+              const tasks = isAi ? aiTasks : manualTasks
+              const taskDatesMap = isAi ? aiTaskDates : manualTaskDates
+              const startDate = isAi ? aiEditableData.startDate : manualData.startDate
+
+              const lastMs = [...milestones].reverse().find(m => m.endDate)
+              const endDate = lastMs?.endDate || (isAi ? aiEditableData.endDate : manualData.endDate) || startDate
+
+              const previewMilestones = milestones.map(m => ({
+                id: m.id, name: m.name, dueDate: m.endDate || '',
+                status: 'todo' as const, progress: 0,
+              }))
+              const previewTasks = tasks.map(t => {
+                const dates = taskDatesMap.get(t.id)
+                return {
+                  id: t.id, projectId: '', milestoneId: t.milestoneId,
+                  title: t.title, description: '', assignee: t.assignee || '',
+                  status: 'todo' as const, priority: t.priority,
+                  durationDays: t.durationDays,
+                  startDate: dates?.startDate || '', endDate: dates?.endDate || '',
+                  dependencies: [] as string[], progress: 0,
+                  parentId: t.parentId || null,
+                }
+              })
+              return (
+                <GanttChart
+                  milestones={previewMilestones}
+                  tasks={previewTasks}
+                  startDate={startDate}
+                  endDate={endDate}
+                />
+              )
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }

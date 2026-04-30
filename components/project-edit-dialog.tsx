@@ -21,10 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign, BarChart3 } from 'lucide-react'
 import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/components/budget-list-editor'
+import { GanttChart } from '@/components/gantt-chart'
 import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
-import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff } from '@/lib/timeline-utils'
+import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff, daysBetween } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
   type Project,
@@ -202,6 +203,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [tlMilestones, setTlMilestones] = useState(tlInit.milestones)
   const [tlTasks, setTlTasks] = useState(tlInit.tasks)
   const [workItemError, setWorkItemError] = useState('')
+  const [ganttPreviewOpen, setGanttPreviewOpen] = useState(false)
   // ─── Date change approval state ──────────────────────────
   const { user } = useAuth()
   const [dateChangeDialogOpen, setDateChangeDialogOpen] = useState(false)
@@ -772,6 +774,83 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     setTlTasks(prev => arrayMove(prev, oldIdx, newIdx))
   }, [])
 
+  // ─── Date change handlers (reverse-calculate durationDays from date) ──
+
+  const handleTlMilestoneDateChange = useCallback((index: number, field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return
+    if (field === 'endDate') {
+      // Compute new durationDays from the computed startDate to the new endDate
+      const ms = recalcMilestones[index]
+      if (!ms?.startDate) return
+      const newDuration = daysBetween(ms.startDate, value) + 1
+      if (newDuration < 1) return
+      setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
+    } else {
+      // startDate change
+      if (index === 0) {
+        // First milestone → update project startDate
+        update('startDate', value)
+      } else {
+        // Adjust previous milestone's durationDays so it ends the day before the new start
+        const prevMs = recalcMilestones[index - 1]
+        if (!prevMs?.startDate) return
+        const newPrevDuration = daysBetween(prevMs.startDate, value) // endDate = value - 1 day, so duration = diff days
+        if (newPrevDuration < 1) return
+        setTlMilestones(prev => prev.map((m, i) => i === index - 1 ? { ...m, durationDays: newPrevDuration } : m))
+      }
+    }
+  }, [recalcMilestones]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTlTaskDateChange = useCallback((taskId: string, field: 'startDate' | 'endDate', value: string) => {
+    if (!value) return
+    const taskDates = tlTaskDates.get(taskId)
+    if (!taskDates) return
+
+    if (field === 'endDate') {
+      // Compute new durationDays from computed startDate to new endDate
+      const newDuration = daysBetween(taskDates.startDate, value) + 1
+      if (newDuration < 1) return
+      setTlTasks(prev => syncParentDurations(
+        prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
+      ))
+    } else {
+      // startDate change: adjust predecessor's durationDays
+      const task = tlTasks.find(t => t.id === taskId)
+      if (!task) return
+
+      // Find same-level siblings in same milestone
+      const siblings = task.parentId
+        ? tlTasks.filter(t => t.parentId === task.parentId)
+        : tlTasks.filter(t => t.milestoneId === task.milestoneId && !t.parentId)
+      const taskIdx = siblings.findIndex(t => t.id === taskId)
+
+      if (taskIdx > 0) {
+        // Adjust previous sibling's durationDays
+        const prevSibling = siblings[taskIdx - 1]
+        const prevDates = tlTaskDates.get(prevSibling.id)
+        if (!prevDates) return
+        const newPrevDuration = daysBetween(prevDates.startDate, value) // prev ends at value - 1 day
+        if (newPrevDuration < 1) return
+        setTlTasks(prev => syncParentDurations(
+          prev.map(t => t.id === prevSibling.id ? { ...t, durationDays: newPrevDuration } : t)
+        ))
+      } else {
+        // First task in milestone: adjust milestone durationDays to create leading space
+        // We need to increase milestone duration so the task shifts
+        const msIdx = recalcMilestones.findIndex(m => m.id === task.milestoneId)
+        if (msIdx < 0) return
+        const ms = recalcMilestones[msIdx]
+        if (!ms?.startDate) return
+        // The gap between milestone start and the new task start becomes "buffer"
+        // This is modelled by increasing the milestone durationDays
+        const gapDays = daysBetween(ms.startDate, value)
+        const taskTotalDays = siblings.reduce((sum, t) => sum + (t.durationDays || 0), 0)
+        const newMsDuration = Math.max(gapDays + taskTotalDays, 1)
+        setTlMilestones(prev => prev.map((m, i) => i === msIdx ? { ...m, durationDays: newMsDuration } : m))
+      }
+    }
+  }, [tlTasks, tlTaskDates, recalcMilestones, syncParentDurations])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -1252,10 +1331,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onMilestoneRemove={handleTlMilestoneRemove}
               onMilestoneAdd={handleTlMilestoneAdd}
               onMilestoneReorder={handleTlMilestoneReorder}
+              onMilestoneDateChange={handleTlMilestoneDateChange}
               onTaskAdd={handleTlTaskAdd}
               onTaskRemove={handleTlTaskRemove}
               onTaskUpdate={handleTlTaskUpdate}
               onTaskReorder={handleTlTaskReorder}
+              onTaskDateChange={handleTlTaskDateChange}
+              onGanttPreview={() => setGanttPreviewOpen(true)}
             />
 
             {workItemError && (
@@ -1361,6 +1443,62 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               提交審核
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gantt Preview Dialog */}
+      <Dialog open={ganttPreviewOpen} onOpenChange={setGanttPreviewOpen}>
+        <DialogContent className="sm:max-w-6xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-500" />
+              甘特圖預覽
+            </DialogTitle>
+            <DialogDescription>
+              根據目前編輯中的里程碑與任務產生的甘特圖預覽，尚未儲存。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-auto">
+            {ganttPreviewOpen && (() => {
+              const lastMs = [...recalcMilestones].reverse().find(m => m.endDate)
+              const previewStartDate = form.startDate || project.startDate
+              const previewEndDate = lastMs?.endDate || form.endDate || project.endDate
+              const previewMilestones = recalcMilestones.map(m => ({
+                id: m.id,
+                name: m.name,
+                dueDate: m.endDate || '',
+                status: 'todo' as const,
+                progress: 0,
+              }))
+              const previewTasks = tlTasks.map(t => {
+                const dates = tlTaskDates.get(t.id)
+                return {
+                  id: t.id,
+                  projectId: project.id,
+                  milestoneId: t.milestoneId,
+                  title: t.title,
+                  description: '',
+                  assignee: t.assignee || '',
+                  status: 'todo' as const,
+                  priority: t.priority,
+                  durationDays: t.durationDays,
+                  startDate: dates?.startDate || '',
+                  endDate: dates?.endDate || '',
+                  dependencies: [] as string[],
+                  progress: 0,
+                  parentId: t.parentId || null,
+                }
+              })
+              return (
+                <GanttChart
+                  milestones={previewMilestones}
+                  tasks={previewTasks}
+                  startDate={previewStartDate}
+                  endDate={previewEndDate}
+                />
+              )
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
     </Dialog>

@@ -16,6 +16,14 @@ interface TaskInput {
   parentId?: string | null
 }
 
+// ─── Date helper ─────────────────────────────────────────────
+
+export function daysBetween(start: string, end: string): number {
+  const s = new Date(start)
+  const e = new Date(end)
+  return Math.round((e.getTime() - s.getTime()) / 86400000)
+}
+
 // ─── Milestone date calculation ──────────────────────────────
 // Sequential scheduling: each milestone starts where previous ends.
 // effectiveDays = max(milestone.durationDays, sum of task durationDays)
