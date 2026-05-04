@@ -31,9 +31,10 @@ const CAT_STYLES: Record<string, { bg: string; text: string; border: string }> =
   slate:   { bg: 'bg-slate-100',  text: 'text-slate-600',   border: 'border-slate-400' },
 }
 
-const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] = [
+const PERMISSIONS: { category: string; definition: string; color: string; rows: PermissionRow[] }[] = [
   {
     category: '儀表板',
+    definition: '專案總覽與待辦事項入口',
     color: 'cyan',
     rows: [
       { label: '查看儀表板', description: '瀏覽專案統計、燈號分佈、風險列表等總覽', member: 'project', executive: true, pm: true, admin: true },
@@ -42,6 +43,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
   },
   {
     category: '專案管理',
+    definition: '專案的建立、檢視與維護',
     color: 'blue',
     rows: [
       { label: '查看專案', description: '瀏覽專案列表與詳細資訊（含 SMART 目標）', member: 'project', executive: true, pm: true, admin: true },
@@ -53,6 +55,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
   },
   {
     category: '里程碑與任務',
+    definition: '時程規劃、任務指派與進度追蹤',
     color: 'indigo',
     rows: [
       { label: '查看里程碑與任務', description: '瀏覽時間軸表格中的里程碑、任務與子任務', member: 'project', executive: true, pm: 'project', admin: true },
@@ -63,33 +66,36 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
     ],
   },
   {
-    category: '工作日誌',
+    category: '工作日誌與週報',
+    definition: '任務執行紀錄與每週進度自動彙整',
     color: 'orange',
     rows: [
       { label: '撰寫工作日誌', description: '在任務下新增工作紀錄，記錄工時與內容', member: 'project', executive: false, pm: 'project', admin: true },
       { label: '查看工作日誌', description: '瀏覽任務的工作紀錄與歷史', member: 'project', executive: true, pm: 'project', admin: true },
       { label: '編輯工作日誌', description: '修改自己撰寫的工作紀錄', member: 'project', executive: false, pm: 'project', admin: true },
+      { label: '查看週報摘要', description: '瀏覽由工作日誌自動彙整的每週進度摘要', member: 'project', executive: true, pm: 'project', admin: true },
     ],
   },
   {
     category: '甘特圖',
+    definition: '專案時程視覺化呈現與基線比較',
     color: 'teal',
     rows: [
-      { label: '查看甘特圖', description: '瀏覽專案時程甘特圖與基線比較', member: 'project', executive: true, pm: 'project', admin: true },
-      { label: '拖拉調整時程', description: '在甘特圖上拖拉調整任務起訖日期', member: false, executive: false, pm: 'project', admin: true },
+      { label: '查看甘特圖', description: '瀏覽專案時程甘特圖，包含計畫、實際進度與延期標示', member: 'project', executive: true, pm: 'project', admin: true },
     ],
   },
   {
     category: '預算',
+    definition: '專案費用規劃與設備清單管理',
     color: 'emerald',
     rows: [
       { label: '查看預算', description: '查看專案預算總覽與設備清單', member: false, executive: 'department', pm: 'project', admin: true },
       { label: '編輯預算', description: '新增/修改設備清單與費用明細', member: false, executive: false, pm: 'project', admin: true },
-      { label: '影像解析預算', description: '透過 OCR 從圖片匯入預算表格資料', member: false, executive: false, pm: 'project', admin: true },
     ],
   },
   {
     category: '團隊',
+    definition: '專案人員組成與 RACI 角色分配',
     color: 'violet',
     rows: [
       { label: '查看團隊成員', description: '瀏覽專案團隊成員與 RACI 角色分配', member: 'project', executive: true, pm: 'project', admin: true },
@@ -98,6 +104,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
   },
   {
     category: '風險管理',
+    definition: '專案風險識別、評估與緩解',
     color: 'red',
     rows: [
       { label: '查看風險', description: '瀏覽專案風險列表與處理狀態', member: 'project', executive: true, pm: 'project', admin: true },
@@ -106,6 +113,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
   },
   {
     category: '延期申請',
+    definition: '里程碑日期調整的申請與審核流程',
     color: 'rose',
     rows: [
       { label: '提交延期申請', description: '發起里程碑延期或日期調整申請', member: 'project', executive: false, pm: 'project', admin: true },
@@ -114,15 +122,8 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
     ],
   },
   {
-    category: '週報',
-    color: 'amber',
-    rows: [
-      { label: '填寫週報', description: '按里程碑填寫每週進度更新、狀態與阻礙事項', member: false, executive: false, pm: 'project', admin: true },
-      { label: '查看週報', description: '瀏覽專案的週報更新紀錄', member: 'project', executive: true, pm: 'project', admin: true },
-    ],
-  },
-  {
     category: '報告與匯出',
+    definition: '專案報告產出與資料匯出',
     color: 'pink',
     rows: [
       { label: '匯出 PDF 報告', description: '產生並下載專案 PDF 報告', member: 'project', executive: true, pm: 'project', admin: true },
@@ -132,6 +133,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
   },
   {
     category: '通知',
+    definition: '系統訊息接收與管理',
     color: 'cyan',
     rows: [
       { label: '接收系統通知', description: '接收任務指派、逾期提醒、延期審核結果等通知', member: true, executive: true, pm: true, admin: true },
@@ -140,6 +142,7 @@ const PERMISSIONS: { category: string; color: string; rows: PermissionRow[] }[] 
   },
   {
     category: '後台管理',
+    definition: '系統層級設定與使用者管理',
     color: 'slate',
     rows: [
       { label: '存取管理後台', description: '進入後台管理頁面', member: false, executive: false, pm: false, admin: true },
@@ -264,6 +267,7 @@ export default function AdminRolesPage() {
                             ? <ChevronRight className="h-3.5 w-3.5" />
                             : <ChevronDown className="h-3.5 w-3.5" />}
                           {section.category}
+                          <span className="font-normal normal-case tracking-normal text-[11px] opacity-70 ml-1">— {section.definition}</span>
                         </span>
                       </td>
                     </tr>
