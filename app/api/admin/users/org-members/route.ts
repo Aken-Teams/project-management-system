@@ -13,7 +13,7 @@ let cacheTime = 0
 
 async function getRawTree(): Promise<ADNode> {
   if (cachedTree && Date.now() - cacheTime < CACHE_TTL_MS) return cachedTree
-  const res = await fetch(`${AD_URL}/api/v1/ldap/organizations/tree?domain=PANJIT`, {
+  const res = await fetch(`${AD_URL}/ldap/api/v1/organizations/tree?domain=PANJIT`, {
     headers: { 'X-API-Key': AD_API },
   })
   if (!res.ok) throw new Error('AD fetch failed')

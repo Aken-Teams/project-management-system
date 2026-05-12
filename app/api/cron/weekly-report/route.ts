@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Send email via LDAP/AD API ─────────────────────────────────────────────
-    const mailRes = await fetch(`${AD_URL}/api/v1/mail/send`, {
+    const mailRes = await fetch(`${AD_URL}/ldap/api/v1/mail/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': AD_API! },
       body: JSON.stringify({

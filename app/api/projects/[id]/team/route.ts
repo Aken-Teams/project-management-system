@@ -9,7 +9,7 @@ const AD_API = process.env.AD_API!
 async function fetchAdEmail(adId: string): Promise<string | null> {
   try {
     const res = await fetch(
-      `${AD_URL}/api/v1/ldap/users/${encodeURIComponent(adId)}`,
+      `${AD_URL}/ldap/api/v1/users/${encodeURIComponent(adId)}`,
       { headers: { 'X-API-Key': AD_API } }
     )
     if (!res.ok) return null

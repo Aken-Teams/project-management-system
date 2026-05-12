@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Send email with PDF attachment
-    const res = await fetch(`${AD_URL}/api/v1/mail/send`, {
+    const res = await fetch(`${AD_URL}/ldap/api/v1/mail/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

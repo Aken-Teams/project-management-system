@@ -29,7 +29,7 @@ export async function GET() {
       return NextResponse.json(cachedTree)
     }
     const res = await fetch(
-      `${AD_URL}/api/v1/ldap/organizations/tree?domain=${DOMAIN}`,
+      `${AD_URL}/ldap/api/v1/organizations/tree?domain=${DOMAIN}`,
       { headers: { 'X-API-Key': AD_API } }
     )
     if (!res.ok) throw new Error('AD API error')

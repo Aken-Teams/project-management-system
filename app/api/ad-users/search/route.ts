@@ -31,7 +31,7 @@ async function getMembers(): Promise<ADMember[]> {
   if (cachedMembers && Date.now() - cacheTime < CACHE_TTL_MS) return cachedMembers
 
   const res = await fetch(
-    `${AD_URL}/api/v1/ldap/organizations/tree?domain=${DOMAIN}`,
+    `${AD_URL}/ldap/api/v1/organizations/tree?domain=${DOMAIN}`,
     { headers: { 'X-API-Key': AD_API }, next: { revalidate: 300 } }
   )
   if (!res.ok) throw new Error('AD API error')

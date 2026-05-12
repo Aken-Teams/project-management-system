@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
           // Send email to all team members who have an email address
           if (teamEmails.length > 0 && AD_URL && AD_API) {
             try {
-              await fetch(`${AD_URL}/api/v1/mail/send`, {
+              await fetch(`${AD_URL}/ldap/api/v1/mail/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-API-Key': AD_API },
                 body: JSON.stringify({ to: teamEmails, subject: emailSubject, body: emailBody }),

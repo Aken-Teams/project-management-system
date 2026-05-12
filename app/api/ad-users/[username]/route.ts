@@ -11,7 +11,7 @@ export async function GET(
   try {
     const { username } = await params
     const res = await fetch(
-      `${AD_URL}/api/v1/ldap/users/${encodeURIComponent(username)}`,
+      `${AD_URL}/ldap/api/v1/users/${encodeURIComponent(username)}`,
       { headers: { 'X-API-Key': AD_API } }
     )
     if (!res.ok) return NextResponse.json({ error: '找不到使用者' }, { status: 404 })
