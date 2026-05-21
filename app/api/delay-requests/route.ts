@@ -191,6 +191,9 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             projectCode: true,
+            projectType: true,
+            projectTier: true,
+            owner: { select: { id: true, name: true } },
             milestones: {
               orderBy: { sortOrder: 'asc' },
               select: { id: true, name: true, dueDate: true, status: true, progress: true },
@@ -221,6 +224,9 @@ export async function GET(request: NextRequest) {
         id: dr.project.id,
         name: dr.project.name,
         projectCode: dr.project.projectCode,
+        projectType: dr.project.projectType,
+        projectTier: dr.project.projectTier,
+        ownerName: dr.project.owner.name,
         milestones: dr.project.milestones.map((m) => ({
           id: m.id,
           name: m.name,
