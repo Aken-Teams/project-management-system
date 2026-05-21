@@ -207,21 +207,11 @@ export function RoiSection({
   const [paramDraft, setParamDraft] = useState<RoiParams>(
     initialRoiParams ?? { grossMargin: null, avgPrice: null, capacity: null }
   )
-  const [actualCostDraft, setActualCostDraft] = useState<(number | null)[]>(
-    initialItems.map((i) => i.actualCost)
-  )
-
   const capitalExp = budget > 0 ? budget : initialItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
   const { monthlyProfit, paybackMonths } = calcRoi(initialRoiParams, capitalExp)
 
-  const estimated = initialItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
-  const actual = initialItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
-  const hasActual = initialItems.some((i) => i.actualCost != null)
-  const missingActualCount = initialItems.filter((i) => i.actualCost == null).length
-
   const startEdit = () => {
     setParamDraft(initialRoiParams ?? { grossMargin: null, avgPrice: null, capacity: null })
-    setActualCostDraft(initialItems.map((i) => i.actualCost))
     setEditing(true)
   }
 
@@ -237,20 +227,8 @@ export function RoiSection({
           roiCapacity: paramDraft.capacity,
         }),
       })
-      const updatedItems = initialItems.map((item, i) => ({
-        ...item,
-        actualCost: actualCostDraft[i] !== undefined ? actualCostDraft[i] : item.actualCost,
-      }))
-      const res = await fetch(`/api/projects/${projectId}/budget-items`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: updatedItems }),
-      })
-      if (res.ok) {
-        const saved = await res.json()
-        onSaved(saved, paramDraft)
-        setEditing(false)
-      }
+      onSaved(initialItems, paramDraft)
+      setEditing(false)
     } finally {
       setSaving(false)
     }
@@ -264,7 +242,7 @@ export function RoiSection({
         {!editing && !readOnly && (
           <Button type="button" variant="ghost" size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            onClick={startEdit} title="編輯 ROI 數據與實際費用">
+            onClick={startEdit} title="編輯 ROI 參數">
             <Pencil className="h-3.5 w-3.5" />
           </Button>
         )}
@@ -303,69 +281,6 @@ export function RoiSection({
             </div>
           </div>
 
-          {/* 2. Actual costs table */}
-          {initialItems.length > 0 && (
-            <div className="rounded-md border overflow-hidden">
-              <div className="bg-muted/60 px-3 py-2 border-b">
-                <div className="text-xs font-semibold text-foreground">各設備實際費用</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  在右側欄位輸入實際採購金額（NT$），未填寫請留空
-                </div>
-              </div>
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground w-10">站別</th>
-                    <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">設備名稱</th>
-                    <th className="px-3 py-1.5 text-right font-medium text-muted-foreground w-32">預估費用</th>
-                    <th className="px-3 py-1.5 text-right font-medium text-muted-foreground w-36">實際費用 (NT$)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {initialItems.map((item, i) => (
-                    <tr key={i} className="hover:bg-muted/20">
-                      <td className="px-3 py-1 text-muted-foreground">{item.station}</td>
-                      <td className="px-3 py-1">{item.equipment}</td>
-                      <td className="px-3 py-1 text-right tabular-nums text-muted-foreground">
-                        {item.estimatedCost != null ? item.estimatedCost.toLocaleString('zh-TW') : '—'}
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          type="text" inputMode="numeric"
-                          value={actualCostDraft[i] != null ? actualCostDraft[i]!.toLocaleString('zh-TW') : ''}
-                          onChange={(e) => {
-                            const raw = e.target.value.replace(/,/g, '').replace(/[^\d.]/g, '')
-                            const d = [...actualCostDraft]
-                            d[i] = raw === '' ? null : (parseFloat(raw) || null)
-                            setActualCostDraft(d)
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Tab' && !e.shiftKey && actualCostDraft[i] == null && item.estimatedCost != null) {
-                              e.preventDefault()
-                              const d = [...actualCostDraft]
-                              d[i] = item.estimatedCost
-                              setActualCostDraft(d)
-                              // move focus to next row
-                              const inputs = (e.target as HTMLInputElement)
-                                .closest('tbody')
-                                ?.querySelectorAll<HTMLInputElement>('input')
-                              if (inputs) {
-                                const idx = Array.from(inputs).indexOf(e.target as HTMLInputElement)
-                                inputs[idx + 1]?.focus()
-                              }
-                            }
-                          }}
-                          placeholder="—"
-                          className="h-6 text-xs w-full text-right"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
           {/* Save / Cancel */}
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" size="sm"
@@ -385,26 +300,6 @@ export function RoiSection({
       {!editing && (
         <div className="space-y-3">
 
-          {/* Actual vs estimated stat cards (only when actual data exists) */}
-          {hasActual && estimated > 0 && (
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="rounded-md bg-muted/40 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">預估資本支出</div>
-                <div className="font-semibold tabular-nums">{fmtNT(estimated)}</div>
-              </div>
-              <div className="rounded-md bg-muted/40 px-3 py-2">
-                <div className="text-muted-foreground mb-0.5">實際投入</div>
-                <div className="font-semibold tabular-nums">{fmtNT(actual)}</div>
-              </div>
-              <div className={`rounded-md px-3 py-2 ${actual <= estimated ? 'bg-green-50' : 'bg-red-50'}`}>
-                <div className="text-muted-foreground mb-0.5">{actual <= estimated ? '節省' : '超支'}</div>
-                <div className={`font-semibold tabular-nums ${actual <= estimated ? 'text-green-600' : 'text-destructive'}`}>
-                  {fmtNT(Math.abs(estimated - actual))}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Table + chart side by side when chart data available, else table alone */}
           {monthlyProfit != null && monthlyProfit > 0 && capitalExp > 0 ? (
             <div className="grid grid-cols-[auto_1fr] gap-4 items-stretch">
@@ -417,21 +312,10 @@ export function RoiSection({
             <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
           )}
 
-          {/* Incomplete actual costs reminder */}
-          {!readOnly && initialItems.length > 0 && missingActualCount > 0 && (
-            <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>
-                尚有 <strong>{missingActualCount}</strong> 項設備未填寫實際費用，
-                點擊右上角鉛筆圖示補充以計算實際 ROI。
-              </span>
-            </div>
-          )}
-
           {/* Hint when completely empty */}
           {!readOnly && !roiText && initialItems.length === 0 && initialRoiParams == null && (
             <p className="text-xs text-muted-foreground">
-              點擊右上角鉛筆圖示填寫 ROI 參數與實際費用
+              點擊右上角鉛筆圖示填寫 ROI 參數
             </p>
           )}
         </div>
