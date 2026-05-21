@@ -743,7 +743,7 @@ export default function ApprovalsPage() {
                           )}
                         </div>
                       ) : (() => {
-                        const canResolve = user?.role === 'admin' || request.reviewers?.some(r => r.id === user?.id)
+                        const canResolve = user?.role === 'admin' || user?.role === 'executive'
                         if (!canResolve) {
                           return (
                             <div className="flex items-center gap-2 p-3 rounded-lg border bg-amber-50/50 border-amber-200 dark:bg-amber-950/10 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
@@ -769,7 +769,7 @@ export default function ApprovalsPage() {
                             </div>
                           </div>
                         ) : (
-                          <Button variant="outline" className="gap-1.5 w-full" onClick={() => setShowSupportForm(true)}>
+                          <Button variant="default" className="gap-1.5 w-full" onClick={() => setShowSupportForm(true)}>
                             <CheckCircle2 className="h-4 w-4" /> 標記協助已解決
                           </Button>
                         )
