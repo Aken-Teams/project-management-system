@@ -64,7 +64,13 @@ interface UserDetail {
 // ─── Constants ──────────────────────────────────────────────
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  pm: '專案經理', member: '團隊成員', executive: '主管', admin: '系統管理員',
+  admin: '系統管理員', executive: '主管', pm: '專案經理', member: '團隊成員',
+}
+const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  admin: '系統管理員 — 管理所有系統設定與使用者',
+  executive: '主管 — 檢視所有專案與報表、處理協助',
+  pm: '專案經理 — 建立與管理專案、編輯預算',
+  member: '團隊成員 — 參與被指派的專案',
 }
 const ROLE_COLORS: Record<UserRole, string> = {
   pm: 'bg-blue-100 text-blue-700',
@@ -648,18 +654,20 @@ export default function AdminUsersPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="搜尋姓名或 Email"
-              className="pl-8 h-9 w-44 sm:w-52"
+              className="pl-8 h-9 w-44 sm:w-52 bg-muted/60"
               onChange={e => handleSearchChange(e.target.value)}
             />
           </div>
           <Select value={roleFilter} onValueChange={v => { setRoleFilter(v); setPage(1) }}>
-            <SelectTrigger className="h-9 w-28 sm:w-32">
+            <SelectTrigger className="h-9 w-28 sm:w-32 bg-muted/60">
               <SelectValue placeholder="角色" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部角色</SelectItem>
-              {Object.entries(ROLE_LABELS).map(([v, l]) => (
-                <SelectItem key={v} value={v}>{l}</SelectItem>
+              {Object.entries(ROLE_LABELS).map(([v, label]) => (
+                <SelectItem key={v} value={v}>
+                  <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium', ROLE_COLORS[v as UserRole])}>{label}</span>
+                </SelectItem>
               ))}
               {selectedOrg !== null && (
                 <SelectItem value="none">未在系統</SelectItem>
