@@ -264,7 +264,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
               投資預估 (PM 填寫)
               {canEditRoi && !editingRoi && (
                 <button
-                  className="ml-auto text-muted-foreground hover:text-foreground"
+                  className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   onClick={() => {
                     setRoiDraft({
                       grossMargin: roiParams?.grossMargin ?? null,
@@ -275,6 +275,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                   }}
                 >
                   <Pencil className="h-3.5 w-3.5" />
+                  編輯
                 </button>
               )}
             </CardTitle>
