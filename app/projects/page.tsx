@@ -14,6 +14,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Calendar as CalendarUI } from '@/components/ui/calendar'
 import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier, type Project } from '@/lib/mock-data'
 import {
@@ -29,6 +35,7 @@ import {
   CalendarDays,
   RotateCcw,
   SlidersHorizontal,
+  HelpCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -297,7 +304,19 @@ export default function ProjectsPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">日期範圍</label>
+                  <label className="text-sm font-medium flex items-center gap-1">
+                    日期範圍
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[220px] text-xs">
+                          依專案的起迄日期篩選，只要專案期間與所選範圍有重疊即會顯示
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </label>
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {[
                       { label: '今年', from: new Date(new Date().getFullYear(), 0, 1), to: new Date(new Date().getFullYear(), 11, 31) },

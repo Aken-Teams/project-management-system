@@ -122,10 +122,8 @@ export async function GET(request: NextRequest) {
         id: { in: projectIds },
         ...(tierFilter ? { projectTier: tierFilter as never } : {}),
         ...(fromFilter && toFilter ? {
-          createdAt: {
-            gte: new Date(`${fromFilter}T00:00:00.000Z`),
-            lte: new Date(`${toFilter}T23:59:59.999Z`),
-          },
+          startDate: { lte: new Date(`${toFilter}T23:59:59.999Z`) },
+          endDate: { gte: new Date(`${fromFilter}T00:00:00.000Z`) },
         } : {}),
       },
       include: {

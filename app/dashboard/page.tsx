@@ -9,9 +9,11 @@ import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Calendar as CalendarUI } from '@/components/ui/calendar'
 import {
   TrendingUp,
+  HelpCircle,
   TrendingDown,
   AlertCircle,
   CheckCircle2,
@@ -206,6 +208,10 @@ export default function DashboardPage() {
               </PopoverTrigger>
               <PopoverContent className="w-auto p-3" align="end">
                 <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <HelpCircle className="h-3 w-3 shrink-0" />
+                    依專案起迄日期篩選，期間有重疊即顯示
+                  </p>
                   <div className="flex items-center gap-2">
                     {[
                       { label: '今年', from: new Date(currentYear, 0, 1), to: new Date(currentYear, 11, 31) },
