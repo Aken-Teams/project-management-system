@@ -218,9 +218,11 @@ function TaskRow({
   endDate,
   teamMembers,
   subtaskCount,
+  collapsed,
   onRemove,
   onUpdate,
   onToggleAddSubtask,
+  onToggleCollapse,
   onDateChange,
 }: {
   task: TimelineTask
@@ -228,9 +230,11 @@ function TaskRow({
   endDate?: string
   teamMembers: TimelineTeamMember[]
   subtaskCount: number
+  collapsed: boolean
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onToggleAddSubtask: () => void
+  onToggleCollapse: () => void
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -273,10 +277,21 @@ function TaskRow({
 
       {/* Name (indented) */}
       <div className="pl-4 flex items-center gap-1 min-w-0 pr-2">
-        {subtaskCount > 0
-          ? <span className="text-blue-400 text-xs select-none shrink-0">├</span>
-          : <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
-        }
+        {subtaskCount > 0 ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="shrink-0 flex items-center justify-center h-5 w-5 rounded hover:bg-muted transition-colors"
+            title={collapsed ? '展開子任務' : '收合子任務'}
+          >
+            {collapsed
+              ? <ChevronRight className="h-3 w-3 text-blue-400" />
+              : <ChevronDown className="h-3 w-3 text-blue-400" />
+            }
+          </button>
+        ) : (
+          <span className="text-muted-foreground/30 text-sm select-none shrink-0 w-5 text-center">└</span>
+        )}
         <Input
           value={task.title}
           onChange={(e) => onUpdate(task.id, 'title', e.target.value)}
@@ -291,13 +306,12 @@ function TaskRow({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={onToggleAddSubtask}
-          className="shrink-0 h-6 px-1.5 gap-0.5 text-[10px] text-muted-foreground hover:text-primary"
+          className="shrink-0 h-6 w-6 text-muted-foreground/50 hover:text-primary hover:bg-primary/10"
           title="新增子任務"
         >
-          <Plus className="h-3 w-3" />
-          子任務
+          <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
 
@@ -669,8 +683,9 @@ function SubtaskRow({
           size="icon"
           className="h-6 w-6 text-muted-foreground hover:text-destructive"
           onClick={() => onRemove(task.id)}
+          title="刪除子任務"
         >
-          <X className="h-3 w-3" />
+          <Trash2 className="h-3 w-3" />
         </Button>
       </div>
     </div>
@@ -946,22 +961,24 @@ export function TimelineTable({
         </button>
       </div>
 
-      {/* Header */}
-      <div
-        className={`${GRID_COLS} px-2 py-2.5 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide`}
-      >
-        <span />
-        <span className="pl-1.5">名稱</span>
-        <span className="text-center">日曆天</span>
-        <span className="text-center">開始日期</span>
-        <span className="text-center">結束日期</span>
-        <span className="text-center">指派人</span>
-        <span className="text-center">優先度</span>
-        <span />
-      </div>
+      {/* Scrollable area with sticky header */}
+      <div className="max-h-[60vh] overflow-y-auto">
+        {/* Header */}
+        <div
+          className={`${GRID_COLS} px-2 py-2.5 bg-muted border-b text-sm font-medium text-muted-foreground tracking-wide sticky top-0 z-10`}
+        >
+          <span />
+          <span className="pl-1.5">名稱</span>
+          <span className="text-center">日曆天</span>
+          <span className="text-center">開始日期</span>
+          <span className="text-center">結束日期</span>
+          <span className="text-center">指派人</span>
+          <span className="text-center">優先度</span>
+          <span />
+        </div>
 
-      {/* Rows */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        {/* Rows */}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={flatIds} strategy={verticalListSortingStrategy}>
           {milestones.map((milestone, msIndex) => {
             const msParentTasks = tasks.filter((t) => t.milestoneId === milestone.id && !t.parentId)
@@ -983,6 +1000,7 @@ export function TimelineTable({
                   <>
                     {msParentTasks.map((task) => {
                       const subtasks = tasks.filter((st) => st.parentId === task.id)
+                      const subtasksCollapsed = collapsedIds.has(task.id)
                       return (
                         <div key={task.id}>
                           <TaskRow
@@ -991,14 +1009,16 @@ export function TimelineTable({
                             endDate={taskDates.get(task.id)?.endDate}
                             teamMembers={teamMembers}
                             subtaskCount={subtasks.length}
+                            collapsed={subtasksCollapsed}
                             onRemove={onTaskRemove}
                             onUpdate={onTaskUpdate}
                             onToggleAddSubtask={() =>
                               setAddingSubtaskForId(prev => prev === task.id ? null : task.id)
                             }
+                            onToggleCollapse={() => toggleCollapse(task.id)}
                             onDateChange={onTaskDateChange}
                           />
-                          {subtasks.map((st) => (
+                          {!subtasksCollapsed && subtasks.map((st) => (
                             <SubtaskRow
                               key={st.id}
                               task={st}
@@ -1010,7 +1030,7 @@ export function TimelineTable({
                               onDateChange={onTaskDateChange}
                             />
                           ))}
-                          {addingSubtaskForId === task.id && (
+                          {!subtasksCollapsed && addingSubtaskForId === task.id && (
                             <InlineSubtaskInput
                               parentTask={task}
                               teamMembers={teamMembers}
@@ -1031,6 +1051,7 @@ export function TimelineTable({
           })}
         </SortableContext>
       </DndContext>
+      </div>
 
       {/* Add milestone */}
       <div className="px-3 py-2 border-t border-dashed">
