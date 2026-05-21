@@ -106,11 +106,6 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div className="flex justify-end">
-                <button type="button" className="text-[13px] font-medium text-blue-600 hover:text-blue-700 transition-colors">
-                  忘記密碼？
-                </button>
-              </div>
 
               {error && (
                 <p className="text-sm text-red-600">{error}</p>
