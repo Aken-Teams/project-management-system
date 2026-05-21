@@ -15,6 +15,17 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
 import type { RoiParams } from '@/components/roi-section'
 
@@ -390,8 +401,8 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
               </Button>
             </>
           ) : (
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-              編輯採購明細
+            <Button size="default" onClick={() => setEditing(true)}>
+              <Pencil className="h-4 w-4 mr-1.5" /> 編輯採購明細
             </Button>
           )}
         </div>
@@ -539,58 +550,110 @@ function CapexItemRow({ item, index, editing, onChange, onRemove }: {
 
 // ─── Read-only display ───
 
+function DisplayCell({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-muted-foreground leading-tight">{label}</div>
+      <div className="text-sm font-medium truncate whitespace-nowrap">{value}</div>
+    </div>
+  )
+}
+
+const hasPayment = (item: CapexItemData) =>
+  item.depositPct != null || item.deliveryPct != null || item.acceptancePct != null
+
 function CapexItemDisplay({ item }: { item: CapexItemData }) {
   return (
-    <div className="space-y-2">
-      {/* Row 1: Basic info */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {item.equipmentCategory && (
-          <Badge variant="outline" className="text-xs">{item.equipmentCategory.replace('固定資產_', '')}</Badge>
-        )}
-        {item.poNumber && <span className="text-xs text-muted-foreground">PO: {item.poNumber}</span>}
-        {item.partNumber && <span className="text-xs text-muted-foreground">料號: {item.partNumber}</span>}
-        {item.supplier && <span className="text-xs font-medium">{item.supplier}</span>}
-        {item.paymentStatus && <PaymentBadge status={item.paymentStatus} />}
-      </div>
-
-      {/* Row 2: Description + amounts */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="text-sm min-w-0">
-          {item.partDescription && <div className="truncate">{item.partDescription}</div>}
-          <div className="text-xs text-muted-foreground">
-            {item.quantity > 0 && <>{item.quantity} {item.unit || '組'}</>}
-            {item.currency !== 'TWD' && item.originalPrice != null && (
-              <> · {item.currency} {item.originalPrice.toLocaleString()}</>
+    <div className="space-y-2.5">
+      {/* Header: description + amount */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {item.equipmentCategory && (
+              <Badge variant="outline" className="text-[11px] py-0 h-5">{item.equipmentCategory.replace('固定資產_', '')}</Badge>
             )}
-            {item.twdPrice != null && <> · 台幣單價 {fmtNT(item.twdPrice)}</>}
+            {item.paymentStatus && <PaymentBadge status={item.paymentStatus} />}
+            {item.supplier && <span className="text-xs font-semibold text-foreground">{item.supplier}</span>}
           </div>
+          {item.partDescription && (
+            <div className="text-sm mt-1 leading-snug">{item.partDescription}</div>
+          )}
         </div>
-        <div className="text-right shrink-0">
-          <div className="font-semibold text-sm">{fmtNT(item.orderAmount)}</div>
+        <div className="text-right shrink-0 pl-2">
+          <div className="text-sm font-bold tabular-nums">{fmtNT(item.orderAmount)}</div>
+          {item.quantity > 0 && item.twdPrice != null && (
+            <div className="text-[11px] text-muted-foreground tabular-nums">
+              {item.quantity} {item.unit || '組'} × {fmtNT(item.twdPrice)}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Row 3: Payment schedule */}
-      {(item.depositPct != null || item.deliveryPct != null || item.acceptancePct != null) && (
-        <div className="flex gap-4 text-xs text-muted-foreground">
-          {item.depositPct != null && (
-            <span>訂金 {fmtPct(item.depositPct)} {item.depositAmount != null && fmtNT(item.depositAmount)} {item.depositPayDate ?? ''}</span>
-          )}
-          {item.deliveryPct != null && (
-            <span>交機 {fmtPct(item.deliveryPct)} {item.deliveryAmount != null && fmtNT(item.deliveryAmount)} {item.deliveryPayDate ?? ''}</span>
-          )}
-          {item.acceptancePct != null && (
-            <span>驗收 {fmtPct(item.acceptancePct)} {item.acceptanceAmount != null && fmtNT(item.acceptanceAmount)} {item.acceptancePayDate ?? ''}</span>
-          )}
+      {/* Info grid — row 1: basic */}
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-x-5 gap-y-1.5">
+        <DisplayCell label="採購單號" value={item.poNumber} />
+        <DisplayCell label="料號" value={item.partNumber} />
+        <DisplayCell label="站別" value={item.station} />
+        {item.currency !== 'TWD' && item.originalPrice != null && (
+          <DisplayCell label={`原幣 (${item.currency})`} value={item.originalPrice.toLocaleString()} />
+        )}
+        {item.masterSummary && (
+          <div className="md:col-span-2 min-w-0">
+            <div className="text-xs text-muted-foreground leading-tight">主檔摘要</div>
+            <div className="text-sm font-medium">{item.masterSummary}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Info grid — row 2: dates */}
+      {(item.issueDate || item.deliveryDate || item.bpmAcceptanceDate) && (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-x-5 gap-y-1.5">
+          <DisplayCell label="開立日期" value={item.issueDate} />
+          <DisplayCell label="設備入廠日" value={item.deliveryDate} />
+          <DisplayCell label="BPM 驗收" value={item.bpmAcceptanceDate} />
         </div>
       )}
 
-      {/* Row 4: Dates */}
-      {(item.issueDate || item.deliveryDate || item.bpmAcceptanceDate) && (
-        <div className="flex gap-4 text-xs text-muted-foreground">
-          {item.issueDate && <span>開立: {item.issueDate}</span>}
-          {item.deliveryDate && <span>入廠: {item.deliveryDate}</span>}
-          {item.bpmAcceptanceDate && <span>驗收: {item.bpmAcceptanceDate}</span>}
+      {/* Payment schedule table */}
+      {hasPayment(item) && (
+        <div className="rounded border overflow-hidden text-sm">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-muted/50 text-muted-foreground">
+                <th className="text-left px-3 py-1.5 font-medium w-24">付款期</th>
+                <th className="text-right px-3 py-1.5 font-medium w-20">比例</th>
+                <th className="text-right px-3 py-1.5 font-medium">金額</th>
+                <th className="text-left px-3 py-1.5 font-medium w-28">付款日</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {item.depositPct != null && (
+                <tr>
+                  <td className="px-3 py-1.5">訂金款</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtPct(item.depositPct)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtNT(item.depositAmount)}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{item.depositPayDate ?? '-'}</td>
+                </tr>
+              )}
+              {item.deliveryPct != null && (
+                <tr>
+                  <td className="px-3 py-1.5">交機款</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtPct(item.deliveryPct)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtNT(item.deliveryAmount)}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{item.deliveryPayDate ?? '-'}</td>
+                </tr>
+              )}
+              {item.acceptancePct != null && (
+                <tr>
+                  <td className="px-3 py-1.5">驗收款</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtPct(item.acceptancePct)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtNT(item.acceptanceAmount)}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{item.acceptancePayDate ?? '-'}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -625,12 +688,32 @@ function CapexItemForm({ item, index, onChange, onRemove }: {
 
   return (
     <div className="space-y-3">
-      {/* Delete button */}
+      {/* Header + Delete */}
       <div className="flex justify-between items-center">
         <span className="text-xs font-medium text-muted-foreground">明細 #{index + 1}</span>
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => onRemove(index)}>
-          <Trash2 className="h-3 w-3 mr-1" /> 刪除
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive">
+              <Trash2 className="h-3 w-3 mr-1" /> 刪除
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>確認刪除此明細？</AlertDialogTitle>
+              <AlertDialogDescription>
+                {item.partDescription || item.poNumber
+                  ? `即將刪除「${item.partDescription || item.poNumber}」，此操作在儲存後無法復原。`
+                  : '即將刪除此採購明細，此操作在儲存後無法復原。'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction onClick={() => onRemove(index)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                確認刪除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Section 1: Basic */}
