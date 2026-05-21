@@ -383,28 +383,28 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <CardContent className="space-y-0">
                   <div className="grid gap-0 divide-y">
                     <div className="py-3 first:pt-0">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <AlertCircle className="h-3 w-3" />
                         開案原因
                       </div>
                       <p className={`text-sm whitespace-pre-line ${!project.createdReason ? 'text-muted-foreground italic' : ''}`}>{project.createdReason || '暫無'}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <Target className="h-3 w-3" />
                         專案目的
                       </div>
                       <p className={`text-sm whitespace-pre-line ${!project.purpose ? 'text-muted-foreground italic' : ''}`}>{project.purpose || '暫無'}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <LayoutList className="h-3 w-3" />
                         專案範圍
                       </div>
                       <p className={`text-sm whitespace-pre-line ${!project.scope ? 'text-muted-foreground italic' : ''}`}>{project.scope || '暫無'}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <TrendingUp className="h-3 w-3" />
                         預期效益
                       </div>
@@ -412,7 +412,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     </div>
                     {project.smartObjective && (
                       <div className="py-3">
-                        <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <div className="text-sm font-semibold text-primary mb-2 flex items-center gap-1.5">
                           <Target className="h-3 w-3" />
                           SMART 目標
                         </div>
@@ -428,7 +428,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                               const val = (project.smartObjective as Record<string, string>)?.[item.key]
                               return (
                                 <div key={item.key} className="py-2 first:pt-0 last:pb-0">
-                                  <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                  <span className="text-xs font-semibold text-primary/80">{item.label}</span>
                                   <p className={`text-sm mt-0.5 whitespace-pre-line ${!val ? 'text-muted-foreground italic' : ''}`}>{val || '暫無'}</p>
                                 </div>
                               )

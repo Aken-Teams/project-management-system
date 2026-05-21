@@ -265,28 +265,28 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                 <CardContent className="space-y-0">
                   <div className="grid gap-0 divide-y">
                     <div className="py-3 first:pt-0">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <AlertCircle className="h-3 w-3" />
                         開案原因
                       </div>
                       <p className={`text-sm whitespace-pre-line ${!project.createdReason ? 'text-muted-foreground italic' : ''}`}>{project.createdReason || '暫無'}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <Target className="h-3 w-3" />
                         專案目的
                       </div>
                       <p className={`text-sm whitespace-pre-line ${!project.purpose ? 'text-muted-foreground italic' : ''}`}>{project.purpose || '暫無'}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <LayoutList className="h-3 w-3" />
                         專案範圍
                       </div>
                       <p className={`text-sm whitespace-pre-line ${!project.scope ? 'text-muted-foreground italic' : ''}`}>{project.scope || '暫無'}</p>
                     </div>
                     <div className="py-3">
-                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                      <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-1.5">
                         <TrendingUp className="h-3 w-3" />
                         預期效益
                       </div>

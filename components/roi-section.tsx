@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Pencil, Check, X, Loader2, AlertCircle } from 'lucide-react'
+import { Pencil, Check, X, Loader2, AlertCircle, DollarSign } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer,
@@ -260,7 +260,7 @@ export function RoiSection({
     <div>
       {/* ─── Section header ─── */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-muted-foreground">投資報酬 (ROI)</span>
+        <span className="text-sm font-semibold text-primary flex items-center gap-1.5"><DollarSign className="h-3 w-3" />投資報酬 (ROI)</span>
         {!editing && !readOnly && (
           <Button type="button" variant="ghost" size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-foreground"
