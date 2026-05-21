@@ -1,10 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Pencil, Check, X, Loader2, AlertCircle, DollarSign } from 'lucide-react'
+import { DollarSign, AlertTriangle } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   ResponsiveContainer,
@@ -24,21 +21,12 @@ interface BudgetItemMin {
 }
 
 interface RoiSectionProps {
-  projectId: string
   budget: number
-  roiText: string
   roiParams: RoiParams | null
   budgetItems: BudgetItemMin[]
-  onSaved: (newBudgetItems: BudgetItemMin[], newRoiParams: RoiParams) => void
-  readOnly?: boolean
 }
 
 const fmtNT = (n: number) => `NT$ ${Math.round(n).toLocaleString('zh-TW')}`
-
-function parseNum(v: string): number | null {
-  const n = parseFloat(v.replace(/,/g, ''))
-  return isNaN(n) ? null : n
-}
 
 function calcRoi(params: RoiParams | null, budget: number) {
   const { grossMargin, avgPrice, capacity } = params ?? {}
@@ -192,134 +180,48 @@ function PaybackChart({ budget, monthlyProfit }: { budget: number; monthlyProfit
   )
 }
 
-// ─── Main RoiSection ───────────────────────────────────────
+// ─── Main RoiSection (display only — editing is in 投資報酬 tab) ───
 export function RoiSection({
-  projectId,
   budget,
-  roiText,
   roiParams: initialRoiParams,
   budgetItems: initialItems,
-  onSaved,
-  readOnly,
 }: RoiSectionProps) {
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [paramDraft, setParamDraft] = useState<RoiParams>(
-    initialRoiParams ?? { grossMargin: null, avgPrice: null, capacity: null }
-  )
   const capitalExp = budget > 0 ? budget : initialItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
-  const { monthlyProfit, paybackMonths } = calcRoi(initialRoiParams, capitalExp)
-
-  const startEdit = () => {
-    setParamDraft(initialRoiParams ?? { grossMargin: null, avgPrice: null, capacity: null })
-    setEditing(true)
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await fetch(`/api/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roiGrossMargin: paramDraft.grossMargin,
-          roiAvgPrice: paramDraft.avgPrice,
-          roiCapacity: paramDraft.capacity,
-        }),
-      })
-      onSaved(initialItems, paramDraft)
-      setEditing(false)
-    } finally {
-      setSaving(false)
-    }
-  }
+  const { monthlyProfit } = calcRoi(initialRoiParams, capitalExp)
 
   return (
     <div>
       {/* ─── Section header ─── */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-semibold text-primary flex items-center gap-1.5"><DollarSign className="h-3 w-3" />投資報酬 (ROI)</span>
-        {!editing && !readOnly && (
-          <Button type="button" variant="ghost" size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            onClick={startEdit} title="編輯 ROI 參數">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-        )}
       </div>
 
-
-      {/* ══════════ EDIT MODE ══════════ */}
-      {editing && (
-        <div className="space-y-4 mb-4">
-
-          {/* 1. ROI params */}
-          <div className="rounded-md border p-3 space-y-3">
-            <div className="text-xs font-semibold text-foreground">ROI 參數</div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">毛利率 (%)</Label>
-                <Input type="number" min={0} max={100} step={0.1}
-                  value={paramDraft.grossMargin ?? ''}
-                  onChange={(e) => setParamDraft((p) => ({ ...p, grossMargin: parseNum(e.target.value) }))}
-                  className="h-7 text-xs" placeholder="—" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">平均售價 (NTD/K)</Label>
-                <Input type="number" min={0}
-                  value={paramDraft.avgPrice ?? ''}
-                  onChange={(e) => setParamDraft((p) => ({ ...p, avgPrice: parseNum(e.target.value) }))}
-                  className="h-7 text-xs" placeholder="—" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Capacity (K/M)</Label>
-                <Input type="number" min={0}
-                  value={paramDraft.capacity ?? ''}
-                  onChange={(e) => setParamDraft((p) => ({ ...p, capacity: parseNum(e.target.value) }))}
-                  className="h-7 text-xs" placeholder="—" />
-              </div>
-            </div>
-          </div>
-
-          {/* Save / Cancel */}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" size="sm"
-              onClick={() => setEditing(false)} disabled={saving}>
-              取消
-            </Button>
-            <Button type="button" size="sm"
-              onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-              儲存
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════ DISPLAY MODE ══════════ */}
-      {!editing && (
-        <div className="space-y-3">
-
-          {/* Table + chart side by side when chart data available, else table alone */}
-          {monthlyProfit != null && monthlyProfit > 0 && capitalExp > 0 ? (
-            <div className="grid grid-cols-[auto_1fr] gap-4 items-stretch">
-              <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
-              <div className="min-w-0">
-              <PaybackChart budget={capitalExp} monthlyProfit={monthlyProfit} />
-              </div>
-            </div>
-          ) : (
+      <div className="space-y-3">
+        {/* Table + chart side by side when chart data available, else table alone */}
+        {monthlyProfit != null && monthlyProfit > 0 && capitalExp > 0 ? (
+          <div className="grid grid-cols-[auto_1fr] gap-4 items-stretch">
             <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
-          )}
+            <div className="min-w-0">
+            <PaybackChart budget={capitalExp} monthlyProfit={monthlyProfit} />
+            </div>
+          </div>
+        ) : (
+          <RoiParamsTable roiParams={initialRoiParams} budget={capitalExp} />
+        )}
 
-          {/* Hint when completely empty */}
-          {!readOnly && !roiText && initialItems.length === 0 && initialRoiParams == null && (
-            <p className="text-xs text-muted-foreground">
-              點擊右上角鉛筆圖示填寫 ROI 參數
-            </p>
-          )}
-        </div>
-      )}
+        {/* Warning when ROI params missing or incomplete */}
+        {(initialRoiParams == null || initialRoiParams.grossMargin == null || initialRoiParams.avgPrice == null || initialRoiParams.capacity == null) && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">ROI 參數尚未填寫完成</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                請至「投資報酬」頁籤或專案編輯中填寫毛利率、平均售價、Capacity，以計算投資回報期
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

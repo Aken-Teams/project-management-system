@@ -71,6 +71,9 @@ export interface ProjectEditData {
   smartObjective?: SmartObjective
   startDate?: string
   endDate?: string
+  roiGrossMargin?: number | null
+  roiAvgPrice?: number | null
+  roiCapacity?: number | null
 }
 
 const EMPTY_SMART: SmartObjective = {
@@ -145,6 +148,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     smartObjective: project.smartObjective ?? { ...EMPTY_SMART },
     startDate: project.startDate,
     endDate: project.endDate,
+    roiGrossMargin: (project as any).roiGrossMargin ?? null,
+    roiAvgPrice: (project as any).roiAvgPrice ?? null,
+    roiCapacity: (project as any).roiCapacity ?? null,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -953,6 +959,46 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               ) : (
                 <BudgetListEditor items={budgetItems} onChange={setBudgetItems} onAITotal={handleAITotal} />
               )}
+            </div>
+
+            {/* ROI Parameters */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5" />
+                ROI 參數
+              </Label>
+              <p className="text-xs text-muted-foreground -mt-0.5">
+                投資報酬率計算所需參數（毛利率、售價、產能）
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">毛利率 (%)</Label>
+                  <Input
+                    type="number"
+                    placeholder="例: 25"
+                    value={form.roiGrossMargin ?? ''}
+                    onChange={e => update('roiGrossMargin', e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">平均售價 (NTD/K)</Label>
+                  <Input
+                    type="number"
+                    placeholder="例: 150"
+                    value={form.roiAvgPrice ?? ''}
+                    onChange={e => update('roiAvgPrice', e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Capacity (K/M)</Label>
+                  <Input
+                    type="number"
+                    placeholder="例: 1000"
+                    value={form.roiCapacity ?? ''}
+                    onChange={e => update('roiCapacity', e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1.5">

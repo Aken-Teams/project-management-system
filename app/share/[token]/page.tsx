@@ -294,13 +294,9 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                     </div>
                     <div className="py-3 last:pb-0">
                       <RoiSection
-                        projectId={project.id}
                         budget={project.budget ?? 0}
-                        roiText={project.roi ?? ''}
                         roiParams={roiParams}
                         budgetItems={[]}
-                        onSaved={() => {}}
-                        readOnly
                       />
                     </div>
                   </div>

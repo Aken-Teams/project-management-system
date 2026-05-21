@@ -106,6 +106,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   )?.role
   const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'S' || currentUserTeamRole === 'P' || user?.role === 'admin'
   const canEditCapex = currentUserTeamRole === 'P'
+  const canEditRoi = user?.role === 'pm' || user?.role === 'admin'
 
   const fetchShareLinks = async () => {
     setShareLinksLoading(true)
@@ -182,6 +183,13 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
     const updated = await res.json()
     setProject(updated)
+    if (updated?.roiGrossMargin != null || updated?.roiAvgPrice != null || updated?.roiCapacity != null) {
+      setRoiParams({
+        grossMargin: updated.roiGrossMargin ?? null,
+        avgPrice: updated.roiAvgPrice ?? null,
+        capacity: updated.roiCapacity ?? null,
+      })
+    }
   }
 
   const handleDeleteProject = async () => {
@@ -510,15 +518,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     )}
                     <div className="py-3 last:pb-0">
                       <RoiSection
-                        projectId={id}
                         budget={project.budget ?? 0}
-                        roiText={project.roi ?? ''}
                         roiParams={roiParams}
                         budgetItems={budgetItems}
-                        onSaved={(newItems, newParams) => {
-                          setBudgetItems(newItems as typeof budgetItems)
-                          setRoiParams(newParams)
-                        }}
                       />
                     </div>
                   </div>
@@ -658,7 +660,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 roiParams={roiParams}
                 budget={project?.budget ?? 0}
                 readOnly={!canEditCapex}
+                canEditRoi={canEditRoi}
                 onSaved={setCapexItems}
+                onRoiParamsSaved={setRoiParams}
               />
             </TabsContent>
           )}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { Plus, Trash2, Save, X, ChevronDown, ChevronRight, Package, DollarSign, CalendarDays, CreditCard } from 'lucide-react'
+import { Plus, Trash2, Save, X, ChevronDown, ChevronRight, Package, DollarSign, CalendarDays, CreditCard, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -69,7 +69,9 @@ interface CapexTableProps {
   roiParams: RoiParams | null
   budget: number
   readOnly: boolean
+  canEditRoi?: boolean
   onSaved: (items: CapexItemData[]) => void
+  onRoiParamsSaved?: (params: RoiParams) => void
 }
 
 const EQUIPMENT_CATEGORIES = ['固定資產_設備', '固定資產_模具', '固定資產_工程', '雜項_消耗品']
@@ -97,12 +99,44 @@ const fmtPct = (v: number | null) => v != null ? `${Math.round(v * 100)}%` : '-'
 
 // ─── Main Component ───
 
-export function CapexTable({ projectId, items: initialItems, budgetItems, roiParams, budget, readOnly, onSaved }: CapexTableProps) {
+export function CapexTable({ projectId, items: initialItems, budgetItems, roiParams, budget, readOnly, canEditRoi, onSaved, onRoiParamsSaved }: CapexTableProps) {
   const [items, setItems] = useState<CapexItemData[]>(initialItems)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedBudgetItems, setExpandedBudgetItems] = useState<Set<string>>(new Set())
   const { toast } = useToast()
+
+  // ROI params editing
+  const [editingRoi, setEditingRoi] = useState(false)
+  const [roiDraft, setRoiDraft] = useState<RoiParams>({
+    grossMargin: roiParams?.grossMargin ?? null,
+    avgPrice: roiParams?.avgPrice ?? null,
+    capacity: roiParams?.capacity ?? null,
+  })
+  const [savingRoi, setSavingRoi] = useState(false)
+
+  const handleSaveRoi = useCallback(async () => {
+    setSavingRoi(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roiGrossMargin: roiDraft.grossMargin,
+          roiAvgPrice: roiDraft.avgPrice,
+          roiCapacity: roiDraft.capacity,
+        }),
+      })
+      if (!res.ok) throw new Error('save failed')
+      onRoiParamsSaved?.(roiDraft)
+      setEditingRoi(false)
+      toast({ title: '儲存成功', description: 'ROI 參數已更新' })
+    } catch {
+      toast({ title: '儲存失敗', description: '請稍後再試', variant: 'destructive' })
+    } finally {
+      setSavingRoi(false)
+    }
+  }, [projectId, roiDraft, onRoiParamsSaved, toast])
 
   const toggleExpand = useCallback((key: string) => {
     setExpandedBudgetItems(prev => {
@@ -217,35 +251,95 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
             <CardTitle className="text-sm flex items-center gap-1.5">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
               投資預估 (PM 填寫)
+              {canEditRoi && !editingRoi && (
+                <button
+                  className="ml-auto text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setRoiDraft({
+                      grossMargin: roiParams?.grossMargin ?? null,
+                      avgPrice: roiParams?.avgPrice ?? null,
+                      capacity: roiParams?.capacity ?? null,
+                    })
+                    setEditingRoi(true)
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-3 text-sm">
-              <div>
-                <div className="text-muted-foreground">毛利率</div>
-                <div className="font-medium">{roiParams?.grossMargin != null ? `${roiParams.grossMargin}%` : '-'}</div>
+            {editingRoi && canEditRoi ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">毛利率 (%)</div>
+                    <Input
+                      className="h-8 text-sm"
+                      type="number"
+                      placeholder="例: 25"
+                      value={roiDraft.grossMargin ?? ''}
+                      onChange={e => setRoiDraft(p => ({ ...p, grossMargin: e.target.value === '' ? null : Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">平均售價 (NTD/K)</div>
+                    <Input
+                      className="h-8 text-sm"
+                      type="number"
+                      placeholder="例: 150"
+                      value={roiDraft.avgPrice ?? ''}
+                      onChange={e => setRoiDraft(p => ({ ...p, avgPrice: e.target.value === '' ? null : Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">Capacity (K/M)</div>
+                    <Input
+                      className="h-8 text-sm"
+                      type="number"
+                      placeholder="例: 1000"
+                      value={roiDraft.capacity ?? ''}
+                      onChange={e => setRoiDraft(p => ({ ...p, capacity: e.target.value === '' ? null : Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setEditingRoi(false)} disabled={savingRoi}>
+                    <X className="h-3.5 w-3.5 mr-1" /> 取消
+                  </Button>
+                  <Button size="sm" onClick={handleSaveRoi} disabled={savingRoi}>
+                    <Save className="h-3.5 w-3.5 mr-1" /> {savingRoi ? '儲存中...' : '儲存'}
+                  </Button>
+                </div>
               </div>
-              <div>
-                <div className="text-muted-foreground">平均售價</div>
-                <div className="font-medium">{roiParams?.avgPrice != null ? `${roiParams.avgPrice} NTD/K` : '-'}</div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-muted-foreground">毛利率</div>
+                  <div className="font-medium">{roiParams?.grossMargin != null ? `${roiParams.grossMargin}%` : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">平均售價</div>
+                  <div className="font-medium">{roiParams?.avgPrice != null ? `${roiParams.avgPrice} NTD/K` : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Capacity</div>
+                  <div className="font-medium">{roiParams?.capacity != null ? `${roiParams.capacity} K/M` : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">月獲利額</div>
+                  <div className="font-medium">{monthlyProfit != null ? fmtNT(monthlyProfit) : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">資本支出預估</div>
+                  <div className="font-medium">{budget > 0 ? fmtNT(budget) : '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">回報期</div>
+                  <div className="font-medium text-red-600">{paybackMonths != null ? `${paybackMonths.toFixed(1)} 個月` : '-'}</div>
+                </div>
               </div>
-              <div>
-                <div className="text-muted-foreground">Capacity</div>
-                <div className="font-medium">{roiParams?.capacity != null ? `${roiParams.capacity} K/M` : '-'}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">月獲利額</div>
-                <div className="font-medium">{monthlyProfit != null ? fmtNT(monthlyProfit) : '-'}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">資本支出預估</div>
-                <div className="font-medium">{budget > 0 ? fmtNT(budget) : '-'}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">回報期</div>
-                <div className="font-medium text-red-600">{paybackMonths != null ? `${paybackMonths.toFixed(1)} 個月` : '-'}</div>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
 
