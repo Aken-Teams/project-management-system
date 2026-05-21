@@ -148,10 +148,23 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const status = searchParams.get('status')
     const projectId = searchParams.get('projectId')
+    const reviewerEmail = searchParams.get('reviewerEmail')
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status
     if (projectId) where.projectId = projectId
+
+    // Filter to only show delay requests for projects where this user is an S-role member
+    if (reviewerEmail) {
+      const sRoleProjects = await prisma.projectTeamMember.findMany({
+        where: { role: 'S', user: { email: reviewerEmail } },
+        select: { projectId: true },
+      })
+      const projectIds = sRoleProjects.map(p => p.projectId)
+      where.projectId = projectId
+        ? (projectIds.includes(projectId) ? projectId : '__none__')
+        : { in: projectIds }
+    }
 
     const delayRequests = await prisma.delayRequest.findMany({
       where,

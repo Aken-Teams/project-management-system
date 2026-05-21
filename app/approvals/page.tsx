@@ -91,7 +91,11 @@ export default function ApprovalsPage() {
 
   const fetchRequests = useCallback(async () => {
     try {
-      const res = await fetch('/api/delay-requests')
+      // S-role filtering: non-admin users only see delay requests for projects they're S-role in
+      const params = user?.role !== 'admin' && user?.email
+        ? `?reviewerEmail=${encodeURIComponent(user.email)}`
+        : ''
+      const res = await fetch(`/api/delay-requests${params}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setAllRequests(data.delayRequests || [])
@@ -100,7 +104,7 @@ export default function ApprovalsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.role, user?.email])
 
   useEffect(() => {
     fetchRequests()

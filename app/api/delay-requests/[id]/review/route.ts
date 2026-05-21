@@ -52,10 +52,20 @@ export async function PATCH(
     // Verify reviewer exists
     const reviewer = await prisma.user.findUnique({
       where: { id: body.reviewerId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, role: true },
     })
     if (!reviewer) {
       return NextResponse.json({ error: '找不到審核人' }, { status: 404 })
+    }
+
+    // Verify reviewer is S-role in this project (or admin)
+    if (reviewer.role !== 'admin') {
+      const sRole = await prisma.projectTeamMember.findFirst({
+        where: { projectId: delayRequest.projectId, userId: body.reviewerId, role: 'S' },
+      })
+      if (!sRole) {
+        return NextResponse.json({ error: '您不是此專案的審核者（需要 S 角色）' }, { status: 403 })
+      }
     }
 
     const now = new Date()

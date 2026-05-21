@@ -48,6 +48,15 @@ export async function getExecutives() {
   })
 }
 
+/** All S (Sign-off) role team members for a specific project */
+export async function getProjectReviewers(projectId: string) {
+  const members = await prisma.projectTeamMember.findMany({
+    where: { projectId, role: 'S' },
+    select: { userId: true, user: { select: { id: true, name: true } } },
+  })
+  return members.map(m => m.user)
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({
@@ -83,10 +92,10 @@ export async function notifyDelaySubmitted({
   projectId: string
   projectName: string
 }) {
-  const executives = await getExecutives()
-  await Promise.all(executives.map(ex =>
+  const reviewers = await getProjectReviewers(projectId)
+  await Promise.all(reviewers.map(r =>
     createNotification({
-      userId: ex.id,
+      userId: r.id,
       type: 'delay_submitted',
       title: '延期申請待審核',
       message: `${requesterName} 提出延期申請（專案：${projectName}），請前往審核`,
@@ -108,10 +117,10 @@ export async function notifySupportNeeded({
   projectName: string
   detail: string
 }) {
-  const executives = await getExecutives()
-  await Promise.all(executives.map(ex =>
+  const reviewers = await getProjectReviewers(projectId)
+  await Promise.all(reviewers.map(r =>
     createNotification({
-      userId: ex.id,
+      userId: r.id,
       type: 'support_needed',
       title: '支援需求',
       message: `${requesterName} 在專案「${projectName}」提出支援需求：${detail.slice(0, 60)}${detail.length > 60 ? '…' : ''}`,

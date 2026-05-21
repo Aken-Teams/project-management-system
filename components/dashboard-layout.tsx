@@ -53,7 +53,7 @@ const navigation = [
   { name: '我的任務', href: '/my-tasks', icon: ClipboardList, roles: ['pm', 'member'] as const },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
   { name: '報告', href: '/reports', icon: FileText, roles: ['pm', 'executive', 'admin'] as const },
-  { name: '審核中心', href: '/approvals', icon: ClipboardCheck, roles: ['pm', 'executive', 'admin'] as const },
+  { name: '審核中心', href: '/approvals', icon: ClipboardCheck },
   { name: '管理後台', href: '/admin', icon: Shield, adminOnly: true as const },
 ]
 
