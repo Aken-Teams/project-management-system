@@ -349,7 +349,7 @@ export default function ProjectsPage() {
                           <CalendarUI
                             mode="single"
                             selected={dateFrom}
-                            onSelect={(d) => d && setDateFrom(d)}
+                            onSelect={(d) => { if (!d) return; setDateFrom(d); if (d > dateTo) setDateTo(d) }}
                             locale={zhTW}
                           />
                         </div>
@@ -359,6 +359,7 @@ export default function ProjectsPage() {
                             mode="single"
                             selected={dateTo}
                             onSelect={(d) => d && setDateTo(d)}
+                            disabled={(date) => date < dateFrom}
                             locale={zhTW}
                           />
                         </div>
