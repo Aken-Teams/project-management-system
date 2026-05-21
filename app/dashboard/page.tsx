@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/auth-context'
 import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar as CalendarUI } from '@/components/ui/calendar'
 import {
   TrendingUp,
   TrendingDown,
@@ -23,9 +25,12 @@ import {
   FileX,
   ArrowRight,
   Loader2,
+  CalendarDays,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { format } from 'date-fns'
+import { zhTW } from 'date-fns/locale'
 
 interface DashboardData {
   user: {
@@ -89,6 +94,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
+  const currentYear = new Date().getFullYear()
+  const [dateFrom, setDateFrom] = useState<Date>(new Date(currentYear, 0, 1))
+  const [dateTo, setDateTo] = useState<Date>(new Date(currentYear, 11, 31))
 
   useEffect(() => {
     if (!user) return
@@ -100,6 +108,8 @@ export default function DashboardPage() {
         if (user.id) params.append('userId', user.id)
         else if (user.email) params.append('userEmail', user.email)
         if (tierFilter) params.append('tier', tierFilter)
+        params.append('from', dateFrom.toISOString().split('T')[0])
+        params.append('to', dateTo.toISOString().split('T')[0])
 
         const response = await fetch(`/api/dashboard?${params}`)
         if (!response.ok) {
@@ -118,7 +128,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboard()
-  }, [user, tierFilter])
+  }, [user, tierFilter, dateFrom, dateTo])
 
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
@@ -179,6 +189,58 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground mt-1">歡迎回來，{data.user.name}</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Date range filter */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-normal">
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                  {format(dateFrom, 'yyyy/MM/dd')} - {format(dateTo, 'yyyy/MM/dd')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-3" align="end">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    {[
+                      { label: '今年', from: new Date(currentYear, 0, 1), to: new Date(currentYear, 11, 31) },
+                      { label: '去年', from: new Date(currentYear - 1, 0, 1), to: new Date(currentYear - 1, 11, 31) },
+                      { label: '近 3 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 3)), to: new Date() },
+                      { label: '近 6 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 6)), to: new Date() },
+                    ].map(preset => (
+                      <Button
+                        key={preset.label}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => { setDateFrom(preset.from); setDateTo(preset.to) }}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground font-medium px-1">開始日期</p>
+                      <CalendarUI
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={(d) => d && setDateFrom(d)}
+                        locale={zhTW}
+                        initialFocus
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground font-medium px-1">結束日期</p>
+                      <CalendarUI
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={(d) => d && setDateTo(d)}
+                        locale={zhTW}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
             {/* Tier filter */}
             <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
               {[{ value: null as ProjectTier | null, label: '全部' }, ...Object.keys(PROJECT_TIER_LABELS).map(t => ({ value: t as ProjectTier | null, label: PROJECT_TIER_LABELS[t as ProjectTier] }))].map(item => (
@@ -293,10 +355,11 @@ export default function DashboardPage() {
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Project List - Takes 2 columns */}
           <Card className="lg:col-span-2 flex flex-col max-h-[480px]">
-            <CardHeader className="py-3 px-4 shrink-0">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-base">
                 {data.user.role === 'member' ? '我的專案' : '專案總覽'}
               </CardTitle>
+              <span className="text-sm text-muted-foreground">共 {projects.length} 筆</span>
             </CardHeader>
             <CardContent className="px-4 pb-3 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-1.5">

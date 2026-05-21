@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
     const userId = request.nextUrl.searchParams.get('userId')
     const userEmail = request.nextUrl.searchParams.get('userEmail')
     const tierFilter = request.nextUrl.searchParams.get('tier') // T1, T2, T3, CIP
+    const fromFilter = request.nextUrl.searchParams.get('from') // e.g. "2026-01-01"
+    const toFilter = request.nextUrl.searchParams.get('to')     // e.g. "2026-12-31"
 
     if (!userId && !userEmail) {
       return NextResponse.json(
@@ -119,6 +121,12 @@ export async function GET(request: NextRequest) {
       where: {
         id: { in: projectIds },
         ...(tierFilter ? { projectTier: tierFilter as never } : {}),
+        ...(fromFilter && toFilter ? {
+          createdAt: {
+            gte: new Date(`${fromFilter}T00:00:00.000Z`),
+            lte: new Date(`${toFilter}T23:59:59.999Z`),
+          },
+        } : {}),
       },
       include: {
         milestones: {
