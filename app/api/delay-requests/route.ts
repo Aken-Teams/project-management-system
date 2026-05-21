@@ -57,6 +57,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '找不到申請人' }, { status: 404 })
     }
 
+    // Count S-role reviewers for this project
+    const sRoleCount = await prisma.projectTeamMember.count({
+      where: { projectId: body.projectId, role: 'S' },
+    })
+
     // Create delay request with affected milestones in a transaction
     const delayRequest = await prisma.$transaction(async (tx) => {
       const dr = await tx.delayRequest.create({
@@ -69,6 +74,7 @@ export async function POST(request: NextRequest) {
           type: body.type || 'delay',
           taskId: body.taskId || null,
           status: 'pending',
+          requiredReviewers: sRoleCount,
           affectedMilestones: {
             create: body.affectedMilestones.map((am) => ({
               milestoneId: am.milestoneId,
@@ -148,19 +154,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const status = searchParams.get('status')
     const projectId = searchParams.get('projectId')
-    const reviewerEmail = searchParams.get('reviewerEmail')
+    const memberEmail = searchParams.get('memberEmail')
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status
     if (projectId) where.projectId = projectId
 
-    // Filter to only show delay requests for projects where this user is an S-role member
-    if (reviewerEmail) {
-      const sRoleProjects = await prisma.projectTeamMember.findMany({
-        where: { role: 'S', user: { email: reviewerEmail } },
+    // Filter: show delay requests for projects where this user is ANY team role (RACIPS)
+    if (memberEmail) {
+      const memberProjects = await prisma.projectTeamMember.findMany({
+        where: { user: { email: memberEmail } },
         select: { projectId: true },
       })
-      const projectIds = sRoleProjects.map(p => p.projectId)
+      const projectIds = memberProjects.map(p => p.projectId)
       where.projectId = projectId
         ? (projectIds.includes(projectId) ? projectId : '__none__')
         : { in: projectIds }
@@ -176,6 +182,10 @@ export async function GET(request: NextRequest) {
         affectedMilestones: {
           include: { milestone: { select: { name: true } } },
         },
+        reviewDecisions: {
+          include: { reviewer: { select: { name: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
         project: {
           select: {
             id: true,
@@ -190,6 +200,19 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' },
     })
+
+    // Batch-fetch all S-role members for relevant projects (avoid N+1)
+    const uniqueProjectIds = [...new Set(delayRequests.map(dr => dr.projectId))]
+    const allSMembers = await prisma.projectTeamMember.findMany({
+      where: { projectId: { in: uniqueProjectIds }, role: 'S' },
+      select: { projectId: true, userId: true, user: { select: { id: true, name: true } } },
+    })
+    const sMembersByProject = new Map<string, { id: string; name: string }[]>()
+    for (const m of allSMembers) {
+      const list = sMembersByProject.get(m.projectId) ?? []
+      list.push({ id: m.user.id, name: m.user.name })
+      sMembersByProject.set(m.projectId, list)
+    }
 
     const result = delayRequests.map((dr) => ({
       id: dr.id,
@@ -225,6 +248,23 @@ export async function GET(request: NextRequest) {
       ...(dr.reviewer ? { reviewedBy: dr.reviewer.name } : {}),
       ...(dr.reviewedAt ? { reviewedAt: dr.reviewedAt.toISOString() } : {}),
       ...(dr.reviewNotes ? { reviewNotes: dr.reviewNotes } : {}),
+      // Multi-review data: merge S-role members with their decisions
+      requiredReviewers: dr.requiredReviewers,
+      approvedCount: dr.reviewDecisions.filter(d => d.action === 'approve').length,
+      reviewers: (() => {
+        const sMembers = sMembersByProject.get(dr.projectId) ?? []
+        const decisionMap = new Map(dr.reviewDecisions.map(d => [d.reviewerId, d]))
+        return sMembers.map(member => {
+          const decision = decisionMap.get(member.id)
+          return {
+            id: member.id,
+            name: member.name,
+            action: decision?.action ?? null,
+            notes: decision?.notes ?? null,
+            createdAt: decision?.createdAt?.toISOString() ?? null,
+          }
+        })
+      })(),
       ...(dr.supportResolved !== null ? { supportResolved: dr.supportResolved } : {}),
       ...(dr.supportResolvedAt ? { supportResolvedAt: dr.supportResolvedAt.toISOString() } : {}),
       ...(dr.supportResolvedBy ? { supportResolvedBy: dr.supportResolvedBy.name } : {}),

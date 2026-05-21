@@ -34,6 +34,14 @@ interface AffectedMilestone {
   proposedDate: string
 }
 
+interface ReviewerStatus {
+  id: string
+  name: string
+  action: string | null   // 'approve' | 'reject' | null (pending)
+  notes: string | null
+  createdAt: string | null
+}
+
 interface DelayRequestItem {
   id: string
   projectId: string
@@ -59,6 +67,10 @@ interface DelayRequestItem {
   supportResolvedAt?: string
   supportResolvedBy?: string
   supportResolvedNotes?: string
+  // Multi-review
+  requiredReviewers?: number
+  approvedCount?: number
+  reviewers?: ReviewerStatus[]
 }
 
 export default function ApprovalsPage() {
@@ -91,9 +103,9 @@ export default function ApprovalsPage() {
 
   const fetchRequests = useCallback(async () => {
     try {
-      // S-role filtering: non-admin users only see delay requests for projects they're S-role in
+      // Team member filtering: non-admin users see delay requests for projects they belong to
       const params = user?.role !== 'admin' && user?.email
-        ? `?reviewerEmail=${encodeURIComponent(user.email)}`
+        ? `?memberEmail=${encodeURIComponent(user.email)}`
         : ''
       const res = await fetch(`/api/delay-requests${params}`)
       if (!res.ok) throw new Error()
@@ -321,6 +333,7 @@ export default function ApprovalsPage() {
                           <th className="text-left px-4 py-3 font-medium">申請時間</th>
                           <th className="text-center px-4 py-3 font-medium">影響里程碑</th>
                           <th className="text-center px-4 py-3 font-medium">最大延遲</th>
+                          <th className="text-center px-4 py-3 font-medium">審核進度</th>
                           <th className="text-right px-4 py-3 font-medium"></th>
                         </tr>
                       </thead>
@@ -359,6 +372,15 @@ export default function ApprovalsPage() {
                                 <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-xs">
                                   +{maxDays} 天
                                 </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                {(request.requiredReviewers ?? 0) > 0 ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {request.approvedCount ?? 0}/{request.requiredReviewers} 已核准
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
                               </td>
                               <td className="px-4 py-3.5 text-right">
                                 <ChevronRight className="h-4 w-4 text-muted-foreground inline-block" />
@@ -720,78 +742,144 @@ export default function ApprovalsPage() {
                             </div>
                           )}
                         </div>
-                      ) : showSupportForm ? (
-                        <div className="space-y-3">
-                          <Textarea
-                            placeholder="處理備註（選填）..."
-                            value={supportNotes}
-                            onChange={(e) => setSupportNotes(e.target.value)}
-                            rows={3}
-                          />
-                          <div className="flex items-center justify-end gap-3">
-                            <Button variant="ghost" onClick={() => setShowSupportForm(false)} disabled={submitting}>取消</Button>
-                            <Button onClick={handleResolveSupport} disabled={submitting} className="gap-1.5">
-                              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                              確認已解決
-                            </Button>
+                      ) : (() => {
+                        const canResolve = user?.role === 'admin' || request.reviewers?.some(r => r.id === user?.id)
+                        if (!canResolve) {
+                          return (
+                            <div className="flex items-center gap-2 p-3 rounded-lg border bg-amber-50/50 border-amber-200 dark:bg-amber-950/10 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
+                              <Clock className="h-4 w-4 shrink-0" />
+                              等待主管處理中
+                            </div>
+                          )
+                        }
+                        return showSupportForm ? (
+                          <div className="space-y-3">
+                            <Textarea
+                              placeholder="處理備註（選填）..."
+                              value={supportNotes}
+                              onChange={(e) => setSupportNotes(e.target.value)}
+                              rows={3}
+                            />
+                            <div className="flex items-center justify-end gap-3">
+                              <Button variant="ghost" onClick={() => setShowSupportForm(false)} disabled={submitting}>取消</Button>
+                              <Button onClick={handleResolveSupport} disabled={submitting} className="gap-1.5">
+                                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                                確認已解決
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <Button variant="outline" className="gap-1.5 w-full" onClick={() => setShowSupportForm(true)}>
-                          <CheckCircle2 className="h-4 w-4" /> 標記協助已解決
-                        </Button>
-                      )}
+                        ) : (
+                          <Button variant="outline" className="gap-1.5 w-full" onClick={() => setShowSupportForm(true)}>
+                            <CheckCircle2 className="h-4 w-4" /> 標記協助已解決
+                          </Button>
+                        )
+                      })()}
                     </div>
                   )}
 
-                  {/* Review actions (for pending) */}
-                  {isPending && (
-                    <div className="border-t pt-4">
-                      {showReviewForm ? (
-                        <div className="space-y-3">
-                          <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                            {reviewAction === 'approve' ? (
-                              <span className="flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-4 w-4" /> 確認核准</span>
+                  {/* Multi-review: show all reviewers (reviewed + pending) */}
+                  {request.reviewers && request.reviewers.length > 0 && (
+                    <div className="border-t pt-4 space-y-3">
+                      <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        審核進度
+                        {(request.requiredReviewers ?? 0) > 0 && (
+                          <Badge variant="outline" className="text-xs ml-1">
+                            {request.approvedCount ?? 0}/{request.requiredReviewers} 已核准
+                          </Badge>
+                        )}
+                      </h4>
+                      <div className="space-y-2">
+                        {request.reviewers.map(r => (
+                          <div key={r.id} className={cn(
+                            'flex items-center gap-3 p-3 rounded-lg border',
+                            r.action === 'approve'
+                              ? 'bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/10 dark:border-emerald-800'
+                              : r.action === 'reject'
+                              ? 'bg-red-50/50 border-red-200 dark:bg-red-950/10 dark:border-red-800'
+                              : 'bg-muted/30 border-muted',
+                          )}>
+                            {r.action === 'approve' ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            ) : r.action === 'reject' ? (
+                              <XCircle className="h-4 w-4 text-red-600 shrink-0" />
                             ) : (
-                              <span className="flex items-center gap-1 text-destructive"><XCircle className="h-4 w-4" /> 確認駁回</span>
+                              <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                             )}
-                          </h4>
-                          <Textarea
-                            placeholder="請輸入審核意見（選填）..."
-                            value={reviewNotes}
-                            onChange={(e) => setReviewNotes(e.target.value)}
-                            rows={3}
-                          />
-                          <div className="flex items-center justify-end gap-3 pt-1">
-                            <Button variant="ghost" onClick={() => setShowReviewForm(false)} disabled={submitting}>取消</Button>
-                            <Button
-                              variant={reviewAction === 'approve' ? 'default' : 'destructive'}
-                              onClick={handleConfirmReview}
-                              disabled={submitting}
-                              className="gap-1.5 min-w-[120px]"
-                            >
-                              {submitting ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : reviewAction === 'approve' ? (
-                                <><CheckCircle2 className="h-4 w-4" /> 確認核准</>
-                              ) : (
-                                <><XCircle className="h-4 w-4" /> 確認駁回</>
-                              )}
-                            </Button>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{r.name}</div>
+                              {r.notes && <div className="text-xs text-muted-foreground mt-0.5">{r.notes}</div>}
+                            </div>
+                            <div className="text-xs text-muted-foreground shrink-0">
+                              {r.action ? formatDate(r.createdAt!) : '待審核'}
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Button className="gap-1.5 flex-1" onClick={() => handleStartReview('approve')}>
-                            <CheckCircle2 className="h-4 w-4" /> 核准
-                          </Button>
-                          <Button variant="destructive" className="gap-1.5 flex-1" onClick={() => handleStartReview('reject')}>
-                            <XCircle className="h-4 w-4" /> 駁回
-                          </Button>
-                        </div>
-                      )}
+                        ))}
+                      </div>
                     </div>
                   )}
+
+                  {/* Review actions (for pending, S-role only) */}
+                  {isPending && (() => {
+                    const isAdmin = user?.role === 'admin'
+                    const isSRole = request.reviewers?.some(r => r.id === user?.id)
+                    const alreadyReviewed = request.reviewers?.some(r => r.id === user?.id && r.action != null)
+
+                    if (!isAdmin && !isSRole) return null // non-S users can only view
+
+                    return (
+                      <div className="border-t pt-4">
+                        {alreadyReviewed ? (
+                          <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/50 text-sm text-muted-foreground">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            您已完成審核，等待其他審核者
+                          </div>
+                        ) : showReviewForm ? (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                              {reviewAction === 'approve' ? (
+                                <span className="flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-4 w-4" /> 確認核准</span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-destructive"><XCircle className="h-4 w-4" /> 確認駁回</span>
+                              )}
+                            </h4>
+                            <Textarea
+                              placeholder="請輸入審核意見（選填）..."
+                              value={reviewNotes}
+                              onChange={(e) => setReviewNotes(e.target.value)}
+                              rows={3}
+                            />
+                            <div className="flex items-center justify-end gap-3 pt-1">
+                              <Button variant="ghost" onClick={() => setShowReviewForm(false)} disabled={submitting}>取消</Button>
+                              <Button
+                                variant={reviewAction === 'approve' ? 'default' : 'destructive'}
+                                onClick={handleConfirmReview}
+                                disabled={submitting}
+                                className="gap-1.5 min-w-[120px]"
+                              >
+                                {submitting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : reviewAction === 'approve' ? (
+                                  <><CheckCircle2 className="h-4 w-4" /> 確認核准</>
+                                ) : (
+                                  <><XCircle className="h-4 w-4" /> 確認駁回</>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Button className="gap-1.5 flex-1" onClick={() => handleStartReview('approve')}>
+                              <CheckCircle2 className="h-4 w-4" /> 核准
+                            </Button>
+                            <Button variant="destructive" className="gap-1.5 flex-1" onClick={() => handleStartReview('reject')}>
+                              <XCircle className="h-4 w-4" /> 駁回
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </>
             )

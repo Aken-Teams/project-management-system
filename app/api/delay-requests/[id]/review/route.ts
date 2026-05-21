@@ -68,183 +68,28 @@ export async function PATCH(
       }
     }
 
+    // Check if this reviewer already submitted a decision
+    const existingDecision = await prisma.delayReviewDecision.findUnique({
+      where: { delayRequestId_reviewerId: { delayRequestId: id, reviewerId: body.reviewerId } },
+    })
+    if (existingDecision) {
+      return NextResponse.json({ error: '您已審核過此申請' }, { status: 400 })
+    }
+
     const now = new Date()
 
-    if (body.action === 'approve') {
-      // Approve: update request + cascade milestone & task dates
-      await prisma.$transaction(async (tx) => {
-        // 1. Update delay request status
-        await tx.delayRequest.update({
-          where: { id },
-          data: {
-            status: 'approved',
-            reviewerId: body.reviewerId,
-            reviewedAt: now,
-            reviewNotes: body.reviewNotes?.trim() || null,
-          },
-        })
+    // 1. Record the individual decision
+    await prisma.delayReviewDecision.create({
+      data: {
+        delayRequestId: id,
+        reviewerId: body.reviewerId,
+        action: body.action,
+        notes: body.reviewNotes?.trim() || null,
+      },
+    })
 
-        // 2. Update affected milestone dueDates
-        for (const am of delayRequest.affectedMilestones) {
-          await tx.milestone.update({
-            where: { id: am.milestoneId },
-            data: { dueDate: am.proposedDate },
-          })
-        }
-
-        // 2b. Update project startDate if a proposed start date was included
-        const proposedStart = delayRequest.affectedMilestones.find(am => am.proposedStartDate)
-        if (proposedStart?.proposedStartDate) {
-          await tx.project.update({
-            where: { id: delayRequest.projectId },
-            data: { startDate: proposedStart.proposedStartDate },
-          })
-        }
-
-        // 3. If a specific task triggered the delay, extend its durationDays
-        //    so the Gantt chart correctly shows which task actually got extended.
-        const triggerTaskId = delayRequest.taskId
-        if (triggerTaskId) {
-          // Calculate how many days the milestone was extended
-          const am = delayRequest.affectedMilestones[0]
-          if (am) {
-            const delayDays = daysBetween(am.originalDate, am.proposedDate)
-            if (delayDays > 0) {
-              const triggerTask = await tx.task.findUnique({
-                where: { id: triggerTaskId },
-                select: { durationDays: true },
-              })
-              if (triggerTask) {
-                await tx.task.update({
-                  where: { id: triggerTaskId },
-                  data: { durationDays: triggerTask.durationDays + delayDays },
-                })
-              }
-            }
-          }
-        }
-
-        // 4. Cascade: recalculate subsequent milestones & all task dates
-        const project = await tx.project.findUnique({
-          where: { id: delayRequest.projectId },
-          include: {
-            milestones: { orderBy: { sortOrder: 'asc' } },
-            tasks: { orderBy: { sortOrder: 'asc' } },
-          },
-        })
-        if (!project) return
-
-        const affectedMsIds = new Set(delayRequest.affectedMilestones.map(am => am.milestoneId))
-
-        // Walk milestones — each uses its own startDate (overlapping support)
-        for (const ms of project.milestones) {
-          // Use milestone's own startDate if set, otherwise fall back to project start
-          const msStart = (ms as any).startDate
-            ? new Date((ms as any).startDate)
-            : new Date(project.startDate)
-
-          const msTasks = project.tasks
-            .filter(t => t.milestoneId === ms.id && t.parentId == null)
-            .sort((a, b) => a.sortOrder - b.sortOrder)
-
-          // Check if this milestone's dueDate needs to be pushed forward
-          const msDueDate = new Date(ms.dueDate)
-          let newDueDate = msDueDate
-
-          // Recalculate task dates — each task uses its own startDate or milestone start
-          for (const task of msTasks) {
-            const taskDurationDays = Math.max(task.durationDays, 1)
-            const taskStart = new Date(task.startDate)
-            const taskEnd = addDays(taskStart, taskDurationDays - 1)
-
-            if (task.startDate.getTime() !== taskStart.getTime() ||
-                task.endDate.getTime() !== taskEnd.getTime()) {
-              const preserveOriginal = (task as any).originalStartDate == null
-                ? { originalStartDate: task.startDate, originalEndDate: task.endDate }
-                : {}
-              await tx.task.update({
-                where: { id: task.id },
-                data: {
-                  startDate: taskStart,
-                  endDate: taskEnd,
-                  ...preserveOriginal,
-                },
-              })
-            }
-
-            // Schedule subtasks — each uses its own startDate or parent start
-            const subtasks = project.tasks
-              .filter(t => t.parentId === task.id)
-              .sort((a, b) => a.sortOrder - b.sortOrder)
-            for (const sub of subtasks) {
-              const subDays = Math.max(sub.durationDays || 1, 1)
-              const subStart = new Date(sub.startDate)
-              const subEnd = addDays(subStart, subDays - 1)
-              if (sub.startDate.getTime() !== subStart.getTime() ||
-                  sub.endDate.getTime() !== subEnd.getTime()) {
-                const subPreserve = (sub as any).originalStartDate == null
-                  ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
-                  : {}
-                await tx.task.update({
-                  where: { id: sub.id },
-                  data: { startDate: subStart, endDate: subEnd, ...subPreserve },
-                })
-              }
-
-              // Track latest task end for milestone expansion
-              if (subEnd > newDueDate) newDueDate = subEnd
-            }
-
-            // Track latest task end for milestone expansion
-            if (taskEnd > newDueDate) newDueDate = taskEnd
-          }
-
-          // Update milestone dueDate if tasks extend beyond it
-          if (newDueDate > msDueDate) {
-            await tx.milestone.update({
-              where: { id: ms.id },
-              data: { dueDate: newDueDate },
-            })
-          }
-        }
-
-        // 4. Update project endDate to latest milestone dueDate (overlapping)
-        const allMs = await tx.milestone.findMany({
-          where: { projectId: project.id },
-          select: { dueDate: true },
-          orderBy: { dueDate: 'desc' },
-          take: 1,
-        })
-        if (allMs.length > 0) {
-          await tx.project.update({
-            where: { id: project.id },
-            data: { endDate: allMs[0].dueDate },
-          })
-        }
-
-        // 5. Reset milestone baselines to the new approved dates
-        //    so the Gantt chart no longer shows delay indicators
-        await tx.milestoneBaseline.deleteMany({
-          where: { projectId: project.id },
-        })
-        const updatedMilestones = await tx.milestone.findMany({
-          where: { projectId: project.id },
-          orderBy: { sortOrder: 'asc' },
-          select: { id: true, name: true, dueDate: true },
-        })
-        for (const ms of updatedMilestones) {
-          await tx.milestoneBaseline.create({
-            data: {
-              projectId: project.id,
-              milestoneId: ms.id,
-              name: ms.name,
-              dueDate: ms.dueDate,
-            },
-          })
-        }
-      })
-    } else {
-      // Reject: only update request status
+    if (body.action === 'reject') {
+      // Any single rejection → immediately reject the whole request
       await prisma.delayRequest.update({
         where: { id },
         data: {
@@ -254,9 +99,204 @@ export async function PATCH(
           reviewNotes: body.reviewNotes?.trim() || null,
         },
       })
+
+      // Notify requester of rejection
+      const projectForNotif = await prisma.project.findUnique({
+        where: { id: delayRequest.projectId },
+        select: { name: true },
+      })
+      if (projectForNotif) {
+        notifyDelayReviewed({
+          requesterId: delayRequest.requesterId,
+          projectId: delayRequest.projectId,
+          projectName: projectForNotif.name,
+          approved: false,
+          reviewNotes: body.reviewNotes,
+        })
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: '已駁回延遲申請',
+      })
     }
 
-    // Notify requester of review result (fire-and-forget)
+    // action === 'approve': check if all S-role reviewers have approved
+    const approvedCount = await prisma.delayReviewDecision.count({
+      where: { delayRequestId: id, action: 'approve' },
+    })
+
+    // Get current S-role count for this project
+    const currentSCount = await prisma.projectTeamMember.count({
+      where: { projectId: delayRequest.projectId, role: 'S' },
+    })
+    const requiredCount = Math.max(currentSCount, delayRequest.requiredReviewers, 1)
+
+    if (approvedCount < requiredCount) {
+      // Not all reviewers have approved yet — stay pending
+      return NextResponse.json({
+        success: true,
+        message: `已記錄您的核准（${approvedCount}/${requiredCount}）`,
+        approvedCount,
+        requiredCount,
+      })
+    }
+
+    // All reviewers approved → approve the request and cascade dates
+    await prisma.$transaction(async (tx) => {
+      // 1. Update delay request status
+      await tx.delayRequest.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          reviewerId: body.reviewerId,
+          reviewedAt: now,
+          reviewNotes: body.reviewNotes?.trim() || null,
+        },
+      })
+
+      // 2. Update affected milestone dueDates
+      for (const am of delayRequest.affectedMilestones) {
+        await tx.milestone.update({
+          where: { id: am.milestoneId },
+          data: { dueDate: am.proposedDate },
+        })
+      }
+
+      // 2b. Update project startDate if a proposed start date was included
+      const proposedStart = delayRequest.affectedMilestones.find(am => am.proposedStartDate)
+      if (proposedStart?.proposedStartDate) {
+        await tx.project.update({
+          where: { id: delayRequest.projectId },
+          data: { startDate: proposedStart.proposedStartDate },
+        })
+      }
+
+      // 3. If a specific task triggered the delay, extend its durationDays
+      const triggerTaskId = delayRequest.taskId
+      if (triggerTaskId) {
+        const am = delayRequest.affectedMilestones[0]
+        if (am) {
+          const delayDays = daysBetween(am.originalDate, am.proposedDate)
+          if (delayDays > 0) {
+            const triggerTask = await tx.task.findUnique({
+              where: { id: triggerTaskId },
+              select: { durationDays: true },
+            })
+            if (triggerTask) {
+              await tx.task.update({
+                where: { id: triggerTaskId },
+                data: { durationDays: triggerTask.durationDays + delayDays },
+              })
+            }
+          }
+        }
+      }
+
+      // 4. Cascade: recalculate subsequent milestones & all task dates
+      const project = await tx.project.findUnique({
+        where: { id: delayRequest.projectId },
+        include: {
+          milestones: { orderBy: { sortOrder: 'asc' } },
+          tasks: { orderBy: { sortOrder: 'asc' } },
+        },
+      })
+      if (!project) return
+
+      for (const ms of project.milestones) {
+        const msStart = (ms as any).startDate
+          ? new Date((ms as any).startDate)
+          : new Date(project.startDate)
+
+        const msTasks = project.tasks
+          .filter(t => t.milestoneId === ms.id && t.parentId == null)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+
+        const msDueDate = new Date(ms.dueDate)
+        let newDueDate = msDueDate
+
+        for (const task of msTasks) {
+          const taskDurationDays = Math.max(task.durationDays, 1)
+          const taskStart = new Date(task.startDate)
+          const taskEnd = addDays(taskStart, taskDurationDays - 1)
+
+          if (task.startDate.getTime() !== taskStart.getTime() ||
+              task.endDate.getTime() !== taskEnd.getTime()) {
+            const preserveOriginal = (task as any).originalStartDate == null
+              ? { originalStartDate: task.startDate, originalEndDate: task.endDate }
+              : {}
+            await tx.task.update({
+              where: { id: task.id },
+              data: { startDate: taskStart, endDate: taskEnd, ...preserveOriginal },
+            })
+          }
+
+          const subtasks = project.tasks
+            .filter(t => t.parentId === task.id)
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+          for (const sub of subtasks) {
+            const subDays = Math.max(sub.durationDays || 1, 1)
+            const subStart = new Date(sub.startDate)
+            const subEnd = addDays(subStart, subDays - 1)
+            if (sub.startDate.getTime() !== subStart.getTime() ||
+                sub.endDate.getTime() !== subEnd.getTime()) {
+              const subPreserve = (sub as any).originalStartDate == null
+                ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
+                : {}
+              await tx.task.update({
+                where: { id: sub.id },
+                data: { startDate: subStart, endDate: subEnd, ...subPreserve },
+              })
+            }
+            if (subEnd > newDueDate) newDueDate = subEnd
+          }
+          if (taskEnd > newDueDate) newDueDate = taskEnd
+        }
+
+        if (newDueDate > msDueDate) {
+          await tx.milestone.update({
+            where: { id: ms.id },
+            data: { dueDate: newDueDate },
+          })
+        }
+      }
+
+      // Update project endDate to latest milestone dueDate
+      const allMs = await tx.milestone.findMany({
+        where: { projectId: project.id },
+        select: { dueDate: true },
+        orderBy: { dueDate: 'desc' },
+        take: 1,
+      })
+      if (allMs.length > 0) {
+        await tx.project.update({
+          where: { id: project.id },
+          data: { endDate: allMs[0].dueDate },
+        })
+      }
+
+      // Reset milestone baselines to the new approved dates
+      await tx.milestoneBaseline.deleteMany({
+        where: { projectId: project.id },
+      })
+      const updatedMilestones = await tx.milestone.findMany({
+        where: { projectId: project.id },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, name: true, dueDate: true },
+      })
+      for (const ms of updatedMilestones) {
+        await tx.milestoneBaseline.create({
+          data: {
+            projectId: project.id,
+            milestoneId: ms.id,
+            name: ms.name,
+            dueDate: ms.dueDate,
+          },
+        })
+      }
+    })
+
+    // Notify requester — all approved
     const projectForNotif = await prisma.project.findUnique({
       where: { id: delayRequest.projectId },
       select: { name: true },
@@ -266,14 +306,14 @@ export async function PATCH(
         requesterId: delayRequest.requesterId,
         projectId: delayRequest.projectId,
         projectName: projectForNotif.name,
-        approved: body.action === 'approve',
+        approved: true,
         reviewNotes: body.reviewNotes,
       })
     }
 
     return NextResponse.json({
       success: true,
-      message: body.action === 'approve' ? '已核准延遲申請' : '已駁回延遲申請',
+      message: '全部審核者已核准，延遲申請已通過',
     })
   } catch (error) {
     console.error('Failed to review delay request:', error)

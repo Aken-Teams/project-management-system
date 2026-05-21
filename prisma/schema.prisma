@@ -123,6 +123,7 @@ model User {
   delayRequests       DelayRequest[]      @relation("DelayRequester")
   reviewedDelays      DelayRequest[]      @relation("DelayReviewer")
   resolvedDelays      DelayRequest[]      @relation("DelaySupportResolver")
+  delayReviewDecisions DelayReviewDecision[]
   taskLogs            TaskLog[]
   notifications       Notification[]
   drafts              ProjectDraft[]
@@ -395,6 +396,9 @@ model DelayRequest {
   task                 Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   affectedMilestones   AffectedMilestone[]
+  reviewDecisions      DelayReviewDecision[]
+
+  requiredReviewers    Int          @default(0) @map("required_reviewers")
 
   @@index([projectId])
   @@index([requesterId])
@@ -417,6 +421,23 @@ model AffectedMilestone {
   @@index([delayRequestId])
   @@index([milestoneId])
   @@map("affected_milestones")
+}
+
+model DelayReviewDecision {
+  id              String       @id @default(cuid())
+  delayRequestId  String       @map("delay_request_id")
+  reviewerId      String       @map("reviewer_id")
+  action          String       // 'approve' | 'reject'
+  notes           String?      @db.Text
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  delayRequest    DelayRequest @relation(fields: [delayRequestId], references: [id], onDelete: Cascade)
+  reviewer        User         @relation(fields: [reviewerId], references: [id])
+
+  @@unique([delayRequestId, reviewerId])
+  @@index([delayRequestId])
+  @@index([reviewerId])
+  @@map("delay_review_decisions")
 }
 
 model Notification {
