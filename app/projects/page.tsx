@@ -21,10 +21,12 @@ import {
   DollarSign,
   CheckCircle2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { getRolePermissions } from '@/lib/permissions'
 import { Loader2 } from 'lucide-react'
@@ -40,6 +42,8 @@ export default function ProjectsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [tierFilter, setTierFilter] = useState<ProjectTier | 'all'>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 12
 
   // Fetch projects from API
   useEffect(() => {
@@ -72,6 +76,27 @@ export default function ProjectsPage() {
     const matchesOwner = ownerFilter === 'all' || project.owner === ownerFilter
     return matchesSearch && matchesStatus && matchesType && matchesTier && matchesOwner
   })
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, statusFilter, typeFilter, tierFilter, ownerFilter])
+
+  const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE)
+  const paginatedProjects = filteredProjects.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  )
+
+  // Generate visible page numbers (show max 5 pages around current)
+  const getPageNumbers = useCallback(() => {
+    const pages: number[] = []
+    let start = Math.max(1, currentPage - 2)
+    let end = Math.min(totalPages, start + 4)
+    start = Math.max(1, end - 4)
+    for (let i = start; i <= end; i++) pages.push(i)
+    return pages
+  }, [currentPage, totalPages])
 
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
@@ -228,7 +253,7 @@ export default function ProjectsPage() {
         ) : (
         <>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {filteredProjects.map((project) => (
+          {paginatedProjects.map((project) => (
             <Link key={project.id} href={`/projects/${project.id}`}>
               <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="p-4 space-y-2.5">
@@ -282,6 +307,46 @@ export default function ProjectsPage() {
             </Link>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              共 {filteredProjects.length} 個專案，第 {currentPage}/{totalPages} 頁
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => p - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {getPageNumbers().map(page => (
+                <Button
+                  key={page}
+                  variant={page === currentPage ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => p + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {filteredProjects.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
