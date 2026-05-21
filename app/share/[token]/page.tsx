@@ -269,21 +269,21 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                         <AlertCircle className="h-3 w-3" />
                         開案原因
                       </div>
-                      <p className="text-sm">{project.createdReason}</p>
+                      <p className="text-sm whitespace-pre-line">{project.createdReason}</p>
                     </div>
                     <div className="py-3">
                       <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <Target className="h-3 w-3" />
                         專案目的
                       </div>
-                      <p className="text-sm">{project.purpose}</p>
+                      <p className="text-sm whitespace-pre-line">{project.purpose}</p>
                     </div>
                     <div className="py-3">
                       <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <LayoutList className="h-3 w-3" />
                         專案範圍
                       </div>
-                      <p className="text-sm">{project.scope}</p>
+                      <p className="text-sm whitespace-pre-line">{project.scope}</p>
                     </div>
                     {project.expectedBenefits && (
                       <div className="py-3">
@@ -291,7 +291,7 @@ export default function SharePage({ params }: { params: Promise<{ token: string 
                           <TrendingUp className="h-3 w-3" />
                           預期效益
                         </div>
-                        <p className="text-sm">{project.expectedBenefits}</p>
+                        <p className="text-sm whitespace-pre-line">{project.expectedBenefits}</p>
                       </div>
                     )}
                     <div className="py-3 last:pb-0">
