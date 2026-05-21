@@ -18,7 +18,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3 } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -112,7 +112,7 @@ function MilestoneRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} px-2 py-1.5 bg-muted/40 border-t first:border-t-0 font-medium`}
+      className={`${GRID_COLS} px-2 py-1.5 bg-primary/5 border-l-[3px] border-l-primary border-t border-t-border first:border-t-0 font-medium`}
     >
       {/* Drag */}
       <div
@@ -125,6 +125,7 @@ function MilestoneRow({
 
       {/* Name + collapse toggle */}
       <div className="pr-2 flex items-center gap-0.5">
+        <MilestoneIcon className="h-3.5 w-3.5 text-primary shrink-0" />
         <button
           type="button"
           onClick={onToggleCollapse}
@@ -259,7 +260,7 @@ function TaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} px-2 py-1 hover:bg-muted/20 transition-colors text-sm`}
+      className={`${GRID_COLS} px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] border-l-blue-200`}
     >
       {/* Drag */}
       <div
@@ -272,7 +273,10 @@ function TaskRow({
 
       {/* Name (indented) */}
       <div className="pl-4 flex items-center gap-1 min-w-0 pr-2">
-        <span className="text-muted-foreground/30 text-sm select-none">└</span>
+        {subtaskCount > 0
+          ? <span className="text-blue-400 text-xs select-none shrink-0">├</span>
+          : <span className="text-muted-foreground/30 text-sm select-none shrink-0">└</span>
+        }
         <Input
           value={task.title}
           onChange={(e) => onUpdate(task.id, 'title', e.target.value)}
@@ -280,18 +284,21 @@ function TaskRow({
           placeholder="任務名稱"
         />
         {subtaskCount > 0 && (
-          <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
-            {subtaskCount}
+          <span className="shrink-0 text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 font-medium">
+            {subtaskCount} 子任務
           </span>
         )}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onToggleAddSubtask}
-          className="shrink-0 flex items-center justify-center h-5 w-5 rounded hover:bg-muted transition-colors text-muted-foreground/40 hover:text-primary"
+          className="shrink-0 h-6 px-1.5 gap-0.5 text-[10px] text-muted-foreground hover:text-primary"
           title="新增子任務"
         >
           <Plus className="h-3 w-3" />
-        </button>
+          子任務
+        </Button>
       </div>
 
       {/* Duration (read-only when parent has subtasks) */}
@@ -383,8 +390,9 @@ function TaskRow({
           size="icon"
           className="h-6 w-6 text-muted-foreground hover:text-destructive"
           onClick={() => onRemove(task.id)}
+          title="刪除任務"
         >
-          <X className="h-3 w-3" />
+          <Trash2 className="h-3 w-3" />
         </Button>
       </div>
     </div>
@@ -444,7 +452,7 @@ function InlineTaskInput({
   }
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] border-l-blue-200`}>
       {/* Drag placeholder */}
       <div />
 
@@ -566,7 +574,7 @@ function SubtaskRow({
   const p = priorityConfig[task.priority]
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm bg-muted/5`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm bg-muted/5 border-l-[3px] border-l-slate-200`}>
       {/* No drag for subtasks */}
       <div />
 
@@ -728,7 +736,7 @@ function InlineSubtaskInput({
   }
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 bg-muted/5`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 bg-muted/5 border-l-[3px] border-l-slate-200`}>
       <div />
 
       {/* Title */}
