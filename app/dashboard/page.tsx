@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Loader2,
   CalendarDays,
+  RotateCcw,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -179,6 +180,12 @@ export default function DashboardPage() {
 
   const { stats, projects, openRisks, upcomingMilestones, missingUpdates, pendingApprovals } = data
 
+  const defaultFrom = new Date(currentYear, 0, 1)
+  const defaultTo = new Date(currentYear, 11, 31)
+  const isDefaultFilter = tierFilter === null
+    && dateFrom.getTime() === defaultFrom.getTime()
+    && dateTo.getTime() === defaultTo.getTime()
+
   return (
     <DashboardLayout>
       <div className="space-y-4">
@@ -257,6 +264,17 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
+            {!isDefaultFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs gap-1 text-muted-foreground"
+                onClick={() => { setTierFilter(null); setDateFrom(defaultFrom); setDateTo(defaultTo) }}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                重設
+              </Button>
+            )}
             {(data.user.role === 'pm' || data.user.role === 'executive') && pendingApprovals > 0 && (
               <Link href="/approvals">
                 <Button size="sm" className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
@@ -354,7 +372,7 @@ export default function DashboardPage() {
         {/* Project List + Risk Summary */}
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Project List - Takes 2 columns */}
-          <Card className="lg:col-span-2 flex flex-col max-h-[480px]">
+          <Card className="lg:col-span-2 flex flex-col max-h-[360px]">
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-base">
                 {data.user.role === 'member' ? '我的專案' : '專案總覽'}
@@ -381,7 +399,7 @@ export default function DashboardPage() {
                           <span className="font-medium text-sm truncate">{project.name}</span>
                         </div>
                       </div>
-<Badge variant="outline" className="text-sm shrink-0 hidden sm:flex">
+                      <Badge variant="outline" className="text-sm shrink-0 hidden sm:flex">
                         {typeLabels[project.projectType] || project.projectType}
                       </Badge>
                       <div className="flex items-center gap-2 shrink-0">
@@ -398,7 +416,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Risk Summary - Takes 1 column */}
-          <Card className="flex flex-col max-h-[480px]">
+          <Card className="flex flex-col max-h-[360px]">
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between shrink-0">
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-warning" />
