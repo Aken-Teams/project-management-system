@@ -343,7 +343,7 @@ export default function ApprovalsPage() {
         <Button
           variant={showFilters ? 'default' : 'outline'}
           size="sm"
-          className="h-9 text-xs gap-1.5"
+          className={cn('h-9 text-xs gap-1.5', !showFilters && 'bg-muted/60')}
           onClick={() => setShowFilters(!showFilters)}
         >
           <Filter className="h-3.5 w-3.5" />
@@ -958,7 +958,7 @@ export default function ApprovalsPage() {
             <FilterBar search={searchPending} setSearch={setSearchPending}>
               <div className="flex items-center gap-1">
                 {(['', 'delay', 'date_change'] as const).map(t => (
-                  <Button key={t} variant={filterType === t ? 'default' : 'outline'} size="sm" className="h-9 text-xs" onClick={() => setFilterType(t)}>
+                  <Button key={t} variant={filterType === t ? 'default' : 'outline'} size="sm" className={cn('h-9 text-xs', filterType !== t && 'bg-muted/60')} onClick={() => setFilterType(t)}>
                     {t === '' ? '全部' : t === 'delay' ? '延遲申請' : '日期變更'}
                   </Button>
                 ))}
@@ -1114,7 +1114,7 @@ export default function ApprovalsPage() {
             <FilterBar search={searchHistory} setSearch={setSearchHistory}>
               <div className="flex items-center gap-1">
                 {(['', 'approved', 'rejected'] as const).map(s => (
-                  <Button key={s} variant={filterResult === s ? 'default' : 'outline'} size="sm" className="h-9 text-xs" onClick={() => setFilterResult(s)}>
+                  <Button key={s} variant={filterResult === s ? 'default' : 'outline'} size="sm" className={cn('h-9 text-xs', filterResult !== s && 'bg-muted/60')} onClick={() => setFilterResult(s)}>
                     {s === '' ? '全部' : s === 'approved' ? '已核准' : '已駁回'}
                   </Button>
                 ))}

@@ -103,91 +103,65 @@ function statusBadge(row: DisplayRow) {
 
 // ─── Org Tree ──────────────────────────────────────────────
 
-const DEPTH_COLORS = [
-  'text-foreground font-semibold',
-  'text-foreground font-medium',
-  'text-foreground/90',
-  'text-muted-foreground',
-]
-
-const LINE_W = 14 // px per depth level
+const INDENT_PX = 14 // px per depth level
 
 function OrgTreeNodeItem({
-  node, depth, isLast, parentLines, selectedOrg, onSelect,
+  node, depth, selectedOrg, onSelect,
 }: {
-  node: OrgTreeNode; depth: number; isLast: boolean
-  parentLines: boolean[]; selectedOrg: string | null
+  node: OrgTreeNode; depth: number
+  selectedOrg: string | null
   onSelect: (names: string[]) => void
 }) {
   const [expanded, setExpanded] = useState(depth < 1)
   const hasChildren = node.children.length > 0
   const isSelected = selectedOrg === node.name
-  const childParentLines = [...parentLines, !isLast]
-  const colorClass = DEPTH_COLORS[Math.min(depth, DEPTH_COLORS.length - 1)]
-  const mid = Math.floor(LINE_W / 2) // 7px — center of each guide column
 
   return (
     <div>
-      {/* items-stretch: guide columns stretch to match button height automatically */}
-      <div className="flex items-stretch">
-        {/* Ancestor vertical guide lines */}
-        {parentLines.map((hasLine, i) => (
-          <div key={i} className="relative shrink-0" style={{ width: LINE_W }}>
-            {hasLine && (
-              <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 0, bottom: 0, width: 1 }} />
-            )}
-          </div>
-        ))}
-
-        {/* Current node connector elbow */}
-        {depth > 0 && (
-          <div className="relative shrink-0" style={{ width: LINE_W }}>
-            {/* Vertical: top → elbow */}
-            <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 0, height: 13, width: 1 }} />
-            {/* Vertical: elbow → bottom (only if not last sibling) */}
-            {!isLast && (
-              <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 13, bottom: 0, width: 1 }} />
-            )}
-            {/* Horizontal: elbow → button */}
-            <div className="absolute bg-muted-foreground/25" style={{ left: mid, top: 13, right: 0, height: 1 }} />
-          </div>
+      <button
+        className={cn(
+          'w-full flex items-start gap-1 text-left py-1.5 px-2 rounded-md transition-colors',
+          isSelected
+            ? 'bg-primary/10 text-primary'
+            : 'hover:bg-muted/50 text-foreground',
         )}
-
-        {/* Node button */}
-        <button
-          className={cn(
-            'flex-1 flex items-start text-left text-sm py-1 px-1 rounded transition-colors min-w-0',
-            colorClass,
-            isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50'
-          )}
-          onClick={() => onSelect(collectNames(node))}
-        >
-          {hasChildren ? (
-            <span
-              className="shrink-0 text-muted-foreground mr-0.5 mt-0.5"
-              onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
-            >
-              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRightIcon className="h-3 w-3" />}
-            </span>
-          ) : (
-            <span className="w-3 shrink-0" />
-          )}
-          <span className="flex-1 leading-5">{node.name}</span>
-          <span className="w-8 shrink-0 tabular-nums text-muted-foreground/60 text-xs text-right mt-px">
-            {node.totalCount}
+        style={{ paddingLeft: depth * INDENT_PX + 8 }}
+        onClick={() => onSelect(collectNames(node))}
+      >
+        {hasChildren ? (
+          <span
+            className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground"
+            onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+          >
+            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
           </span>
-        </button>
-      </div>
+        ) : (
+          <span className="w-3.5 shrink-0" />
+        )}
+        <span className={cn(
+          'flex-1 text-xs leading-5 min-w-0 break-words',
+          depth === 0 && 'font-semibold',
+          isSelected && 'font-medium',
+        )}>
+          {node.name}
+        </span>
+        <span className={cn(
+          'shrink-0 mt-0.5 min-w-[22px] text-center text-[10px] font-semibold rounded-full px-1.5 py-px leading-4',
+          isSelected
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted-foreground/15 text-muted-foreground',
+        )}>
+          {node.totalCount}
+        </span>
+      </button>
 
       {hasChildren && expanded && (
         <div>
-          {node.children.map((child, i) => (
+          {node.children.map(child => (
             <OrgTreeNodeItem
               key={child.name}
               node={child}
               depth={depth + 1}
-              isLast={i === node.children.length - 1}
-              parentLines={childParentLines}
               selectedOrg={selectedOrg}
               onSelect={onSelect}
             />
@@ -206,15 +180,15 @@ function OrgTreePanel({
   onSelect: (org: string | null, names: string[]) => void
 }) {
   return (
-    <div className="hidden lg:flex w-56 shrink-0 flex-col">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-1.5">
+    <div className="hidden lg:flex w-64 shrink-0 flex-col border-r pr-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-2">
         組織架構
       </p>
 
       {/* All */}
       <button
         className={cn(
-          'flex items-center gap-1.5 px-1 py-1.5 rounded text-sm text-left transition-colors mb-0.5',
+          'flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs text-left transition-colors mb-1',
           selectedOrg === null
             ? 'bg-primary/10 text-primary font-medium'
             : 'hover:bg-muted/50 text-foreground font-medium'
@@ -224,7 +198,12 @@ function OrgTreePanel({
         <Users className="h-3.5 w-3.5 shrink-0" />
         <span className="flex-1">全部人員</span>
         {orgTree && (
-          <span className="tabular-nums text-muted-foreground/60 text-xs">
+          <span className={cn(
+            'min-w-[22px] text-center text-[10px] font-semibold rounded-full px-1.5 py-px leading-4',
+            selectedOrg === null
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted-foreground/15 text-muted-foreground',
+          )}>
             {orgTree.totalCount}
           </span>
         )}
@@ -233,7 +212,7 @@ function OrgTreePanel({
       {/* Tree */}
       <div className="overflow-y-auto flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ maxHeight: 'calc(100vh - 260px)' }}>
         {orgLoading && (
-          <div className="flex items-center gap-1.5 px-1 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 px-2 py-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" /> 載入中...
           </div>
         )}
@@ -241,8 +220,6 @@ function OrgTreePanel({
           <OrgTreeNodeItem
             node={orgTree}
             depth={0}
-            isLast={true}
-            parentLines={[]}
             selectedOrg={selectedOrg}
             onSelect={names => onSelect(names[0] ?? null, names)}
           />
