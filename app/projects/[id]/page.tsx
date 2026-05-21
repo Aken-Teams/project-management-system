@@ -387,38 +387,36 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                         <AlertCircle className="h-3 w-3" />
                         開案原因
                       </div>
-                      <p className="text-sm whitespace-pre-line">{project.createdReason}</p>
+                      <p className={`text-sm whitespace-pre-line ${!project.createdReason ? 'text-muted-foreground italic' : ''}`}>{project.createdReason || '暫無'}</p>
                     </div>
                     <div className="py-3">
                       <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <Target className="h-3 w-3" />
                         專案目的
                       </div>
-                      <p className="text-sm whitespace-pre-line">{project.purpose}</p>
+                      <p className={`text-sm whitespace-pre-line ${!project.purpose ? 'text-muted-foreground italic' : ''}`}>{project.purpose || '暫無'}</p>
                     </div>
                     <div className="py-3">
                       <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
                         <LayoutList className="h-3 w-3" />
                         專案範圍
                       </div>
-                      <p className="text-sm whitespace-pre-line">{project.scope}</p>
+                      <p className={`text-sm whitespace-pre-line ${!project.scope ? 'text-muted-foreground italic' : ''}`}>{project.scope || '暫無'}</p>
                     </div>
-                    {project.expectedBenefits && (
-                      <div className="py-3">
-                        <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-                          <TrendingUp className="h-3 w-3" />
-                          預期效益
-                        </div>
-                        <p className="text-sm whitespace-pre-line">{project.expectedBenefits}</p>
+                    <div className="py-3">
+                      <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                        <TrendingUp className="h-3 w-3" />
+                        預期效益
                       </div>
-                    )}
+                      <p className={`text-sm whitespace-pre-line ${!project.expectedBenefits ? 'text-muted-foreground italic' : ''}`}>{project.expectedBenefits || '暫無'}</p>
+                    </div>
                     {project.smartObjective && (
                       <div className="py-3">
                         <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                           <Target className="h-3 w-3" />
                           SMART 目標
                         </div>
-                        <div className="grid gap-2">
+                        <div className="grid gap-0 divide-y">
                           {([
                             { key: 'specific', label: 'S — 具體目標' },
                             { key: 'measurable', label: 'M — 可衡量指標' },
@@ -426,13 +424,15 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                             { key: 'relevant', label: 'R — 相關性' },
                             { key: 'timeBound', label: 'T — 時限性' },
                           ] as const)
-                            .filter(item => (project.smartObjective as Record<string, string>)?.[item.key])
-                            .map(item => (
-                              <div key={item.key}>
-                                <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
-                                <p className="text-sm mt-0.5 whitespace-pre-line">{(project.smartObjective as Record<string, string>)[item.key]}</p>
-                              </div>
-                            ))
+                            .map(item => {
+                              const val = (project.smartObjective as Record<string, string>)?.[item.key]
+                              return (
+                                <div key={item.key} className="py-2 first:pt-0 last:pb-0">
+                                  <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                  <p className={`text-sm mt-0.5 whitespace-pre-line ${!val ? 'text-muted-foreground italic' : ''}`}>{val || '暫無'}</p>
+                                </div>
+                              )
+                            })
                           }
                         </div>
                       </div>
