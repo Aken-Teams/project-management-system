@@ -57,6 +57,7 @@ import {
   Share2,
   Copy,
   Check,
+  ShoppingCart,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
@@ -65,6 +66,7 @@ import { ProjectRiskTab } from '@/components/project-risk-tab'
 import { ProjectDelayTab } from '@/components/project-delay-tab'
 import { WeeklyActivitySummary } from '@/components/weekly-activity-summary'
 import { RoiSection, type RoiParams } from '@/components/roi-section'
+import { CapexTable, type CapexItemData } from '@/components/capex-table'
 
 // --- Main page ---
 
@@ -96,6 +98,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   }>>([])
   const [shareLinksLoading, setShareLinksLoading] = useState(false)
   const [shareCopiedId, setShareCopiedId] = useState<string | null>(null)
+  const [capexItems, setCapexItems] = useState<CapexItemData[]>([])
+
+  // Team role of current user in this project
+  const currentUserTeamRole = project?.teamMembers?.find(
+    m => m.email === user?.email
+  )?.role
+  const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'S' || currentUserTeamRole === 'P' || user?.role === 'admin'
+  const canEditCapex = currentUserTeamRole === 'P'
 
   const fetchShareLinks = async () => {
     setShareLinksLoading(true)
@@ -151,6 +161,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       .then(setBudgetItems)
       .catch(() => {})
   }, [id])
+
+  useEffect(() => {
+    if (!canViewCapex) return
+    fetch(`/api/projects/${id}/capex`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setCapexItems)
+      .catch(() => {})
+  }, [id, canViewCapex]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveProject = async (data: ProjectEditData) => {
     const res = await fetch(`/api/projects/${id}`, {
@@ -382,6 +400,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <Info className="h-4 w-4" />
                 概覽
               </TabsTrigger>
+              {canViewCapex && (
+                <TabsTrigger value="capex" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
+                  <ShoppingCart className="h-4 w-4" />
+                  投資報酬
+                  {capexItems.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-sm">
+                      {capexItems.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
               <TabsTrigger value="work-items" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">
                 <ListTodo className="h-4 w-4" />
                 工作項目
@@ -619,7 +648,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             }} />
           </TabsContent>
 
-          {/* Dependencies Tab */}
+          {/* CAPEX / Investment ROI Tab */}
+          {canViewCapex && (
+            <TabsContent value="capex" className="mt-0">
+              <CapexTable
+                projectId={id}
+                items={capexItems}
+                budgetItems={budgetItems}
+                roiParams={roiParams}
+                budget={project?.budget ?? 0}
+                readOnly={!canEditCapex}
+                onSaved={setCapexItems}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

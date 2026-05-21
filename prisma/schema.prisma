@@ -182,6 +182,7 @@ model Project {
   notifications   Notification[]
   shareLinks      ShareLink[]
   budgetItems     ProjectBudgetItem[]
+  capexItems      CapexItem[]
 
   @@index([startDate, endDate])
   @@map("projects")
@@ -482,6 +483,8 @@ model ProjectBudgetItem {
   sortOrder     Int      @default(0) @map("sort_order")
   createdAt     DateTime @default(now()) @map("created_at")
 
+  capexItems    CapexItem[]
+
   @@index([projectId, sortOrder])
   @@map("project_budget_items")
 }
@@ -574,4 +577,45 @@ model CronJobLog {
 
   @@index([jobType, runAt])
   @@map("cron_job_logs")
+}
+
+model CapexItem {
+  id                    String    @id @default(cuid())
+  projectId             String    @map("project_id")
+  project               Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetItemId          String?   @map("budget_item_id")
+  budgetItem            ProjectBudgetItem? @relation(fields: [budgetItemId], references: [id], onDelete: SetNull)
+
+  equipmentCategory     String    @default("") @map("equipment_category")
+  station               String    @default("")
+  supplier              String    @default("")
+  issueDate             DateTime? @map("issue_date")
+  poNumber              String    @default("") @map("po_number")
+  partNumber            String    @default("") @map("part_number")
+  masterSummary         String    @default("") @map("master_summary")
+  partDescription       String    @default("") @map("part_description")
+  unit                  String    @default("")
+  currency              String    @default("TWD")
+  quantity              Int       @default(1)
+  originalPrice         Float?    @map("original_price")
+  twdPrice              Float?    @map("twd_price")
+  orderAmount           Float?    @map("order_amount")
+  deliveryDate          DateTime? @map("delivery_date")
+  bpmAcceptanceDate     DateTime? @map("bpm_acceptance_date")
+  depositPct            Float?    @map("deposit_pct")
+  deliveryPct           Float?    @map("delivery_pct")
+  acceptancePct         Float?    @map("acceptance_pct")
+  depositAmount         Float?    @map("deposit_amount")
+  depositPayDate        DateTime? @map("deposit_pay_date")
+  deliveryAmount        Float?    @map("delivery_amount")
+  deliveryPayDate       DateTime? @map("delivery_pay_date")
+  acceptanceAmount      Float?    @map("acceptance_amount")
+  acceptancePayDate     DateTime? @map("acceptance_pay_date")
+  paymentStatus         String    @default("") @map("payment_status")
+  sortOrder             Int       @default(0) @map("sort_order")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([projectId, sortOrder])
+  @@map("capex_items")
 }

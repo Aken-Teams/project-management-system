@@ -375,7 +375,7 @@ export function dbProjectToFrontend(
       email: tm.user.email,
       jobTitle: tm.jobTitle || tm.user.jobTitle || '',
       organization: tm.organization || tm.user.organization || '',
-      role: tm.role as 'R' | 'A' | 'C' | 'I',
+      role: tm.role as 'R' | 'A' | 'C' | 'I' | 'P' | 'S',
       responsibility: tm.responsibility,
     })),
     milestones: feMilestones,
