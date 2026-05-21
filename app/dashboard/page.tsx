@@ -30,6 +30,7 @@ import {
   CalendarDays,
   RotateCcw,
 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
@@ -97,6 +98,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const currentYear = new Date().getFullYear()
   const [dateFrom, setDateFrom] = useState<Date>(new Date(currentYear, 0, 1))
   const [dateTo, setDateTo] = useState<Date>(new Date(currentYear, 11, 31))
@@ -194,7 +196,16 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">儀表板</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">儀表板</h1>
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="儀表板說明"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            </div>
             <p className="text-sm text-muted-foreground mt-1">歡迎回來，{data.user.name}</p>
           </div>
           <div className="flex items-center gap-2 bg-card rounded-lg border px-3 py-2">
@@ -548,6 +559,119 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Help Dialog */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-xl">儀表板說明</DialogTitle>
+            <DialogDescription>各區塊功能與指標說明</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Stats cards */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-blue-500" /> 統計卡片
+              </h3>
+              <div className="space-y-1.5">
+                {[
+                  { icon: <FolderKanban className="h-3.5 w-3.5" />, name: '總專案數 / 參與專案', desc: '顯示目前篩選範圍內的專案總數，以及各狀態燈號（綠/黃/紅）的數量分佈。一般成員僅顯示自己參與的專案。' },
+                  { icon: <FolderKanban className="h-3.5 w-3.5" />, name: '專案層級', desc: '依層級分類（T1/T2/T3/CIP）統計專案數量。T1 為最高優先級大型專案，CIP 為持續改善專案。' },
+                  { icon: <DollarSign className="h-3.5 w-3.5" />, name: '預算使用率', desc: '所有專案的預算使用比例（已使用/總預算）。僅專案經理、主管和管理員可見。一般成員改為顯示任務統計。' },
+                  { icon: <TrendingUp className="h-3.5 w-3.5" />, name: '健康度', desc: '綠燈專案佔總專案的比例。若有紅燈專案則顯示風險警示，黃燈則提示需關注。' },
+                ].map(item => (
+                  <div key={item.name} className="rounded-lg border bg-muted/30 p-3 flex items-start gap-3">
+                    <div className="shrink-0 mt-0.5 text-muted-foreground">{item.icon}</div>
+                    <div>
+                      <span className="text-sm font-semibold">{item.name}</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Status lights */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-500" /> 專案狀態燈號
+              </h3>
+              <div className="space-y-1.5">
+                <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 p-3 flex items-start gap-3">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">綠燈 (Green)</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">專案進度正常，在預期範圍內執行，無需特別關注。</p>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 p-3 flex items-start gap-3">
+                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">黃燈 (Yellow)</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">專案存在潛在風險或輕微延遲，需要關注和適當處理。</p>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 p-3 flex items-start gap-3">
+                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-sm font-semibold text-red-700 dark:text-red-300">紅燈 (Red)</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">專案有重大風險或嚴重延遲，需立即介入處理。</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-indigo-500" /> 篩選功能
+              </h3>
+              <div className="space-y-1.5">
+                <div className="rounded-lg border bg-muted/30 p-3 flex items-start gap-3">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-sm font-semibold">日期範圍篩選</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">依專案起迄日期篩選，只要專案期間與選定範圍有重疊即會顯示。支援快速選擇今年、去年、近 3/6 個月。</p>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3 flex items-start gap-3">
+                  <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-sm font-semibold">層級篩選（T1/T2/T3/CIP）</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">依專案層級篩選，所有統計數據和列表會即時更新。</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Role visibility */}
+            <div className="rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <Users className="h-4 w-4 text-indigo-500" /> 角色可見範圍
+              </h3>
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5 hover:bg-secondary">一般成員</Badge>
+                  <span className="text-sm text-muted-foreground">僅看到自己參與的專案，預算卡片改為顯示個人任務統計。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5 hover:bg-secondary">專案經理</Badge>
+                  <span className="text-sm text-muted-foreground">可看到所有專案的完整統計與預算使用率。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge variant="secondary" className="bg-amber-100 hover:bg-amber-100 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:text-amber-300 border-transparent text-[10px] shrink-0 mt-0.5">主管</Badge>
+                  <span className="text-sm text-muted-foreground">可看到所有專案，並在右上角顯示待審核提醒按鈕。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge variant="secondary" className="bg-red-100 hover:bg-red-100 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:text-red-300 border-transparent text-[10px] shrink-0 mt-0.5">管理員</Badge>
+                  <span className="text-sm text-muted-foreground">擁有完整檢視權限，可看到所有專案、預算及風險資訊。</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }

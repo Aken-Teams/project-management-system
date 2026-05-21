@@ -29,6 +29,7 @@ import {
   Wrench,
   Filter,
   X,
+  HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -99,6 +100,7 @@ export default function ApprovalsPage() {
   const [showSupportForm, setShowSupportForm] = useState(false)
   const [supportNotes, setSupportNotes] = useState('')
   const [activeTab, setActiveTab] = useState('pending')
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Search & filter states (shared across tabs)
   const [searchPending, setSearchPending] = useState('')
@@ -918,7 +920,16 @@ export default function ApprovalsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">審核中心</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">審核中心</h1>
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="角色權限說明"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            </div>
             <p className="text-sm text-muted-foreground mt-1">審核專案延遲申請與日期變更</p>
           </div>
         </div>
@@ -1182,6 +1193,131 @@ export default function ApprovalsPage() {
               ? renderSupportDetail(selectedItem)
               : renderStandardDetail(selectedItem)
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Help Dialog */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-xl">審核中心 — 角色權限說明</DialogTitle>
+            <DialogDescription>
+              說明各角色在審核中心的功能與職責
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Project Team Roles (RACIPS) */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <User className="h-4 w-4 text-blue-500" /> 專案角色（RACIPS）
+              </h3>
+              <div className="space-y-1.5">
+                {[
+                  { code: 'R', name: '負責 (Responsible)', desc: '實際執行任務的人，負責完成交付項目。', perm: '唯讀', highlight: false },
+                  { code: 'A', name: '當責 (Accountable)', desc: '對任務成果負最終責任的人，確保任務正確完成。', perm: '唯讀', highlight: false },
+                  { code: 'C', name: '諮詢 (Consulted)', desc: '在決策前被徵詢意見的人，提供專業建議。', perm: '唯讀', highlight: false },
+                  { code: 'I', name: '知會 (Informed)', desc: '在決策後被通知的人，需了解進展但不參與決策。', perm: '唯讀', highlight: false },
+                  { code: 'P', name: '採購 (Procurement)', desc: '負責專案相關採購與資源取得的人。', perm: '唯讀', highlight: false },
+                  { code: 'S', name: '審核 (Sign-off)', desc: '負責審核與批准的人，需簽核才能推進。', perm: '可審核', highlight: true },
+                ].map(r => (
+                  <div key={r.code} className={cn(
+                    'rounded-lg border p-3 flex items-start gap-3',
+                    r.highlight
+                      ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-muted/30 border-muted',
+                  )}>
+                    <Badge variant="outline" className={cn(
+                      'text-xs shrink-0 mt-0.5 font-semibold min-w-[26px] justify-center',
+                      r.highlight
+                        ? 'bg-emerald-100 hover:bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-300'
+                        : 'bg-muted hover:bg-muted',
+                    )}>{r.code}</Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold">{r.name}</span>
+                        <Badge variant="secondary" className={cn(
+                          'text-[10px] px-1.5 py-0 border-transparent',
+                          r.highlight
+                            ? 'bg-emerald-100 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:text-emerald-300'
+                            : 'hover:bg-secondary',
+                        )}>{r.perm}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{r.desc}</p>
+                      {r.highlight && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium">可審核延期申請（核准/駁回），多位 S 角色需全部核准才通過</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* System Roles */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-indigo-500" /> 系統角色
+              </h3>
+              <div className="space-y-1.5">
+                {[
+                  { name: '一般成員', code: 'member', letter: 'M', desc: '系統一般使用者，參與專案執行。', perms: ['檢視所屬專案審核狀態'], highlight: '' },
+                  { name: '專案經理', code: 'pm', letter: 'PM', desc: '管理專案進度、團隊與交付。', perms: ['檢視所有專案審核狀態'], highlight: '' },
+                  { name: '主管', code: 'executive', letter: 'E', desc: '高階管理者，監督整體營運與資源分配。', perms: ['檢視所有專案', '處理協助需求'], highlight: 'amber' },
+                  { name: '管理員', code: 'admin', letter: 'A', desc: '系統管理員，擁有完整系統權限。', perms: ['檢視所有專案', '審核延期', '處理協助需求'], highlight: 'red' },
+                ].map(r => {
+                  const colorMap: Record<string, { bg: string; border: string; badge: string }> = {
+                    amber: { bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 hover:bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:border-amber-700 dark:text-amber-300' },
+                    red: { bg: 'bg-red-50 dark:bg-red-950/20', border: 'border-red-200 dark:border-red-800', badge: 'bg-red-100 hover:bg-red-100 border-red-300 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:border-red-700 dark:text-red-300' },
+                  }
+                  const c = r.highlight ? colorMap[r.highlight] : null
+                  return (
+                    <div key={r.code} className={cn(
+                      'rounded-lg border p-3 flex items-start gap-3',
+                      c ? `${c.bg} ${c.border}` : 'bg-muted/30 border-muted',
+                    )}>
+                      <Badge variant="outline" className={cn(
+                        'text-xs shrink-0 mt-0.5 font-semibold min-w-[28px] justify-center',
+                        c ? c.badge : 'bg-muted hover:bg-muted',
+                      )}>{r.letter}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">{r.name}</span>
+                          {r.perms.map(p => (
+                            <Badge key={p} variant="secondary" className={cn(
+                              'text-[10px] px-1.5 py-0 border-transparent',
+                              c ? `${c.badge}` : 'hover:bg-secondary',
+                            )}>{p}</Badge>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{r.desc}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Workflow summary */}
+            <div className="rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-indigo-500" /> 審核流程摘要
+              </h3>
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <Badge className="bg-emerald-100 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:text-emerald-300 text-[10px] shrink-0 mt-0.5 border-transparent">延期審核</Badge>
+                  <span className="text-sm text-muted-foreground">由專案中所有 <Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-emerald-50 hover:bg-emerald-50 border-emerald-300 text-emerald-700">S</Badge> 角色成員進行審核，<span className="text-emerald-600 dark:text-emerald-400 font-medium">全部核准</span>後才通過；任一駁回即<span className="text-red-600 dark:text-red-400 font-medium">駁回</span>。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge className="bg-amber-100 hover:bg-amber-100 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:text-amber-300 text-[10px] shrink-0 mt-0.5 border-transparent">協助處理</Badge>
+                  <span className="text-sm text-muted-foreground">當延期申請包含「需要支援」時，由<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-amber-50 hover:bg-amber-50 border-amber-300 text-amber-700">主管</Badge>或<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-red-50 hover:bg-red-50 border-red-300 text-red-700">管理員</Badge>負責處理並標記完成。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge className="bg-blue-100 hover:bg-blue-100 text-blue-700 dark:bg-blue-900 dark:hover:bg-blue-900 dark:text-blue-300 text-[10px] shrink-0 mt-0.5 border-transparent">可見性</Badge>
+                  <span className="text-sm text-muted-foreground">專案團隊中所有角色（RACIPS）都能查看自己所屬專案的審核進度，但只有 <Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-emerald-50 hover:bg-emerald-50 border-emerald-300 text-emerald-700">S</Badge> 角色可以執行審核動作。</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
