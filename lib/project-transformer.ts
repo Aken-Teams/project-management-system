@@ -88,6 +88,7 @@ export function dbProjectToFrontend(
     milestones: {
       id: string
       name: string
+      startDate: Date | null
       dueDate: Date
       status: string
       progress: number
@@ -202,6 +203,7 @@ export function dbProjectToFrontend(
     .map((m) => ({
       id: m.id,
       name: m.name,
+      startDate: m.startDate ? m.startDate.toISOString().split('T')[0] : undefined,
       dueDate: m.dueDate.toISOString().split('T')[0],
       status: m.status === 'in_progress' ? ('in-progress' as const) : (m.status as 'todo' | 'done' | 'blocked'),
       progress: m.progress,

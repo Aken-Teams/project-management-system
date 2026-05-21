@@ -57,7 +57,7 @@ interface CreateProjectBody {
   ownerName: string
   team: string[]
   teamMembers?: { name: string; role: string; jobTitle?: string; organization?: string; responsibility: string }[]
-  milestones: { id: string; name: string; dueDate: string }[]
+  milestones: { id: string; name: string; dueDate: string; startDate?: string }[]
   tasks?: {
     milestoneId: string
     title: string
@@ -202,6 +202,7 @@ export async function POST(request: NextRequest) {
           data: {
             projectId: proj.id,
             name: m.name,
+            startDate: m.startDate ? new Date(m.startDate) : undefined,
             dueDate: new Date(m.dueDate),
             sortOrder: i,
           },

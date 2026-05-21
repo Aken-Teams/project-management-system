@@ -796,15 +796,16 @@ export default function NewProjectPage() {
 
   // Auto-expand milestone duration when tasks exceed it
   useEffect(() => {
-    const { milestones: updated, changed } = autoExpandMilestones(manualMilestones, manualTasks)
+    const { milestones: updated, changed } = autoExpandMilestones(manualMilestones, manualTasks, manualData.startDate)
     if (changed) setManualMilestones(updated)
   }, [manualTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track the last milestone's end date (only changes when milestones actually change)
   const lastMilestoneEndDate = useMemo(() => {
-    const lastMilestone = [...recalculatedMilestones]
-      .reverse()
-      .find(m => m.endDate && m.durationDays > 0)
+    const endDates = recalculatedMilestones
+      .filter(m => m.endDate && m.durationDays > 0)
+      .map(m => m.endDate!)
+    const lastMilestone = endDates.length > 0 ? { endDate: endDates.sort().pop()! } : null
     return lastMilestone?.endDate || ''
   }, [recalculatedMilestones])
 
@@ -865,16 +866,16 @@ export default function NewProjectPage() {
 
   // Auto-expand AI milestone duration when tasks exceed it
   useEffect(() => {
-    const { milestones: updated, changed } = autoExpandMilestones(aiMilestones, aiTasks)
+    const { milestones: updated, changed } = autoExpandMilestones(aiMilestones, aiTasks, aiEditableData.startDate)
     if (changed) setAiMilestones(updated)
   }, [aiTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track AI last milestone end date
   const aiLastMilestoneEndDate = useMemo(() => {
-    const lastMilestone = [...recalculatedAiMilestones]
-      .reverse()
-      .find(m => m.endDate && m.durationDays > 0)
-    return lastMilestone?.endDate || ''
+    const endDates = recalculatedAiMilestones
+      .filter(m => m.endDate && m.durationDays > 0)
+      .map(m => m.endDate!)
+    return endDates.length > 0 ? endDates.sort().pop()! : ''
   }, [recalculatedAiMilestones])
 
   // Auto-update AI project end date
@@ -914,15 +915,13 @@ export default function NewProjectPage() {
       if (newDuration < 1) return
       setManualMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
     } else {
-      if (index === 0) {
-        setManualData(prev => ({ ...prev, startDate: value }))
-      } else {
-        const prevMs = recalculatedMilestones[index - 1]
-        if (!prevMs?.startDate) return
-        const newPrevDuration = daysBetween(prevMs.startDate, value)
-        if (newPrevDuration < 1) return
-        setManualMilestones(prev => prev.map((m, i) => i === index - 1 ? { ...m, durationDays: newPrevDuration } : m))
-      }
+      // startDate change — directly set milestone's own startDate (overlapping)
+      setManualMilestones(prev => prev.map((m, i) => {
+        if (i !== index) return m
+        const currentEnd = recalculatedMilestones[index]?.endDate
+        const newDuration = currentEnd ? daysBetween(value, currentEnd) + 1 : m.durationDays
+        return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
+      }))
     }
   }
 
@@ -935,29 +934,10 @@ export default function NewProjectPage() {
       if (newDuration < 1) return
       setManualTasks(prev => prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t))
     } else {
-      const task = manualTasks.find(t => t.id === taskId)
-      if (!task) return
-      const siblings = task.parentId
-        ? manualTasks.filter(t => t.parentId === task.parentId)
-        : manualTasks.filter(t => t.milestoneId === task.milestoneId && !t.parentId)
-      const taskIdx = siblings.findIndex(t => t.id === taskId)
-      if (taskIdx > 0) {
-        const prevSibling = siblings[taskIdx - 1]
-        const prevDates = manualTaskDates.get(prevSibling.id)
-        if (!prevDates) return
-        const newPrevDuration = daysBetween(prevDates.startDate, value)
-        if (newPrevDuration < 1) return
-        setManualTasks(prev => prev.map(t => t.id === prevSibling.id ? { ...t, durationDays: newPrevDuration } : t))
-      } else {
-        const msIdx = recalculatedMilestones.findIndex(m => m.id === task.milestoneId)
-        if (msIdx < 0) return
-        const ms = recalculatedMilestones[msIdx]
-        if (!ms?.startDate) return
-        const gapDays = daysBetween(ms.startDate, value)
-        const taskTotalDays = siblings.reduce((sum, t) => sum + (t.durationDays || 0), 0)
-        const newMsDuration = Math.max(gapDays + taskTotalDays, 1)
-        setManualMilestones(prev => prev.map((m, i) => i === msIdx ? { ...m, durationDays: newMsDuration } : m))
-      }
+      // startDate change — directly set task's own startDate (overlapping)
+      const currentEnd = taskDates.endDate
+      const newDuration = daysBetween(value, currentEnd) + 1
+      setManualTasks(prev => prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t))
     }
   }
 
@@ -971,15 +951,13 @@ export default function NewProjectPage() {
       if (newDuration < 1) return
       setAiMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
     } else {
-      if (index === 0) {
-        setAiEditableData(prev => ({ ...prev, startDate: value }))
-      } else {
-        const prevMs = recalculatedAiMilestones[index - 1]
-        if (!prevMs?.startDate) return
-        const newPrevDuration = daysBetween(prevMs.startDate, value)
-        if (newPrevDuration < 1) return
-        setAiMilestones(prev => prev.map((m, i) => i === index - 1 ? { ...m, durationDays: newPrevDuration } : m))
-      }
+      // startDate change — directly set milestone's own startDate (overlapping)
+      setAiMilestones(prev => prev.map((m, i) => {
+        if (i !== index) return m
+        const currentEnd = recalculatedAiMilestones[index]?.endDate
+        const newDuration = currentEnd ? daysBetween(value, currentEnd) + 1 : m.durationDays
+        return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
+      }))
     }
   }
 
@@ -992,29 +970,10 @@ export default function NewProjectPage() {
       if (newDuration < 1) return
       setAiTasks(prev => prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t))
     } else {
-      const task = aiTasks.find(t => t.id === taskId)
-      if (!task) return
-      const siblings = task.parentId
-        ? aiTasks.filter(t => t.parentId === task.parentId)
-        : aiTasks.filter(t => t.milestoneId === task.milestoneId && !t.parentId)
-      const taskIdx = siblings.findIndex(t => t.id === taskId)
-      if (taskIdx > 0) {
-        const prevSibling = siblings[taskIdx - 1]
-        const prevDates = aiTaskDates.get(prevSibling.id)
-        if (!prevDates) return
-        const newPrevDuration = daysBetween(prevDates.startDate, value)
-        if (newPrevDuration < 1) return
-        setAiTasks(prev => prev.map(t => t.id === prevSibling.id ? { ...t, durationDays: newPrevDuration } : t))
-      } else {
-        const msIdx = recalculatedAiMilestones.findIndex(m => m.id === task.milestoneId)
-        if (msIdx < 0) return
-        const ms = recalculatedAiMilestones[msIdx]
-        if (!ms?.startDate) return
-        const gapDays = daysBetween(ms.startDate, value)
-        const taskTotalDays = siblings.reduce((sum, t) => sum + (t.durationDays || 0), 0)
-        const newMsDuration = Math.max(gapDays + taskTotalDays, 1)
-        setAiMilestones(prev => prev.map((m, i) => i === msIdx ? { ...m, durationDays: newMsDuration } : m))
-      }
+      // startDate change — directly set task's own startDate (overlapping)
+      const currentEnd = taskDates.endDate
+      const newDuration = daysBetween(value, currentEnd) + 1
+      setAiTasks(prev => prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t))
     }
   }
 
@@ -1192,6 +1151,7 @@ export default function NewProjectPage() {
           id: newId,
           name: m.name,
           dueDate: m.endDate || aiEditableData.endDate,
+          startDate: m.startDate,
         }
       })
 
@@ -1303,6 +1263,7 @@ export default function NewProjectPage() {
           id: newId,
           name: m.name,
           dueDate: m.endDate!,
+          startDate: m.startDate,
         }
       })
 

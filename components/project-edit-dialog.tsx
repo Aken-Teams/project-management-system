@@ -223,7 +223,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // (e.g. after a project startDate change was approved) don't cause false positives.
   const [origMilestones] = useState(() => {
     const initRecalc = calculateMilestoneDates(tlInit.milestones, project.startDate, tlInit.tasks)
-    return initRecalc.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.endDate || '' }))
+    return initRecalc.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.endDate || '', startDate: ms.startDate }))
   })
   const [origTasks] = useState(() =>
     (project.tasks ?? []).map(t => ({
@@ -264,14 +264,16 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // Auto-resize milestone duration to match task total (expand + shrink)
   useEffect(() => {
-    const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks)
+    const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks, form.startDate || project.startDate)
     if (changed) setTlMilestones(updated)
   }, [tlTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-update project end date from last milestone
+  // Auto-update project end date from latest milestone end
   const lastMsEndDate = useMemo(() => {
-    const last = [...recalcMilestones].reverse().find(m => m.endDate && m.durationDays > 0)
-    return last?.endDate || ''
+    const endDates = recalcMilestones
+      .filter(m => m.endDate && m.durationDays > 0)
+      .map(m => m.endDate!)
+    return endDates.length > 0 ? endDates.sort().pop()! : ''
   }, [recalcMilestones])
 
   useEffect(() => {
@@ -788,20 +790,15 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       if (newDuration < 1) return
       setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
     } else {
-      // startDate change
-      if (index === 0) {
-        // First milestone → update project startDate
-        update('startDate', value)
-      } else {
-        // Adjust previous milestone's durationDays so it ends the day before the new start
-        const prevMs = recalcMilestones[index - 1]
-        if (!prevMs?.startDate) return
-        const newPrevDuration = daysBetween(prevMs.startDate, value) // endDate = value - 1 day, so duration = diff days
-        if (newPrevDuration < 1) return
-        setTlMilestones(prev => prev.map((m, i) => i === index - 1 ? { ...m, durationDays: newPrevDuration } : m))
-      }
+      // startDate change — directly set milestone's own startDate (overlapping)
+      setTlMilestones(prev => prev.map((m, i) => {
+        if (i !== index) return m
+        const currentEnd = recalcMilestones[index]?.endDate
+        const newDuration = currentEnd ? daysBetween(value, currentEnd) + 1 : m.durationDays
+        return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
+      }))
     }
-  }, [recalcMilestones]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recalcMilestones])
 
   const handleTlTaskDateChange = useCallback((taskId: string, field: 'startDate' | 'endDate', value: string) => {
     if (!value) return
@@ -816,42 +813,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
       ))
     } else {
-      // startDate change: adjust predecessor's durationDays
-      const task = tlTasks.find(t => t.id === taskId)
-      if (!task) return
-
-      // Find same-level siblings in same milestone
-      const siblings = task.parentId
-        ? tlTasks.filter(t => t.parentId === task.parentId)
-        : tlTasks.filter(t => t.milestoneId === task.milestoneId && !t.parentId)
-      const taskIdx = siblings.findIndex(t => t.id === taskId)
-
-      if (taskIdx > 0) {
-        // Adjust previous sibling's durationDays
-        const prevSibling = siblings[taskIdx - 1]
-        const prevDates = tlTaskDates.get(prevSibling.id)
-        if (!prevDates) return
-        const newPrevDuration = daysBetween(prevDates.startDate, value) // prev ends at value - 1 day
-        if (newPrevDuration < 1) return
-        setTlTasks(prev => syncParentDurations(
-          prev.map(t => t.id === prevSibling.id ? { ...t, durationDays: newPrevDuration } : t)
-        ))
-      } else {
-        // First task in milestone: adjust milestone durationDays to create leading space
-        // We need to increase milestone duration so the task shifts
-        const msIdx = recalcMilestones.findIndex(m => m.id === task.milestoneId)
-        if (msIdx < 0) return
-        const ms = recalcMilestones[msIdx]
-        if (!ms?.startDate) return
-        // The gap between milestone start and the new task start becomes "buffer"
-        // This is modelled by increasing the milestone durationDays
-        const gapDays = daysBetween(ms.startDate, value)
-        const taskTotalDays = siblings.reduce((sum, t) => sum + (t.durationDays || 0), 0)
-        const newMsDuration = Math.max(gapDays + taskTotalDays, 1)
-        setTlMilestones(prev => prev.map((m, i) => i === msIdx ? { ...m, durationDays: newMsDuration } : m))
-      }
+      // startDate change — directly set task's own startDate (overlapping)
+      const currentEnd = taskDates.endDate
+      const newDuration = daysBetween(value, currentEnd) + 1
+      setTlTasks(prev => syncParentDurations(
+        prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
+      ))
     }
-  }, [tlTasks, tlTaskDates, recalcMilestones, syncParentDurations])
+  }, [tlTaskDates, syncParentDurations])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

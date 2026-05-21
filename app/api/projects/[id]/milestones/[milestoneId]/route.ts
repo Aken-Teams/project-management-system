@@ -8,6 +8,7 @@ type RouteContext = { params: Promise<{ id: string; milestoneId: string }> }
 
 interface UpdateMilestoneBody {
   name?: string
+  startDate?: string | null
   dueDate?: string
   status?: string
   sortOrder?: number
@@ -35,6 +36,17 @@ export async function PUT(
         return NextResponse.json({ error: '里程碑名稱不可為空' }, { status: 400 })
       }
       data.name = name
+    }
+    if (body.startDate !== undefined) {
+      if (body.startDate === null) {
+        data.startDate = null
+      } else {
+        const sd = new Date(body.startDate)
+        if (isNaN(sd.getTime())) {
+          return NextResponse.json({ error: '開始日期格式不正確' }, { status: 400 })
+        }
+        data.startDate = sd
+      }
     }
     if (body.dueDate !== undefined) {
       const d = new Date(body.dueDate)

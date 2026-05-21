@@ -209,6 +209,7 @@ model Milestone {
   id        String     @id @default(cuid())
   projectId String     @map("project_id")
   name      String
+  startDate DateTime?  @map("start_date")
   dueDate   DateTime   @map("due_date")
   status    TaskStatus @default(todo)
   progress  Int        @default(0)

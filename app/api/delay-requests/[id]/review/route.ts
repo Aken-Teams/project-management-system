@@ -126,53 +126,29 @@ export async function PATCH(
 
         const affectedMsIds = new Set(delayRequest.affectedMilestones.map(am => am.milestoneId))
 
-        // Walk milestones sequentially, computing start dates
-        let currentStart = new Date(project.startDate)
-
+        // Walk milestones — each uses its own startDate (overlapping support)
         for (const ms of project.milestones) {
-          const msStart = new Date(currentStart)
+          // Use milestone's own startDate if set, otherwise fall back to project start
+          const msStart = (ms as any).startDate
+            ? new Date((ms as any).startDate)
+            : new Date(project.startDate)
+
           const msTasks = project.tasks
             .filter(t => t.milestoneId === ms.id && t.parentId == null)
             .sort((a, b) => a.sortOrder - b.sortOrder)
-
-          // Compute task-based duration (in days) — uses updated durationDays
-          const totalTaskDays = msTasks.reduce(
-            (sum, t) => sum + Math.max(t.durationDays, 1), 0
-          )
 
           // Check if this milestone's dueDate needs to be pushed forward
           const msDueDate = new Date(ms.dueDate)
           let newDueDate = msDueDate
 
-          if (msStart > msDueDate) {
-            if (totalTaskDays > 0) {
-              newDueDate = addDays(msStart, totalTaskDays - 1)
-            } else {
-              const prevMsIdx = project.milestones.indexOf(ms) - 1
-              const origStart = prevMsIdx >= 0
-                ? addDays(new Date(project.milestones[prevMsIdx].dueDate), 1)
-                : new Date(project.startDate)
-              const origDurationDays = daysBetween(origStart, msDueDate)
-              newDueDate = addDays(msStart, Math.max(origDurationDays, 0))
-            }
-
-            await tx.milestone.update({
-              where: { id: ms.id },
-              data: { dueDate: newDueDate },
-            })
-          }
-
-          // Recalculate task dates: lay out tasks sequentially from milestone start
-          let taskCurrent = new Date(msStart)
-
+          // Recalculate task dates — each task uses its own startDate or milestone start
           for (const task of msTasks) {
             const taskDurationDays = Math.max(task.durationDays, 1)
-            const taskStart = new Date(taskCurrent)
-            const taskEnd = addDays(taskCurrent, taskDurationDays - 1)
+            const taskStart = new Date(task.startDate)
+            const taskEnd = addDays(taskStart, taskDurationDays - 1)
 
             if (task.startDate.getTime() !== taskStart.getTime() ||
                 task.endDate.getTime() !== taskEnd.getTime()) {
-              // Preserve original dates (first delay = snapshot current dates)
               const preserveOriginal = (task as any).originalStartDate == null
                 ? { originalStartDate: task.startDate, originalEndDate: task.endDate }
                 : {}
@@ -186,62 +162,54 @@ export async function PATCH(
               })
             }
 
-            // Schedule subtasks sequentially within parent's date range
+            // Schedule subtasks — each uses its own startDate or parent start
             const subtasks = project.tasks
               .filter(t => t.parentId === task.id)
               .sort((a, b) => a.sortOrder - b.sortOrder)
-            if (subtasks.length > 0) {
-              let subCurrent = new Date(taskStart)
-              for (const sub of subtasks) {
-                const subDays = Math.max(sub.durationDays || 1, 1)
-                const subStart = new Date(subCurrent)
-                const subEnd = addDays(subCurrent, subDays - 1)
-                if (sub.startDate.getTime() !== subStart.getTime() ||
-                    sub.endDate.getTime() !== subEnd.getTime()) {
-                  const subPreserve = (sub as any).originalStartDate == null
-                    ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
-                    : {}
-                  await tx.task.update({
-                    where: { id: sub.id },
-                    data: { startDate: subStart, endDate: subEnd, ...subPreserve },
-                  })
-                }
-                subCurrent = addDays(subEnd, 1)
+            for (const sub of subtasks) {
+              const subDays = Math.max(sub.durationDays || 1, 1)
+              const subStart = new Date(sub.startDate)
+              const subEnd = addDays(subStart, subDays - 1)
+              if (sub.startDate.getTime() !== subStart.getTime() ||
+                  sub.endDate.getTime() !== subEnd.getTime()) {
+                const subPreserve = (sub as any).originalStartDate == null
+                  ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
+                  : {}
+                await tx.task.update({
+                  where: { id: sub.id },
+                  data: { startDate: subStart, endDate: subEnd, ...subPreserve },
+                })
               }
+
+              // Track latest task end for milestone expansion
+              if (subEnd > newDueDate) newDueDate = subEnd
             }
 
-            taskCurrent = addDays(taskEnd, 1)
+            // Track latest task end for milestone expansion
+            if (taskEnd > newDueDate) newDueDate = taskEnd
           }
 
-          // Ensure milestone dueDate >= last task's endDate
-          if (msTasks.length > 0) {
-            const lastTaskEnd = addDays(taskCurrent, -1)
-            if (lastTaskEnd > newDueDate) {
-              newDueDate = lastTaskEnd
-              await tx.milestone.update({
-                where: { id: ms.id },
-                data: { dueDate: newDueDate },
-              })
-            }
-          }
-
-          // Next milestone starts after this one's dueDate
-          currentStart = addDays(newDueDate, 1)
-        }
-
-        // 4. Update project endDate to last milestone's dueDate
-        const lastMs = project.milestones[project.milestones.length - 1]
-        if (lastMs) {
-          const updatedLastMs = await tx.milestone.findUnique({
-            where: { id: lastMs.id },
-            select: { dueDate: true },
-          })
-          if (updatedLastMs) {
-            await tx.project.update({
-              where: { id: project.id },
-              data: { endDate: updatedLastMs.dueDate },
+          // Update milestone dueDate if tasks extend beyond it
+          if (newDueDate > msDueDate) {
+            await tx.milestone.update({
+              where: { id: ms.id },
+              data: { dueDate: newDueDate },
             })
           }
+        }
+
+        // 4. Update project endDate to latest milestone dueDate (overlapping)
+        const allMs = await tx.milestone.findMany({
+          where: { projectId: project.id },
+          select: { dueDate: true },
+          orderBy: { dueDate: 'desc' },
+          take: 1,
+        })
+        if (allMs.length > 0) {
+          await tx.project.update({
+            where: { id: project.id },
+            data: { endDate: allMs[0].dueDate },
+          })
         }
 
         // 5. Reset milestone baselines to the new approved dates

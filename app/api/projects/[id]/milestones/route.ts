@@ -8,6 +8,7 @@ type RouteContext = { params: Promise<{ id: string }> }
 interface AddMilestoneBody {
   name: string
   dueDate: string
+  startDate?: string
 }
 
 export async function POST(
@@ -39,6 +40,7 @@ export async function POST(
       data: {
         projectId: id,
         name: body.name.trim(),
+        startDate: body.startDate ? new Date(body.startDate) : undefined,
         dueDate: new Date(body.dueDate),
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
       },

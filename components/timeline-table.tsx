@@ -47,6 +47,7 @@ export interface TimelineTask {
   priority: 'low' | 'medium' | 'high'
   durationDays: number
   parentId?: string
+  startDate?: string
 }
 
 export interface TimelineTeamMember {

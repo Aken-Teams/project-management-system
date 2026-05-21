@@ -9,6 +9,7 @@ export type DemandSource = 'company-policy' | 'external-requirement' | 'internal
 export interface Milestone {
   id: string
   name: string
+  startDate?: string
   dueDate: string
   status: TaskStatus
   progress: number
