@@ -17,6 +17,11 @@ import { useNotificationStore } from '@/lib/notification-store'
 import { TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { Input } from '@/components/ui/input'
+import { Calendar as CalendarUI } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { format, addDays } from 'date-fns'
+import { zhTW } from 'date-fns/locale'
+import { CalendarDays } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -83,6 +88,37 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+  const [shareExpiresAt, setShareExpiresAt] = useState<Date>(addDays(new Date(), 7))
+  const [shareExpiryDays, setShareExpiryDays] = useState<number>(7)
+  const [shareLinks, setShareLinks] = useState<Array<{
+    id: string; token: string; createdAt: string; expiresAt: string | null
+    createdBy: { name: string }
+  }>>([])
+  const [shareLinksLoading, setShareLinksLoading] = useState(false)
+  const [shareCopiedId, setShareCopiedId] = useState<string | null>(null)
+
+  const fetchShareLinks = async () => {
+    setShareLinksLoading(true)
+    try {
+      const res = await fetch(`/api/projects/${id}/share`)
+      if (res.ok) setShareLinks(await res.json())
+    } finally { setShareLinksLoading(false) }
+  }
+
+  const deleteShareLink = async (linkId: string) => {
+    await fetch(`/api/projects/${id}/share`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ linkId }),
+    })
+    fetchShareLinks()
+  }
+
+  const copyLink = (token: string, linkId: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/share/${token}`)
+    setShareCopiedId(linkId)
+    setTimeout(() => setShareCopiedId(null), 2000)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -146,12 +182,13 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       const res = await fetch(`/api/projects/${id}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId: user.id, expiresAt: shareExpiresAt.toISOString() }),
       })
       if (res.ok) {
         const { token } = await res.json()
         setShareToken(token)
         setShareDialogOpen(true)
+        fetchShareLinks()
       }
     } finally {
       setShareLoading(false)
@@ -252,7 +289,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleShare} disabled={shareLoading}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setShareToken(null); setShareExpiryDays(7); setShareExpiresAt(addDays(new Date(), 7)); setShareDialogOpen(true); fetchShareLinks() }}>
                 {shareLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
                 分享
               </Button>
@@ -615,7 +652,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
       {/* Share Dialog */}
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Share2 className="h-4 w-4" />
@@ -625,20 +662,130 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               任何擁有此連結的人都可以檢視專案（唯讀）
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={shareToken ? `${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareToken}` : ''}
-              className="text-sm"
-            />
-            <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={copyShareLink}>
-              {shareCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {shareCopied ? '已複製' : '複製'}
-            </Button>
+
+          {/* New link creation */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium mb-2">建立新連結</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: '7 天', days: 7 },
+                  { label: '14 天', days: 14 },
+                  { label: '30 天', days: 30 },
+                  { label: '90 天', days: 90 },
+                ].map(preset => (
+                  <Button
+                    key={preset.days}
+                    variant={shareExpiryDays === preset.days ? 'default' : 'outline'}
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => { setShareExpiryDays(preset.days); setShareExpiresAt(addDays(new Date(), preset.days)) }}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={shareExpiryDays === 0 ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs h-8 gap-1.5"
+                    >
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      自訂
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarUI
+                      mode="single"
+                      selected={shareExpiresAt}
+                      onSelect={(d) => { if (d) { setShareExpiresAt(d); setShareExpiryDays(0) } }}
+                      disabled={(date) => date <= new Date()}
+                      locale={zhTW}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-muted-foreground">
+                  到期日：{format(shareExpiresAt, 'yyyy/MM/dd (EEEE)', { locale: zhTW })}
+                </p>
+                <Button size="sm" className="gap-1.5 h-8" onClick={handleShare} disabled={shareLoading}>
+                  {shareLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+                  產生連結
+                </Button>
+              </div>
+            </div>
           </div>
-          <DialogFooter className="sm:justify-start">
-            <p className="text-xs text-muted-foreground">連結不會過期，可隨時分享給需要查看進度的人</p>
-          </DialogFooter>
+
+          {/* Newly created link */}
+          {shareToken && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <p className="text-xs font-medium text-primary">新連結已建立</p>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareToken}`}
+                  className="text-xs h-8"
+                />
+                <Button size="sm" variant="outline" className="shrink-0 gap-1 h-8 text-xs" onClick={copyShareLink}>
+                  {shareCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {shareCopied ? '已複製' : '複製'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Link history */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">連結紀錄 ({shareLinks.length})</p>
+            {shareLinksLoading ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+            ) : shareLinks.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-3 text-center">尚無分享連結</p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-0 divide-y rounded-lg border">
+                {shareLinks.map(link => {
+                  const expired = link.expiresAt ? new Date(link.expiresAt) < new Date() : false
+                  const expSoon = !expired && link.expiresAt
+                    ? (new Date(link.expiresAt).getTime() - Date.now()) < 3 * 24 * 60 * 60 * 1000
+                    : false
+                  return (
+                    <div key={link.id} className={`flex items-center gap-2 px-3 py-2 text-xs ${expired ? 'opacity-50' : ''}`}>
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono truncate text-muted-foreground">...{link.token.slice(-8)}</span>
+                          {expired ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-destructive border-destructive/30">已過期</Badge>
+                          ) : expSoon ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-warning border-warning/30">即將到期</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-600 border-green-600/30">有效</Badge>
+                          )}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {link.createdBy.name} 建立於 {format(new Date(link.createdAt), 'MM/dd')}
+                          {link.expiresAt && <> · 到期 {format(new Date(link.expiresAt), 'yyyy/MM/dd')}</>}
+                          {!link.expiresAt && <> · 永不過期</>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!expired && (
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => copyLink(link.token, link.id)}>
+                            {shareCopiedId === link.id ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                          </Button>
+                        )}
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteShareLink(link.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
