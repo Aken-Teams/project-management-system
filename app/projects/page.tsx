@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar as CalendarUI } from '@/components/ui/calendar'
 import { PROJECT_TIER_LABELS, type ProjectStatus, type ProjectTier, type Project } from '@/lib/mock-data'
 import {
   Search,
@@ -24,6 +26,9 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  CalendarDays,
+  RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -31,6 +36,8 @@ import { useAuth } from '@/lib/auth-context'
 import { getRolePermissions } from '@/lib/permissions'
 import { Loader2 } from 'lucide-react'
 import { useProjectTypes } from '@/hooks/use-project-types'
+import { format } from 'date-fns'
+import { zhTW } from 'date-fns/locale'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
@@ -42,8 +49,17 @@ export default function ProjectsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [tierFilter, setTierFilter] = useState<ProjectTier | 'all'>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
+  const [memberFilter, setMemberFilter] = useState<string>('all')
+  const [dateFrom, setDateFrom] = useState<Date>(() => new Date(new Date().getFullYear(), 0, 1))
+  const [dateTo, setDateTo] = useState<Date>(() => new Date(new Date().getFullYear(), 11, 31))
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 12
+
+  // Default date range (current year)
+  const defaultDateFrom = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
+  const defaultDateTo = useMemo(() => new Date(new Date().getFullYear(), 11, 31), [])
 
   // Fetch projects from API
   useEffect(() => {
@@ -66,6 +82,17 @@ export default function ProjectsPage() {
     return Array.from(ownerSet).sort()
   }, [projects])
 
+  // 取得所有負責執行成員 (角色 R)
+  const responsibleMembers = useMemo(() => {
+    const memberSet = new Set<string>()
+    projects.forEach(p => {
+      p.teamMembers?.forEach(tm => {
+        if (tm.role === 'R') memberSet.add(tm.name)
+      })
+    })
+    return Array.from(memberSet).sort()
+  }, [projects])
+
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          project.objective.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -74,13 +101,39 @@ export default function ProjectsPage() {
     const matchesType = typeFilter === 'all' || project.projectType === typeFilter
     const matchesTier = tierFilter === 'all' || project.projectTier === tierFilter
     const matchesOwner = ownerFilter === 'all' || project.owner === ownerFilter
-    return matchesSearch && matchesStatus && matchesType && matchesTier && matchesOwner
+    const matchesMember = memberFilter === 'all' || project.teamMembers?.some(tm => tm.role === 'R' && tm.name === memberFilter)
+    // Date range filter: project overlaps with [dateFrom, dateTo]
+    const projStart = new Date(project.startDate)
+    const projEnd = new Date(project.endDate)
+    const matchesDate = projStart <= dateTo && projEnd >= dateFrom
+    return matchesSearch && matchesStatus && matchesType && matchesTier && matchesOwner && matchesMember && matchesDate
   })
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, statusFilter, typeFilter, tierFilter, ownerFilter])
+  }, [searchQuery, statusFilter, typeFilter, tierFilter, ownerFilter, memberFilter, dateFrom, dateTo])
+
+  // Check if any filter differs from defaults
+  const hasActiveFilters = statusFilter !== 'all' || typeFilter !== 'all' || tierFilter !== 'all' || ownerFilter !== 'all' || memberFilter !== 'all' ||
+    dateFrom.getTime() !== defaultDateFrom.getTime() || dateTo.getTime() !== defaultDateTo.getTime()
+
+  // Count active "more" filters (owner, member, date)
+  const moreFilterCount = [
+    ownerFilter !== 'all',
+    memberFilter !== 'all',
+    dateFrom.getTime() !== defaultDateFrom.getTime() || dateTo.getTime() !== defaultDateTo.getTime(),
+  ].filter(Boolean).length
+
+  const resetAllFilters = () => {
+    setStatusFilter('all')
+    setTypeFilter('all')
+    setTierFilter('all')
+    setOwnerFilter('all')
+    setMemberFilter('all')
+    setDateFrom(defaultDateFrom)
+    setDateTo(defaultDateTo)
+  }
 
   const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE)
   const paginatedProjects = filteredProjects.slice(
@@ -156,8 +209,8 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        {/* Filters - Single Row */}
-        <div className="flex flex-wrap items-center gap-3 bg-muted/50 rounded-lg p-3 border">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2 bg-card rounded-lg px-3 py-2 border">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -167,41 +220,8 @@ export default function ProjectsPage() {
               className="pl-9"
             />
           </div>
-          <div className="flex gap-1.5">
-            <Button
-              variant={statusFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('all')}
-            >
-              全部
-            </Button>
-            <Button
-              variant={statusFilter === 'green' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('green')}
-              className={statusFilter === 'green' ? 'bg-success hover:bg-success/90' : ''}
-            >
-              正常
-            </Button>
-            <Button
-              variant={statusFilter === 'yellow' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('yellow')}
-              className={statusFilter === 'yellow' ? 'bg-warning hover:bg-warning/90' : ''}
-            >
-              注意
-            </Button>
-            <Button
-              variant={statusFilter === 'red' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter('red')}
-              className={statusFilter === 'red' ? 'bg-destructive hover:bg-destructive/90' : ''}
-            >
-              風險
-            </Button>
-          </div>
           <Select value={tierFilter} onValueChange={(v) => setTierFilter(v as ProjectTier | 'all')}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[120px] h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -212,7 +232,7 @@ export default function ProjectsPage() {
             </SelectContent>
           </Select>
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[140px] h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -222,24 +242,123 @@ export default function ProjectsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="w-[140px]">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as ProjectStatus | 'all')}>
+            <SelectTrigger className="w-[120px] h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">全部負責人</SelectItem>
-              {owners.map(owner => (
-                <SelectItem key={owner} value={owner}>{owner}</SelectItem>
-              ))}
+              <SelectItem value="all">全部狀態</SelectItem>
+              <SelectItem value="green">正常</SelectItem>
+              <SelectItem value="yellow">注意</SelectItem>
+              <SelectItem value="red">風險</SelectItem>
             </SelectContent>
           </Select>
-          {(statusFilter !== 'all' || typeFilter !== 'all' || tierFilter !== 'all' || ownerFilter !== 'all') && (
+          {/* More filters popover */}
+          <Popover open={moreFiltersOpen} onOpenChange={setMoreFiltersOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <SlidersHorizontal className="h-4 w-4" />
+                更多篩選
+                {moreFilterCount > 0 && (
+                  <Badge variant="secondary" className="h-5 min-w-5 px-1 text-xs">
+                    {moreFilterCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-4" align="end">
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">負責人</label>
+                  <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部負責人</SelectItem>
+                      {owners.map(owner => (
+                        <SelectItem key={owner} value={owner}>{owner}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">需求者</label>
+                  <Select value={memberFilter} onValueChange={setMemberFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">全部需求者</SelectItem>
+                      {responsibleMembers.map(name => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">日期範圍</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {[
+                      { label: '今年', from: new Date(new Date().getFullYear(), 0, 1), to: new Date(new Date().getFullYear(), 11, 31) },
+                      { label: '去年', from: new Date(new Date().getFullYear() - 1, 0, 1), to: new Date(new Date().getFullYear() - 1, 11, 31) },
+                      { label: '近3個月', from: (() => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d })(), to: new Date() },
+                      { label: '近6個月', from: (() => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d })(), to: new Date() },
+                    ].map(preset => (
+                      <Button
+                        key={preset.label}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => { setDateFrom(preset.from); setDateTo(preset.to) }}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full justify-start gap-1.5">
+                        <CalendarDays className="h-4 w-4" />
+                        {format(dateFrom, 'yyyy/MM/dd')} - {format(dateTo, 'yyyy/MM/dd')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-4" align="start" side="bottom">
+                      <div className="flex gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">開始日期</p>
+                          <CalendarUI
+                            mode="single"
+                            selected={dateFrom}
+                            onSelect={(d) => d && setDateFrom(d)}
+                            locale={zhTW}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">結束日期</p>
+                          <CalendarUI
+                            mode="single"
+                            selected={dateTo}
+                            onSelect={(d) => d && setDateTo(d)}
+                            locale={zhTW}
+                          />
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setStatusFilter('all'); setTypeFilter('all'); setTierFilter('all'); setOwnerFilter('all') }}
+              onClick={resetAllFilters}
+              className="h-9 gap-1"
             >
-              清除
+              <RotateCcw className="h-3.5 w-3.5" />
+              重設
             </Button>
           )}
         </div>
