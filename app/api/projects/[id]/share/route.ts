@@ -59,6 +59,23 @@ export async function POST(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
+    // Limit active (non-expired) links to 5
+    const activeCount = await prisma.shareLink.count({
+      where: {
+        projectId: id,
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
+      },
+    })
+    if (activeCount >= 5) {
+      return NextResponse.json(
+        { error: '有效連結已達上限（5 個），請先刪除舊連結再建立新的' },
+        { status: 400 },
+      )
+    }
+
     // Create new share link with random token and expiration
     const token = crypto.randomBytes(16).toString('base64url')
     const link = await prisma.shareLink.create({

@@ -175,9 +175,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     router.push('/projects')
   }
 
+  const [shareError, setShareError] = useState<string | null>(null)
+
   const handleShare = async () => {
     if (!user || !project) return
     setShareLoading(true)
+    setShareError(null)
     try {
       const res = await fetch(`/api/projects/${id}/share`, {
         method: 'POST',
@@ -187,8 +190,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       if (res.ok) {
         const { token } = await res.json()
         setShareToken(token)
-        setShareDialogOpen(true)
         fetchShareLinks()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setShareError(data.error || '建立失敗')
       }
     } finally {
       setShareLoading(false)
@@ -289,7 +294,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setShareToken(null); setShareExpiryDays(7); setShareExpiresAt(addDays(new Date(), 7)); setShareDialogOpen(true); fetchShareLinks() }}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setShareToken(null); setShareError(null); setShareExpiryDays(7); setShareExpiresAt(addDays(new Date(), 7)); setShareDialogOpen(true); fetchShareLinks() }}>
                 {shareLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
                 分享
               </Button>
@@ -716,6 +721,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   產生連結
                 </Button>
               </div>
+              {shareError && (
+                <p className="text-xs text-destructive mt-2 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {shareError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -739,13 +750,18 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
           {/* Link history */}
           <div className="space-y-2">
-            <p className="text-sm font-medium">連結紀錄 ({shareLinks.length})</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">連結紀錄</p>
+              <p className="text-xs text-muted-foreground">
+                有效 {shareLinks.filter(l => !l.expiresAt || new Date(l.expiresAt) > new Date()).length} / 5
+              </p>
+            </div>
             {shareLinksLoading ? (
               <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
             ) : shareLinks.length === 0 ? (
               <p className="text-xs text-muted-foreground py-3 text-center">尚無分享連結</p>
             ) : (
-              <div className="max-h-48 overflow-y-auto space-y-0 divide-y rounded-lg border">
+              <div className="max-h-[156px] overflow-y-auto space-y-0 divide-y rounded-lg border">
                 {shareLinks.map(link => {
                   const expired = link.expiresAt ? new Date(link.expiresAt) < new Date() : false
                   const expSoon = !expired && link.expiresAt

@@ -40,6 +40,8 @@ enum TeamRole {
   A
   C
   I
+  P
+  S
 }
 
 enum UserRole {

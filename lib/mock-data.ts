@@ -172,13 +172,15 @@ export interface Risk {
   status: 'open' | 'mitigated' | 'closed'
 }
 
-export type TeamRole = 'R' | 'A' | 'C' | 'I'
+export type TeamRole = 'R' | 'A' | 'C' | 'I' | 'P' | 'S'
 
 export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
   'A': '當責 (A)',
   'R': '負責 (R)',
   'C': '諮詢 (C)',
   'I': '知會 (I)',
+  'P': '採購 (P)',
+  'S': '審核 (S)',
 }
 
 export interface TeamMember {

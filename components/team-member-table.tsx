@@ -18,6 +18,8 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   A: { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500' },
   C: { bg: 'bg-violet-50', text: 'text-violet-700', dot: 'bg-violet-500' },
   I: { bg: 'bg-slate-50',  text: 'text-slate-600',  dot: 'bg-slate-400' },
+  P: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  S: { bg: 'bg-rose-50',   text: 'text-rose-700',   dot: 'bg-rose-500' },
 }
 
 function RoleBadge({ role, label }: { role: string; label: string }) {
