@@ -604,45 +604,18 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       const nbMsPlanEnd = nbMsHasExtension && nbMsOrigEnd ? nbMsOrigEnd : milestone.dueDate
                       return (
                       <>
-                        {/* Milestone plan bar (original portion — solid amber) */}
+                        {/* Single merged milestone bar — plan outline with progress fill */}
                         <div
-                          className="absolute h-3.5 rounded-sm"
+                          className="absolute h-5 rounded-sm overflow-hidden"
                           style={{
-                            ...barStyle(msBar.start, nbMsPlanEnd),
-                            top: 12,
+                            ...barStyle(msBar.start, milestone.dueDate),
+                            top: 10,
                             backgroundColor: PLAN_COLOR.bg,
-                            border: `1px solid ${PLAN_COLOR.border}60`,
-                            ...(nbMsHasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}),
+                            border: `1px solid ${PLAN_COLOR.border}80`,
                           }}
-                        />
-                        {nbMsHasExtension && (
-                          <div
-                            className="absolute h-3.5 rounded-r-sm border"
-                            style={{
-                              ...barStyle(nbMsOrigEnd!, milestone.dueDate),
-                              top: 12,
-                              backgroundColor: EXTENSION_COLOR.bg,
-                              borderColor: EXTENSION_COLOR.border,
-                              borderLeft: 'none',
-                            }}
-                          />
-                        )}
-                        {/* Milestone actual bar (below plan bar) */}
-                        {milestoneHasActivity(msTasks) && (() => {
-                          const msActualStartNb = getMilestoneActualStart(msTasks) || msBar.start
-                          const msLatestCompletion = msTasks.reduce<string | null>((latest, t) => t.completedAt && (!latest || t.completedAt > latest) ? t.completedAt : latest, null)
-                          const msAllDone = msAllDoneAgg && msLatestCompletion
-                          return (
-                            <div
-                              className="absolute h-2.5 rounded-sm"
-                              style={{
-                                ...barStyle(msActualStartNb, msAllDone ? msLatestCompletion : todayStr),
-                                top: 30,
-                                backgroundColor: colors.bg,
-                              }}
-                            />
-                          )
-                        })()}
+                        >
+                          <div className="h-full rounded-sm" style={{ width: `${msAggregatedProgress}%`, backgroundColor: colors.bg }} />
+                        </div>
                         {/* Milestone percentage + time diff */}
                         <span
                           className="absolute text-[10px] font-medium whitespace-nowrap"
@@ -883,69 +856,21 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           </>
                           )
                         })() : (() => {
-                          /* Non-baseline: single bar with progress fill + optional extension segment */
-                          // Extension = task duration actually increased (not just shifted)
-                          const nbHasExtension = task.originalEndDate && task.originalStartDate && (() => {
-                            const origSpan = new Date(task.originalEndDate!).getTime() - new Date(task.originalStartDate!).getTime()
-                            const curSpan = new Date(task.endDate).getTime() - new Date(task.startDate).getTime()
-                            return curSpan > origSpan
-                          })()
-                          // Extended task: plan = original dates; shifted/normal: plan = current dates
-                          const nbPlanStart = nbHasExtension ? task.originalStartDate! : task.startDate
-                          const nbBarEnd = nbHasExtension ? task.originalEndDate! : task.endDate
+                          /* Non-baseline: single merged bar — plan outline with progress fill */
                           return (
                           <>
-                            {/* Plan bar (original plan portion — solid amber) */}
                             <div
-                              className="absolute h-3.5 rounded-sm"
+                              className="absolute h-5 rounded-sm overflow-hidden"
                               style={{
-                                ...barStyle(nbPlanStart, nbBarEnd),
-                                top: 12,
+                                ...barStyle(task.startDate, task.endDate),
+                                top: 10,
                                 backgroundColor: PLAN_COLOR.bg,
-                                border: `1px solid ${PLAN_COLOR.border}60`,
+                                border: `1px solid ${PLAN_COLOR.border}80`,
                                 ...(isCritical ? { boxShadow: '0 0 0 1.5px #64748b' } : {}),
-                                ...(nbHasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}),
                               }}
-                            />
-                            {/* Extension segment (delay period — light red) */}
-                            {nbHasExtension && (
-                              <div
-                                className="absolute h-3.5 rounded-r-sm border"
-                                style={{
-                                  ...barStyle(task.originalEndDate!, task.endDate),
-                                  top: 12,
-                                  backgroundColor: `${EXTENSION_COLOR.bg}`,
-                                  borderColor: EXTENSION_COLOR.border,
-                                  borderLeft: 'none',
-                                }}
-                              />
-                            )}
-                            {/* Actual bar (below plan bar — shows where work actually happened; for parent tasks, aggregates subtask data) */}
-                            {(displayDone && (task.completedAt || parentLatestCompletion)) ? (
-                              <div
-                                className="absolute h-2.5 rounded-sm"
-                                style={{
-                                  ...barStyle(
-                                    hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
-                                    parentLatestCompletion || task.completedAt || todayStr,
-                                  ),
-                                  top: 30,
-                                  backgroundColor: taskColors.bg,
-                                }}
-                              />
-                            ) : (earliestLogDateMap.has(task.id) || parentHasActivity) ? (
-                              <div
-                                className="absolute h-2.5 rounded-sm"
-                                style={{
-                                  ...barStyle(
-                                    hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
-                                    todayStr,
-                                  ),
-                                  top: 30,
-                                  backgroundColor: taskColors.bg,
-                                }}
-                              />
-                            ) : null}
+                            >
+                              <div className="h-full rounded-sm" style={{ width: `${displayProgress}%`, backgroundColor: taskColors.bg }} />
+                            </div>
                             {/* Percentage label + time diff */}
                             <span
                               className="absolute text-[10px] font-medium whitespace-nowrap"
@@ -1062,27 +987,18 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               </>
                               )
                             })() : (
-                              /* Non-baseline subtask: simple single bar with progress fill */
+                              /* Non-baseline subtask: single merged bar — plan outline with progress fill */
                               <>
                                 <div
-                                  className="absolute h-3 rounded-sm border"
+                                  className="absolute h-5 rounded-sm overflow-hidden"
                                   style={{
                                     ...barStyle(sub.startDate, sub.endDate),
-                                    top: 12,
-                                    backgroundColor: `${subColors.bg}30`,
-                                    borderColor: `${subColors.border}50`,
+                                    top: 10,
+                                    backgroundColor: PLAN_COLOR.bg,
+                                    border: `1px solid ${PLAN_COLOR.border}80`,
                                   }}
                                 >
-                                  {sub.progress > 0 && (
-                                    <div
-                                      className="absolute inset-y-0 left-0 rounded-l-sm"
-                                      style={{
-                                        width: `${Math.min(sub.progress, 100)}%`,
-                                        backgroundColor: subColors.bg,
-                                        borderRadius: sub.progress >= 100 ? '0.125rem' : undefined,
-                                      }}
-                                    />
-                                  )}
+                                  <div className="h-full rounded-sm" style={{ width: `${Math.min(sub.progress, 100)}%`, backgroundColor: subColors.bg }} />
                                 </div>
                                 <span
                                   className="absolute text-[10px] font-medium whitespace-nowrap"
