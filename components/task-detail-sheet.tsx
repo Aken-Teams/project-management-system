@@ -7,7 +7,13 @@ import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { WeekPicker } from '@/components/ui/week-picker'
 import {
   Sheet,
@@ -149,8 +155,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     return fmtLocalDate(new Date(now.getFullYear(), now.getMonth(), diff))
   })
 
-  // R 週報 popover in 工作紀錄 tab
-  const [showRReportPopover, setShowRReportPopover] = useState(false)
+  // Center Dialog states
+  const [showRReportDialog, setShowRReportDialog] = useState(false)
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false)
+  const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [rReportCopied, setRReportCopied] = useState(false)
 
   // Helper: compute R members' logs for the current log week (used in both tabs)
@@ -947,35 +955,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Main content area */}
           {!showExtensionForm ? (
-            <Tabs defaultValue={readOnly ? 'history' : 'log'} className="flex-1 flex flex-col min-h-0">
-              <div className="px-6 pt-1 pb-0 border-t shrink-0">
-                <TabsList className="w-full bg-transparent h-auto p-0 rounded-none gap-0">
-                  {!readOnly && (
-                    <TabsTrigger value="log" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
-                      工作紀錄
-                    </TabsTrigger>
-                  )}
-                  <TabsTrigger value="history" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
-                    過往紀錄
-                    {taskLogs.length > 0 && (
-                      <Badge variant="secondary" className="ml-1.5 h-4 min-w-4 px-1 text-[10px] rounded-full">
-                        {taskLogs.length}
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="r-reports" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
-                    R 週報
-                  </TabsTrigger>
-                  <TabsTrigger value="info" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
-                    任務資訊
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+            <div className="flex-1 flex flex-col min-h-0">
 
-              {/* Tab: 工作紀錄 (editable, hidden in readOnly) */}
-              {!readOnly && <TabsContent value="log" className="flex-1 overflow-y-auto px-6 mt-0">
+              {/* Work log form (editable, hidden in readOnly) */}
+              {!readOnly && <div className="flex-1 overflow-y-auto px-6">
                 <div className="py-4 space-y-4">
                   {isCompleted ? (
                     <div className="space-y-2">
@@ -1227,84 +1212,6 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         </div>
                       )}
 
-                      {/* R 週報 quick-access popover */}
-                      {rMemberLogs.weekLogs.length > 0 && (
-                        <Popover open={showRReportPopover} onOpenChange={(v) => { setShowRReportPopover(v); if (!v) setRReportCopied(false) }}>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/60 dark:hover:bg-blue-950/40 transition-colors text-left"
-                            >
-                              <Users className="h-4 w-4 text-blue-500 shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">R 成員本周週報</span>
-                                <span className="text-xs text-blue-500/70 dark:text-blue-400/60 ml-1.5">{rMemberLogs.weekLogs.length} 筆紀錄</span>
-                              </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent side="top" align="start" className="w-[380px] max-h-[400px] p-0 overflow-hidden z-[60]">
-                            <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between">
-                              <span className="text-xs font-medium">R 成員週報內容</span>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(buildRReportText())
-                                    setRReportCopied(true)
-                                    setTimeout(() => setRReportCopied(false), 2000)
-                                  }}
-                                >
-                                  {rReportCopied ? <ClipboardCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                                  {rReportCopied ? '已複製' : '複製全部'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
-                                  onClick={() => {
-                                    appendToLogRows(buildRReportText())
-                                    setShowRReportPopover(false)
-                                  }}
-                                >
-                                  <FileText className="h-3 w-3" />
-                                  帶入週報
-                                </button>
-                              </div>
-                            </div>
-                            <div className="overflow-y-auto max-h-[340px] divide-y">
-                              {Array.from(rMemberLogs.byAuthor.entries()).map(([author, logs]) => (
-                                <div key={author} className="px-3 py-2 space-y-1.5">
-                                  <div className="flex items-center gap-1.5">
-                                    <Avatar className="h-5 w-5 shrink-0">
-                                      <AvatarFallback className={cn('text-[9px] font-semibold text-white', getAvatarColor(author))}>
-                                        {author.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs font-medium">{author}</span>
-                                    <span className="text-[10px] text-muted-foreground ml-auto">{logs.length} 筆</span>
-                                  </div>
-                                  {logs.map(log => {
-                                    const taskInfo = rMemberLogs.targetTaskMap.get(log.taskId)
-                                    return (
-                                      <div key={log.id} className="pl-6 space-y-0.5">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-[10px] text-muted-foreground/70 font-medium">{taskInfo?.title || '任務'}</span>
-                                          <span className="text-[10px] text-muted-foreground/50 tabular-nums ml-auto">
-                                            {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                          </span>
-                                        </div>
-                                        <p className="text-xs leading-relaxed whitespace-pre-line text-foreground/80">{log.content}</p>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              ))}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
-
                       {/* Overdue entry blocking — date-level validation */}
                       {overdueEntryDates.length > 0 && (
                         <div className="rounded-xl border-2 border-red-200 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900 p-4 space-y-3">
@@ -1551,10 +1458,223 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     )
                   )}
                 </div>
-              </TabsContent>}
+              </div>}
 
-              {/* Tab: 過往紀錄 */}
-              <TabsContent value="history" className="flex-1 px-4 mt-0 overflow-y-auto">
+              {/* ReadOnly mode: show task summary */}
+              {readOnly && (
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                  {task.description && (
+                    <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                      <p className="text-sm text-muted-foreground leading-relaxed">{task.description}</p>
+                    </div>
+                  )}
+                  <div className="rounded-lg border divide-y">
+                    <div className="flex items-center justify-between py-2.5 px-3">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5"><User className="h-3.5 w-3.5" />負責人</span>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>{task.assignee.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                        <span className="text-sm font-medium">{task.assignee}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-2.5 px-3">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />時程</span>
+                      <span className="text-sm font-medium">
+                        {new Date(task.startDate).toLocaleDateString('zh-TW')} → {new Date(task.endDate).toLocaleDateString('zh-TW')}
+                        <span className="text-muted-foreground text-xs ml-1">（{task.durationDays} 天）</span>
+                      </span>
+                    </div>
+                    {task.completedAt && (
+                      <div className="flex items-center justify-between py-2.5 px-3">
+                        <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" />完成</span>
+                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                          {new Date(task.completedAt).toLocaleDateString('zh-TW')}
+                          {task.completedBy && <span className="text-muted-foreground font-normal ml-1.5">由 {task.completedBy}</span>}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick action buttons — open center Dialogs */}
+              <div className="px-6 py-3 border-t shrink-0 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRReportDialog(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border hover:bg-muted/50 transition-colors text-sm"
+                >
+                  <Users className="h-3.5 w-3.5 text-blue-500" />
+                  <span>R 週報</span>
+                  {rMemberLogs.weekLogs.length > 0 && (
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full">{rMemberLogs.weekLogs.length}</Badge>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowHistoryDialog(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border hover:bg-muted/50 transition-colors text-sm"
+                >
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>過往紀錄</span>
+                  {taskLogs.length > 0 && (
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full">{taskLogs.length}</Badge>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInfoDialog(true)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border hover:bg-muted/50 transition-colors text-sm"
+                >
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>任務資訊</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ═══ Center Dialogs ═══ */}
+
+          {/* R 週報 Dialog */}
+          <Dialog open={showRReportDialog} onOpenChange={(v) => { setShowRReportDialog(v); if (!v) setRReportCopied(false) }}>
+            <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
+                <DialogTitle className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-blue-500" />
+                  R 成員週報
+                </DialogTitle>
+                <DialogDescription>同里程碑 R 成員的工作紀錄</DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                <WeekPicker value={rWeekStart} onChange={setRWeekStart} />
+                {(() => {
+                  const [wy, wm, wd] = rWeekStart.split('-').map(Number)
+                  const wkStart = `${wy}-${String(wm).padStart(2, '0')}-${String(wd).padStart(2, '0')}`
+                  const wkEndDate = new Date(wy, wm - 1, wd + 6)
+                  const wkEnd = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`
+                  const milestoneTasks = project.tasks.filter(t => t.milestoneId === task.milestoneId)
+                  const milestoneTaskIds = new Set(milestoneTasks.map(t => t.id))
+                  for (const mt of milestoneTasks) { if (mt.subtasks) { for (const sub of mt.subtasks) milestoneTaskIds.add(sub.id) } }
+                  const targetTaskMap = new Map<string, { title: string; assignee: string }>()
+                  for (const mt of milestoneTasks) {
+                    targetTaskMap.set(mt.id, { title: mt.title, assignee: mt.assignee })
+                    if (mt.subtasks) { for (const sub of mt.subtasks) targetTaskMap.set(sub.id, { title: sub.title, assignee: sub.assignee }) }
+                  }
+                  const weekLogs = project.taskLogs
+                    .filter(l => milestoneTaskIds.has(l.taskId) && l.logDate >= wkStart && l.logDate <= wkEnd && (readOnly || l.author !== user?.name))
+                    .sort((a, b) => a.logDate.localeCompare(b.logDate))
+                  const byAuthor = new Map<string, typeof weekLogs>()
+                  for (const log of weekLogs) { if (!byAuthor.has(log.author)) byAuthor.set(log.author, []); byAuthor.get(log.author)!.push(log) }
+                  const otherTasks = Array.from(targetTaskMap.entries()).filter(([, info]) => info.assignee && info.assignee !== user?.name)
+                  const withLogs = new Set(weekLogs.map(l => l.taskId))
+                  const tasksWithoutLogs = otherTasks.filter(([id]) => !withLogs.has(id))
+
+                  if (weekLogs.length === 0) return (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3"><Clock className="h-5 w-5 text-muted-foreground" /></div>
+                      <p className="text-sm text-muted-foreground">本周尚無成員工作紀錄</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">R 成員填寫週報後會顯示在這裡</p>
+                    </div>
+                  )
+
+                  return (
+                    <>
+                      {Array.from(byAuthor.entries()).map(([author, logs]) => (
+                        <div key={author} className="border rounded-lg overflow-hidden">
+                          <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
+                            <Avatar className="h-6 w-6 shrink-0">
+                              <AvatarFallback className={cn('text-[10px] font-semibold text-white', getAvatarColor(author))}>{author.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm font-medium">{author}</span>
+                            <Badge variant="secondary" className="text-[10px] ml-auto">{logs.length} 筆紀錄</Badge>
+                          </div>
+                          <div className="divide-y">
+                            {logs.map(log => {
+                              const taskInfo = targetTaskMap.get(log.taskId)
+                              return (
+                                <div key={log.id} className="px-4 py-3 space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{taskInfo?.title || '任務'}</Badge>
+                                    <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">
+                                      {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm leading-relaxed whitespace-pre-line">{log.content}</p>
+                                  {log.nextPlans && log.nextPlans.length > 0 && (
+                                    <div className="text-xs text-blue-600 dark:text-blue-400">
+                                      <span className="font-medium">下週計畫：</span>
+                                      {log.nextPlans.map(p => p.content).join('、')}
+                                    </div>
+                                  )}
+                                  {log.attachments && log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                      {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                        <a key={ai} href={att.url} target="_blank" rel="noopener">
+                                          <img src={att.url} alt={att.name} className="h-14 w-14 rounded-lg object-cover border hover:opacity-80 transition-opacity" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      {tasksWithoutLogs.length > 0 && (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/60 dark:border-amber-800/40">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          <span className="text-xs text-amber-700 dark:text-amber-400">
+                            <span className="font-medium">{tasksWithoutLogs.length} 項任務</span>未填寫：{tasksWithoutLogs.map(([, info]) => info.assignee ? `${info.assignee}(${info.title})` : info.title).join('、')}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+              {/* Bottom action bar */}
+              {!readOnly && rMemberLogs.weekLogs.length > 0 && (
+                <div className="px-6 py-3 border-t shrink-0 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-xs"
+                    onClick={() => {
+                      navigator.clipboard.writeText(buildRReportText())
+                      setRReportCopied(true)
+                      setTimeout(() => setRReportCopied(false), 2000)
+                    }}
+                  >
+                    {rReportCopied ? <ClipboardCheck className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    {rReportCopied ? '已複製' : '複製全部'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => {
+                      appendToLogRows(buildRReportText())
+                      setShowRReportDialog(false)
+                    }}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    帶入我的週報
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* 過往紀錄 Dialog */}
+          <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+            <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
+                <DialogTitle className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  過往紀錄
+                </DialogTitle>
+                <DialogDescription>{task.title} 的歷史工作紀錄</DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 overflow-y-auto px-4">
                 {hasSubtasks ? (() => {
                   // For parent tasks with subtasks: show aggregated subtask logs (read-only)
                   const subIds = (task.subtasks || []).map(s => s.id)
@@ -1859,188 +1979,47 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     ))}
                   </div>
                 )}
-              </TabsContent>
+              </div>
+            </DialogContent>
+          </Dialog>
 
-              {/* Tab: R 週報 — Show R members' task logs for A to review */}
-              <TabsContent value="r-reports" className="flex-1 px-6 mt-0 overflow-y-auto">
-                {(() => {
-                  // Collect all task logs from the same milestone for the selected week
-                  const [wy, wm, wd] = rWeekStart.split('-').map(Number)
-                  const wkStart = `${wy}-${String(wm).padStart(2, '0')}-${String(wd).padStart(2, '0')}`
-                  const wkEndDate = new Date(wy, wm - 1, wd + 6)
-                  const wkEnd = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`
-
-                  // Collect all tasks in same milestone (including subtasks)
-                  const milestoneTasks = project.tasks.filter(t => t.milestoneId === task.milestoneId)
-                  const milestoneTaskIds = new Set(milestoneTasks.map(t => t.id))
-                  // Also include subtask IDs
-                  for (const mt of milestoneTasks) {
-                    if (mt.subtasks) {
-                      for (const sub of mt.subtasks) milestoneTaskIds.add(sub.id)
-                    }
-                  }
-
-                  // Build task map for display
-                  const targetTaskMap = new Map<string, { title: string; assignee: string }>()
-                  for (const mt of milestoneTasks) {
-                    targetTaskMap.set(mt.id, { title: mt.title, assignee: mt.assignee })
-                    if (mt.subtasks) {
-                      for (const sub of mt.subtasks) {
-                        targetTaskMap.set(sub.id, { title: sub.title, assignee: sub.assignee })
-                      }
-                    }
-                  }
-
-                  // Filter logs for this week
-                  // readOnly (R role): show ALL members' logs; A: exclude own logs (for import)
-                  const weekLogs = project.taskLogs
-                    .filter(l =>
-                      milestoneTaskIds.has(l.taskId) &&
-                      l.logDate >= wkStart &&
-                      l.logDate <= wkEnd &&
-                      (readOnly || l.author !== user?.name)
-                    )
-                    .sort((a, b) => a.logDate.localeCompare(b.logDate))
-
-                  // Group by author
-                  const byAuthor = new Map<string, typeof weekLogs>()
-                  for (const log of weekLogs) {
-                    const key = log.author
-                    if (!byAuthor.has(key)) byAuthor.set(key, [])
-                    byAuthor.get(key)!.push(log)
-                  }
-
-                  // Find tasks assigned to others that have NO logs this week
-                  const otherMemberTasks = Array.from(targetTaskMap.entries())
-                    .filter(([, info]) => info.assignee && info.assignee !== user?.name)
-                  const tasksWithLogs = new Set(weekLogs.map(l => l.taskId))
-                  const tasksWithoutLogs = otherMemberTasks.filter(([id]) => !tasksWithLogs.has(id))
-
-                  return (
-                    <div className="py-4 space-y-4">
-                      {/* Week picker */}
-                      <WeekPicker value={rWeekStart} onChange={setRWeekStart} />
-
-                      {weekLogs.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                            <Clock className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <p className="text-sm text-muted-foreground">本周尚無其他成員工作紀錄</p>
-                          <p className="text-xs text-muted-foreground/60 mt-1">R 成員在「我的任務」或甘特圖填寫週報後會顯示在這裡</p>
-                        </div>
-                      ) : (
-                        <>
-                          {/* By author */}
-                          {Array.from(byAuthor.entries()).map(([author, logs]) => (
-                            <div key={author} className="border rounded-lg overflow-hidden">
-                              <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
-                                <Avatar className="h-6 w-6 shrink-0">
-                                  <AvatarFallback className={cn('text-[10px] font-semibold text-white', getAvatarColor(author))}>
-                                    {author.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm font-medium">{author}</span>
-                                <Badge variant="secondary" className="text-[10px] ml-auto">{logs.length} 筆紀錄</Badge>
-                              </div>
-                              <div className="divide-y">
-                                {logs.map(log => {
-                                  const taskInfo = targetTaskMap.get(log.taskId)
-                                  return (
-                                    <div key={log.id} className="px-4 py-3 space-y-1.5">
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-                                          {taskInfo?.title || '任務'}
-                                        </Badge>
-                                        <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">
-                                          {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                        </span>
-                                      </div>
-                                      <p className="text-sm leading-relaxed whitespace-pre-line">{log.content}</p>
-                                      {log.nextPlans && log.nextPlans.length > 0 && (
-                                        <div className="text-xs text-blue-600 dark:text-blue-400">
-                                          <span className="font-medium">下週計畫：</span>
-                                          {log.nextPlans.map(p => p.content).join('、')}
-                                        </div>
-                                      )}
-                                      {log.attachments && log.attachments.filter(a => a.type === 'image').length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5 pt-1">
-                                          {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
-                                            <a key={ai} href={att.url} target="_blank" rel="noopener">
-                                              <img src={att.url} alt={att.name} className="h-14 w-14 rounded-lg object-cover border hover:opacity-80 transition-opacity" />
-                                            </a>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          ))}
-
-                          {/* Tasks without logs — compact inline */}
-                          {tasksWithoutLogs.length > 0 && (
-                            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/60 dark:border-amber-800/40">
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                              <span className="text-xs text-amber-700 dark:text-amber-400">
-                                <span className="font-medium">{tasksWithoutLogs.length} 項任務</span>未填寫：{tasksWithoutLogs.map(([, info]) => info.assignee ? `${info.assignee}(${info.title})` : info.title).join('、')}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )
-                })()}
-              </TabsContent>
-
-              {/* Tab: 任務資訊 */}
-              <TabsContent value="info" className="flex-1 overflow-y-auto px-6 mt-0">
+          {/* 任務資訊 Dialog */}
+          <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+            <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0 gap-0">
+              <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
+                <DialogTitle className="flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  任務資訊
+                </DialogTitle>
+                <DialogDescription>{task.title}</DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 overflow-y-auto px-6">
                 <div className="space-y-4 py-4">
-                  {/* Description */}
                   {task.description && (
                     <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
                       <p className="text-sm text-muted-foreground leading-relaxed">{task.description}</p>
                     </div>
                   )}
-
-                  {/* Info card */}
                   <div className="rounded-lg border divide-y">
                     <div className="flex items-center justify-between py-2.5 px-3">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                        <User className="h-3.5 w-3.5" />
-                        負責人
-                      </span>
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5"><User className="h-3.5 w-3.5" />負責人</span>
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-5 w-5">
-                          <AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>
-                            {task.assignee.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
+                        <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>{task.assignee.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
                         <span className="text-sm font-medium">{task.assignee}</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between py-2.5 px-3">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" />
-                        時程
-                      </span>
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />時程</span>
                       <span className="text-sm font-medium">
                         {new Date(task.startDate).toLocaleDateString('zh-TW')}
                         <span className="text-muted-foreground mx-1">→</span>
-                        <span className={cn(isOverdue && 'text-destructive')}>
-                          {new Date(task.endDate).toLocaleDateString('zh-TW')}
-                        </span>
+                        <span className={cn(isOverdue && 'text-destructive')}>{new Date(task.endDate).toLocaleDateString('zh-TW')}</span>
                         <span className="text-muted-foreground text-xs ml-1">（{task.durationDays} 天）</span>
                       </span>
                     </div>
                     {task.completedAt && (
                       <div className="flex items-center justify-between py-2.5 px-3">
-                        <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          完成
-                        </span>
+                        <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" />完成</span>
                         <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
                           {new Date(task.completedAt).toLocaleDateString('zh-TW')}
                           {task.completedBy && <span className="text-muted-foreground font-normal ml-1.5">由 {task.completedBy}</span>}
@@ -2049,22 +2028,15 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     )}
                   </div>
 
-                  {/* Upstream tasks */}
                   {upstreamTasks.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
-                          <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                        </div>
+                        <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30"><ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" /></div>
                         <span className="text-sm font-medium text-muted-foreground">需先完成</span>
                       </div>
                       <div className="space-y-1.5 ml-7">
                         {upstreamTasks.map(({ task: dep, status: depStatus }) => (
-                          <div
-                            key={dep.id}
-                            className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50 cursor-pointer hover:bg-muted/50"
-                            onClick={() => handleSelectTask(dep)}
-                          >
+                          <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => { setShowInfoDialog(false); handleSelectTask(dep) }}>
                             {getStatusDot(depStatus)}
                             <span className="flex-1 truncate">{dep.title}</span>
                             {getComputedStatusBadge(depStatus)}
@@ -2074,22 +2046,15 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     </div>
                   )}
 
-                  {/* Downstream tasks */}
                   {downstreamTasks.length > 0 && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
-                          <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                        </div>
+                        <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30"><ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" /></div>
                         <span className="text-sm font-medium text-muted-foreground">完成後開始</span>
                       </div>
                       <div className="space-y-1.5 ml-7">
                         {downstreamTasks.map(({ task: dep, status: depStatus }) => (
-                          <div
-                            key={dep.id}
-                            className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50 cursor-pointer hover:bg-muted/50"
-                            onClick={() => handleSelectTask(dep)}
-                          >
+                          <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => { setShowInfoDialog(false); handleSelectTask(dep) }}>
                             {getStatusDot(depStatus)}
                             <span className="flex-1 truncate">{dep.title}</span>
                             {getComputedStatusBadge(depStatus)}
@@ -2099,13 +2064,11 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     </div>
                   )}
 
-                  {/* Impact Analysis */}
                   <div className="pt-2 border-t">
                     <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                       延遲影響
                     </h4>
-
                     {impact.totalDelayChain === 0 ? (
                       <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
                         <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
@@ -2115,38 +2078,21 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <div className={`p-3 rounded-lg border ${
-                          impact.totalDelayChain >= 3
-                            ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900'
-                            : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900'
-                        }`}>
-                          <div className={`flex items-center gap-2 text-sm font-medium ${
-                            impact.totalDelayChain >= 3
-                              ? 'text-red-700 dark:text-red-400'
-                              : 'text-amber-700 dark:text-amber-400'
-                          }`}>
+                        <div className={`p-3 rounded-lg border ${impact.totalDelayChain >= 3 ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900'}`}>
+                          <div className={`flex items-center gap-2 text-sm font-medium ${impact.totalDelayChain >= 3 ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
                             <AlertTriangle className="h-4 w-4" />
                             若此任務延遲，將影響 {impact.totalDelayChain} 個後續任務
                           </div>
                           {impact.affectedMilestones.length > 0 && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              涉及里程碑：{impact.affectedMilestones.map(m => m.name).join('、')}
-                            </p>
+                            <p className="text-sm text-muted-foreground mt-1">涉及里程碑：{impact.affectedMilestones.map(m => m.name).join('、')}</p>
                           )}
                         </div>
-
                         {impact.directlyBlocked.length > 0 && (
                           <div>
-                            <div className="text-sm font-medium text-muted-foreground mb-1.5">
-                              直接影響（{impact.directlyBlocked.length}）
-                            </div>
+                            <div className="text-sm font-medium text-muted-foreground mb-1.5">直接影響（{impact.directlyBlocked.length}）</div>
                             <div className="space-y-1">
                               {impact.directlyBlocked.map(t => (
-                                <div
-                                  key={t.id}
-                                  className="flex items-center gap-2 p-2 rounded-md border text-sm cursor-pointer hover:bg-muted/30"
-                                  onClick={() => handleSelectTask(t)}
-                                >
+                                <div key={t.id} className="flex items-center gap-2 p-2 rounded-md border text-sm cursor-pointer hover:bg-muted/30" onClick={() => { setShowInfoDialog(false); handleSelectTask(t) }}>
                                   <span className="flex-1 truncate">{t.title}</span>
                                   <span className="text-sm text-muted-foreground">{t.assignee}</span>
                                 </div>
@@ -2154,19 +2100,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             </div>
                           </div>
                         )}
-
                         {impact.indirectlyAffected.length > 0 && (
                           <div>
-                            <div className="text-sm font-medium text-muted-foreground mb-1.5">
-                              間接影響（{impact.indirectlyAffected.length}）
-                            </div>
+                            <div className="text-sm font-medium text-muted-foreground mb-1.5">間接影響（{impact.indirectlyAffected.length}）</div>
                             <div className="space-y-1">
                               {impact.indirectlyAffected.map(t => (
-                                <div
-                                  key={t.id}
-                                  className="flex items-center gap-2 p-2 rounded-md border border-dashed text-sm cursor-pointer hover:bg-muted/30"
-                                  onClick={() => handleSelectTask(t)}
-                                >
+                                <div key={t.id} className="flex items-center gap-2 p-2 rounded-md border border-dashed text-sm cursor-pointer hover:bg-muted/30" onClick={() => { setShowInfoDialog(false); handleSelectTask(t) }}>
                                   <span className="flex-1 truncate text-muted-foreground">{t.title}</span>
                                   <span className="text-sm text-muted-foreground">{t.assignee}</span>
                                 </div>
@@ -2178,7 +2117,6 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     )}
                   </div>
 
-                  {/* Critical path indicator */}
                   {node?.isOnCriticalPath && (
                     <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded-md p-2.5 border border-amber-200 dark:border-amber-900">
                       <Route className="h-3.5 w-3.5 shrink-0" />
@@ -2186,9 +2124,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     </div>
                   )}
                 </div>
-              </TabsContent>
-            </Tabs>
-          ) : null}
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Extension Form (replaces tabs when shown) */}
           {!readOnly && showExtensionForm && (
