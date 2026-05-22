@@ -133,7 +133,12 @@ export function WeekPicker({ value, onChange, warningLabel, className }: WeekPic
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent
+            className="w-auto p-0 z-[60] overflow-y-auto"
+            align="start"
+            collisionPadding={12}
+            style={{ maxHeight: 'var(--radix-popover-content-available-height, 420px)' }}
+          >
             <div className="p-2 pb-0">
               {/* Year selector */}
               <div className="flex items-center justify-center gap-2 mb-1">
@@ -207,7 +212,7 @@ export function WeekPicker({ value, onChange, warningLabel, className }: WeekPic
               }}
             />
             {/* Quick jump: this week */}
-            <div className="border-t px-3 py-2">
+            <div className="border-t px-3 py-2 sticky bottom-0 bg-popover">
               <button
                 type="button"
                 onClick={() => { handleGoThisWeek(); setOpen(false) }}

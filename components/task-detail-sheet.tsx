@@ -911,6 +911,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       </Badge>
                     )}
                   </TabsTrigger>
+                  <TabsTrigger value="r-reports" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
+                    R 週報
+                  </TabsTrigger>
                   <TabsTrigger value="info" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
                     任務資訊
                   </TabsTrigger>
@@ -1724,6 +1727,177 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     ))}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* Tab: R 週報 — Show R members' task logs for A to review */}
+              <TabsContent value="r-reports" className="flex-1 px-6 mt-0 overflow-y-auto">
+                {(() => {
+                  // Collect all task logs from the same milestone by OTHER members for the selected week
+                  const [wy, wm, wd] = selectedWeekStart.split('-').map(Number)
+                  const wkStart = `${wy}-${String(wm).padStart(2, '0')}-${String(wd).padStart(2, '0')}`
+                  const wkEndDate = new Date(wy, wm - 1, wd + 6)
+                  const wkEnd = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`
+
+                  // Collect all tasks in same milestone (including subtasks)
+                  const milestoneTasks = project.tasks.filter(t => t.milestoneId === task.milestoneId)
+                  const milestoneTaskIds = new Set(milestoneTasks.map(t => t.id))
+                  // Also include subtask IDs
+                  for (const mt of milestoneTasks) {
+                    if (mt.subtasks) {
+                      for (const sub of mt.subtasks) milestoneTaskIds.add(sub.id)
+                    }
+                  }
+
+                  // Build task map for display
+                  const targetTaskMap = new Map<string, { title: string; assignee: string }>()
+                  for (const mt of milestoneTasks) {
+                    targetTaskMap.set(mt.id, { title: mt.title, assignee: mt.assignee })
+                    if (mt.subtasks) {
+                      for (const sub of mt.subtasks) {
+                        targetTaskMap.set(sub.id, { title: sub.title, assignee: sub.assignee })
+                      }
+                    }
+                  }
+
+                  // Filter logs for this week, from other members (exclude current user)
+                  const weekLogs = project.taskLogs
+                    .filter(l =>
+                      milestoneTaskIds.has(l.taskId) &&
+                      l.logDate >= wkStart &&
+                      l.logDate <= wkEnd &&
+                      l.author !== user?.name
+                    )
+                    .sort((a, b) => a.logDate.localeCompare(b.logDate))
+
+                  // Group by author
+                  const byAuthor = new Map<string, typeof weekLogs>()
+                  for (const log of weekLogs) {
+                    const key = log.author
+                    if (!byAuthor.has(key)) byAuthor.set(key, [])
+                    byAuthor.get(key)!.push(log)
+                  }
+
+                  // Find tasks assigned to others that have NO logs this week
+                  const otherMemberTasks = Array.from(targetTaskMap.entries())
+                    .filter(([, info]) => info.assignee && info.assignee !== user?.name)
+                  const tasksWithLogs = new Set(weekLogs.map(l => l.taskId))
+                  const tasksWithoutLogs = otherMemberTasks.filter(([id]) => !tasksWithLogs.has(id))
+
+                  return (
+                    <div className="py-4 space-y-4">
+                      {/* Week info */}
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">
+                          顯示 {new Date(wy, wm - 1, wd).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} ~ {wkEndDate.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 的 R 成員紀錄
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/60">（與上方工作紀錄同一周）</span>
+                      </div>
+
+                      {weekLogs.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-center">
+                          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                            <Clock className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <p className="text-sm text-muted-foreground">本周尚無其他成員工作紀錄</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">R 成員在「我的任務」或甘特圖填寫週報後會顯示在這裡</p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* By author */}
+                          {Array.from(byAuthor.entries()).map(([author, logs]) => (
+                            <div key={author} className="border rounded-lg overflow-hidden">
+                              <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
+                                <Avatar className="h-6 w-6 shrink-0">
+                                  <AvatarFallback className={cn('text-[10px] font-semibold text-white', getAvatarColor(author))}>
+                                    {author.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm font-medium">{author}</span>
+                                <Badge variant="secondary" className="text-[10px] ml-auto">{logs.length} 筆紀錄</Badge>
+                              </div>
+                              <div className="divide-y">
+                                {logs.map(log => {
+                                  const taskInfo = targetTaskMap.get(log.taskId)
+                                  return (
+                                    <div key={log.id} className="px-4 py-3 space-y-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                                          {taskInfo?.title || '任務'}
+                                        </Badge>
+                                        <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">
+                                          {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm leading-relaxed whitespace-pre-line">{log.content}</p>
+                                      {log.nextPlans && log.nextPlans.length > 0 && (
+                                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                                          <span className="font-medium">下週計畫：</span>
+                                          {log.nextPlans.map(p => p.content).join('、')}
+                                        </div>
+                                      )}
+                                      {log.attachments && log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 pt-1">
+                                          {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                            <a key={ai} href={att.url} target="_blank" rel="noopener">
+                                              <img src={att.url} alt={att.name} className="h-14 w-14 rounded-lg object-cover border hover:opacity-80 transition-opacity" />
+                                            </a>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Tasks without logs this week */}
+                          {tasksWithoutLogs.length > 0 && (
+                            <div className="rounded-lg border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/10 px-4 py-3">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">本周尚未填寫的任務</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {tasksWithoutLogs.map(([id, info]) => (
+                                  <Badge key={id} variant="outline" className="text-[10px] px-2 py-0.5 text-amber-600 border-amber-300">
+                                    {info.assignee} — {info.title}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Import into my log */}
+                          <div className="border-t pt-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full gap-1.5 text-xs"
+                              onClick={() => {
+                                // Build summary text from R logs
+                                const lines: string[] = []
+                                for (const [author, logs] of byAuthor) {
+                                  for (const log of logs) {
+                                    const taskInfo = targetTaskMap.get(log.taskId)
+                                    lines.push(`【${taskInfo?.title || '任務'}】(${author})\n${log.content}`)
+                                  }
+                                }
+                                const text = lines.join('\n\n')
+                                // Append to logRows
+                                appendToLogRows(text)
+                              }}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              帶入 R 週報到我的工作紀錄
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })()}
               </TabsContent>
 
               {/* Tab: 任務資訊 */}
