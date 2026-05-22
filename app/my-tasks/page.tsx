@@ -66,6 +66,7 @@ import {
   ClipboardList,
   UserCheck,
   UserX,
+  HelpCircle,
 } from 'lucide-react'
 import {
   Popover,
@@ -141,6 +142,7 @@ export default function MyTasksPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [dialogTask, setDialogTask] = useState<{ task: Task; project: MyTasksProject } | null>(null)
   const [logContent, setLogContent] = useState('')
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0])
@@ -214,6 +216,14 @@ export default function MyTasksPage() {
   const [aRReportProject, setARReportProject] = useState<MyTasksProject | null>(null)
   const [aRReportData, setARReportData] = useState<{ reports: any[]; memberStatus: any[] }>({ reports: [], memberStatus: [] })
   const [aRReportLoading, setARReportLoading] = useState(false)
+  const [aRReportWeekOf, setARReportWeekOf] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+    const monday = new Date(now)
+    monday.setDate(diff)
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+  })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -861,18 +871,22 @@ export default function MyTasksPage() {
   }
 
   // Open A-tab R member report dialog
-  const openARReportDialog = async (project: MyTasksProject) => {
-    setARReportProject(project)
-    setARReportDialogOpen(true)
+  const fetchARReportData = useCallback(async (projectId: string, weekOf: string) => {
     setARReportLoading(true)
     try {
-      const res = await fetch(`/api/member-weekly-reports?projectId=${project.id}`)
+      const res = await fetch(`/api/member-weekly-reports?projectId=${projectId}&weekOf=${weekOf}`)
       if (res.ok) {
         const data = await res.json()
         setARReportData({ reports: data.reports || [], memberStatus: data.memberStatus || [] })
       }
     } catch { /* ignore */ }
     setARReportLoading(false)
+  }, [])
+
+  const openARReportDialog = async (project: MyTasksProject) => {
+    setARReportProject(project)
+    setARReportDialogOpen(true)
+    fetchARReportData(project.id, aRReportWeekOf)
   }
 
   if (!user) return null
@@ -1142,7 +1156,16 @@ export default function MyTasksPage() {
       <div className="space-y-4">
         {/* Page Header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
+            <button
+              onClick={() => setHelpOpen(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="我的任務說明"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
+          </div>
           <p className="text-sm text-muted-foreground mt-1">{user.name} 的工作總覽</p>
         </div>
 
@@ -2549,19 +2572,28 @@ export default function MyTasksPage() {
             <DialogTitle className="text-base">R 成員週報</DialogTitle>
             {aRReportProject && (
               <DialogDescription className="text-sm">
-                {aRReportProject.name} — 查看執行者本週提交的工作報告
+                {aRReportProject.name} — 查看執行者本週提交的工作紀錄
               </DialogDescription>
             )}
           </DialogHeader>
           {aRReportProject && (
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {/* Week picker */}
+              <WeekPicker
+                value={aRReportWeekOf}
+                onChange={(v) => {
+                  setARReportWeekOf(v)
+                  fetchARReportData(aRReportProject.id, v)
+                }}
+              />
+
               {aRReportLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
                 <>
-                  {/* Submission status */}
+                  {/* Submission status badges */}
                   <div className="flex flex-wrap gap-2">
                     {aRReportData.memberStatus.map((m: any) => (
                       <div
@@ -2575,6 +2607,7 @@ export default function MyTasksPage() {
                       >
                         {m.submitted ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
                         {m.name}
+                        {m.submitted && <span className="text-xs opacity-70">({m.reportCount})</span>}
                       </div>
                     ))}
                   </div>
@@ -2583,38 +2616,49 @@ export default function MyTasksPage() {
                     <p className="text-sm text-muted-foreground text-center py-4">此專案尚無 R 角色成員</p>
                   )}
 
-                  {/* Reports per member */}
+                  {/* Task logs per member */}
                   {aRReportData.memberStatus.filter((m: any) => m.submitted).map((member: any) => {
-                    const reports = aRReportData.reports.filter((r: any) => r.userId === member.userId)
+                    const memberLogs = aRReportData.reports.filter((r: any) => r.userId === member.userId)
+                    // Group by milestone
+                    const byMilestone = new Map<string, { name: string; logs: any[] }>()
+                    for (const log of memberLogs) {
+                      const key = log.milestoneId
+                      if (!byMilestone.has(key)) byMilestone.set(key, { name: log.milestoneName, logs: [] })
+                      byMilestone.get(key)!.logs.push(log)
+                    }
                     return (
                       <div key={member.userId} className="border rounded-lg overflow-hidden">
                         <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
                           <UserCheck className="h-4 w-4 text-green-600" />
                           <span className="text-sm font-medium">{member.name}</span>
-                          <Badge variant="secondary" className="text-xs ml-auto">{reports.length} 份報告</Badge>
+                          <Badge variant="secondary" className="text-xs ml-auto">{memberLogs.length} 筆紀錄</Badge>
                         </div>
-                        <div className="px-4 py-3 space-y-3">
-                          {reports.map((report: any) => (
-                            <div key={report.id} className="space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{report.milestoneName}</Badge>
-                                <span className="text-[11px] text-muted-foreground ml-auto">
-                                  {new Date(report.updatedAt || report.createdAt).toLocaleString('zh-TW')}
-                                </span>
-                              </div>
-                              <div className="space-y-1 text-sm">
-                                <p className="whitespace-pre-wrap">{report.content}</p>
-                                {report.blockers && (
-                                  <p className="text-amber-700 dark:text-amber-400">
-                                    <span className="font-medium">遇到問題：</span>{report.blockers}
-                                  </p>
-                                )}
-                                {report.nextPlan && (
-                                  <p className="text-blue-700 dark:text-blue-400">
-                                    <span className="font-medium">下週計畫：</span>{report.nextPlan}
-                                  </p>
-                                )}
-                              </div>
+                        <div className="divide-y">
+                          {[...byMilestone.entries()].map(([msId, { name: msName, logs }]) => (
+                            <div key={msId} className="px-4 py-3 space-y-2">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{msName}</Badge>
+                              {logs.map((log: any) => (
+                                <div key={log.id} className="pl-2 border-l-2 border-primary/20 space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-primary">{log.taskTitle}</span>
+                                    <span className="text-[11px] text-muted-foreground ml-auto">{log.logDate}</span>
+                                  </div>
+                                  <p className="text-sm whitespace-pre-wrap">{log.content}</p>
+                                  {log.nextPlans && (() => {
+                                    try {
+                                      const plans = JSON.parse(log.nextPlans)
+                                      if (Array.isArray(plans) && plans.length > 0) {
+                                        return (
+                                          <p className="text-xs text-blue-600 dark:text-blue-400">
+                                            <span className="font-medium">下週計畫：</span>{plans.map((p: any) => p.content).join('、')}
+                                          </p>
+                                        )
+                                      }
+                                    } catch { /* ignore */ }
+                                    return null
+                                  })()}
+                                </div>
+                              ))}
                             </div>
                           ))}
                         </div>
@@ -2623,7 +2667,7 @@ export default function MyTasksPage() {
                   })}
 
                   {aRReportData.memberStatus.filter((m: any) => m.submitted).length === 0 && aRReportData.memberStatus.length > 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">本週尚無 R 成員提交週報</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">本週尚無 R 成員提交工作紀錄</p>
                   )}
                 </>
               )}
@@ -2655,6 +2699,103 @@ export default function MyTasksPage() {
           }}
         />
       )}
+
+      {/* ── Help Dialog ── */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-xl">我的任務說明</DialogTitle>
+            <DialogDescription>依專案角色 (RACIPS) 分頁顯示您參與的專案任務</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-blue-500" /> 頁面說明
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                此頁面依據您在各專案中的<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色 (RACIPS)</span> 分頁顯示，
+                每個角色頁籤僅列出您擁有該角色的專案。<span className="text-amber-600 dark:text-amber-400 font-medium">所有系統角色</span>都可以使用此頁面。
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <ListChecks className="h-4 w-4 text-indigo-500" /> 各角色功能
+              </h3>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">專案角色</th>
+                      <th className="text-center px-3 py-2 font-medium">頁籤</th>
+                      <th className="text-left px-3 py-2 font-medium">功能說明</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { role: 'R', label: '執行', desc: '填寫工作週報（依任務逐筆紀錄工作內容）', color: 'text-blue-600 dark:text-blue-400' },
+                      { role: 'A', label: '當責', desc: '查看所有任務進度、查看 R 成員週報、管理任務', color: 'text-emerald-600 dark:text-emerald-400' },
+                      { role: 'P', label: '採購', desc: '查看及管理專案的預算項目與資本支出', color: 'text-purple-600 dark:text-purple-400' },
+                      { role: 'C', label: '諮詢', desc: '查看專案進度總覽（唯讀）', color: 'text-amber-600 dark:text-amber-400' },
+                      { role: 'I', label: '知會', desc: '查看專案進度總覽（唯讀）', color: 'text-amber-600 dark:text-amber-400' },
+                      { role: 'S', label: '審核', desc: '查看專案進度、前往審核中心審核延期', color: 'text-red-600 dark:text-red-400' },
+                    ].map((r, i) => (
+                      <tr key={r.role} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                        <td className="px-3 py-2">
+                          <span className={cn('font-bold', r.color)}>{r.role}</span>
+                          <span className="text-muted-foreground ml-1 text-xs">({r.label})</span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span className="text-emerald-600">✓</span>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{r.desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Info className="h-4 w-4 text-amber-500" /> 操作說明
+              </h3>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">操作</th>
+                      <th className="text-center px-3 py-2 font-medium">R</th>
+                      <th className="text-center px-3 py-2 font-medium">A</th>
+                      <th className="text-center px-3 py-2 font-medium">P</th>
+                      <th className="text-center px-3 py-2 font-medium">C/I/S</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { op: '填寫工作週報', R: true, A: false, P: false, CI: false },
+                      { op: '查看所有任務進度', R: false, A: true, P: false, CI: false },
+                      { op: '查看 R 成員週報', R: false, A: true, P: false, CI: false },
+                      { op: '管理預算/資本支出', R: false, A: false, P: true, CI: false },
+                      { op: '查看專案概況', R: true, A: true, P: true, CI: true },
+                      { op: '前往甘特圖', R: true, A: true, P: true, CI: true },
+                    ].map((r, i) => (
+                      <tr key={r.op} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                        <td className="px-3 py-2 font-medium">{r.op}</td>
+                        <td className="px-3 py-2 text-center">{r.R ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
+                        <td className="px-3 py-2 text-center">{r.A ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
+                        <td className="px-3 py-2 text-center">{r.P ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
+                        <td className="px-3 py-2 text-center">{r.CI ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </DashboardLayout>
   )

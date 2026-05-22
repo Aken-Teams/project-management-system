@@ -14,13 +14,11 @@ function getMondayOfWeek(date: Date): Date {
 // Query params:
 //   projectId (required) — the project to fetch reports for
 //   weekOf (optional) — ISO date string, defaults to current week's Monday
-//   userId (optional) — filter by specific user
-// Returns: reports for the week + list of R members with submission status
+// Returns: task logs from R members for the week + R member submission status
 export async function GET(request: NextRequest) {
   try {
     const projectId = request.nextUrl.searchParams.get('projectId')
     const weekOfParam = request.nextUrl.searchParams.get('weekOf')
-    const userId = request.nextUrl.searchParams.get('userId')
 
     if (!projectId) {
       return NextResponse.json({ error: '需要提供 projectId' }, { status: 400 })
@@ -29,6 +27,10 @@ export async function GET(request: NextRequest) {
     const weekOf = weekOfParam
       ? getMondayOfWeek(new Date(weekOfParam))
       : getMondayOfWeek(new Date())
+
+    // Week range: Monday 00:00 ~ Sunday 23:59
+    const weekEnd = new Date(weekOf)
+    weekEnd.setDate(weekEnd.getDate() + 7)
 
     // Get all R-role members for this project
     const rMembers = await prisma.projectTeamMember.findMany({
@@ -39,49 +41,56 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Get submitted reports for this week
-    const whereClause: any = { projectId, weekOf }
-    if (userId) whereClause.userId = userId
+    const rUserIds = rMembers.map(m => m.userId)
 
-    // Check if model exists (Prisma client may need regeneration / dev server restart)
-    if (!prisma.memberWeeklyReport) {
-      return NextResponse.json({ reports: [], memberStatus: [], totalRMembers: rMembers.length, submittedCount: 0, weekOf: weekOf.toISOString() })
-    }
+    // Get task logs from R members for this week
+    const taskLogs = rUserIds.length > 0
+      ? await prisma.taskLog.findMany({
+          where: {
+            projectId,
+            authorId: { in: rUserIds },
+            logDate: { gte: weekOf, lt: weekEnd },
+          },
+          include: {
+            author: { select: { id: true, name: true, email: true } },
+            task: {
+              select: {
+                id: true,
+                title: true,
+                milestoneId: true,
+                milestone: { select: { id: true, name: true, sortOrder: true } },
+              },
+            },
+          },
+          orderBy: [{ logDate: 'asc' }, { createdAt: 'asc' }],
+        })
+      : []
 
-    const reports = await prisma.memberWeeklyReport.findMany({
-      where: whereClause,
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        milestone: { select: { id: true, name: true, dueDate: true, sortOrder: true } },
-      },
-      orderBy: [{ milestone: { sortOrder: 'asc' } }, { user: { name: 'asc' } }],
-    })
-
-    // Build submission status: which R members have submitted / not yet
-    const submittedUserIds = new Set(reports.map(r => r.userId))
+    // Build submission status: which R members have logs this week
+    const submittedUserIds = new Set(taskLogs.map(l => l.authorId))
     const memberStatus = rMembers.map(m => ({
       userId: m.userId,
       name: m.user.name,
       email: m.user.email,
       submitted: submittedUserIds.has(m.userId),
-      reportCount: reports.filter(r => r.userId === m.userId).length,
+      reportCount: taskLogs.filter(l => l.authorId === m.userId).length,
     }))
 
     return NextResponse.json({
       weekOf: weekOf.toISOString(),
-      reports: reports.map(r => ({
-        id: r.id,
-        milestoneId: r.milestoneId,
-        milestoneName: r.milestone.name,
-        milestoneDueDate: r.milestone.dueDate,
-        userId: r.userId,
-        userName: r.user.name,
-        content: r.content,
-        progress: r.progress,
-        blockers: r.blockers,
-        nextPlan: r.nextPlan,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
+      reports: taskLogs.map(l => ({
+        id: l.id,
+        taskId: l.task.id,
+        taskTitle: l.task.title,
+        milestoneId: l.task.milestoneId,
+        milestoneName: l.task.milestone.name,
+        userId: l.authorId,
+        userName: l.author.name,
+        logDate: l.logDate.toISOString().split('T')[0],
+        content: l.content,
+        nextPlans: l.nextPlans,
+        attachments: l.attachments,
+        createdAt: l.createdAt,
       })),
       memberStatus,
       totalRMembers: rMembers.length,
