@@ -879,6 +879,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     <SheetTitle className={cn('text-base text-left leading-tight', isCompleted && 'text-muted-foreground')}>
                       {task.title}
                     </SheetTitle>
+                    <Badge className={cn('text-xs px-2 py-0.5 shrink-0', getPriorityColor(task.priority))}>
+                      {getPriorityText(task.priority)}優先
+                    </Badge>
                     <Badge className={cn('text-xs px-2 py-0.5 shrink-0',
                       hasPendingDelay && (computedStatus === 'overdue' || computedStatus === 'overdue-not-started')
                         ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
@@ -918,17 +921,6 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
           {/* Progress section */}
           <div className="px-6 py-3 border-t shrink-0">
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <Badge className={cn('text-sm', getPriorityColor(task.priority))}>
-                {getPriorityText(task.priority)}優先
-              </Badge>
-              {isOverdue && !isCompleted && (
-                <Badge variant="destructive" className="text-sm gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  逾期
-                </Badge>
-              )}
-            </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
                 <Progress value={autoProgress?.percent ?? task.progress} className="h-2 flex-1" />
@@ -960,7 +952,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
             <div className="flex-1 flex flex-col min-h-0">
 
               {/* Work log form (editable, hidden in readOnly) */}
-              {!readOnly && <div className="flex-1 overflow-y-auto px-6">
+              {!readOnly && <div className="flex-1 overflow-y-auto px-6 border-t">
                 <div className="py-4 space-y-4">
                   {isCompleted ? (
                     <div className="space-y-2">
@@ -1497,37 +1489,40 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
               )}
 
               {/* Quick action buttons — open center Dialogs */}
-              <div className="px-6 py-3 border-t shrink-0 flex gap-2">
-                <button
-                  type="button"
+              <div className="px-6 py-3 border-t shrink-0 flex gap-2 bg-muted/40">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowRReportDialog(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border hover:bg-muted/50 transition-colors text-sm"
+                  className="flex-1 gap-1.5 text-sm h-9 bg-background"
                 >
-                  <Users className="h-3.5 w-3.5 text-blue-500" />
-                  <span>R 週報</span>
+                  <Users className="h-3.5 w-3.5" />
+                  R 週報
                   {rMemberLogs.weekLogs.length > 0 && (
                     <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full">{rMemberLogs.weekLogs.length}</Badge>
                   )}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowHistoryDialog(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border hover:bg-muted/50 transition-colors text-sm"
+                  className="flex-1 gap-1.5 text-sm h-9 bg-background"
                 >
-                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>過往紀錄</span>
+                  <Clock className="h-3.5 w-3.5" />
+                  過往紀錄
                   {taskLogs.length > 0 && (
                     <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full">{taskLogs.length}</Badge>
                   )}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowInfoDialog(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border hover:bg-muted/50 transition-colors text-sm"
+                  className="flex-1 gap-1.5 text-sm h-9 bg-background"
                 >
-                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>任務資訊</span>
-                </button>
+                  <Info className="h-3.5 w-3.5" />
+                  任務資訊
+                </Button>
               </div>
             </div>
           ) : null}
