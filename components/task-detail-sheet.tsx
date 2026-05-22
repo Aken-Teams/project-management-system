@@ -896,13 +896,15 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
           </div>
 
           {/* Tabs */}
-          {!readOnly && !showExtensionForm ? (
-            <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
+          {!showExtensionForm ? (
+            <Tabs defaultValue={readOnly ? 'history' : 'log'} className="flex-1 flex flex-col min-h-0">
               <div className="px-6 pt-1 pb-0 border-t shrink-0">
                 <TabsList className="w-full bg-transparent h-auto p-0 rounded-none gap-0">
-                  <TabsTrigger value="log" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
-                    工作紀錄
-                  </TabsTrigger>
+                  {!readOnly && (
+                    <TabsTrigger value="log" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
+                      工作紀錄
+                    </TabsTrigger>
+                  )}
                   <TabsTrigger value="history" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
                     過往紀錄
                     {taskLogs.length > 0 && (
@@ -920,8 +922,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </TabsList>
               </div>
 
-              {/* Tab: 工作紀錄 */}
-              <TabsContent value="log" className="flex-1 overflow-y-auto px-6 mt-0">
+              {/* Tab: 工作紀錄 (editable, hidden in readOnly) */}
+              {!readOnly && <TabsContent value="log" className="flex-1 overflow-y-auto px-6 mt-0">
                 <div className="py-4 space-y-4">
                   {isCompleted ? (
                     <div className="space-y-2">
@@ -1419,7 +1421,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     )
                   )}
                 </div>
-              </TabsContent>
+              </TabsContent>}
 
               {/* Tab: 過往紀錄 */}
               <TabsContent value="history" className="flex-1 px-4 mt-0 overflow-y-auto">
@@ -1665,7 +1667,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                     {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                                   </span>
                                 </div>
-                                {user && log.author === user.name && (
+                                {!readOnly && user && log.author === user.name && (
                                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                     <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={() => handleStartEditLog(log)}>
                                       <Pencil className="h-3 w-3" />
@@ -1869,30 +1871,32 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             </div>
                           )}
 
-                          {/* Import into my log */}
-                          <div className="border-t pt-3">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full gap-1.5 text-xs"
-                              onClick={() => {
-                                // Build summary text from R logs
-                                const lines: string[] = []
-                                for (const [author, logs] of byAuthor) {
-                                  for (const log of logs) {
-                                    const taskInfo = targetTaskMap.get(log.taskId)
-                                    lines.push(`【${taskInfo?.title || '任務'}】(${author})\n${log.content}`)
+                          {/* Import into my log (only for editable users) */}
+                          {!readOnly && (
+                            <div className="border-t pt-3">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full gap-1.5 text-xs"
+                                onClick={() => {
+                                  // Build summary text from R logs
+                                  const lines: string[] = []
+                                  for (const [author, logs] of byAuthor) {
+                                    for (const log of logs) {
+                                      const taskInfo = targetTaskMap.get(log.taskId)
+                                      lines.push(`【${taskInfo?.title || '任務'}】(${author})\n${log.content}`)
+                                    }
                                   }
-                                }
-                                const text = lines.join('\n\n')
-                                // Append to logRows
-                                appendToLogRows(text)
-                              }}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              帶入 R 週報到我的工作紀錄
-                            </Button>
-                          </div>
+                                  const text = lines.join('\n\n')
+                                  // Append to logRows
+                                  appendToLogRows(text)
+                                }}
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                帶入 R 週報到我的工作紀錄
+                              </Button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -2093,137 +2097,6 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </div>
               </TabsContent>
             </Tabs>
-          ) : readOnly ? (
-            /* Read-only: show info directly without tabs */
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="px-6 py-4 space-y-4">
-                {/* Description */}
-                {task.description && (
-                  <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
-                    <p className="text-sm text-muted-foreground leading-relaxed">{task.description}</p>
-                  </div>
-                )}
-
-                {/* Info card */}
-                <div className="rounded-lg border divide-y">
-                  <div className="flex items-center justify-between py-2.5 px-3">
-                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5" />
-                      負責人
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-5 w-5">
-                        <AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>
-                          {task.assignee.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium">{task.assignee}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5 px-3">
-                    <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
-                      時程
-                    </span>
-                    <span className="text-sm font-medium">
-                      {new Date(task.startDate).toLocaleDateString('zh-TW')}
-                      <span className="text-muted-foreground mx-1">→</span>
-                      <span className={cn(isOverdue && 'text-destructive')}>
-                        {new Date(task.endDate).toLocaleDateString('zh-TW')}
-                      </span>
-                      <span className="text-muted-foreground text-xs ml-1">（{task.durationDays} 天）</span>
-                    </span>
-                  </div>
-                  {task.completedAt && (
-                    <div className="flex items-center justify-between py-2.5 px-3">
-                      <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        完成
-                      </span>
-                      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                        {new Date(task.completedAt).toLocaleDateString('zh-TW')}
-                        {task.completedBy && <span className="text-muted-foreground font-normal ml-1.5">由 {task.completedBy}</span>}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Dependencies */}
-                {upstreamTasks.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded flex items-center justify-center bg-blue-100 dark:bg-blue-900/30">
-                        <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <span className="text-sm font-medium text-muted-foreground">需先完成</span>
-                    </div>
-                    <div className="space-y-1.5 ml-7">
-                      {upstreamTasks.map(({ task: dep, status: depStatus }) => (
-                        <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
-                          {getStatusDot(depStatus)}
-                          <span className="flex-1 truncate">{dep.title}</span>
-                          {getComputedStatusBadge(depStatus)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {downstreamTasks.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-5 w-5 rounded flex items-center justify-center bg-purple-100 dark:bg-purple-900/30">
-                        <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                      </div>
-                      <span className="text-sm font-medium text-muted-foreground">完成後開始</span>
-                    </div>
-                    <div className="space-y-1.5 ml-7">
-                      {downstreamTasks.map(({ task: dep, status: depStatus }) => (
-                        <div key={dep.id} className="flex items-center gap-2.5 text-sm py-2 px-3 rounded-lg bg-muted/30 border border-border/50">
-                          {getStatusDot(depStatus)}
-                          <span className="flex-1 truncate">{dep.title}</span>
-                          {getComputedStatusBadge(depStatus)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Impact Analysis */}
-                <div className="pt-2 border-t">
-                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                    延遲影響
-                  </h4>
-
-                  {impact.totalDelayChain === 0 ? (
-                    <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900">
-                      <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span className="font-medium">無連鎖影響，此任務延遲不會影響其他任務</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className={`p-3 rounded-lg border ${
-                        impact.totalDelayChain >= 3
-                          ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900'
-                          : 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900'
-                      }`}>
-                        <div className={`flex items-center gap-2 text-sm font-medium ${
-                          impact.totalDelayChain >= 3
-                            ? 'text-red-700 dark:text-red-400'
-                            : 'text-amber-700 dark:text-amber-400'
-                        }`}>
-                          <AlertTriangle className="h-4 w-4" />
-                          若此任務延遲，將影響 {impact.totalDelayChain} 個後續任務
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           ) : null}
 
           {/* Extension Form (replaces tabs when shown) */}

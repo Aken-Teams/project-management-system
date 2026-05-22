@@ -324,14 +324,18 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 {shareLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
                 分享
               </Button>
-              <Button size="default" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-4 w-4" />
-                編輯
-              </Button>
-              <Button variant="destructive" size="default" className="gap-1.5" onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="h-4 w-4" />
-                刪除
-              </Button>
+              {(currentUserTeamRole === 'A' || user?.role === 'admin') && (
+                <>
+                  <Button size="default" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                    <Pencil className="h-4 w-4" />
+                    編輯
+                  </Button>
+                  <Button variant="destructive" size="default" className="gap-1.5" onClick={() => setDeleteOpen(true)}>
+                    <Trash2 className="h-4 w-4" />
+                    刪除
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -628,6 +632,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 const res = await fetch(`/api/projects/${id}`)
                 if (res.ok) setProject(await res.json())
               }}
+              readOnly={currentUserTeamRole !== 'A' && user?.role !== 'admin'}
             />
           </TabsContent>
 
