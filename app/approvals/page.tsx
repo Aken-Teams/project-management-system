@@ -125,8 +125,10 @@ export default function ApprovalsPage() {
 
   const fetchRequests = useCallback(async () => {
     try {
-      const params = user?.role !== 'admin' && user?.email
-        ? `?memberEmail=${encodeURIComponent(user.email)}`
+      // admin / executive 看全部；pm / member 只看自己是 S 角色的專案
+      const needsFilter = user?.role !== 'admin' && user?.role !== 'executive'
+      const params = needsFilter && user?.email
+        ? `?sRoleEmail=${encodeURIComponent(user.email)}`
         : ''
       const res = await fetch(`/api/delay-requests${params}`)
       if (!res.ok) throw new Error()
@@ -848,7 +850,7 @@ export default function ApprovalsPage() {
             </div>
           )}
 
-          {/* Review actions (for pending, S-role only) */}
+          {/* Review actions — S 角色 + admin 可審核 */}
           {isPending && (() => {
             const isAdmin = user?.role === 'admin'
             const isSRole = request.reviewers?.some(r => r.id === user?.id)
@@ -942,12 +944,14 @@ export default function ApprovalsPage() {
                 <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">{pendingAll.length}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-4 py-2.5 gap-1.5">
-              <Wrench className="h-4 w-4" /> 待處理協助
-              {supportAll.length > 0 && (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0 ml-1">{supportAll.length}</Badge>
-              )}
-            </TabsTrigger>
+            {(user?.role === 'executive' || user?.role === 'admin') && (
+              <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-4 py-2.5 gap-1.5">
+                <Wrench className="h-4 w-4" /> 待處理協助
+                {supportAll.length > 0 && (
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0 ml-1">{supportAll.length}</Badge>
+                )}
+              </TabsTrigger>
+            )}
             <TabsTrigger value="history" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-4 py-2.5 gap-1.5">
               <FileText className="h-4 w-4" /> 已審核紀錄
             </TabsTrigger>
