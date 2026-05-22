@@ -323,7 +323,8 @@ export default function ReportsPage() {
         setLoading(true)
         const params = new URLSearchParams()
         if (user.id) params.append('userId', user.id)
-        else if (user.email) params.append('userEmail', user.email)
+        if (user.email) params.append('userEmail', user.email)
+        if (user.name) params.append('userName', user.name)
 
         // Always fetch all projects, filter on frontend
         const response = await fetch(`/api/reports?${params}`)

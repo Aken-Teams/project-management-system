@@ -60,12 +60,22 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Resolve user
+    // Resolve user (try ID first, fallback to email, auto-create if needed)
     let user = userId
       ? await prisma.user.findUnique({ where: { id: userId } })
       : null
     if (!user && userEmail) {
       user = await prisma.user.findUnique({ where: { email: userEmail } })
+    }
+    if (!user && userEmail) {
+      const userName = request.nextUrl.searchParams.get('userName')
+      user = await prisma.user.create({
+        data: {
+          name: userName || userEmail.split('@')[0],
+          email: userEmail,
+          role: 'member',
+        },
+      })
     }
 
     if (!user) {
