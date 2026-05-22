@@ -86,6 +86,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [roiParams, setRoiParams] = useState<RoiParams | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [roleHelpOpen, setRoleHelpOpen] = useState(false)
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [shareLoading, setShareLoading] = useState(false)
@@ -317,7 +318,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   </span>
                 </Badge>
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+              <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                {project.name}
+                <button onClick={() => setRoleHelpOpen(true)} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <HelpCircle className="h-5 w-5" />
+                </button>
+              </h1>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Button variant="outline" size="default" className="gap-1.5" onClick={() => { setShareToken(null); setShareError(null); setShareExpiryDays(7); setShareExpiresAt(addDays(new Date(), 7)); setShareDialogOpen(true); fetchShareLinks() }}>
@@ -852,6 +858,117 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 })}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Role Help Dialog */}
+      <Dialog open={roleHelpOpen} onOpenChange={setRoleHelpOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-xl">專案詳細 — 角色權限說明</DialogTitle>
+            <DialogDescription>說明專案角色（RACIPS）與系統角色在專案詳細頁的權限</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            {/* Current user role */}
+            {currentUserTeamRole && (
+              <div className="rounded-lg border bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800 p-3 flex items-center gap-2">
+                <Badge className="bg-blue-100 hover:bg-blue-100 text-blue-700 dark:bg-blue-900 dark:hover:bg-blue-900 dark:text-blue-300 border-transparent text-xs">您的角色</Badge>
+                <span className="text-sm font-medium">{TEAM_ROLE_LABELS[currentUserTeamRole as TeamRole] || currentUserTeamRole}（{currentUserTeamRole}）</span>
+              </div>
+            )}
+
+            {/* RACIPS Roles */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4 text-blue-500" /> 專案角色（RACIPS）
+              </h3>
+              <div className="space-y-1.5">
+                {[
+                  { code: 'A', name: '當責 (Accountable)', desc: '對任務成果負最終責任的人。', perms: ['編輯專案', '更新甘特圖週報', '檢視投資報酬'], highlight: true, color: 'emerald' },
+                  { code: 'R', name: '負責 (Responsible)', desc: '實際執行任務的人，負責完成交付項目。', perms: ['唯讀'], highlight: false, color: '' },
+                  { code: 'C', name: '諮詢 (Consulted)', desc: '在決策前被徵詢意見的人。', perms: ['唯讀'], highlight: false, color: '' },
+                  { code: 'I', name: '知會 (Informed)', desc: '在決策後被通知的人。', perms: ['唯讀'], highlight: false, color: '' },
+                  { code: 'P', name: '採購 (Procurement)', desc: '負責專案相關採購與資源取得。', perms: ['編輯投資報酬資料', '檢視投資報酬'], highlight: true, color: 'amber' },
+                  { code: 'S', name: '審核 (Sign-off)', desc: '負責審核與批准，需簽核才能推進。', perms: ['唯讀', '審核延期申請'], highlight: true, color: 'violet' },
+                ].map(r => {
+                  const colorMap: Record<string, { bg: string; border: string; badge: string }> = {
+                    emerald: { bg: 'bg-emerald-50 dark:bg-emerald-950/20', border: 'border-emerald-200 dark:border-emerald-800', badge: 'bg-emerald-100 hover:bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-300' },
+                    amber: { bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 hover:bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:border-amber-700 dark:text-amber-300' },
+                    violet: { bg: 'bg-violet-50 dark:bg-violet-950/20', border: 'border-violet-200 dark:border-violet-800', badge: 'bg-violet-100 hover:bg-violet-100 border-violet-300 text-violet-700 dark:bg-violet-900 dark:hover:bg-violet-900 dark:border-violet-700 dark:text-violet-300' },
+                  }
+                  const c = r.highlight && r.color ? colorMap[r.color] : null
+                  const isCurrentRole = currentUserTeamRole === r.code
+                  return (
+                    <div key={r.code} className={`rounded-lg border p-3 flex items-start gap-3 ${isCurrentRole ? 'ring-2 ring-blue-400' : ''} ${c ? `${c.bg} ${c.border}` : 'bg-muted/30 border-muted'}`}>
+                      <Badge variant="outline" className={`text-xs shrink-0 mt-0.5 font-semibold min-w-[26px] justify-center ${c ? c.badge : 'bg-muted hover:bg-muted'}`}>{r.code}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">{r.name}</span>
+                          {r.perms.map(p => (
+                            <Badge key={p} variant="secondary" className={`text-[10px] px-1.5 py-0 border-transparent ${c ? c.badge : 'hover:bg-secondary'}`}>{p}</Badge>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{r.desc}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* System Roles */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Shield className="h-4 w-4 text-indigo-500" /> 系統角色（額外權限）
+              </h3>
+              <div className="space-y-1.5">
+                {[
+                  { name: '專案經理', letter: 'PM', perms: ['編輯專案', '刪除專案', '更新甘特圖週報', '檢視投資報酬'], highlight: '' },
+                  { name: '主管', letter: 'E', perms: ['檢視投資報酬'], highlight: 'amber' },
+                  { name: '管理員', letter: 'A', perms: ['編輯專案', '刪除專案', '更新甘特圖週報', '檢視投資報酬'], highlight: 'red' },
+                ].map(r => {
+                  const colorMap: Record<string, { bg: string; border: string; badge: string }> = {
+                    amber: { bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 hover:bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:border-amber-700 dark:text-amber-300' },
+                    red: { bg: 'bg-red-50 dark:bg-red-950/20', border: 'border-red-200 dark:border-red-800', badge: 'bg-red-100 hover:bg-red-100 border-red-300 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:border-red-700 dark:text-red-300' },
+                  }
+                  const c = r.highlight ? colorMap[r.highlight] : null
+                  return (
+                    <div key={r.letter} className={`rounded-lg border p-3 flex items-start gap-3 ${c ? `${c.bg} ${c.border}` : 'bg-muted/30 border-muted'}`}>
+                      <Badge variant="outline" className={`text-xs shrink-0 mt-0.5 font-semibold min-w-[28px] justify-center ${c ? c.badge : 'bg-muted hover:bg-muted'}`}>{r.letter}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold">{r.name}</span>
+                          {r.perms.map(p => (
+                            <Badge key={p} variant="secondary" className={`text-[10px] px-1.5 py-0 border-transparent ${c ? c.badge : 'hover:bg-secondary'}`}>{p}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Key Points */}
+            <div className="rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-indigo-500" /> 重點說明
+              </h3>
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <Badge className="bg-emerald-100 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:text-emerald-300 text-[10px] shrink-0 mt-0.5 border-transparent">編輯</Badge>
+                  <span className="text-sm text-muted-foreground">專案角色 <span className="text-emerald-600 dark:text-emerald-400 font-medium">A（當責）</span>可編輯專案但<span className="text-red-600 dark:text-red-400 font-medium">不能刪除</span>，刪除僅限<span className="text-blue-600 dark:text-blue-400 font-medium">專案經理</span>與<span className="text-red-600 dark:text-red-400 font-medium">管理員</span>。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge className="bg-amber-100 hover:bg-amber-100 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:text-amber-300 text-[10px] shrink-0 mt-0.5 border-transparent">投資報酬</Badge>
+                  <span className="text-sm text-muted-foreground">投資報酬頁籤僅 <span className="text-emerald-600 dark:text-emerald-400 font-medium">A</span>、<span className="text-amber-600 dark:text-amber-400 font-medium">P</span>、<span className="text-blue-600 dark:text-blue-400 font-medium">PM</span>、<span className="text-amber-600 dark:text-amber-400 font-medium">主管</span>、<span className="text-red-600 dark:text-red-400 font-medium">管理員</span>可見，其中 <span className="text-amber-600 dark:text-amber-400 font-medium">P</span> 可編輯投資報酬資料。</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Badge className="bg-blue-100 hover:bg-blue-100 text-blue-700 dark:bg-blue-900 dark:hover:bg-blue-900 dark:text-blue-300 text-[10px] shrink-0 mt-0.5 border-transparent">甘特圖</Badge>
+                  <span className="text-sm text-muted-foreground">週報更新僅 <span className="text-emerald-600 dark:text-emerald-400 font-medium">A</span>、<span className="text-blue-600 dark:text-blue-400 font-medium">PM</span>、<span className="text-red-600 dark:text-red-400 font-medium">管理員</span>可操作，其餘角色為唯讀。</span>
+                </div>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
