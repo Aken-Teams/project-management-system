@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useState } from 'react'
+import { use, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
 import {
   ArrowLeft,
@@ -22,11 +21,46 @@ import {
   CheckCircle2,
   Clock,
   Calendar,
+  Users,
+  UserCheck,
+  UserX,
+  ChevronDown,
+  Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 
 interface UpdatePageProps {
   params: Promise<{ id: string }>
+}
+
+interface ProjectMilestone {
+  id: string
+  name: string
+  dueDate: string
+  progress: number
+  status: string
+}
+
+interface ProjectTask {
+  id: string
+  milestoneId: string
+  title: string
+  status: string
+  assignee: string
+}
+
+interface ProjectBaseline {
+  id: string
+  dueDate: string
+}
+
+interface ProjectData {
+  id: string
+  name: string
+  milestones: ProjectMilestone[]
+  tasks: ProjectTask[]
+  baseline: ProjectBaseline[]
 }
 
 function getMondayOfCurrentWeek(): string {
@@ -40,31 +74,39 @@ function getMondayOfCurrentWeek(): string {
 export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const { getProject, addWeeklyUpdate } = useProjectStore()
   const { user } = useAuth()
-  const project = getProject(id)
+
+  // Load project from DB API
+  const [project, setProject] = useState<ProjectData | null>(null)
+  const [projectLoading, setProjectLoading] = useState(true)
+
+  useEffect(() => {
+    if (!id) return
+    setProjectLoading(true)
+    fetch(`/api/projects/${id}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.id) {
+          setProject({
+            id: data.id,
+            name: data.name,
+            milestones: data.milestones || [],
+            tasks: (data.tasks || []).filter((t: any) => !t.parentId),
+            baseline: data.baseline || [],
+          })
+        }
+      })
+      .catch(() => setProject(null))
+      .finally(() => setProjectLoading(false))
+  }, [id])
 
   const [weekOf, setWeekOf] = useState(getMondayOfCurrentWeek())
-  const [milestoneNotes, setMilestoneNotes] = useState<Record<string, string>>(() => {
-    if (!project) return {}
-    const initial: Record<string, string> = {}
-    project.milestones.forEach((m) => {
-      initial[m.id] = ''
-    })
-    return initial
-  })
+  const [milestoneNotes, setMilestoneNotes] = useState<Record<string, string>>({})
 
   const [overallStatus, setOverallStatus] = useState<'on-time' | 'delay'>('on-time')
   const [canCatchUp, setCanCatchUp] = useState<'yes' | 'no'>('yes')
   const [delayReason, setDelayReason] = useState('')
-  const [proposedDates, setProposedDates] = useState<Record<string, string>>(() => {
-    if (!project) return {}
-    const initial: Record<string, string> = {}
-    project.milestones.forEach((m) => {
-      initial[m.id] = m.dueDate
-    })
-    return initial
-  })
+  const [proposedDates, setProposedDates] = useState<Record<string, string>>({})
   const [supportNeeded, setSupportNeeded] = useState('')
 
   const [overallNotes, setOverallNotes] = useState('')
@@ -75,6 +117,57 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
   const [isListening, setIsListening] = useState(false)
   const [activeField, setActiveField] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Initialize milestone notes and proposed dates when project loads
+  useEffect(() => {
+    if (!project) return
+    const notes: Record<string, string> = {}
+    const dates: Record<string, string> = {}
+    project.milestones.forEach(m => {
+      notes[m.id] = ''
+      dates[m.id] = m.dueDate
+    })
+    setMilestoneNotes(notes)
+    setProposedDates(dates)
+  }, [project])
+
+  // R member weekly reports
+  interface MemberReport {
+    id: string
+    milestoneId: string
+    milestoneName: string
+    userId: string
+    userName: string
+    content: string
+    blockers: string
+    nextPlan: string
+    updatedAt: string
+  }
+  interface MemberStatus {
+    userId: string
+    name: string
+    submitted: boolean
+    reportCount: number
+  }
+  const [memberReports, setMemberReports] = useState<MemberReport[]>([])
+  const [memberStatus, setMemberStatus] = useState<MemberStatus[]>([])
+  const [memberReportsLoading, setMemberReportsLoading] = useState(false)
+  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!id) return
+    setMemberReportsLoading(true)
+    fetch(`/api/member-weekly-reports?projectId=${id}&weekOf=${weekOf}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          setMemberReports(data.reports || [])
+          setMemberStatus(data.memberStatus || [])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setMemberReportsLoading(false))
+  }, [id, weekOf])
 
   const startVoiceInput = (fieldSetter: (val: string) => void, currentVal: string, fieldName: string) => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -101,6 +194,17 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
       setActiveField(null)
     }
     recognition.start()
+  }
+
+  if (projectLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">載入專案中...</p>
+        </div>
+      </DashboardLayout>
+    )
   }
 
   if (!project) {
@@ -130,17 +234,27 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
         notes: milestoneNotes[m.id] || '',
       }))
 
-      addWeeklyUpdate(id, {
-        weekOf,
-        updatedBy: user.name,
-        updatedAt: new Date().toISOString(),
-        milestoneUpdates: milestoneUpdateArray,
-        overallStatus,
-        overallNotes,
-        blockers,
-        nextWeekPlan,
-        keyAchievements,
+      // Save weekly update to DB
+      const res = await fetch('/api/weekly-updates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: id,
+          userId: user.id,
+          weekOf,
+          overallStatus,
+          overallNotes,
+          blockers,
+          keyAchievements,
+          nextWeekPlan,
+          milestoneUpdates: milestoneUpdateArray,
+        }),
       })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '儲存週報失敗')
+      }
 
       if (overallStatus === 'delay' && canCatchUp === 'no') {
         const affectedMilestones = Object.entries(proposedDates)
@@ -176,7 +290,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
       router.push(`/projects/${id}`)
     } catch (error) {
       console.error('Failed to submit weekly update:', error)
-      alert('提交失敗，請稍後再試')
+      alert(error instanceof Error ? error.message : '提交失敗，請稍後再試')
     } finally {
       setIsSubmitting(false)
     }
@@ -393,6 +507,106 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
             )
           })}
         </div>
+
+        {/* R Members' Weekly Reports */}
+        {memberStatus.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                R 成員週報
+              </CardTitle>
+              <CardDescription>
+                查看執行者（R 角色）本週提交的工作報告，作為您撰寫週報的參考
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Submission status summary */}
+              <div className="flex flex-wrap gap-2">
+                {memberStatus.map(m => (
+                  <div
+                    key={m.userId}
+                    className={cn(
+                      'flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-full border',
+                      m.submitted
+                        ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-800 dark:text-green-400'
+                        : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-800 dark:text-red-400',
+                    )}
+                  >
+                    {m.submitted ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
+                    {m.name}
+                  </div>
+                ))}
+              </div>
+
+              {memberReportsLoading && (
+                <p className="text-sm text-muted-foreground">載入中...</p>
+              )}
+
+              {/* Reports per member */}
+              {!memberReportsLoading && memberStatus.filter(m => m.submitted).length > 0 && (
+                <div className="space-y-3">
+                  {memberStatus.filter(m => m.submitted).map(member => {
+                    const reports = memberReports.filter(r => r.userId === member.userId)
+                    const isExpanded = expandedMembers.has(member.userId)
+
+                    return (
+                      <div key={member.userId} className="border rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => setExpandedMembers(prev => {
+                            const next = new Set(prev)
+                            if (next.has(member.userId)) next.delete(member.userId)
+                            else next.add(member.userId)
+                            return next
+                          })}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted/30 transition-colors text-left"
+                        >
+                          <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', !isExpanded && '-rotate-90')} />
+                          <span className="text-sm font-medium">{member.name}</span>
+                          <Badge variant="secondary" className="text-xs ml-auto">{reports.length} 份報告</Badge>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-3 pb-3 space-y-3 border-t bg-muted/10">
+                            {reports.map(report => (
+                              <div key={report.id} className="pt-3 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                    {report.milestoneName}
+                                  </Badge>
+                                  <span className="text-[11px] text-muted-foreground ml-auto">
+                                    {new Date(report.updatedAt).toLocaleString('zh-TW')}
+                                  </span>
+                                </div>
+                                <div className="space-y-1 text-sm">
+                                  <p className="whitespace-pre-wrap">{report.content}</p>
+                                  {report.blockers && (
+                                    <p className="text-amber-700 dark:text-amber-400">
+                                      <span className="font-medium">阻礙：</span>{report.blockers}
+                                    </p>
+                                  )}
+                                  {report.nextPlan && (
+                                    <p className="text-blue-700 dark:text-blue-400">
+                                      <span className="font-medium">下週：</span>{report.nextPlan}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {!memberReportsLoading && memberStatus.filter(m => m.submitted).length === 0 && memberStatus.length > 0 && (
+                <p className="text-sm text-muted-foreground">本週尚無 R 成員提交週報</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Overall Status */}
         <Card>

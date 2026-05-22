@@ -109,7 +109,6 @@ export async function GET(request: NextRequest) {
 
     // Transform to frontend format
     const feProjects = projects
-      .filter(p => p.tasks.length > 0 || membershipRoleMap.get(p.id) === 'A')
       .map(p => ({
         id: p.id,
         name: p.name,
