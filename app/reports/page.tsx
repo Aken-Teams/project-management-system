@@ -957,112 +957,118 @@ export default function ReportsPage() {
               </div>
               <p className="text-sm text-muted-foreground mt-1">檢視專案進度與統計分析</p>
             </div>
-            <div className="flex items-center gap-2 bg-card rounded-lg border px-3 py-2">
-              {/* Date range filter */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs font-normal">
-                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                    {format(dateFrom, 'yyyy/MM/dd')} - {format(dateTo, 'yyyy/MM/dd')}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-3" align="end">
-                  <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <HelpCircle className="h-3 w-3 shrink-0" />
-                      依專案起迄日期篩選，期間有重疊即顯示
-                    </p>
-                    <div className="flex items-center gap-2">
-                      {[
-                        { label: '今年', from: new Date(currentYear, 0, 1), to: new Date(currentYear, 11, 31) },
-                        { label: '去年', from: new Date(currentYear - 1, 0, 1), to: new Date(currentYear - 1, 11, 31) },
-                        { label: '近 3 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 3)), to: new Date() },
-                        { label: '近 6 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 6)), to: new Date() },
-                      ].map(preset => (
-                        <Button
-                          key={preset.label}
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => { setDateFrom(preset.from); setDateTo(preset.to) }}
-                        >
-                          {preset.label}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="flex gap-4">
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground font-medium px-1">開始日期</p>
-                        <CalendarUI
-                          mode="single"
-                          selected={dateFrom}
-                          onSelect={(d) => { if (!d) return; setDateFrom(d); if (d > dateTo) setDateTo(d) }}
-                          locale={zhTW}
-                          initialFocus
-                        />
+            <div className="bg-card rounded-lg border px-3 py-2 space-y-2">
+              {/* Row 1: Filters */}
+              <div className="flex items-center gap-2">
+                {/* Date range filter */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-normal">
+                      <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                      {dateFrom.getMonth() === 0 && dateFrom.getDate() === 1 && dateTo.getMonth() === 11 && dateTo.getDate() === 31 && dateFrom.getFullYear() === dateTo.getFullYear()
+                        ? `${dateFrom.getFullYear()} 年度`
+                        : `${format(dateFrom, 'yyyy/MM/dd')} - ${format(dateTo, 'yyyy/MM/dd')}`}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="end">
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <HelpCircle className="h-3 w-3 shrink-0" />
+                        依專案起迄日期篩選，期間有重疊即顯示
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {[
+                          { label: '今年', from: new Date(currentYear, 0, 1), to: new Date(currentYear, 11, 31) },
+                          { label: '去年', from: new Date(currentYear - 1, 0, 1), to: new Date(currentYear - 1, 11, 31) },
+                          { label: '近 3 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 3)), to: new Date() },
+                          { label: '近 6 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 6)), to: new Date() },
+                        ].map(preset => (
+                          <Button
+                            key={preset.label}
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => { setDateFrom(preset.from); setDateTo(preset.to) }}
+                          >
+                            {preset.label}
+                          </Button>
+                        ))}
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground font-medium px-1">結束日期</p>
-                        <CalendarUI
-                          mode="single"
-                          selected={dateTo}
-                          onSelect={(d) => d && setDateTo(d)}
-                          disabled={(date) => date < dateFrom}
-                          locale={zhTW}
-                        />
+                      <div className="flex gap-4">
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground font-medium px-1">開始日期</p>
+                          <CalendarUI
+                            mode="single"
+                            selected={dateFrom}
+                            onSelect={(d) => { if (!d) return; setDateFrom(d); if (d > dateTo) setDateTo(d) }}
+                            locale={zhTW}
+                            initialFocus
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground font-medium px-1">結束日期</p>
+                          <CalendarUI
+                            mode="single"
+                            selected={dateTo}
+                            onSelect={(d) => d && setDateTo(d)}
+                            disabled={(date) => date < dateFrom}
+                            locale={zhTW}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                <SelectTrigger className="w-[200px] h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">所有專案（總覽）</SelectItem>
-                  {filteredProjects.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  </PopoverContent>
+                </Popover>
+                <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                  <SelectTrigger className="w-[200px] h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">所有專案（總覽）</SelectItem>
+                    {filteredProjects.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Tier filter — only show in all-projects mode */}
+                {selectedProjectId === 'all' && <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
+                  {[{ value: null as ProjectTier | null, label: '全部' }, ...Object.keys(PROJECT_TIER_LABELS).map(t => ({ value: t as ProjectTier | null, label: PROJECT_TIER_LABELS[t as ProjectTier] }))].map(item => (
+                    <button
+                      key={item.label}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                        tierFilter === item.value
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-foreground/70 hover:text-foreground hover:bg-muted'
+                      }`}
+                      onClick={() => setTierFilter(item.value)}
+                    >
+                      {item.label}
+                    </button>
                   ))}
-                </SelectContent>
-              </Select>
-              {/* Tier filter — only show in all-projects mode */}
-              {selectedProjectId === 'all' && <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
-                {[{ value: null as ProjectTier | null, label: '全部' }, ...Object.keys(PROJECT_TIER_LABELS).map(t => ({ value: t as ProjectTier | null, label: PROJECT_TIER_LABELS[t as ProjectTier] }))].map(item => (
-                  <button
-                    key={item.label}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                      tierFilter === item.value
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-foreground/70 hover:text-foreground hover:bg-muted'
-                    }`}
-                    onClick={() => setTierFilter(item.value)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>}
-              {(user?.role === 'pm' || user?.role === 'admin') && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpenEmailDialog}>
-                <Mail className="h-3.5 w-3.5" /> Email
-              </Button>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" className="gap-1.5">
-                    <FileDown className="h-3.5 w-3.5" /> 匯出
-                    <ChevronDown className="h-3 w-3 ml-0.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleOpenPdfDialog} className="gap-2">
-                    <FileDown className="h-4 w-4 text-orange-600" /> 匯出 PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowExcelDialog(true)} className="gap-2">
-                    <FileSpreadsheet className="h-4 w-4 text-green-600" /> 匯出 Excel
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                </div>}
+                <div className="flex-1" />
+                {(user?.role === 'pm' || user?.role === 'admin') && (
+                <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleOpenEmailDialog}>
+                  <Mail className="h-3.5 w-3.5" /> Email
+                </Button>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className="h-8 gap-1.5">
+                      <FileDown className="h-3.5 w-3.5" /> 匯出
+                      <ChevronDown className="h-3 w-3 ml-0.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleOpenPdfDialog} className="gap-2">
+                      <FileDown className="h-4 w-4 text-orange-600" /> 匯出 PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowExcelDialog(true)} className="gap-2">
+                      <FileSpreadsheet className="h-4 w-4 text-green-600" /> 匯出 Excel
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
 
