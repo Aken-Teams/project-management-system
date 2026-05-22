@@ -64,6 +64,9 @@ import {
   ImagePlus,
   Paperclip,
   Sparkles,
+  Users,
+  Copy,
+  ClipboardCheck,
 } from 'lucide-react'
 
 interface TaskDetailSheetProps {
@@ -145,6 +148,47 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     const diff = now.getDate() - day + (day === 0 ? -6 : 1)
     return fmtLocalDate(new Date(now.getFullYear(), now.getMonth(), diff))
   })
+
+  // R 週報 popover in 工作紀錄 tab
+  const [showRReportPopover, setShowRReportPopover] = useState(false)
+  const [rReportCopied, setRReportCopied] = useState(false)
+
+  // Helper: compute R members' logs for the current log week (used in both tabs)
+  const rMemberLogs = useMemo(() => {
+    if (!task) return { weekLogs: [] as TaskLog[], byAuthor: new Map<string, TaskLog[]>(), targetTaskMap: new Map<string, { title: string; assignee: string }>(), tasksWithoutLogs: [] as [string, { title: string; assignee: string }][] }
+    const [wy, wm, wd] = selectedWeekStart.split('-').map(Number)
+    const wkStart = `${wy}-${String(wm).padStart(2, '0')}-${String(wd).padStart(2, '0')}`
+    const wkEndDate = new Date(wy, wm - 1, wd + 6)
+    const wkEnd = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`
+    const milestoneTasks = project.tasks.filter(t => t.milestoneId === task.milestoneId)
+    const milestoneTaskIds = new Set(milestoneTasks.map(t => t.id))
+    for (const mt of milestoneTasks) { if (mt.subtasks) { for (const sub of mt.subtasks) milestoneTaskIds.add(sub.id) } }
+    const taskMap = new Map<string, { title: string; assignee: string }>()
+    for (const mt of milestoneTasks) {
+      taskMap.set(mt.id, { title: mt.title, assignee: mt.assignee })
+      if (mt.subtasks) { for (const sub of mt.subtasks) taskMap.set(sub.id, { title: sub.title, assignee: sub.assignee }) }
+    }
+    const logs = project.taskLogs
+      .filter(l => milestoneTaskIds.has(l.taskId) && l.logDate >= wkStart && l.logDate <= wkEnd && l.author !== user?.name)
+      .sort((a, b) => a.logDate.localeCompare(b.logDate))
+    const grouped = new Map<string, TaskLog[]>()
+    for (const log of logs) { if (!grouped.has(log.author)) grouped.set(log.author, []); grouped.get(log.author)!.push(log) }
+    const otherTasks = Array.from(taskMap.entries()).filter(([, info]) => info.assignee && info.assignee !== user?.name)
+    const withLogs = new Set(logs.map(l => l.taskId))
+    const without = otherTasks.filter(([id]) => !withLogs.has(id))
+    return { weekLogs: logs, byAuthor: grouped, targetTaskMap: taskMap, tasksWithoutLogs: without }
+  }, [task, selectedWeekStart, project.tasks, project.taskLogs, user?.name])
+
+  const buildRReportText = useCallback(() => {
+    const lines: string[] = []
+    for (const [author, logs] of rMemberLogs.byAuthor) {
+      for (const log of logs) {
+        const taskInfo = rMemberLogs.targetTaskMap.get(log.taskId)
+        lines.push(`【${taskInfo?.title || '任務'}】(${author})\n${log.content}`)
+      }
+    }
+    return lines.join('\n\n')
+  }, [rMemberLogs])
 
   // Backward compat: logDate used by subtask import and edit flows
   const logDate = useMemo(() => {
@@ -1183,6 +1227,84 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         </div>
                       )}
 
+                      {/* R 週報 quick-access popover */}
+                      {rMemberLogs.weekLogs.length > 0 && (
+                        <Popover open={showRReportPopover} onOpenChange={(v) => { setShowRReportPopover(v); if (!v) setRReportCopied(false) }}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/60 dark:hover:bg-blue-950/40 transition-colors text-left"
+                            >
+                              <Users className="h-4 w-4 text-blue-500 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">R 成員本周週報</span>
+                                <span className="text-xs text-blue-500/70 dark:text-blue-400/60 ml-1.5">{rMemberLogs.weekLogs.length} 筆紀錄</span>
+                              </div>
+                              <ChevronRight className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent side="top" align="start" className="w-[380px] max-h-[400px] p-0 overflow-hidden z-[60]">
+                            <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between">
+                              <span className="text-xs font-medium">R 成員週報內容</span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(buildRReportText())
+                                    setRReportCopied(true)
+                                    setTimeout(() => setRReportCopied(false), 2000)
+                                  }}
+                                >
+                                  {rReportCopied ? <ClipboardCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                                  {rReportCopied ? '已複製' : '複製全部'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                                  onClick={() => {
+                                    appendToLogRows(buildRReportText())
+                                    setShowRReportPopover(false)
+                                  }}
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  帶入週報
+                                </button>
+                              </div>
+                            </div>
+                            <div className="overflow-y-auto max-h-[340px] divide-y">
+                              {Array.from(rMemberLogs.byAuthor.entries()).map(([author, logs]) => (
+                                <div key={author} className="px-3 py-2 space-y-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <Avatar className="h-5 w-5 shrink-0">
+                                      <AvatarFallback className={cn('text-[9px] font-semibold text-white', getAvatarColor(author))}>
+                                        {author.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-xs font-medium">{author}</span>
+                                    <span className="text-[10px] text-muted-foreground ml-auto">{logs.length} 筆</span>
+                                  </div>
+                                  {logs.map(log => {
+                                    const taskInfo = rMemberLogs.targetTaskMap.get(log.taskId)
+                                    return (
+                                      <div key={log.id} className="pl-6 space-y-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[10px] text-muted-foreground/70 font-medium">{taskInfo?.title || '任務'}</span>
+                                          <span className="text-[10px] text-muted-foreground/50 tabular-nums ml-auto">
+                                            {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs leading-relaxed whitespace-pre-line text-foreground/80">{log.content}</p>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+
                       {/* Overdue entry blocking — date-level validation */}
                       {overdueEntryDates.length > 0 && (
                         <div className="rounded-xl border-2 border-red-200 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900 p-4 space-y-3">
@@ -1857,47 +1979,13 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                             </div>
                           ))}
 
-                          {/* Tasks without logs this week */}
+                          {/* Tasks without logs — compact inline */}
                           {tasksWithoutLogs.length > 0 && (
-                            <div className="rounded-lg border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/10 px-4 py-3">
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">本周尚未填寫的任務</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {tasksWithoutLogs.map(([id, info]) => (
-                                  <Badge key={id} variant="outline" className="text-[10px] px-2 py-0.5 text-amber-600 border-amber-300">
-                                    {info.assignee} — {info.title}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Import into my log (only for editable users) */}
-                          {!readOnly && (
-                            <div className="border-t pt-3">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full gap-1.5 text-xs"
-                                onClick={() => {
-                                  // Build summary text from R logs
-                                  const lines: string[] = []
-                                  for (const [author, logs] of byAuthor) {
-                                    for (const log of logs) {
-                                      const taskInfo = targetTaskMap.get(log.taskId)
-                                      lines.push(`【${taskInfo?.title || '任務'}】(${author})\n${log.content}`)
-                                    }
-                                  }
-                                  const text = lines.join('\n\n')
-                                  // Append to logRows
-                                  appendToLogRows(text)
-                                }}
-                              >
-                                <FileText className="h-3.5 w-3.5" />
-                                帶入 R 週報到我的工作紀錄
-                              </Button>
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50/60 dark:bg-amber-950/10 border border-amber-200/60 dark:border-amber-800/40">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                              <span className="text-xs text-amber-700 dark:text-amber-400">
+                                <span className="font-medium">{tasksWithoutLogs.length} 項任務</span>未填寫：{tasksWithoutLogs.map(([, info]) => info.assignee ? `${info.assignee}(${info.title})` : info.title).join('、')}
+                              </span>
                             </div>
                           )}
                         </>
