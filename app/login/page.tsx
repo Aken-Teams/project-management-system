@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import Image from 'next/image'
 
 const QUICK_LOGINS = [
-  { role: 'pm' as const, email: 'alice@example.com', label: '專案經理', initial: 'A', bgColor: 'bg-blue-100', textColor: 'text-blue-600' },
+  { role: 'admin' as const, email: 'alice@example.com', label: '系統管理員', initial: 'A', bgColor: 'bg-red-100', textColor: 'text-red-600' },
+  { role: 'pm' as const, email: 'dave@example.com', label: '專案經理', initial: 'D', bgColor: 'bg-blue-100', textColor: 'text-blue-600' },
   { role: 'member' as const, email: 'bob@example.com', label: '團隊成員', initial: 'B', bgColor: 'bg-green-100', textColor: 'text-green-600' },
   { role: 'executive' as const, email: 'carol@example.com', label: '高階主管', initial: 'C', bgColor: 'bg-amber-100', textColor: 'text-amber-600' },
 ]
@@ -37,9 +38,10 @@ export default function LoginPage() {
     }
   }
 
-  const quickLogin = (role: 'pm' | 'member' | 'executive') => {
+  const quickLogin = (role: 'admin' | 'pm' | 'member' | 'executive') => {
     const emails = {
-      pm: 'alice@example.com',
+      admin: 'alice@example.com',
+      pm: 'dave@example.com',
       member: 'bob@example.com',
       executive: 'carol@example.com'
     }
@@ -129,7 +131,7 @@ export default function LoginPage() {
             </div>
 
             {/* Quick Login Cards */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               {QUICK_LOGINS.map((item) => (
                 <button
                   key={item.role}

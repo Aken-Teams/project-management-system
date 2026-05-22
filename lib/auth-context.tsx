@@ -28,9 +28,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // Mock users data — emails must match DB seed users
 const MOCK_USERS: User[] = [
-  { id: '1', name: 'Alice Chen', email: 'alice@example.com', role: 'pm', avatar: '/avatars/alice.jpg' },
+  { id: '1', name: 'Alice Chen', email: 'alice@example.com', role: 'admin', avatar: '/avatars/alice.jpg' },
   { id: '2', name: 'Bob Wang', email: 'bob@example.com', role: 'member', avatar: '/avatars/bob.jpg' },
   { id: '3', name: 'Carol Lee', email: 'carol@example.com', role: 'executive', avatar: '/avatars/carol.jpg' },
+  { id: '4', name: 'Dave Liu', email: 'dave@example.com', role: 'pm', avatar: '/avatars/dave.jpg' },
 ]
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

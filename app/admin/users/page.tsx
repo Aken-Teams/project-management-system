@@ -822,7 +822,7 @@ export default function AdminUsersPage() {
                 <Select value={editRole} onValueChange={v => setEditRole(v as UserRole)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ROLE_LABELS).filter(([v]) => v !== 'pm').map(([v, l]) => (
+                    {Object.entries(ROLE_LABELS).map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
                     ))}
                   </SelectContent>
@@ -873,7 +873,7 @@ export default function AdminUsersPage() {
                 <Select value={addRole} onValueChange={v => setAddRole(v as UserRole)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ROLE_LABELS).filter(([v]) => v !== 'pm').map(([v, l]) => (
+                    {Object.entries(ROLE_LABELS).map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
                     ))}
                   </SelectContent>

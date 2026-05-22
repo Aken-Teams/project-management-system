@@ -9,11 +9,11 @@ async function main() {
   // Create default users
   const alice = await prisma.user.upsert({
     where: { email: 'alice@example.com' },
-    update: {},
+    update: { role: 'admin' },
     create: {
       name: 'Alice Chen',
       email: 'alice@example.com',
-      role: 'pm',
+      role: 'admin',
     },
   })
 
@@ -37,10 +37,21 @@ async function main() {
     },
   })
 
+  const dave = await prisma.user.upsert({
+    where: { email: 'dave@example.com' },
+    update: {},
+    create: {
+      name: 'Dave Liu',
+      email: 'dave@example.com',
+      role: 'pm',
+    },
+  })
+
   console.log('Created users:')
   console.log(`  - ${alice.name} (${alice.role})`)
   console.log(`  - ${bob.name} (${bob.role})`)
   console.log(`  - ${carol.name} (${carol.role})`)
+  console.log(`  - ${dave.name} (${dave.role})`)
 
   // Initialize project code sequences for current year
   const currentYear = new Date().getFullYear()
