@@ -866,7 +866,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader className="pb-3">
             <DialogTitle className="text-xl">專案詳細 — 角色權限說明</DialogTitle>
-            <DialogDescription>說明專案角色（RACIPS）與系統角色在專案詳細頁的權限</DialogDescription>
+            <DialogDescription>說明專案角色（SAPRCI）與系統角色在專案詳細頁的權限</DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
             {/* Current user role */}
@@ -877,10 +877,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               </div>
             )}
 
-            {/* RACIPS Table */}
+            {/* SAPRCI Table */}
             <div>
               <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-500" /> 專案角色（RACIPS）
+                <Users className="h-4 w-4 text-blue-500" /> 專案角色（SAPRCI）
               </h3>
               <div className="rounded-lg border overflow-hidden">
                 <table className="w-full text-sm">
@@ -895,12 +895,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   </thead>
                   <tbody>
                     {[
+                      { code: 'S', name: '簽核', edit: false, gantt: '唯讀', roi: '—', review: true },
                       { code: 'A', name: '當責', edit: true, gantt: '可寫', roi: '可見', review: false },
-                      { code: 'R', name: '負責', edit: false, gantt: '唯讀', roi: '—', review: false },
+                      { code: 'P', name: '採購', edit: false, gantt: '唯讀', roi: '可編輯', review: false },
+                      { code: 'R', name: '執行', edit: false, gantt: '唯讀', roi: '—', review: false },
                       { code: 'C', name: '諮詢', edit: false, gantt: '唯讀', roi: '—', review: false },
                       { code: 'I', name: '知會', edit: false, gantt: '唯讀', roi: '—', review: false },
-                      { code: 'P', name: '採購', edit: false, gantt: '唯讀', roi: '可編輯', review: false },
-                      { code: 'S', name: '審核', edit: false, gantt: '唯讀', roi: '—', review: true },
                     ].map((r, i) => (
                       <tr key={r.code} className={`${i % 2 !== 0 ? 'bg-muted/20' : ''} ${currentUserTeamRole === r.code ? 'bg-blue-50/80 dark:bg-blue-950/20' : ''}`}>
                         <td className="px-3 py-2">

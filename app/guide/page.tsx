@@ -64,7 +64,7 @@ export default function GuidePage() {
               </div>
               <div className="rounded-lg border-2 border-emerald-200 dark:border-emerald-800 p-3 bg-emerald-50/50 dark:bg-emerald-950/20">
                 <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 text-xs mb-1">
-                  <Users className="h-3.5 w-3.5" /> 專案角色（RACIPS）
+                  <Users className="h-3.5 w-3.5" /> 專案角色（SAPRCI）
                 </div>
                 <p className="text-xs text-muted-foreground">
                   決定成員在個別專案中的職責，由專案經理在建立或編輯專案時指派
@@ -188,23 +188,36 @@ export default function GuidePage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-4 w-4 text-emerald-600" />
-                專案角色（RACIPS）
+                專案角色（SAPRCI）
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">同一人在不同專案中可擔任不同角色，由專案經理在建立專案時指派</p>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
               <div className="space-y-2">
-                <div className="rounded-md border px-3 py-2.5 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                <div className="rounded-md border-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-blue-700 dark:text-blue-400 text-sm">R — Responsible 執行者</span>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm">S — Sign-off 簽核者</span>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">最高審核權限</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">實際執行任務的成員，負責填寫工作日誌、回報進度、管理子任務</p>
+                  <p className="text-xs text-muted-foreground mt-1">負責審核延期申請，可核准或駁回。每個專案可有多位 S 角色，需全部通過才算核准</p>
                 </div>
                 <div className="rounded-md border px-3 py-2.5 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-amber-700 dark:text-amber-400 text-sm">A — Accountable 當責者</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">對專案成果負最終責任，通常為專案負責人或部門主管</p>
+                </div>
+                <div className="rounded-md border px-3 py-2.5 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-orange-700 dark:text-orange-400 text-sm">P — Procurement 採購者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">負責專案相關的設備採購與供應商管理</p>
+                </div>
+                <div className="rounded-md border px-3 py-2.5 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-blue-700 dark:text-blue-400 text-sm">R — Responsible 執行者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">實際執行任務的成員，負責填寫工作日誌、回報進度、管理子任務</p>
                 </div>
                 <div className="rounded-md border px-3 py-2.5 bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800">
                   <div className="flex items-center justify-between">
@@ -217,19 +230,6 @@ export default function GuidePage() {
                     <span className="font-semibold text-slate-700 dark:text-slate-400 text-sm">I — Informed 知會者</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">需被告知專案進度與決策結果，但不直接參與執行</p>
-                </div>
-                <div className="rounded-md border px-3 py-2.5 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-orange-700 dark:text-orange-400 text-sm">P — Procurement 採購者</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">負責專案相關的設備採購與供應商管理</p>
-                </div>
-                <div className="rounded-md border-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm">S — Sign-off 簽核者</span>
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">審核權限</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">負責審核延期申請，可核准或駁回。每個專案可有多位 S 角色，需全部通過才算核准</p>
                 </div>
               </div>
             </CardContent>

@@ -1255,10 +1255,10 @@ export default function ApprovalsPage() {
               </div>
             </div>
 
-            {/* RACIPS Table */}
+            {/* SAPRCI Table */}
             <div>
               <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-                <User className="h-4 w-4 text-blue-500" /> 專案角色（RACIPS）
+                <User className="h-4 w-4 text-blue-500" /> 專案角色（SAPRCI）
               </h3>
               <div className="rounded-lg border overflow-hidden">
                 <table className="w-full text-sm">
@@ -1271,12 +1271,12 @@ export default function ApprovalsPage() {
                   </thead>
                   <tbody>
                     {[
-                      { code: 'R', name: '負責', desc: '實際執行任務的人', review: false },
+                      { code: 'S', name: '簽核', desc: '負責審核與批准，需簽核推進', review: true },
                       { code: 'A', name: '當責', desc: '對任務成果負最終責任', review: false },
+                      { code: 'P', name: '採購', desc: '負責採購與資源取得', review: false },
+                      { code: 'R', name: '執行', desc: '實際執行任務的人', review: false },
                       { code: 'C', name: '諮詢', desc: '決策前被徵詢意見的人', review: false },
                       { code: 'I', name: '知會', desc: '決策後被通知的人', review: false },
-                      { code: 'P', name: '採購', desc: '負責採購與資源取得', review: false },
-                      { code: 'S', name: '審核', desc: '負責審核與批准，需簽核推進', review: true },
                     ].map((r, i) => (
                       <tr key={r.code} className={`${i % 2 !== 0 ? 'bg-muted/20' : ''} ${r.review ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : ''}`}>
                         <td className="px-3 py-2">

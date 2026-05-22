@@ -80,7 +80,7 @@ export default function ProjectsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 所有角色都能看到全部專案（細部權限由專案角色 RACIPS 控制）
+  // 所有角色都能看到全部專案（細部權限由專案角色 SAPRCI 控制）
   const projects = allProjects
 
   // 取得所有負責人列表
@@ -532,7 +532,7 @@ export default function ProjectsPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">※ 所有角色都能看到全部專案，細部操作由<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色（RACIPS）</span>控制。編輯專案含專案角色 A（當責）。</p>
+              <p className="text-xs text-muted-foreground mt-2">※ 所有角色都能看到全部專案，細部操作由<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色（SAPRCI）</span>控制。編輯專案含專案角色 A（當責）。</p>
             </div>
           </div>
         </DialogContent>

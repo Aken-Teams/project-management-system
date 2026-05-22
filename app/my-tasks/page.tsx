@@ -273,7 +273,7 @@ export default function MyTasksPage() {
   }, [apiProjects])
 
   const availableRoles = useMemo(() => {
-    const order = ['A', 'R', 'P', 'C', 'I', 'S']
+    const order = ['S', 'A', 'P', 'R', 'C', 'I']
     return order.filter(r => userRolesMap.has(r))
   }, [userRolesMap])
 
@@ -2758,7 +2758,7 @@ export default function MyTasksPage() {
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader className="pb-3">
             <DialogTitle className="text-xl">我的任務說明</DialogTitle>
-            <DialogDescription>依專案角色 (RACIPS) 分頁顯示您參與的專案任務</DialogDescription>
+            <DialogDescription>依專案角色 (SAPRCI) 分頁顯示您參與的專案任務</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
@@ -2767,7 +2767,7 @@ export default function MyTasksPage() {
                 <ClipboardList className="h-4 w-4 text-blue-500" /> 頁面說明
               </h3>
               <p className="text-sm text-muted-foreground">
-                此頁面依據您在各專案中的<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色 (RACIPS)</span> 分頁顯示，
+                此頁面依據您在各專案中的<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色 (SAPRCI)</span> 分頁顯示，
                 每個角色頁籤僅列出您擁有該角色的專案。<span className="text-amber-600 dark:text-amber-400 font-medium">所有系統角色</span>都可以使用此頁面。
               </p>
             </div>
@@ -2787,12 +2787,12 @@ export default function MyTasksPage() {
                   </thead>
                   <tbody>
                     {[
-                      { role: 'R', label: '執行', desc: '填寫工作週報（依任務逐筆紀錄工作內容）', color: 'text-blue-600 dark:text-blue-400' },
-                      { role: 'A', label: '當責', desc: '查看所有任務進度、查看 R 成員週報、管理任務', color: 'text-emerald-600 dark:text-emerald-400' },
+                      { role: 'S', label: '簽核', desc: '查看專案進度、前往審核中心審核延期', color: 'text-emerald-600 dark:text-emerald-400' },
+                      { role: 'A', label: '當責', desc: '查看所有任務進度、查看 R 成員週報、管理任務', color: 'text-amber-600 dark:text-amber-400' },
                       { role: 'P', label: '採購', desc: '查看及管理專案的預算項目與資本支出', color: 'text-purple-600 dark:text-purple-400' },
-                      { role: 'C', label: '諮詢', desc: '查看專案進度總覽（唯讀）', color: 'text-amber-600 dark:text-amber-400' },
-                      { role: 'I', label: '知會', desc: '查看專案進度總覽（唯讀）', color: 'text-amber-600 dark:text-amber-400' },
-                      { role: 'S', label: '審核', desc: '查看專案進度、前往審核中心審核延期', color: 'text-red-600 dark:text-red-400' },
+                      { role: 'R', label: '執行', desc: '填寫工作週報（依任務逐筆紀錄工作內容）', color: 'text-blue-600 dark:text-blue-400' },
+                      { role: 'C', label: '諮詢', desc: '查看專案進度總覽（唯讀）', color: 'text-muted-foreground' },
+                      { role: 'I', label: '知會', desc: '查看專案進度總覽（唯讀）', color: 'text-muted-foreground' },
                     ].map((r, i) => (
                       <tr key={r.role} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
                         <td className="px-3 py-2">
@@ -2819,26 +2819,29 @@ export default function MyTasksPage() {
                   <thead>
                     <tr className="bg-muted/50 text-muted-foreground">
                       <th className="text-left px-3 py-2 font-medium">操作</th>
-                      <th className="text-center px-3 py-2 font-medium">R</th>
+                      <th className="text-center px-3 py-2 font-medium">S</th>
                       <th className="text-center px-3 py-2 font-medium">A</th>
                       <th className="text-center px-3 py-2 font-medium">P</th>
-                      <th className="text-center px-3 py-2 font-medium">C/I/S</th>
+                      <th className="text-center px-3 py-2 font-medium">R</th>
+                      <th className="text-center px-3 py-2 font-medium">C/I</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { op: '填寫工作週報', R: true, A: false, P: false, CI: false },
-                      { op: '查看所有任務進度', R: false, A: true, P: false, CI: false },
-                      { op: '查看 R 成員週報', R: false, A: true, P: false, CI: false },
-                      { op: '管理預算/資本支出', R: false, A: false, P: true, CI: false },
-                      { op: '查看專案概況', R: true, A: true, P: true, CI: true },
-                      { op: '前往甘特圖', R: true, A: true, P: true, CI: true },
+                      { op: '審核延期申請', S: true, A: false, P: false, R: false, CI: false },
+                      { op: '查看所有任務進度', S: false, A: true, P: false, R: false, CI: false },
+                      { op: '查看 R 成員週報', S: false, A: true, P: false, R: false, CI: false },
+                      { op: '管理預算/資本支出', S: false, A: false, P: true, R: false, CI: false },
+                      { op: '填寫工作週報', S: false, A: false, P: false, R: true, CI: false },
+                      { op: '查看專案概況', S: true, A: true, P: true, R: true, CI: true },
+                      { op: '前往甘特圖', S: true, A: true, P: true, R: true, CI: true },
                     ].map((r, i) => (
                       <tr key={r.op} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
                         <td className="px-3 py-2 font-medium">{r.op}</td>
-                        <td className="px-3 py-2 text-center">{r.R ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
+                        <td className="px-3 py-2 text-center">{r.S ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
                         <td className="px-3 py-2 text-center">{r.A ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
                         <td className="px-3 py-2 text-center">{r.P ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
+                        <td className="px-3 py-2 text-center">{r.R ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
                         <td className="px-3 py-2 text-center">{r.CI ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}</td>
                       </tr>
                     ))}
