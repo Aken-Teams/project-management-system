@@ -1264,8 +1264,8 @@ export default function ApprovalsPage() {
               </h3>
               <div className="space-y-1.5">
                 {[
-                  { name: '一般成員', code: 'member', letter: 'M', desc: '系統一般使用者，參與專案執行。', perms: ['檢視所屬專案審核狀態'], highlight: '' },
-                  { name: '專案經理', code: 'pm', letter: 'PM', desc: '管理專案進度、團隊與交付。', perms: ['檢視所有專案審核狀態'], highlight: '' },
+                  { name: '一般成員', code: 'member', letter: 'M', desc: '系統一般使用者，參與專案執行。', perms: ['檢視自己是 S 角色的專案'], highlight: '' },
+                  { name: '專案經理', code: 'pm', letter: 'PM', desc: '管理專案進度、團隊與交付。', perms: ['檢視自己是 S 角色的專案'], highlight: '' },
                   { name: '主管', code: 'executive', letter: 'E', desc: '高階管理者，監督整體營運與資源分配。', perms: ['檢視所有專案', '處理協助需求'], highlight: 'amber' },
                   { name: '管理員', code: 'admin', letter: 'A', desc: '系統管理員，擁有完整系統權限。', perms: ['檢視所有專案', '審核延期', '處理協助需求'], highlight: 'red' },
                 ].map(r => {
@@ -1317,7 +1317,7 @@ export default function ApprovalsPage() {
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Badge className="bg-blue-100 hover:bg-blue-100 text-blue-700 dark:bg-blue-900 dark:hover:bg-blue-900 dark:text-blue-300 text-[10px] shrink-0 mt-0.5 border-transparent">可見性</Badge>
-                  <span className="text-sm text-muted-foreground">專案團隊中所有角色（RACIPS）都能查看自己所屬專案的審核進度，但只有 <Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-emerald-50 hover:bg-emerald-50 border-emerald-300 text-emerald-700">S</Badge> 角色可以執行審核動作。</span>
+                  <span className="text-sm text-muted-foreground">一般成員與專案經理僅能查看自己擔任 <Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-emerald-50 hover:bg-emerald-50 border-emerald-300 text-emerald-700">S</Badge> 角色的專案審核；<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-amber-50 hover:bg-amber-50 border-amber-300 text-amber-700">主管</Badge>與<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-red-50 hover:bg-red-50 border-red-300 text-red-700">管理員</Badge>可查看所有專案。</span>
                 </div>
               </div>
             </div>
