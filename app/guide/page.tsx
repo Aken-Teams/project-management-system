@@ -51,24 +51,24 @@ export default function GuidePage() {
               本系統是一套專為團隊協作設計的專案管理工具，支援從專案建立、里程碑規劃、任務分派到進度追蹤的完整流程。
             </p>
             <p>
-              系統採用 <strong>ARCI 模型</strong>管理團隊角色，清楚劃分每位成員的權責：
+              系統有兩套角色機制，分別管理不同層面的權限：
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-md border px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-                <span className="font-semibold text-amber-700 dark:text-amber-400">A 當責</span>
-                <span className="text-muted-foreground ml-1.5">— 對專案成果負最終責任</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border-2 border-blue-200 dark:border-blue-800 p-3 bg-blue-50/50 dark:bg-blue-950/20">
+                <div className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-400 text-xs mb-1">
+                  <Shield className="h-3.5 w-3.5" /> 系統角色
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  決定使用者可以存取哪些頁面與功能，由系統管理員在後台統一設定
+                </p>
               </div>
-              <div className="rounded-md border px-3 py-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <span className="font-semibold text-blue-700 dark:text-blue-400">R 負責</span>
-                <span className="text-muted-foreground ml-1.5">— 實際執行任務的成員</span>
-              </div>
-              <div className="rounded-md border px-3 py-2 bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800">
-                <span className="font-semibold text-violet-700 dark:text-violet-400">C 諮詢</span>
-                <span className="text-muted-foreground ml-1.5">— 提供專業意見的顧問</span>
-              </div>
-              <div className="rounded-md border px-3 py-2 bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
-                <span className="font-semibold text-slate-700 dark:text-slate-400">I 知會</span>
-                <span className="text-muted-foreground ml-1.5">— 需被告知進度的人</span>
+              <div className="rounded-lg border-2 border-emerald-200 dark:border-emerald-800 p-3 bg-emerald-50/50 dark:bg-emerald-950/20">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 text-xs mb-1">
+                  <Users className="h-3.5 w-3.5" /> 專案角色（RACIPS）
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  決定成員在個別專案中的職責，由專案經理在建立或編輯專案時指派
+                </p>
               </div>
             </div>
             <p className="text-muted-foreground">
@@ -77,85 +77,104 @@ export default function GuidePage() {
           </CardContent>
         </Card>
 
+        {/* Two role systems */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Role-based Guides */}
+          {/* System Roles */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                角色指南
+                <Shield className="h-4 w-4 text-blue-600" />
+                系統角色
               </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">每位使用者有且只有一個系統角色，決定可存取的頁面與操作範圍</p>
             </CardHeader>
             <CardContent className="pt-0">
               <Accordion type="multiple">
-                <AccordionItem value="pm">
-                  <AccordionTrigger className="text-sm">專案經理（PM / 當責 A）</AccordionTrigger>
+                <AccordionItem value="sys-admin">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">系統管理員</span>
+                    </span>
+                  </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2 text-sm leading-relaxed">
-                      <p>身為專案經理，您是系統的核心使用者：</p>
+                      <p>擁有最高權限，負責系統整體運作：</p>
+                      <ol className="list-decimal ml-5 space-y-1">
+                        <li><strong>使用者管理</strong>：新增、編輯、停用帳號，指派系統角色</li>
+                        <li><strong>專案設定</strong>：管理專案類型、代碼前綴、里程碑範本</li>
+                        <li><strong>通知與報告</strong>：設定通知規則與自動報告排程</li>
+                        <li><strong>排程行事曆</strong>：查看排程任務執行紀錄</li>
+                        <li><strong>全域存取</strong>：可檢視所有專案、審核中心、報告</li>
+                      </ol>
+                      <p className="text-xs text-muted-foreground border-l-2 border-red-300 pl-2 mt-2">
+                        管理後台僅此角色可見，側邊欄會顯示「管理後台」選項
+                      </p>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="sys-executive">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">主管</span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2 text-sm leading-relaxed">
+                      <p>負責監督與決策，掌握全局資訊：</p>
+                      <ol className="list-decimal ml-5 space-y-1">
+                        <li><strong>儀表板</strong>：總覽所有專案進度、預算與風險</li>
+                        <li><strong>報告</strong>：查看統計圖表與匯出 PDF</li>
+                        <li><strong>審核中心</strong>：檢視延期申請進度</li>
+                        <li><strong>協助處理</strong>：處理「待處理協助」的支援請求</li>
+                        <li><strong>專案看板</strong>：深入查看所有專案詳情</li>
+                      </ol>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="sys-pm">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">專案經理</span>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2 text-sm leading-relaxed">
+                      <p>專案的核心管理者，負責建立與推動專案：</p>
                       <ol className="list-decimal ml-5 space-y-1">
                         <li><strong>建立專案</strong>：透過手動或 AI 輔助模式建立</li>
                         <li><strong>規劃任務</strong>：為里程碑建立任務與子任務、設定負責人</li>
-                        <li><strong>追蹤進度</strong>：透過「儀表板」掌握整體狀態</li>
-                        <li><strong>審核變更</strong>：在「審核中心」處理延期申請</li>
-                        <li><strong>產出報告</strong>：透過「報告」匯出 PDF</li>
+                        <li><strong>追蹤進度</strong>：透過儀表板掌握整體狀態</li>
+                        <li><strong>審核中心</strong>：檢視團隊的延期申請進度</li>
+                        <li><strong>產出報告</strong>：匯出 PDF 報告</li>
                         <li><strong>分享專案</strong>：產生分享連結供外部檢視</li>
                       </ol>
-                      <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
+                      <p className="text-xs text-muted-foreground border-l-2 border-blue-300 pl-2 mt-2">
                         提示：建立專案時可選擇里程碑範本，自動帶入預設的任務與子任務結構
                       </p>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
-                <AccordionItem value="member">
-                  <AccordionTrigger className="text-sm">團隊成員</AccordionTrigger>
+                <AccordionItem value="sys-member" className="border-b-0">
+                  <AccordionTrigger className="text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">團隊成員</span>
+                    </span>
+                  </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2 text-sm leading-relaxed">
                       <p>日常操作集中在「我的任務」頁面：</p>
                       <ol className="list-decimal ml-5 space-y-1">
-                        <li><strong>查看任務</strong>：系統自動顯示指派的任務</li>
+                        <li><strong>查看任務</strong>：系統自動顯示被指派的任務</li>
                         <li><strong>填寫日誌</strong>：點擊任務卡片新增工作紀錄</li>
                         <li><strong>管理子任務</strong>：可新增 / 刪除子任務</li>
-                        <li><strong>申請延期</strong>：提交延期申請由 PM 審核</li>
+                        <li><strong>申請延期</strong>：提交延期申請由 S 角色審核</li>
+                        <li><strong>審核中心</strong>：可查看自己參與專案的審核進度</li>
                       </ol>
-                      <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
-                        提示：狀態燈號依起迄日期自動判定，無需手動設定
-                      </p>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="executive">
-                  <AccordionTrigger className="text-sm">主管（Executive）</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-2 text-sm leading-relaxed">
-                      <p>主要透過以下頁面掌握專案狀態：</p>
-                      <ol className="list-decimal ml-5 space-y-1">
-                        <li><strong>儀表板</strong>：總覽所有專案進度與風險</li>
-                        <li><strong>報告</strong>：查看統計圖表與摘要</li>
-                        <li><strong>審核中心</strong>：審批延期申請</li>
-                        <li><strong>專案看板</strong>：深入查看專案詳情</li>
-                      </ol>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="admin" className="border-b-0">
-                  <AccordionTrigger className="text-sm">系統管理員（Admin）</AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-2 text-sm leading-relaxed">
-                      <p>擁有所有 PM 權限，並可進入「管理後台」：</p>
-                      <ol className="list-decimal ml-5 space-y-1">
-                        <li><strong>使用者管理</strong>：新增、編輯、停用帳號</li>
-                        <li><strong>角色權限</strong>：指派與調整使用者角色</li>
-                        <li><strong>專案設定</strong>：管理專案類型、代碼前綴、里程碑範本</li>
-                        <li><strong>通知設定</strong>：設定系統通知規則</li>
-                        <li><strong>報告設定</strong>：設定自動報告產出規則</li>
-                        <li><strong>排程行事曆</strong>：查看排程任務執行紀錄</li>
-                      </ol>
-                      <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-2 mt-2">
-                        管理後台僅 admin 角色可見，側邊欄會顯示「管理後台」選項
+                      <p className="text-xs text-muted-foreground border-l-2 border-gray-300 pl-2 mt-2">
+                        僅能看到自己參與的專案，狀態燈號依起迄日期自動判定
                       </p>
                     </div>
                   </AccordionContent>
@@ -163,6 +182,138 @@ export default function GuidePage() {
               </Accordion>
             </CardContent>
           </Card>
+
+          {/* Project Roles (RACIPS) */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-emerald-600" />
+                專案角色（RACIPS）
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">同一人在不同專案中可擔任不同角色，由專案經理在建立專案時指派</p>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              <div className="space-y-2">
+                <div className="rounded-md border px-3 py-2.5 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-blue-700 dark:text-blue-400 text-sm">R — Responsible 執行者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">實際執行任務的成員，負責填寫工作日誌、回報進度、管理子任務</p>
+                </div>
+                <div className="rounded-md border px-3 py-2.5 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-amber-700 dark:text-amber-400 text-sm">A — Accountable 當責者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">對專案成果負最終責任，通常為專案負責人或部門主管</p>
+                </div>
+                <div className="rounded-md border px-3 py-2.5 bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-violet-700 dark:text-violet-400 text-sm">C — Consulted 諮詢者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">提供專業意見與技術支援，在決策前被徵詢的專家</p>
+                </div>
+                <div className="rounded-md border px-3 py-2.5 bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-700 dark:text-slate-400 text-sm">I — Informed 知會者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">需被告知專案進度與決策結果，但不直接參與執行</p>
+                </div>
+                <div className="rounded-md border px-3 py-2.5 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-orange-700 dark:text-orange-400 text-sm">P — Procurement 採購者</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">負責專案相關的設備採購與供應商管理</p>
+                </div>
+                <div className="rounded-md border-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm">S — Sign-off 簽核者</span>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">審核權限</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">負責審核延期申請，可核准或駁回。每個專案可有多位 S 角色，需全部通過才算核准</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Role comparison */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <HelpCircle className="h-4 w-4" />
+              系統角色 vs 專案角色 — 有什麼不同？
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b"></th>
+                    <th className="text-left px-4 py-2.5 font-medium border-b">
+                      <span className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                        <Shield className="h-3.5 w-3.5" /> 系統角色
+                      </span>
+                    </th>
+                    <th className="text-left px-4 py-2.5 font-medium border-b">
+                      <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                        <Users className="h-3.5 w-3.5" /> 專案角色
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  <tr>
+                    <td className="px-4 py-2.5 font-medium text-muted-foreground">設定方式</td>
+                    <td className="px-4 py-2.5">由管理員在「使用者管理」設定</td>
+                    <td className="px-4 py-2.5">由專案經理在建立/編輯專案時指派</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-medium text-muted-foreground">數量</td>
+                    <td className="px-4 py-2.5">每人固定一個</td>
+                    <td className="px-4 py-2.5">每個專案各自指派，可不同</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-medium text-muted-foreground">影響範圍</td>
+                    <td className="px-4 py-2.5">全系統的頁面存取與操作權限</td>
+                    <td className="px-4 py-2.5">該專案內的角色職責與審核權</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2.5 font-medium text-muted-foreground">種類</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">管理員</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">主管</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">PM</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">成員</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">R</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">A</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">C</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">I</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700">P</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">S</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed space-y-1.5">
+              <p><strong className="text-foreground">舉例：</strong>小明的系統角色是「團隊成員」，他同時參與三個專案：</p>
+              <ul className="list-disc ml-5 space-y-0.5">
+                <li>專案 A 中擔任 <strong className="text-blue-700 dark:text-blue-400">R（執行者）</strong>— 負責填寫日誌與回報進度</li>
+                <li>專案 B 中擔任 <strong className="text-emerald-700 dark:text-emerald-400">S（簽核者）</strong>— 負責審核該專案的延期申請</li>
+                <li>專案 C 中擔任 <strong className="text-slate-700 dark:text-slate-400">I（知會者）</strong>— 只需接收進度通知</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 lg:grid-cols-2">
 
           {/* Feature Descriptions */}
           <Card>
@@ -373,10 +524,9 @@ export default function GuidePage() {
               </Accordion>
             </CardContent>
           </Card>
-        </div>
 
-        {/* FAQ */}
-        <Card>
+          {/* FAQ */}
+          <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <HelpCircle className="h-4 w-4" />
@@ -746,7 +896,8 @@ export default function GuidePage() {
               </AccordionItem>
             </Accordion>
           </CardContent>
-        </Card>
+          </Card>
+        </div>
       </div>
     </DashboardLayout>
   )
