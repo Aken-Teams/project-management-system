@@ -254,6 +254,8 @@ function BoolCell({ value }: { value: boolean }) {
 }
 
 export default function AdminRolesPage() {
+  const [activeTab, setActiveTab] = useState<'system' | 'project'>('system')
+
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const toggle = (cat: string) => setCollapsed(prev => {
     const next = new Set(prev)
@@ -269,21 +271,29 @@ export default function AdminRolesPage() {
   })
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Page header */}
       <div>
         <h2 className="text-base font-semibold">角色權限</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">本系統有兩套獨立的角色機制，分別控制不同層級的權限</p>
+        <p className="text-sm text-muted-foreground mt-0.5">本系統有兩套獨立的角色機制，點擊下方卡片切換查看</p>
       </div>
 
-      {/* Two role systems overview */}
+      {/* Switchable cards */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border-2 border-blue-200 p-4 bg-blue-50/50">
+        <button
+          className={cn(
+            'rounded-lg border-2 p-4 text-left transition-all',
+            activeTab === 'system'
+              ? 'border-blue-400 bg-blue-50/80 ring-2 ring-blue-200'
+              : 'border-muted hover:border-blue-200 hover:bg-blue-50/30',
+          )}
+          onClick={() => setActiveTab('system')}
+        >
           <div className="flex items-center gap-2 font-semibold text-blue-700 text-sm mb-1.5">
             <Shield className="h-4 w-4" /> 系統角色
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            由管理員在「使用者管理」中設定，每人固定一個。控制<span className="font-medium text-foreground">全系統的頁面存取與操作權限</span>，例如能否進入後台、能否建立專案。
+            由管理員在「使用者管理」中設定，每人固定一個。控制<span className="font-medium text-foreground">全系統的頁面存取與操作權限</span>。
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {SYSTEM_ROLES.map(r => (
@@ -292,13 +302,21 @@ export default function AdminRolesPage() {
               </span>
             ))}
           </div>
-        </div>
-        <div className="rounded-lg border-2 border-emerald-200 p-4 bg-emerald-50/50">
+        </button>
+        <button
+          className={cn(
+            'rounded-lg border-2 p-4 text-left transition-all',
+            activeTab === 'project'
+              ? 'border-emerald-400 bg-emerald-50/80 ring-2 ring-emerald-200'
+              : 'border-muted hover:border-emerald-200 hover:bg-emerald-50/30',
+          )}
+          onClick={() => setActiveTab('project')}
+        >
           <div className="flex items-center gap-2 font-semibold text-emerald-700 text-sm mb-1.5">
             <Users className="h-4 w-4" /> 專案角色（SAPRCI）
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            由專案經理在建立或編輯專案時指派，同一人在不同專案可擔任不同角色。控制<span className="font-medium text-foreground">該專案內的角色職責與審核權</span>。
+            由專案經理在建立或編輯專案時指派，同一人在不同專案可擔任不同角色。控制<span className="font-medium text-foreground">該專案內的角色職責</span>。
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {PROJECT_ROLES.map(r => (
@@ -307,206 +325,198 @@ export default function AdminRolesPage() {
               </span>
             ))}
           </div>
-        </div>
+        </button>
       </div>
 
-      {/* ═══ Section 1: System Roles ═══ */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <Shield className="h-4 w-4 text-blue-600" />
-          <h3 className="text-sm font-bold text-blue-700">系統角色權限矩陣</h3>
-          <span className="text-xs text-muted-foreground">— 控制全系統的頁面存取與操作能力</span>
-        </div>
-
-        {/* System role cards */}
-        <div className="grid grid-cols-4 gap-3">
-          {SYSTEM_ROLES.map(role => (
-            <Card key={role.key} className="border">
-              <CardContent className="pt-4 pb-3 px-4">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mb-2 ${role.color}`}>
-                  {role.label}
-                </span>
-                <p className="text-xs text-muted-foreground leading-relaxed">{role.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5 flex-wrap">
-          <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> 綠色：完整存取</span>
-          <span className="text-muted-foreground/40">|</span>
-          <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-violet-500" /> 紫色：僅限部門專案</span>
-          <span className="text-muted-foreground/40">|</span>
-          <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-orange-500" /> 橙色：僅限自己負責的專案</span>
-        </div>
-
-        {/* System permission table */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48">功能</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground flex-1">說明</th>
-                    {SYSTEM_ROLES.map(role => (
-                      <th key={role.key} className="px-4 py-3 w-28 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${role.color}`}>
-                          {role.label}
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {PERMISSIONS.map(section => (
-                    <React.Fragment key={section.category}>
-                      <tr
-                        className="cursor-pointer select-none"
-                        onClick={() => toggle(section.category)}
-                      >
-                        <td colSpan={6} className={cn(
-                          'border-l-4 pl-3 pr-4 py-2.5 text-xs font-bold uppercase tracking-widest',
-                          CAT_STYLES[section.color].bg,
-                          CAT_STYLES[section.color].text,
-                          CAT_STYLES[section.color].border,
-                        )}>
-                          <span className="flex items-center gap-1.5">
-                            {collapsed.has(section.category)
-                              ? <ChevronRight className="h-3.5 w-3.5" />
-                              : <ChevronDown className="h-3.5 w-3.5" />}
-                            {section.category}
-                            <span className="font-normal normal-case tracking-normal text-[11px] opacity-70 ml-1">— {section.definition}</span>
-                          </span>
-                        </td>
-                      </tr>
-                      {!collapsed.has(section.category) && section.rows.map(row => (
-                        <tr key={row.label} className="border-b last:border-0 hover:bg-muted/10">
-                          <td className="px-4 py-2.5 font-medium">{row.label}</td>
-                          <td className="px-4 py-2.5 text-muted-foreground text-xs">{row.description}</td>
-                          {SYSTEM_ROLES.map(role => (
-                            <td key={role.key} className="px-4 py-2.5">
-                              <PermCell value={row[role.key as RoleKey]} />
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ═══ Section 2: Project Roles (SAPRCI) ═══ */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 border-b pb-2">
-          <Users className="h-4 w-4 text-emerald-600" />
-          <h3 className="text-sm font-bold text-emerald-700">專案角色權限矩陣（SAPRCI）</h3>
-          <span className="text-xs text-muted-foreground">— 控制個別專案內的角色職責與操作範圍</span>
-        </div>
-
-        {/* Project role cards */}
-        <div className="grid grid-cols-3 gap-3">
-          {PROJECT_ROLES.map(role => (
-            <Card key={role.key} className="border">
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${role.color}`}>
-                    {role.key}
+      {/* ═══ System Roles Content ═══ */}
+      {activeTab === 'system' && (
+        <div className="space-y-4">
+          {/* System role cards */}
+          <div className="grid grid-cols-4 gap-3">
+            {SYSTEM_ROLES.map(role => (
+              <Card key={role.key} className="border">
+                <CardContent className="pt-4 pb-3 px-4">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mb-2 ${role.color}`}>
+                    {role.label}
                   </span>
-                  <span className="text-xs font-medium text-foreground">{role.label}</span>
-                  {'badge' in role && role.badge && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ml-auto">
-                      {role.badge}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{role.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Hierarchy note */}
-        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-emerald-50/50 border border-emerald-200 rounded-md px-3 py-2.5">
-          <Info className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-medium text-foreground">層級順序：</span>
-            <span className="font-mono tracking-wider ml-1">S &gt; A &gt; P &gt; R &gt; C &gt; I</span>
-            <span className="ml-2">— 同一人在不同專案中可擔任不同角色。我的任務頁面依此順序顯示各角色頁籤。</span>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{role.description}</p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
 
-        {/* Project permission table */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground flex-1">功能</th>
-                    {PROJECT_ROLES.map(role => (
-                      <th key={role.key} className="px-4 py-3 w-20 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${role.color}`}>
-                          {role.key}
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {PROJECT_PERMISSIONS.map(section => (
-                    <React.Fragment key={section.category}>
-                      <tr
-                        className="cursor-pointer select-none"
-                        onClick={() => toggleProj(section.category)}
-                      >
-                        <td colSpan={7} className="border-l-4 border-emerald-400 pl-3 pr-4 py-2.5 text-xs font-bold uppercase tracking-widest bg-emerald-50 text-emerald-700">
-                          <span className="flex items-center gap-1.5">
-                            {projCollapsed.has(section.category)
-                              ? <ChevronRight className="h-3.5 w-3.5" />
-                              : <ChevronDown className="h-3.5 w-3.5" />}
-                            {section.category}
+          {/* Legend */}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2.5 flex-wrap">
+            <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> 綠色：完整存取</span>
+            <span className="text-muted-foreground/40">|</span>
+            <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-violet-500" /> 紫色：僅限部門專案</span>
+            <span className="text-muted-foreground/40">|</span>
+            <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-4 w-4 text-orange-500" /> 橙色：僅限自己負責的專案</span>
+          </div>
+
+          {/* System permission table */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground w-48">功能</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground flex-1">說明</th>
+                      {SYSTEM_ROLES.map(role => (
+                        <th key={role.key} className="px-4 py-3 w-28 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${role.color}`}>
+                            {role.label}
                           </span>
-                        </td>
-                      </tr>
-                      {!projCollapsed.has(section.category) && section.rows.map(row => (
-                        <tr key={row.label} className="border-b last:border-0 hover:bg-muted/10">
-                          <td className="px-4 py-2.5 font-medium">{row.label}</td>
-                          {PROJECT_ROLES.map(role => (
-                            <td key={role.key} className="px-4 py-2.5">
-                              <BoolCell value={row[role.key as keyof ProjectPermRow] as boolean} />
-                            </td>
-                          ))}
-                        </tr>
+                        </th>
                       ))}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PERMISSIONS.map(section => (
+                      <React.Fragment key={section.category}>
+                        <tr
+                          className="cursor-pointer select-none"
+                          onClick={() => toggle(section.category)}
+                        >
+                          <td colSpan={6} className={cn(
+                            'border-l-4 pl-3 pr-4 py-2.5 text-xs font-bold uppercase tracking-widest',
+                            CAT_STYLES[section.color].bg,
+                            CAT_STYLES[section.color].text,
+                            CAT_STYLES[section.color].border,
+                          )}>
+                            <span className="flex items-center gap-1.5">
+                              {collapsed.has(section.category)
+                                ? <ChevronRight className="h-3.5 w-3.5" />
+                                : <ChevronDown className="h-3.5 w-3.5" />}
+                              {section.category}
+                              <span className="font-normal normal-case tracking-normal text-[11px] opacity-70 ml-1">— {section.definition}</span>
+                            </span>
+                          </td>
+                        </tr>
+                        {!collapsed.has(section.category) && section.rows.map(row => (
+                          <tr key={row.label} className="border-b last:border-0 hover:bg-muted/10">
+                            <td className="px-4 py-2.5 font-medium">{row.label}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground text-xs">{row.description}</td>
+                            {SYSTEM_ROLES.map(role => (
+                              <td key={role.key} className="px-4 py-2.5">
+                                <PermCell value={row[role.key as RoleKey]} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Relationship note */}
-      <Card className="border-dashed">
-        <CardContent className="pt-4 pb-4 px-5">
-          <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-muted-foreground" />
-            系統角色 vs 專案角色 — 兩者的關係
-          </h4>
-          <div className="text-xs text-muted-foreground space-y-1.5 leading-relaxed">
-            <p><span className="font-medium text-foreground">互不衝突：</span>系統角色決定你能進入哪些頁面，專案角色決定你在個別專案中扮演什麼職責。兩者獨立運作。</p>
-            <p><span className="font-medium text-foreground">舉例：</span>一位「團隊成員」(系統角色) 可以在 A 專案擔任 R 執行者、在 B 專案擔任 S 簽核者。</p>
-            <p><span className="font-medium text-foreground">管理員特權：</span>系統管理員 (Admin) 擁有最高權限，不受專案角色限制，可操作所有專案的所有功能。</p>
+      {/* ═══ Project Roles Content (SAPRCI) ═══ */}
+      {activeTab === 'project' && (
+        <div className="space-y-4">
+          {/* Project role cards */}
+          <div className="grid grid-cols-3 gap-3">
+            {PROJECT_ROLES.map(role => (
+              <Card key={role.key} className="border">
+                <CardContent className="pt-4 pb-3 px-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${role.color}`}>
+                      {role.key}
+                    </span>
+                    <span className="text-xs font-medium text-foreground">{role.label}</span>
+                    {'badge' in role && role.badge && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ml-auto">
+                        {role.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{role.description}</p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Hierarchy note */}
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-emerald-50/50 border border-emerald-200 rounded-md px-3 py-2.5">
+            <Info className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-medium text-foreground">層級順序：</span>
+              <span className="font-mono tracking-wider ml-1">S &gt; A &gt; P &gt; R &gt; C &gt; I</span>
+              <span className="ml-2">— 同一人在不同專案中可擔任不同角色。我的任務頁面依此順序顯示各角色頁籤。</span>
+            </div>
+          </div>
+
+          {/* Project permission table */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground flex-1">功能</th>
+                      {PROJECT_ROLES.map(role => (
+                        <th key={role.key} className="px-4 py-3 w-20 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold border ${role.color}`}>
+                            {role.key}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PROJECT_PERMISSIONS.map(section => (
+                      <React.Fragment key={section.category}>
+                        <tr
+                          className="cursor-pointer select-none"
+                          onClick={() => toggleProj(section.category)}
+                        >
+                          <td colSpan={7} className="border-l-4 border-emerald-400 pl-3 pr-4 py-2.5 text-xs font-bold uppercase tracking-widest bg-emerald-50 text-emerald-700">
+                            <span className="flex items-center gap-1.5">
+                              {projCollapsed.has(section.category)
+                                ? <ChevronRight className="h-3.5 w-3.5" />
+                                : <ChevronDown className="h-3.5 w-3.5" />}
+                              {section.category}
+                            </span>
+                          </td>
+                        </tr>
+                        {!projCollapsed.has(section.category) && section.rows.map(row => (
+                          <tr key={row.label} className="border-b last:border-0 hover:bg-muted/10">
+                            <td className="px-4 py-2.5 font-medium">{row.label}</td>
+                            {PROJECT_ROLES.map(role => (
+                              <td key={role.key} className="px-4 py-2.5">
+                                <BoolCell value={row[role.key as keyof ProjectPermRow] as boolean} />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Relationship note */}
+          <Card className="border-dashed">
+            <CardContent className="pt-4 pb-4 px-5">
+              <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                系統角色 vs 專案角色 — 兩者的關係
+              </h4>
+              <div className="text-xs text-muted-foreground space-y-1.5 leading-relaxed">
+                <p><span className="font-medium text-foreground">互不衝突：</span>系統角色決定你能進入哪些頁面，專案角色決定你在個別專案中扮演什麼職責。兩者獨立運作。</p>
+                <p><span className="font-medium text-foreground">舉例：</span>一位「團隊成員」(系統角色) 可以在 A 專案擔任 R 執行者、在 B 專案擔任 S 簽核者。</p>
+                <p><span className="font-medium text-foreground">管理員特權：</span>系統管理員 (Admin) 擁有最高權限，不受專案角色限制，可操作所有專案的所有功能。</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
