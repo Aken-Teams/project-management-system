@@ -16,7 +16,7 @@ const QUICK_LOGINS = [
 ]
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,10 +29,10 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      await login(email, password)
+      await login(account, password)
       router.replace('/dashboard')
     } catch (err) {
-      setError('登入失敗，請檢查您的帳號密碼')
+      setError(err instanceof Error ? err.message : '登入失敗，請檢查您的帳號密碼')
     } finally {
       setLoading(false)
     }
@@ -45,7 +45,7 @@ export default function LoginPage() {
       member: 'bob@example.com',
       executive: 'carol@example.com'
     }
-    setEmail(emails[role])
+    setAccount(emails[role])
     setPassword('demo')
   }
 
@@ -84,13 +84,13 @@ export default function LoginPage() {
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm font-medium text-zinc-900">電子郵件</Label>
+                <Label htmlFor="account" className="text-sm font-medium text-zinc-900">帳號</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="account"
+                  type="text"
+                  placeholder="AD 工號或電子郵件"
+                  value={account}
+                  onChange={(e) => setAccount(e.target.value)}
                   required
                   className="h-11 border-zinc-200 focus-visible:ring-blue-600"
                 />

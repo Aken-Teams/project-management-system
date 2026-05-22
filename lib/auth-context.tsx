@@ -76,27 +76,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  const login = async (email: string, password: string) => {
-    // Mock login - in real app, this would call an API
-    const foundUser = MOCK_USERS.find(u => u.email === email)
-    if (!foundUser) throw new Error('Invalid credentials')
+  const login = async (username: string, password: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
 
-    // Resolve real DB user ID and role (timeout after 5s to avoid blocking login)
-    let resolvedUser = { ...foundUser }
-    try {
-      const loginAc = new AbortController()
-      const loginTimer = setTimeout(() => loginAc.abort(), 5000)
-      const res = await fetch(`/api/users/search?q=${encodeURIComponent(email)}&limit=1`, { signal: loginAc.signal })
-      clearTimeout(loginTimer)
-      if (res.ok) {
-        const users = await res.json()
-        const dbUser = users.find((u: { email: string }) => u.email === email)
-        if (dbUser) resolvedUser = { ...foundUser, id: dbUser.id, role: dbUser.role ?? foundUser.role }
-      }
-    } catch { /* fallback to mock id */ }
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '登入失敗')
+    }
 
-    setUser(resolvedUser)
-    localStorage.setItem('currentUser', JSON.stringify(resolvedUser))
+    const loggedInUser: User = {
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
+      role: data.user.role as UserRole,
+      organization: data.user.organization,
+    }
+
+    setUser(loggedInUser)
+    localStorage.setItem('currentUser', JSON.stringify(loggedInUser))
   }
 
   const logout = () => {
