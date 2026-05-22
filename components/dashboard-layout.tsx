@@ -50,7 +50,7 @@ interface DashboardLayoutProps {
 
 const navigation = [
   { name: '儀表板', href: '/dashboard', icon: LayoutDashboard },
-  { name: '我的任務', href: '/my-tasks', icon: ClipboardList, hideFor: ['admin'] as const },
+  { name: '我的任務', href: '/my-tasks', icon: ClipboardList },
   { name: '專案看板', href: '/projects', icon: FolderKanban },
   { name: '報告', href: '/reports', icon: FileText },
   { name: '審核中心', href: '/approvals', icon: ClipboardCheck },

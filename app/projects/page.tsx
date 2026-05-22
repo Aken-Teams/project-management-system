@@ -498,60 +498,41 @@ export default function ProjectsPage() {
             <DialogDescription>說明各系統角色在專案看板的功能與權限</DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
-            {/* System Roles */}
             <div>
               <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
                 <Users className="h-4 w-4 text-indigo-500" /> 系統角色權限
               </h3>
-              <div className="space-y-1.5">
-                {[
-                  { name: '專案經理', letter: 'PM', desc: '管理專案進度、團隊與交付。', perms: ['檢視所有專案', '建立新專案', '編輯專案', '刪除專案'], highlight: '' },
-                  { name: '一般成員', letter: 'M', desc: '系統一般使用者，參與專案執行。', perms: ['檢視所有專案'], highlight: '' },
-                  { name: '主管', letter: 'E', desc: '高階管理者，監督整體營運與資源分配。', perms: ['檢視所有專案'], highlight: 'amber' },
-                  { name: '管理員', letter: 'A', desc: '系統管理員，擁有完整系統權限。', perms: ['檢視所有專案', '建立新專案', '編輯專案', '刪除專案'], highlight: 'red' },
-                ].map(r => {
-                  const colorMap: Record<string, { bg: string; border: string; badge: string }> = {
-                    amber: { bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 hover:bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:border-amber-700 dark:text-amber-300' },
-                    red: { bg: 'bg-red-50 dark:bg-red-950/20', border: 'border-red-200 dark:border-red-800', badge: 'bg-red-100 hover:bg-red-100 border-red-300 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:border-red-700 dark:text-red-300' },
-                  }
-                  const c = r.highlight ? colorMap[r.highlight] : null
-                  return (
-                    <div key={r.letter} className={`rounded-lg border p-3 flex items-start gap-3 ${c ? `${c.bg} ${c.border}` : 'bg-muted/30 border-muted'}`}>
-                      <Badge variant="outline" className={`text-xs shrink-0 mt-0.5 font-semibold min-w-[28px] justify-center ${c ? c.badge : 'bg-muted hover:bg-muted'}`}>{r.letter}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold">{r.name}</span>
-                          {r.perms.map(p => (
-                            <Badge key={p} variant="secondary" className={`text-[10px] px-1.5 py-0 border-transparent ${c ? c.badge : 'hover:bg-secondary'}`}>{p}</Badge>
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{r.desc}</p>
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">系統角色</th>
+                      <th className="text-center px-3 py-2 font-medium">檢視專案</th>
+                      <th className="text-center px-3 py-2 font-medium">建立專案</th>
+                      <th className="text-center px-3 py-2 font-medium">編輯專案</th>
+                      <th className="text-center px-3 py-2 font-medium">刪除專案</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: '專案經理', view: true, create: true, edit: true, del: true },
+                      { name: '主管', view: true, create: false, edit: false, del: false },
+                      { name: '管理員', view: true, create: true, edit: true, del: true },
+                      { name: '一般成員', view: true, create: false, edit: false, del: false },
+                    ].map((r, i) => (
+                      <tr key={r.name} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                        {[r.view, r.create, r.edit, r.del].map((v, j) => (
+                          <td key={j} className="px-3 py-2 text-center">
+                            {v ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-muted-foreground">✗</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
-
-            {/* Key Points */}
-            <div className="rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-indigo-500" /> 重點說明
-              </h3>
-              <div className="space-y-2.5">
-                <div className="flex items-start gap-2.5">
-                  <Badge className="bg-blue-100 hover:bg-blue-100 text-blue-700 dark:bg-blue-900 dark:hover:bg-blue-900 dark:text-blue-300 text-[10px] shrink-0 mt-0.5 border-transparent">可見性</Badge>
-                  <span className="text-sm text-muted-foreground"><span className="text-blue-600 dark:text-blue-400 font-medium">所有角色</span>都能看到全部專案，細部操作權限由<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色（RACIPS）</span>控制。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge className="bg-emerald-100 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:text-emerald-300 text-[10px] shrink-0 mt-0.5 border-transparent">建立專案</Badge>
-                  <span className="text-sm text-muted-foreground">僅<span className="text-emerald-600 dark:text-emerald-400 font-medium">專案經理</span>與<span className="text-red-600 dark:text-red-400 font-medium">管理員</span>可建立新專案。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge className="bg-red-100 hover:bg-red-100 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:text-red-300 text-[10px] shrink-0 mt-0.5 border-transparent">刪除專案</Badge>
-                  <span className="text-sm text-muted-foreground">僅<span className="text-emerald-600 dark:text-emerald-400 font-medium">專案經理</span>與<span className="text-red-600 dark:text-red-400 font-medium">管理員</span>可刪除專案，專案角色 A（當責）僅能編輯不能刪除。</span>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground mt-2">※ 所有角色都能看到全部專案，細部操作由<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色（RACIPS）</span>控制。編輯專案含專案角色 A（當責）。</p>
             </div>
           </div>
         </DialogContent>

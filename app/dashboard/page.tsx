@@ -645,28 +645,43 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Role visibility */}
-            <div className="rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
-              <h3 className="text-sm font-bold flex items-center gap-2">
+            {/* Role visibility table */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
                 <Users className="h-4 w-4 text-indigo-500" /> 角色可見範圍
               </h3>
-              <div className="space-y-2.5">
-                <div className="flex items-start gap-2.5">
-                  <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5 hover:bg-secondary">一般成員</Badge>
-                  <span className="text-sm text-muted-foreground">僅看到<span className="text-blue-600 dark:text-blue-400 font-medium">自己參與的專案</span>，預算卡片改為顯示個人任務統計。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5 hover:bg-secondary">專案經理</Badge>
-                  <span className="text-sm text-muted-foreground">可看到<span className="text-blue-600 dark:text-blue-400 font-medium">所有專案</span>的完整統計與預算使用率，並顯示<span className="text-amber-600 dark:text-amber-400 font-medium">待審核提醒</span>。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge variant="secondary" className="bg-amber-100 hover:bg-amber-100 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:text-amber-300 border-transparent text-[10px] shrink-0 mt-0.5">主管</Badge>
-                  <span className="text-sm text-muted-foreground">可看到<span className="text-blue-600 dark:text-blue-400 font-medium">所有專案</span>，並顯示<span className="text-amber-600 dark:text-amber-400 font-medium">待審核提醒</span>按鈕。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge variant="secondary" className="bg-red-100 hover:bg-red-100 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:text-red-300 border-transparent text-[10px] shrink-0 mt-0.5">管理員</Badge>
-                  <span className="text-sm text-muted-foreground"><span className="text-red-600 dark:text-red-400 font-medium">完整檢視權限</span>，可看到所有專案、預算及風險資訊，並顯示<span className="text-amber-600 dark:text-amber-400 font-medium">待審核提醒</span>。</span>
-                </div>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">系統角色</th>
+                      <th className="text-center px-3 py-2 font-medium">檢視範圍</th>
+                      <th className="text-center px-3 py-2 font-medium">預算資訊</th>
+                      <th className="text-center px-3 py-2 font-medium">待審核提醒</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: '專案經理', range: '所有專案', budget: true, approval: true },
+                      { name: '主管', range: '所有專案', budget: true, approval: true },
+                      { name: '管理員', range: '所有專案', budget: true, approval: true },
+                      { name: '一般成員', range: '參與的專案', budget: false, approval: false, budgetNote: '任務統計' },
+                    ].map((r, i) => (
+                      <tr key={r.name} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={r.range === '所有專案' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-amber-600 dark:text-amber-400 font-medium'}>{r.range}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.budget ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground text-xs">{r.budgetNote || '✗'}</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.approval ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

@@ -1211,115 +1211,88 @@ export default function ApprovalsPage() {
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Project Team Roles (RACIPS) */}
+            {/* System Roles Table */}
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-indigo-500" /> 系統角色權限
+              </h3>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">系統角色</th>
+                      <th className="text-center px-3 py-2 font-medium">待審核</th>
+                      <th className="text-center px-3 py-2 font-medium">審核操作</th>
+                      <th className="text-center px-3 py-2 font-medium">待處理協助</th>
+                      <th className="text-center px-3 py-2 font-medium">已審核紀錄</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: '專案經理', pending: 'S 角色專案', review: 'S 角色可審', support: false, history: 'S 角色專案' },
+                      { name: '一般成員', pending: 'S 角色專案', review: 'S 角色可審', support: false, history: 'S 角色專案' },
+                      { name: '主管', pending: '全部', review: '—', support: true, history: '全部' },
+                      { name: '管理員', pending: '全部', review: '✓', support: true, history: '全部' },
+                    ].map((r, i) => (
+                      <tr key={r.name} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={r.pending === '全部' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-muted-foreground text-xs'}>{r.pending}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.review === '✓' ? <span className="text-emerald-600 font-medium">✓</span> : r.review === '—' ? <span className="text-muted-foreground">✗</span> : <span className="text-muted-foreground text-xs">{r.review}</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {r.support ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-muted-foreground">✗</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={r.history === '全部' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-muted-foreground text-xs'}>{r.history}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* RACIPS Table */}
             <div>
               <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
                 <User className="h-4 w-4 text-blue-500" /> 專案角色（RACIPS）
               </h3>
-              <div className="space-y-1.5">
-                {[
-                  { code: 'R', name: '負責 (Responsible)', desc: '實際執行任務的人，負責完成交付項目。', perm: '唯讀', highlight: false },
-                  { code: 'A', name: '當責 (Accountable)', desc: '對任務成果負最終責任的人，確保任務正確完成。', perm: '唯讀', highlight: false },
-                  { code: 'C', name: '諮詢 (Consulted)', desc: '在決策前被徵詢意見的人，提供專業建議。', perm: '唯讀', highlight: false },
-                  { code: 'I', name: '知會 (Informed)', desc: '在決策後被通知的人，需了解進展但不參與決策。', perm: '唯讀', highlight: false },
-                  { code: 'P', name: '採購 (Procurement)', desc: '負責專案相關採購與資源取得的人。', perm: '唯讀', highlight: false },
-                  { code: 'S', name: '審核 (Sign-off)', desc: '負責審核與批准的人，需簽核才能推進。', perm: '可審核', highlight: true },
-                ].map(r => (
-                  <div key={r.code} className={cn(
-                    'rounded-lg border p-3 flex items-start gap-3',
-                    r.highlight
-                      ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
-                      : 'bg-muted/30 border-muted',
-                  )}>
-                    <Badge variant="outline" className={cn(
-                      'text-xs shrink-0 mt-0.5 font-semibold min-w-[26px] justify-center',
-                      r.highlight
-                        ? 'bg-emerald-100 hover:bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-300'
-                        : 'bg-muted hover:bg-muted',
-                    )}>{r.code}</Badge>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold">{r.name}</span>
-                        <Badge variant="secondary" className={cn(
-                          'text-[10px] px-1.5 py-0 border-transparent',
-                          r.highlight
-                            ? 'bg-emerald-100 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:text-emerald-300'
-                            : 'hover:bg-secondary',
-                        )}>{r.perm}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{r.desc}</p>
-                      {r.highlight && (
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-medium">可審核延期申請（核准/駁回），多位 S 角色需全部核准才通過</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">角色</th>
+                      <th className="text-left px-3 py-2 font-medium">說明</th>
+                      <th className="text-center px-3 py-2 font-medium">審核權限</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { code: 'R', name: '負責', desc: '實際執行任務的人', review: false },
+                      { code: 'A', name: '當責', desc: '對任務成果負最終責任', review: false },
+                      { code: 'C', name: '諮詢', desc: '決策前被徵詢意見的人', review: false },
+                      { code: 'I', name: '知會', desc: '決策後被通知的人', review: false },
+                      { code: 'P', name: '採購', desc: '負責採購與資源取得', review: false },
+                      { code: 'S', name: '審核', desc: '負責審核與批准，需簽核推進', review: true },
+                    ].map((r, i) => (
+                      <tr key={r.code} className={`${i % 2 !== 0 ? 'bg-muted/20' : ''} ${r.review ? 'bg-emerald-50/50 dark:bg-emerald-950/10' : ''}`}>
+                        <td className="px-3 py-2">
+                          <span className={`font-medium ${r.review ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>{r.code}</span>
+                          <span className="text-muted-foreground ml-1.5">{r.name}</span>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground text-xs">{r.desc}</td>
+                        <td className="px-3 py-2 text-center">
+                          {r.review ? <span className="text-emerald-600 font-medium">✓ 可審核</span> : <span className="text-muted-foreground">唯讀</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
-
-            {/* System Roles */}
-            <div>
-              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-                <FileText className="h-4 w-4 text-indigo-500" /> 系統角色
-              </h3>
-              <div className="space-y-1.5">
-                {[
-                  { name: '一般成員', code: 'member', letter: 'M', desc: '系統一般使用者，參與專案執行。', perms: ['檢視自己是 S 角色的專案'], highlight: '' },
-                  { name: '專案經理', code: 'pm', letter: 'PM', desc: '管理專案進度、團隊與交付。', perms: ['檢視自己是 S 角色的專案'], highlight: '' },
-                  { name: '主管', code: 'executive', letter: 'E', desc: '高階管理者，監督整體營運與資源分配。', perms: ['檢視所有專案', '處理協助需求'], highlight: 'amber' },
-                  { name: '管理員', code: 'admin', letter: 'A', desc: '系統管理員，擁有完整系統權限。', perms: ['檢視所有專案', '審核延期', '處理協助需求'], highlight: 'red' },
-                ].map(r => {
-                  const colorMap: Record<string, { bg: string; border: string; badge: string }> = {
-                    amber: { bg: 'bg-amber-50 dark:bg-amber-950/20', border: 'border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 hover:bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:border-amber-700 dark:text-amber-300' },
-                    red: { bg: 'bg-red-50 dark:bg-red-950/20', border: 'border-red-200 dark:border-red-800', badge: 'bg-red-100 hover:bg-red-100 border-red-300 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:border-red-700 dark:text-red-300' },
-                  }
-                  const c = r.highlight ? colorMap[r.highlight] : null
-                  return (
-                    <div key={r.code} className={cn(
-                      'rounded-lg border p-3 flex items-start gap-3',
-                      c ? `${c.bg} ${c.border}` : 'bg-muted/30 border-muted',
-                    )}>
-                      <Badge variant="outline" className={cn(
-                        'text-xs shrink-0 mt-0.5 font-semibold min-w-[28px] justify-center',
-                        c ? c.badge : 'bg-muted hover:bg-muted',
-                      )}>{r.letter}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold">{r.name}</span>
-                          {r.perms.map(p => (
-                            <Badge key={p} variant="secondary" className={cn(
-                              'text-[10px] px-1.5 py-0 border-transparent',
-                              c ? `${c.badge}` : 'hover:bg-secondary',
-                            )}>{p}</Badge>
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{r.desc}</p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Workflow summary */}
-            <div className="rounded-lg border bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-indigo-500" /> 審核流程摘要
-              </h3>
-              <div className="space-y-2.5">
-                <div className="flex items-start gap-2.5">
-                  <Badge className="bg-emerald-100 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:hover:bg-emerald-900 dark:text-emerald-300 text-[10px] shrink-0 mt-0.5 border-transparent">延期審核</Badge>
-                  <span className="text-sm text-muted-foreground">由專案中所有 <Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-emerald-50 hover:bg-emerald-50 border-emerald-300 text-emerald-700">S</Badge> 角色成員進行審核，<span className="text-emerald-600 dark:text-emerald-400 font-medium">全部核准</span>後才通過；任一駁回即<span className="text-red-600 dark:text-red-400 font-medium">駁回</span>。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge className="bg-amber-100 hover:bg-amber-100 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:text-amber-300 text-[10px] shrink-0 mt-0.5 border-transparent">協助處理</Badge>
-                  <span className="text-sm text-muted-foreground">當延期申請包含「需要支援」時，由<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-amber-50 hover:bg-amber-50 border-amber-300 text-amber-700">主管</Badge>或<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-red-50 hover:bg-red-50 border-red-300 text-red-700">管理員</Badge>負責處理並標記完成。</span>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Badge className="bg-blue-100 hover:bg-blue-100 text-blue-700 dark:bg-blue-900 dark:hover:bg-blue-900 dark:text-blue-300 text-[10px] shrink-0 mt-0.5 border-transparent">可見性</Badge>
-                  <span className="text-sm text-muted-foreground">一般成員與專案經理僅能查看自己擔任 <Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-emerald-50 hover:bg-emerald-50 border-emerald-300 text-emerald-700">S</Badge> 角色的專案審核；<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-amber-50 hover:bg-amber-50 border-amber-300 text-amber-700">主管</Badge>與<Badge variant="outline" className="text-[10px] px-1 py-0 mx-0.5 bg-red-50 hover:bg-red-50 border-red-300 text-red-700">管理員</Badge>可查看所有專案。</span>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground mt-2">※ 多位 <span className="text-emerald-600 dark:text-emerald-400 font-medium">S</span> 角色需<span className="text-emerald-600 dark:text-emerald-400 font-medium">全部核准</span>才通過；任一駁回即<span className="text-red-600 dark:text-red-400 font-medium">駁回</span>。協助需求由<span className="text-amber-600 dark:text-amber-400 font-medium">主管</span>或<span className="text-red-600 dark:text-red-400 font-medium">管理員</span>處理。</p>
             </div>
           </div>
         </DialogContent>
