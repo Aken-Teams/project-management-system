@@ -138,6 +138,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [showActions, setShowActions] = useState(false)
   const [submittingBatch, setSubmittingBatch] = useState(false)
 
+  // R 週報 tab — separate week state so R/A can navigate weeks independently
+  const [rWeekStart, setRWeekStart] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+    return fmtLocalDate(new Date(now.getFullYear(), now.getMonth(), diff))
+  })
+
   // Backward compat: logDate used by subtask import and edit flows
   const logDate = useMemo(() => {
     const filledDates = logRows.filter(r => r.content.trim()).map(r => r.date).sort()
@@ -1734,8 +1742,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
               {/* Tab: R 週報 — Show R members' task logs for A to review */}
               <TabsContent value="r-reports" className="flex-1 px-6 mt-0 overflow-y-auto">
                 {(() => {
-                  // Collect all task logs from the same milestone by OTHER members for the selected week
-                  const [wy, wm, wd] = selectedWeekStart.split('-').map(Number)
+                  // Collect all task logs from the same milestone for the selected week
+                  const [wy, wm, wd] = rWeekStart.split('-').map(Number)
                   const wkStart = `${wy}-${String(wm).padStart(2, '0')}-${String(wd).padStart(2, '0')}`
                   const wkEndDate = new Date(wy, wm - 1, wd + 6)
                   const wkEnd = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`
@@ -1761,13 +1769,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     }
                   }
 
-                  // Filter logs for this week, from other members (exclude current user)
+                  // Filter logs for this week
+                  // readOnly (R role): show ALL members' logs; A: exclude own logs (for import)
                   const weekLogs = project.taskLogs
                     .filter(l =>
                       milestoneTaskIds.has(l.taskId) &&
                       l.logDate >= wkStart &&
                       l.logDate <= wkEnd &&
-                      l.author !== user?.name
+                      (readOnly || l.author !== user?.name)
                     )
                     .sort((a, b) => a.logDate.localeCompare(b.logDate))
 
@@ -1787,14 +1796,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
                   return (
                     <div className="py-4 space-y-4">
-                      {/* Week info */}
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          顯示 {new Date(wy, wm - 1, wd).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} ~ {wkEndDate.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 的 R 成員紀錄
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/60">（與上方工作紀錄同一周）</span>
-                      </div>
+                      {/* Week picker */}
+                      <WeekPicker value={rWeekStart} onChange={setRWeekStart} />
 
                       {weekLogs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-10 text-center">

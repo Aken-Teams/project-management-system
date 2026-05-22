@@ -1159,7 +1159,7 @@ export default function MyTasksPage() {
                   className={cn(
                     'text-sm px-4 py-1.5 rounded-md transition-all font-medium flex items-center gap-1.5',
                     activeRole === role
-                      ? 'bg-background text-foreground shadow-sm'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
