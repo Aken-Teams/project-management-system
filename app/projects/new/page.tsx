@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast'
 import { type ParsedProjectData } from '@/lib/ai-service'
 import { useProjectStore } from '@/lib/project-store'
 import { useAuth } from '@/lib/auth-context'
+import { getRolePermissions } from '@/lib/permissions'
 import { PROJECT_TIER_LABELS, DEMAND_SOURCE_LABELS, TEAM_ROLE_LABELS, type ProjectType, type ProjectTier, type DemandSource, type TeamRole } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { MILESTONE_TEMPLATES, type MilestoneTemplate } from '@/lib/milestone-templates'
@@ -427,6 +428,13 @@ export default function NewProjectPage() {
   const { user } = useAuth()
   const { projectTypes } = useProjectTypes()
   const { toast } = useToast()
+
+  // 權限守衛：只有 PM 和 admin 可建立專案
+  useEffect(() => {
+    if (user && !getRolePermissions(user.role).canCreateProject) {
+      router.replace('/projects')
+    }
+  }, [user, router])
   const [isCreating, setIsCreating] = useState(false)
   const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai')
   const [showDraftsDialog, setShowDraftsDialog] = useState(false)
