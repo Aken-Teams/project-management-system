@@ -54,6 +54,8 @@ import {
   Paperclip,
   FileSpreadsheet,
   Download,
+  HelpCircle,
+  CalendarDays,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -61,6 +63,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Calendar as CalendarUI } from '@/components/ui/calendar'
+import { zhTW } from 'date-fns/locale'
+import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 
 // ── Types ──
@@ -267,6 +277,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [helpOpen, setHelpOpen] = useState(false)
   const [showPdfDialog, setShowPdfDialog] = useState(false)
   const [showEmailDialog, setShowEmailDialog] = useState(false)
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
@@ -293,6 +304,9 @@ export default function ReportsPage() {
   const [ganttMsExpanded, setGanttMsExpanded] = useState<Set<string>>(new Set())
   const [activeTab, setActiveTab] = useState('overview')
   const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
+  const currentYear = new Date().getFullYear()
+  const [dateFrom, setDateFrom] = useState<Date>(new Date(currentYear, 0, 1))
+  const [dateTo, setDateTo] = useState<Date>(new Date(currentYear, 11, 31))
   // Excel export
   const [showExcelDialog, setShowExcelDialog] = useState(false)
   const [excelExporting, setExcelExporting] = useState(false)
@@ -333,13 +347,11 @@ export default function ReportsPage() {
 
   // Reset project selection when tier filter changes and current selection is not in filtered list
   useEffect(() => {
-    if (selectedProjectId !== 'all' && tierFilter && data) {
-      const proj = data.projects.find(p => p.id === selectedProjectId)
-      if (proj && proj.projectTier !== tierFilter) {
-        setSelectedProjectId('all')
-      }
+    if (selectedProjectId !== 'all' && data) {
+      const inFiltered = filteredProjects.some(p => p.id === selectedProjectId)
+      if (!inFiltered) setSelectedProjectId('all')
     }
-  }, [tierFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tierFilter, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fetch full project detail when single project selected ──
   useEffect(() => {
@@ -366,12 +378,19 @@ export default function ReportsPage() {
     return () => controller.abort()
   }, [selectedProjectId])
 
-  // Filtered projects by tier (for "all projects" mode)
+  // Filtered projects by date range + tier
   const filteredProjects = useMemo(() => {
     if (!data) return []
-    if (!tierFilter) return data.projects
-    return data.projects.filter(p => p.projectTier === tierFilter)
-  }, [data, tierFilter])
+    const fromStr = format(dateFrom, 'yyyy-MM-dd')
+    const toStr = format(dateTo, 'yyyy-MM-dd')
+    return data.projects.filter(p => {
+      // Date overlap: project period intersects filter range
+      const dateMatch = p.startDate <= toStr && p.endDate >= fromStr
+      if (!dateMatch) return false
+      if (tierFilter && p.projectTier !== tierFilter) return false
+      return true
+    })
+  }, [data, tierFilter, dateFrom, dateTo])
 
   // Tier counts (computed from filtered projects so it reflects the active filter)
   const tierCounts = useMemo(() => {
@@ -411,7 +430,10 @@ export default function ReportsPage() {
     }
 
     // "All projects" mode — aggregate from filtered projects
-    if (!tierFilter) return data.stats
+    const defaultFrom = new Date(currentYear, 0, 1)
+    const defaultTo = new Date(currentYear, 11, 31)
+    const isDefaultDate = dateFrom.getTime() === defaultFrom.getTime() && dateTo.getTime() === defaultTo.getTime()
+    if (!tierFilter && isDefaultDate) return data.stats
     const fp = filteredProjects
     return {
       totalProjects: fp.length,
@@ -429,7 +451,7 @@ export default function ReportsPage() {
       teamSize: new Set(fp.flatMap(p => p.teamWorkload.map(w => w.name))).size,
       progress: fp.length > 0 ? Math.round(fp.reduce((a, p) => a + p.progress, 0) / fp.length) : 0,
     }
-  }, [data, selectedProjectId, tierFilter, filteredProjects])
+  }, [data, selectedProjectId, tierFilter, filteredProjects, dateFrom, dateTo])
 
   const displayStatusDistribution = useMemo(() => {
     if (!data) return null
@@ -443,14 +465,17 @@ export default function ReportsPage() {
       }
     }
 
-    if (!tierFilter) return data.statusDistribution
+    const defaultFrom2 = new Date(currentYear, 0, 1)
+    const defaultTo2 = new Date(currentYear, 11, 31)
+    const isDefaultDate2 = dateFrom.getTime() === defaultFrom2.getTime() && dateTo.getTime() === defaultTo2.getTime()
+    if (!tierFilter && isDefaultDate2) return data.statusDistribution
     const fp = filteredProjects
     return {
       green: fp.filter(p => p.status === 'green').length,
       yellow: fp.filter(p => p.status === 'yellow').length,
       red: fp.filter(p => p.status === 'red').length,
     }
-  }, [data, selectedProjectId, tierFilter, filteredProjects])
+  }, [data, selectedProjectId, tierFilter, filteredProjects, dateFrom, dateTo])
 
   const displayTeamWorkload = useMemo(() => {
     if (!data) return []
@@ -920,10 +945,76 @@ export default function ReportsPage() {
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">專案報告</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">專案報告</h1>
+                <button
+                  onClick={() => setHelpOpen(true)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  title="專案報告說明"
+                >
+                  <HelpCircle className="h-5 w-5" />
+                </button>
+              </div>
               <p className="text-sm text-muted-foreground mt-1">檢視專案進度與統計分析</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-card rounded-lg border px-3 py-2">
+              {/* Date range filter */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs font-normal">
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                    {format(dateFrom, 'yyyy/MM/dd')} - {format(dateTo, 'yyyy/MM/dd')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3" align="end">
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <HelpCircle className="h-3 w-3 shrink-0" />
+                      依專案起迄日期篩選，期間有重疊即顯示
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {[
+                        { label: '今年', from: new Date(currentYear, 0, 1), to: new Date(currentYear, 11, 31) },
+                        { label: '去年', from: new Date(currentYear - 1, 0, 1), to: new Date(currentYear - 1, 11, 31) },
+                        { label: '近 3 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 3)), to: new Date() },
+                        { label: '近 6 個月', from: new Date(new Date().setMonth(new Date().getMonth() - 6)), to: new Date() },
+                      ].map(preset => (
+                        <Button
+                          key={preset.label}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => { setDateFrom(preset.from); setDateTo(preset.to) }}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium px-1">開始日期</p>
+                        <CalendarUI
+                          mode="single"
+                          selected={dateFrom}
+                          onSelect={(d) => { if (!d) return; setDateFrom(d); if (d > dateTo) setDateTo(d) }}
+                          locale={zhTW}
+                          initialFocus
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium px-1">結束日期</p>
+                        <CalendarUI
+                          mode="single"
+                          selected={dateTo}
+                          onSelect={(d) => d && setDateTo(d)}
+                          disabled={(date) => date < dateFrom}
+                          locale={zhTW}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
                 <SelectTrigger className="w-[200px] h-9 text-sm">
                   <SelectValue />
@@ -951,9 +1042,11 @@ export default function ReportsPage() {
                   </button>
                 ))}
               </div>}
+              {(user?.role === 'pm' || user?.role === 'admin') && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={handleOpenEmailDialog}>
                 <Mail className="h-3.5 w-3.5" /> Email
               </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" className="gap-1.5">
@@ -2132,6 +2225,65 @@ export default function ReportsPage() {
             </Tabs>
           )}
         </div>
+      {/* ── Help Dialog ── */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-xl">專案報告說明</DialogTitle>
+            <DialogDescription>檢視專案進度報告與匯出功能</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-500" /> 頁面說明
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                此頁面彙整所有專案的進度報告，包含<span className="text-blue-600 dark:text-blue-400 font-medium">總覽統計</span>、
+                <span className="text-blue-600 dark:text-blue-400 font-medium">各專案詳細進度</span>及
+                <span className="text-blue-600 dark:text-blue-400 font-medium">甘特圖</span>。
+                <span className="text-amber-600 dark:text-amber-400 font-medium">所有系統角色</span>都可以查看報告。
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4 text-indigo-500" /> 系統角色權限
+              </h3>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/50 text-muted-foreground">
+                      <th className="text-left px-3 py-2 font-medium">系統角色</th>
+                      <th className="text-center px-3 py-2 font-medium">檢視報告</th>
+                      <th className="text-center px-3 py-2 font-medium">匯出 PDF/Excel</th>
+                      <th className="text-center px-3 py-2 font-medium">Email 寄送</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: '專案經理', view: true, download: true, email: true },
+                      { name: '管理員', view: true, download: true, email: true },
+                      { name: '主管', view: true, download: true, email: false },
+                      { name: '一般成員', view: true, download: true, email: false },
+                    ].map((r, i) => (
+                      <tr key={r.name} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                        <td className="px-3 py-2 font-medium">{r.name}</td>
+                        <td className="px-3 py-2 text-center"><span className="text-emerald-600">✓</span></td>
+                        <td className="px-3 py-2 text-center"><span className="text-emerald-600">✓</span></td>
+                        <td className="px-3 py-2 text-center">
+                          {r.email ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">✗</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </DashboardLayout>
   )
 }
