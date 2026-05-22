@@ -60,8 +60,6 @@ import {
   Trash2,
   Check,
   X,
-  Plus,
-  Settings2,
   Sparkles,
   FileText,
   ClipboardList,
@@ -192,6 +190,24 @@ export default function MyTasksPage() {
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false)
   // P-tab: procurement data
   const [procurementData, setProcurementData] = useState<Record<string, { budgetItems: any[]; capexItems: any[]; loading: boolean }>>({})
+  // R-tab: weekly report dialog
+  const [rReportDialogOpen, setRReportDialogOpen] = useState(false)
+  const [rReportDialogProject, setRReportDialogProject] = useState<MyTasksProject | null>(null)
+  const [rReportWeekOf, setRReportWeekOf] = useState(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+    const monday = new Date(now)
+    monday.setDate(diff)
+    return monday.toISOString().split('T')[0]
+  })
+  const [rReportHistory, setRReportHistory] = useState<any[]>([])
+  const [rReportHistoryLoading, setRReportHistoryLoading] = useState(false)
+  // A-tab: R member report dialog
+  const [aRReportDialogOpen, setARReportDialogOpen] = useState(false)
+  const [aRReportProject, setARReportProject] = useState<MyTasksProject | null>(null)
+  const [aRReportData, setARReportData] = useState<{ reports: any[]; memberStatus: any[] }>({ reports: [], memberStatus: [] })
+  const [aRReportLoading, setARReportLoading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -687,6 +703,39 @@ export default function MyTasksPage() {
     }
   }
 
+  // Open R report dialog and load history
+  const openRReportDialog = (project: MyTasksProject) => {
+    setRReportDialogProject(project)
+    setRReportDialogOpen(true)
+    // Pre-fill forms for all milestones if existing reports
+    const forms: Record<string, { content: string; blockers: string; nextPlan: string }> = {}
+    project.milestones.filter(m => m.status !== 'done').forEach(m => {
+      const key = `${project.id}_${m.id}`
+      const existing = existingReports[key]
+      if (existing) {
+        forms[key] = { content: existing.content, blockers: existing.blockers, nextPlan: existing.nextPlan }
+      }
+    })
+    if (Object.keys(forms).length > 0) {
+      setWeeklyReportForms(prev => ({ ...prev, ...forms }))
+    }
+  }
+
+  // Open A-tab R member report dialog
+  const openARReportDialog = async (project: MyTasksProject) => {
+    setARReportProject(project)
+    setARReportDialogOpen(true)
+    setARReportLoading(true)
+    try {
+      const res = await fetch(`/api/member-weekly-reports?projectId=${project.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setARReportData({ reports: data.reports || [], memberStatus: data.memberStatus || [] })
+      }
+    } catch { /* ignore */ }
+    setARReportLoading(false)
+  }
+
   if (!user) return null
 
   const handleSubmitLog = async () => {
@@ -986,132 +1035,50 @@ export default function MyTasksPage() {
 
         {/* ═══ R Tab — 執行者週報 (Table Layout) ═══ */}
         {activeRole === 'R' && rProjects.length > 0 && (
-          <div className="space-y-4">
-            <Card>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/30">
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">里程碑</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">到期日</th>
-                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">週報狀態</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rProjects.flatMap(project =>
-                      project.milestones
-                        .filter(m => m.status !== 'done')
-                        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                        .map((milestone, idx) => {
-                          const key = `${project.id}_${milestone.id}`
-                          const existing = existingReports[key]
-                          const form = weeklyReportForms[key]
-                          const isEditing = !!form
-                          const isSubmitting = weeklyReportSubmitting === key
-                          const isExpanded = expandedTasks.has(key)
-
-                          return (
-                            <tr key={key} className="border-b last:border-0 group">
-                              <td className="px-4 py-2.5">
-                                {idx === 0 && <span className="font-medium">{project.name}</span>}
-                              </td>
-                              <td className="px-4 py-2.5">{milestone.name}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">
-                                {new Date(milestone.dueDate).toLocaleDateString('zh-TW')}
-                              </td>
-                              <td className="px-4 py-2.5 text-center">
-                                {existing ? (
-                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                                    <Check className="h-3 w-3 mr-1" />已送出
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">待填寫</Badge>
-                                )}
-                              </td>
-                              <td className="px-4 py-2.5 text-right">
-                                <Button
-                                  size="sm"
-                                  variant={existing ? 'ghost' : 'default'}
-                                  className="h-7 text-xs"
-                                  onClick={() => {
-                                    if (isExpanded) {
-                                      setExpandedTasks(prev => { const n = new Set(prev); n.delete(key); return n })
-                                    } else {
-                                      if (existing && !form) handleEditWeeklyReport(project.id, milestone.id)
-                                      setExpandedTasks(prev => new Set(prev).add(key))
-                                    }
-                                  }}
-                                >
-                                  {existing ? '查看/修改' : '填寫週報'}
-                                </Button>
-                              </td>
-                            </tr>
-                          )
-                        })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-
-            {/* Expanded report forms */}
-            {rProjects.flatMap(project =>
-              project.milestones
-                .filter(m => m.status !== 'done')
-                .map(milestone => {
-                  const key = `${project.id}_${milestone.id}`
-                  if (!expandedTasks.has(key)) return null
-                  const existing = existingReports[key]
-                  const form = weeklyReportForms[key]
-                  const isEditing = !!form
-                  const isSubmitting = weeklyReportSubmitting === key
-
-                  return (
-                    <Card key={key} className="border-blue-200 dark:border-blue-800">
-                      <CardHeader className="py-3 px-4 bg-blue-50/50 dark:bg-blue-950/20">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            {project.name} — {milestone.name}
-                          </CardTitle>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setExpandedTasks(prev => { const n = new Set(prev); n.delete(key); return n })}>
-                            <X className="h-3.5 w-3.5" />
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">里程碑</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">本週週報</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rProjects.map(project => {
+                    const activeMilestones = project.milestones.filter(m => m.status !== 'done')
+                    const submittedCount = activeMilestones.filter(m => existingReports[`${project.id}_${m.id}`]).length
+                    return (
+                      <tr key={project.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-medium">{project.name}</td>
+                        <td className="px-4 py-3 text-center text-muted-foreground">{activeMilestones.length} 個進行中</td>
+                        <td className="px-4 py-3 text-center">
+                          {submittedCount === activeMilestones.length && activeMilestones.length > 0 ? (
+                            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                              <Check className="h-3 w-3 mr-1" />已送出
+                            </Badge>
+                          ) : submittedCount > 0 ? (
+                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                              {submittedCount}/{activeMilestones.length} 已填
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">待填寫</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="default" className="h-7 text-xs gap-1" onClick={() => openRReportDialog(project)}>
+                            <FileText className="h-3 w-3" />填寫週報
                           </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="px-4 py-3 space-y-3">
-                        {existing && !isEditing && (
-                          <div className="space-y-2">
-                            <div><Label className="text-xs text-muted-foreground">本週工作內容</Label><p className="text-sm whitespace-pre-wrap mt-0.5">{existing.content}</p></div>
-                            {existing.blockers && <div><Label className="text-xs text-muted-foreground">遇到的問題/阻礙</Label><p className="text-sm whitespace-pre-wrap mt-0.5">{existing.blockers}</p></div>}
-                            {existing.nextPlan && <div><Label className="text-xs text-muted-foreground">下週計畫</Label><p className="text-sm whitespace-pre-wrap mt-0.5">{existing.nextPlan}</p></div>}
-                            <div className="flex items-center justify-between pt-1">
-                              <span className="text-[11px] text-muted-foreground">更新於 {new Date(existing.updatedAt).toLocaleString('zh-TW')}</span>
-                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleEditWeeklyReport(project.id, milestone.id)}><Pencil className="h-3 w-3 mr-1" />修改</Button>
-                            </div>
-                          </div>
-                        )}
-                        {(isEditing || !existing) && (
-                          <div className="space-y-3">
-                            <div><Label className="text-xs">本週工作內容 <span className="text-destructive">*</span></Label><Textarea placeholder="描述本週在此里程碑的工作進展..." value={form?.content || ''} onChange={e => setWeeklyReportForms(prev => ({ ...prev, [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, content: e.target.value } }))} className="mt-1 min-h-[80px] text-sm" /></div>
-                            <div><Label className="text-xs">遇到的問題/阻礙</Label><Textarea placeholder="如有阻礙或需要協助的事項..." value={form?.blockers || ''} onChange={e => setWeeklyReportForms(prev => ({ ...prev, [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, blockers: e.target.value } }))} className="mt-1 min-h-[60px] text-sm" /></div>
-                            <div><Label className="text-xs">下週計畫</Label><Textarea placeholder="下週預計進行的工作..." value={form?.nextPlan || ''} onChange={e => setWeeklyReportForms(prev => ({ ...prev, [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, nextPlan: e.target.value } }))} className="mt-1 min-h-[60px] text-sm" /></div>
-                            <div className="flex items-center justify-end gap-2">
-                              {isEditing && existing && <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setWeeklyReportForms(prev => { const next = { ...prev }; delete next[key]; return next })}>取消</Button>}
-                              <Button size="sm" className="h-8 text-xs gap-1.5" disabled={!form?.content?.trim() || isSubmitting} onClick={() => handleSubmitWeeklyReport(project.id, milestone.id)}>
-                                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                                {existing ? '更新週報' : '送出週報'}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )
-                })
-            )}
-          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
 
         {/* ═══ P Tab — 採購管理 (Table Layout) ═══ */}
@@ -1123,7 +1090,7 @@ export default function MyTasksPage() {
                   <tr className="border-b bg-muted/30">
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
                     <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">預算項目</th>
-                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">CAPEX</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">資本支出項目</th>
                     <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">預估金額</th>
                     <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
                   </tr>
@@ -1151,7 +1118,7 @@ export default function MyTasksPage() {
                         <td className="px-4 py-3 text-right">
                           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
                             <a href={`/projects/${project.id}?tab=capex`}>
-                              <ArrowRight className="h-3 w-3" />CAPEX 管理
+                              <ArrowRight className="h-3 w-3" />採購管理
                             </a>
                           </Button>
                         </td>
@@ -1224,390 +1191,66 @@ export default function MyTasksPage() {
         )}
 
         {/* ═══ A Tab — 當責/PM 管理 (Table Layout) ═══ */}
-        {activeRole === 'A' && <>
+        {activeRole === 'A' && (
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">任務進度</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">需注意</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">R 成員週報</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGroups.map(({ project, milestoneGroups, completedCount: pCompleted, totalCount: pTotal }) => {
+                    const pAtRisk = milestoneGroups.flatMap(m => m.tasks.filter(t => {
+                      const s = computeTaskStatus(t, project.taskLogs)
+                      return s === 'at-risk' || s === 'overdue' || s === 'overdue-not-started'
+                    })).length
 
-        {/* Project Table */}
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
-                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">任務</th>
-                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">完成率</th>
-                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">需注意</th>
-                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredGroups.map(({ project, milestoneGroups, completedCount: pCompleted, totalCount: pTotal }) => {
-                  const pAtRisk = milestoneGroups.flatMap(m => m.tasks.filter(t => {
-                    const s = computeTaskStatus(t, project.taskLogs)
-                    return s === 'at-risk' || s === 'overdue' || s === 'overdue-not-started'
-                  })).length
-
-                  return (
-                    <tr key={project.id} className="border-b last:border-0">
-                      <td className="px-4 py-3">
-                        <div className="font-medium">{project.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{milestoneGroups.length} 個里程碑</div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="font-medium">{pCompleted}</span>
-                        <span className="text-muted-foreground">/{pTotal}</span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={cn('font-medium', pTotal > 0 && pCompleted === pTotal ? 'text-green-600' : '')}>
-                          {pTotal > 0 ? Math.round((pCompleted / pTotal) * 100) : 0}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {pAtRisk > 0 ? (
-                          <Badge variant="destructive" className="text-xs">{pAtRisk}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => toggleProject(project.id)}>
-                          <ChevronDown className={cn('h-3 w-3 transition-transform', collapsedProjects.has(project.id) && '-rotate-90')} />
-                          任務
-                        </Button>
-                        <Button size="sm" variant="default" className="h-7 text-xs gap-1" onClick={() => window.location.href = `/projects/${project.id}/update`}>
-                          <FileText className="h-3 w-3" />週報
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* Expanded Project Task Details */}
-        {filteredGroups.filter(g => !collapsedProjects.has(g.project.id)).length > 0 && (
-          <div className="space-y-3">
-            {filteredGroups.filter(g => !collapsedProjects.has(g.project.id)).map(({ project, milestoneGroups, isPM }) => (
-              <Card key={project.id}>
-                <CardHeader className="py-2 px-4 bg-muted/20 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    {project.name}
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => toggleProject(project.id)}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </CardTitle>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="編輯專案" onClick={() => handleOpenProjectEdit(project.id)} disabled={editProjectLoading === project.id}>
-                    {editProjectLoading === project.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Settings2 className="h-3.5 w-3.5" />}
-                  </Button>
-                </CardHeader>
-                <CardContent className="px-4 pb-3 pt-0">
-                      <div className="divide-y divide-border">
-                      {milestoneGroups.map(mg => {
-                        const milestone = project.milestones.find(m => m.id === mg.milestoneId)
-                        const msPendingDelay = (project.pendingDelayMilestoneIds || []).includes(mg.milestoneId)
-                        const isMsCollapsed = collapsedMilestones.has(mg.milestoneId)
-
-                        return (
-                        <div key={mg.milestoneId} className="py-2 first:pt-0 last:pb-0">
-                          {/* Milestone label */}
-                          <div
-                            className="flex items-center gap-1.5 mb-0.5 cursor-pointer group/ms"
-                            onClick={() => setCollapsedMilestones(prev => {
-                              const next = new Set(prev)
-                              if (next.has(mg.milestoneId)) next.delete(mg.milestoneId)
-                              else next.add(mg.milestoneId)
-                              return next
-                            })}
-                          >
-                            <ChevronDown className={cn(
-                              'h-3 w-3 text-muted-foreground transition-transform shrink-0',
-                              isMsCollapsed && '-rotate-90',
-                            )} />
-                            <span className="text-sm font-medium text-muted-foreground">{mg.milestoneName}</span>
-                            {/* Date badge — unified style */}
-                            <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                              {new Date(mg.milestoneDueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                            </Badge>
-                            {/* PM: pending delay or edit button */}
-                            {isPM && milestone && (
-                              msPendingDelay ? (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-700 dark:bg-amber-950/20">
-                                  審核中
-                                </Badge>
-                              ) : (
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation()
-                                    const sortedMs = [...project.milestones].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                                    const msIdx = sortedMs.findIndex(m => m.id === mg.milestoneId)
-                                    const msStartDate = msIdx > 0
-                                      ? addOneDayStr(sortedMs[msIdx - 1].dueDate)
-                                      : (project.startDate || sortedMs[0]?.dueDate || '')
-                                    const nextMs = msIdx >= 0 && msIdx < sortedMs.length - 1 ? sortedMs[msIdx + 1] : null
-                                    setMsDateDialogData({
-                                      milestoneId: mg.milestoneId,
-                                      milestoneName: mg.milestoneName,
-                                      projectId: project.id,
-                                      projectName: project.name,
-                                      currentStartDate: msStartDate,
-                                      currentDueDate: milestone.dueDate,
-                                      nextMilestoneDueDate: nextMs?.dueDate ?? null,
-                                      nextMilestoneName: nextMs?.name ?? null,
-                                      proposedDate: milestone.dueDate,
-                                    })
-                                    setMsDateDialogOpen(true)
-                                  }}
-                                  className="inline-flex items-center gap-0.5 text-[10px] text-primary/70 hover:text-primary transition-colors group"
-                                  title="提出延期申請（需審核）"
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                  <span className="group-hover:underline">提出延期</span>
-                                </button>
-                              )
-                            )}
-                            {/* Progress indicator */}
-                            {milestone && (
-                              <span className="ml-auto flex items-center gap-1 shrink-0">
-                                <span className="text-[10px] font-medium tabular-nums" style={{ color: milestone.progress >= 100 ? 'var(--color-green-600)' : milestone.progress >= 50 ? 'var(--color-blue-600)' : undefined }}>
-                                  {milestone.progress}%
-                                </span>
-                                <span className="h-1 w-10 rounded-full bg-muted overflow-hidden">
-                                  <span
-                                    className={cn(
-                                      'block h-full rounded-full transition-all',
-                                      milestone.progress >= 100 ? 'bg-green-500' : milestone.progress >= 50 ? 'bg-blue-500' : 'bg-amber-500',
-                                    )}
-                                    style={{ width: `${Math.min(100, milestone.progress)}%` }}
-                                  />
-                                </span>
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Collapsed milestone hint */}
-                          {isMsCollapsed && mg.tasks.length > 0 && (
-                            <div className="ml-5 text-[11px] text-muted-foreground py-0.5">
-                              {mg.tasks.filter(t => !!t.completedAt).length}/{mg.tasks.length} 個任務完成
-                            </div>
+                    return (
+                      <tr key={project.id} className="border-b last:border-0">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{project.name}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{milestoneGroups.length} 個里程碑</div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="font-medium">{pCompleted}</span>
+                          <span className="text-muted-foreground">/{pTotal}</span>
+                          <span className={cn('ml-1.5 text-xs', pTotal > 0 && pCompleted === pTotal ? 'text-green-600' : 'text-muted-foreground')}>
+                            ({pTotal > 0 ? Math.round((pCompleted / pTotal) * 100) : 0}%)
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {pAtRisk > 0 ? (
+                            <Badge variant="destructive" className="text-xs">{pAtRisk}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
                           )}
-
-                          {/* Tasks + Subtasks — compact lines */}
-                          {!isMsCollapsed && <div className="divide-y divide-border/40">
-                            {mg.tasks.map(task => {
-                              const status = computeTaskStatus(task, project.taskLogs)
-                              const days = getDaysUntilDeadline(task)
-                              const isCompleted = !!task.completedAt
-                              const taskPendingDelay = (project.pendingDelayMilestoneIds || []).includes(task.milestoneId)
-                              const subtasks = task.subtasks || []
-                              const isAddingSub = addingSubtaskForId === task.id
-
-                              const hasSubtasks = subtasks.length > 0
-                              const isSubExpanded = expandedTasks.has(task.id)
-
-                              return (
-                                <div key={task.id}>
-                                  {/* Parent task row */}
-                                  <div className="flex items-center gap-0.5">
-                                    {/* Subtask expand/collapse toggle */}
-                                    {hasSubtasks ? (
-                                      <button
-                                        onClick={e => {
-                                          e.stopPropagation()
-                                          setExpandedTasks(prev => {
-                                            const next = new Set(prev)
-                                            if (next.has(task.id)) next.delete(task.id)
-                                            else next.add(task.id)
-                                            return next
-                                          })
-                                        }}
-                                        className="h-5 w-5 flex items-center justify-center shrink-0 rounded hover:bg-muted/60 text-muted-foreground transition-transform"
-                                      >
-                                        <ChevronDown className={cn('h-3 w-3 transition-transform', !isSubExpanded && '-rotate-90')} />
-                                      </button>
-                                    ) : (
-                                      <div className="w-5 shrink-0" />
-                                    )}
-                                    <button
-                                      onClick={() => openTaskDialog(task, project)}
-                                      className="flex-1 flex items-center gap-2 px-1 py-1.5 text-left transition-colors hover:bg-muted/40 rounded-sm min-w-0"
-                                    >
-                                      {getStatusDot(status)}
-                                      <span className={cn('text-sm flex-1 min-w-0 truncate', isCompleted && 'text-muted-foreground')}>
-                                        {task.title}
-                                      </span>
-                                      {isPM && task.assignee && (
-                                        <span className="text-[11px] text-muted-foreground shrink-0 max-w-[60px] truncate">{task.assignee}</span>
-                                      )}
-                                      {taskPendingDelay && (status === 'overdue' || status === 'overdue-not-started') ? (
-                                        <span className="text-[11px] text-amber-600 font-medium shrink-0">延期申請中</span>
-                                      ) : status === 'overdue' ? (
-                                        <span className="text-[11px] text-destructive font-medium shrink-0">逾期{Math.abs(days)}天</span>
-                                      ) : status === 'overdue-not-started' ? (
-                                        <span className="text-[11px] text-orange-600 font-medium shrink-0">逾期未開始</span>
-                                      ) : null}
-                                      {status === 'at-risk' && (
-                                        <span className="text-[11px] text-amber-600 font-medium shrink-0">剩{days}天</span>
-                                      )}
-                                      {isCompleted && <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />}
-                                    </button>
-                                    {/* Add subtask button */}
-                                    <button
-                                      onClick={e => {
-                                        e.stopPropagation()
-                                        if (isAddingSub) {
-                                          setAddingSubtaskForId(null)
-                                        } else {
-                                          setAddingSubtaskForId(task.id)
-                                          setInlineSubtaskTitle('')
-                                          setInlineSubtaskDays(1)
-                                          setExpandedTasks(prev => new Set(prev).add(task.id))
-                                        }
-                                      }}
-                                      className="h-6 w-6 flex items-center justify-center shrink-0 rounded hover:bg-muted/60 text-muted-foreground hover:text-primary transition-colors"
-                                      title="新增子任務"
-                                    >
-                                      <Plus className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                  {/* Subtask count hint when collapsed */}
-                                  {hasSubtasks && !isSubExpanded && !isAddingSub && (
-                                    <button
-                                      onClick={() => setExpandedTasks(prev => new Set(prev).add(task.id))}
-                                      className="ml-12 text-[11px] text-muted-foreground hover:text-foreground transition-colors py-0.5"
-                                    >
-                                      {subtasks.length} 個子任務
-                                    </button>
-                                  )}
-                                  {/* Inline add subtask form */}
-                                  {isAddingSub && (() => {
-                                    const usedDays = subtasks.reduce((sum, s) => sum + (s.durationDays || 1), 0)
-                                    const remainingDays = Math.max(0, task.durationDays - usedDays)
-                                    const canAdd = remainingDays > 0
-                                    const effectiveMax = Math.max(1, remainingDays)
-                                    return (
-                                      <div className="ml-6 py-1 px-1 space-y-1">
-                                        <div className="flex items-center gap-1.5">
-                                          <div className="h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0" />
-                                          <input
-                                            type="text"
-                                            placeholder="子任務名稱"
-                                            value={inlineSubtaskTitle}
-                                            onChange={e => setInlineSubtaskTitle(e.target.value)}
-                                            onKeyDown={e => {
-                                              if (e.key === 'Enter' && inlineSubtaskTitle.trim() && canAdd) handleAddSubtaskInline(task, project)
-                                              if (e.key === 'Escape') setAddingSubtaskForId(null)
-                                            }}
-                                            className="flex-1 text-sm border rounded px-2 py-1 bg-background min-w-0"
-                                            autoFocus
-                                          />
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            max={effectiveMax}
-                                            value={Math.min(inlineSubtaskDays, effectiveMax)}
-                                            onChange={e => setInlineSubtaskDays(Math.min(Math.max(1, Number(e.target.value) || 1), effectiveMax))}
-                                            className="w-12 text-xs border rounded px-1.5 py-1 bg-background text-center"
-                                            title={`天數（剩餘 ${remainingDays} 天）`}
-                                            disabled={!canAdd}
-                                          />
-                                          <span className="text-sm text-muted-foreground shrink-0">天</span>
-                                          <Button
-                                            size="sm"
-                                            className="h-6 text-xs px-2"
-                                            disabled={!inlineSubtaskTitle.trim() || !canAdd}
-                                            onClick={() => handleAddSubtaskInline(task, project)}
-                                          >
-                                            新增
-                                          </Button>
-                                          <button
-                                            onClick={() => setAddingSubtaskForId(null)}
-                                            className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        </div>
-                                        {!canAdd && (
-                                          <p className="ml-4 text-[11px] text-destructive">
-                                            已用完此任務的 {task.durationDays} 天配額，如需更多時間請提出延期申請
-                                          </p>
-                                        )}
-                                        {canAdd && (
-                                          <p className="ml-4 text-[11px] text-muted-foreground">
-                                            此任務共 {task.durationDays} 天，已分配 {usedDays} 天，剩餘 {remainingDays} 天
-                                          </p>
-                                        )}
-                                      </div>
-                                    )
-                                  })()}
-                                  {/* Subtask rows — indented (collapsed by default) */}
-                                  {isSubExpanded && subtasks.map(sub => {
-                                    // Build a Task-like object so subtask opens in the same dialog
-                                    const subAsTask: Task = {
-                                      id: sub.id,
-                                      projectId: task.projectId,
-                                      milestoneId: task.milestoneId,
-                                      title: sub.title,
-                                      description: '',
-                                      assignee: sub.assignee,
-                                      status: sub.status,
-                                      priority: sub.priority,
-                                      durationDays: sub.durationDays || 1,
-                                      startDate: sub.startDate,
-                                      endDate: sub.endDate,
-                                      dependencies: [],
-                                      progress: sub.progress,
-                                      parentId: task.id,
-                                      completedAt: sub.completedAt,
-                                      completedBy: sub.completedBy,
-                                    }
-                                    const subStatus = computeTaskStatus(subAsTask, project.taskLogs)
-                                    const subCompleted = !!sub.completedAt || sub.status === 'done'
-                                    return (
-                                      <div key={sub.id} className="group/sub flex items-center ml-10 pr-1">
-                                        <button
-                                          onClick={() => openTaskDialog(subAsTask, project)}
-                                          className="flex-1 flex items-center gap-2 py-1 text-left transition-colors hover:bg-muted/40 rounded-sm min-w-0"
-                                        >
-                                          {getStatusDot(subStatus)}
-                                          <span className={cn('text-xs flex-1 min-w-0 truncate', subCompleted && 'text-muted-foreground')}>
-                                            {sub.title}
-                                          </span>
-                                          {isPM && sub.assignee && (
-                                            <span className="text-[10px] text-muted-foreground shrink-0 max-w-[50px] truncate">{sub.assignee}</span>
-                                          )}
-                                          <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">{sub.progress}%</Badge>
-                                          {subCompleted && <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />}
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            if (confirm(`確定要刪除子任務「${sub.title}」嗎？`)) {
-                                              handleDeleteSubtask(sub.id, task, project)
-                                            }
-                                          }}
-                                          className="h-5 w-5 flex items-center justify-center text-muted-foreground/0 group-hover/sub:text-muted-foreground hover:!text-destructive transition-colors shrink-0"
-                                          title="刪除子任務"
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </button>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )
-                            })}
-                          </div>}
-                        </div>
-                        )
-                      })}
-                      </div>
-                    </CardContent>
-                </Card>
-              ))}
-          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => openARReportDialog(project)}>
+                            <ClipboardList className="h-3 w-3" />查看 R 週報
+                          </Button>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
+                            <a href={`/projects/${project.id}`}>
+                              <ArrowRight className="h-3 w-3" />甘特圖
+                            </a>
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
-        </>}
       </div>
 
       {/* Task Dialog — Tab-based */}
@@ -2470,6 +2113,253 @@ export default function MyTasksPage() {
               </div>
             )
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── R Tab: Weekly Report Dialog ── */}
+      <Dialog open={rReportDialogOpen} onOpenChange={(open) => {
+        setRReportDialogOpen(open)
+        if (!open) setRReportDialogProject(null)
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b">
+            <DialogTitle className="text-base">填寫週報</DialogTitle>
+            {rReportDialogProject && (
+              <DialogDescription className="text-sm">
+                {rReportDialogProject.name} — 選擇週別並填寫各里程碑進度
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {rReportDialogProject && (
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+              {/* Week selector */}
+              <div className="flex items-center gap-3">
+                <Label htmlFor="r-week-of" className="shrink-0 text-sm">週別</Label>
+                <input
+                  id="r-week-of"
+                  type="date"
+                  value={rReportWeekOf}
+                  onChange={e => setRReportWeekOf(e.target.value)}
+                  className="h-9 text-sm border rounded-md px-3 bg-background w-44"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {new Date(rReportWeekOf).toLocaleDateString('zh-TW')} 那週
+                </span>
+              </div>
+
+              {/* Milestone report forms */}
+              {rReportDialogProject.milestones
+                .filter(m => m.status !== 'done')
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                .map(milestone => {
+                  const key = `${rReportDialogProject!.id}_${milestone.id}`
+                  const existing = existingReports[key]
+                  const form = weeklyReportForms[key]
+                  const isSubmitting = weeklyReportSubmitting === key
+
+                  return (
+                    <div key={milestone.id} className="border rounded-lg overflow-hidden">
+                      <div className="px-4 py-2.5 bg-muted/30 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{milestone.name}</span>
+                          <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                            {new Date(milestone.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                          </Badge>
+                        </div>
+                        {existing && !form && (
+                          <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                            <Check className="h-3 w-3 mr-1" />已送出
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="px-4 py-3 space-y-3">
+                        {/* Show existing or form */}
+                        {existing && !form ? (
+                          <div className="space-y-2">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">本週記錄</Label>
+                              <p className="text-sm whitespace-pre-wrap mt-0.5">{existing.content}</p>
+                            </div>
+                            {existing.blockers && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">遇到問題</Label>
+                                <p className="text-sm whitespace-pre-wrap mt-0.5">{existing.blockers}</p>
+                              </div>
+                            )}
+                            {existing.nextPlan && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground">下週計畫</Label>
+                                <p className="text-sm whitespace-pre-wrap mt-0.5">{existing.nextPlan}</p>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-[11px] text-muted-foreground">
+                                更新於 {new Date(existing.updatedAt).toLocaleString('zh-TW')}
+                              </span>
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleEditWeeklyReport(rReportDialogProject!.id, milestone.id)}>
+                                <Pencil className="h-3 w-3 mr-1" />修改
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-xs">本週記錄 <span className="text-destructive">*</span></Label>
+                              <Textarea
+                                placeholder="描述本週在此里程碑的工作進展..."
+                                value={form?.content || ''}
+                                onChange={e => setWeeklyReportForms(prev => ({
+                                  ...prev,
+                                  [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, content: e.target.value },
+                                }))}
+                                className="mt-1 min-h-[80px] text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">遇到問題</Label>
+                              <Textarea
+                                placeholder="如有阻礙或需要協助的事項..."
+                                value={form?.blockers || ''}
+                                onChange={e => setWeeklyReportForms(prev => ({
+                                  ...prev,
+                                  [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, blockers: e.target.value },
+                                }))}
+                                className="mt-1 min-h-[50px] text-sm"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">下週計畫</Label>
+                              <Textarea
+                                placeholder="下週預計進行的工作..."
+                                value={form?.nextPlan || ''}
+                                onChange={e => setWeeklyReportForms(prev => ({
+                                  ...prev,
+                                  [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, nextPlan: e.target.value },
+                                }))}
+                                className="mt-1 min-h-[50px] text-sm"
+                              />
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                              {form && existing && (
+                                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setWeeklyReportForms(prev => { const next = { ...prev }; delete next[key]; return next })}>
+                                  取消
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs gap-1.5"
+                                disabled={!form?.content?.trim() || !!isSubmitting}
+                                onClick={() => handleSubmitWeeklyReport(rReportDialogProject!.id, milestone.id)}
+                              >
+                                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                {existing ? '更新週報' : '送出週報'}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+
+              {rReportDialogProject.milestones.filter(m => m.status !== 'done').length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">目前沒有進行中的里程碑</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── A Tab: R Member Reports Dialog ── */}
+      <Dialog open={aRReportDialogOpen} onOpenChange={(open) => {
+        setARReportDialogOpen(open)
+        if (!open) setARReportProject(null)
+      }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b">
+            <DialogTitle className="text-base">R 成員週報</DialogTitle>
+            {aRReportProject && (
+              <DialogDescription className="text-sm">
+                {aRReportProject.name} — 查看執行者本週提交的工作報告
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {aRReportProject && (
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {aRReportLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {/* Submission status */}
+                  <div className="flex flex-wrap gap-2">
+                    {aRReportData.memberStatus.map((m: any) => (
+                      <div
+                        key={m.userId}
+                        className={cn(
+                          'flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-full border',
+                          m.submitted
+                            ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-800 dark:text-green-400'
+                            : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-800 dark:text-red-400',
+                        )}
+                      >
+                        {m.submitted ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
+                        {m.name}
+                      </div>
+                    ))}
+                  </div>
+
+                  {aRReportData.memberStatus.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">此專案尚無 R 角色成員</p>
+                  )}
+
+                  {/* Reports per member */}
+                  {aRReportData.memberStatus.filter((m: any) => m.submitted).map((member: any) => {
+                    const reports = aRReportData.reports.filter((r: any) => r.userId === member.userId)
+                    return (
+                      <div key={member.userId} className="border rounded-lg overflow-hidden">
+                        <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
+                          <UserCheck className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium">{member.name}</span>
+                          <Badge variant="secondary" className="text-xs ml-auto">{reports.length} 份報告</Badge>
+                        </div>
+                        <div className="px-4 py-3 space-y-3">
+                          {reports.map((report: any) => (
+                            <div key={report.id} className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{report.milestoneName}</Badge>
+                                <span className="text-[11px] text-muted-foreground ml-auto">
+                                  {new Date(report.updatedAt || report.createdAt).toLocaleString('zh-TW')}
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-sm">
+                                <p className="whitespace-pre-wrap">{report.content}</p>
+                                {report.blockers && (
+                                  <p className="text-amber-700 dark:text-amber-400">
+                                    <span className="font-medium">遇到問題：</span>{report.blockers}
+                                  </p>
+                                )}
+                                {report.nextPlan && (
+                                  <p className="text-blue-700 dark:text-blue-400">
+                                    <span className="font-medium">下週計畫：</span>{report.nextPlan}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {aRReportData.memberStatus.filter((m: any) => m.submitted).length === 0 && aRReportData.memberStatus.length > 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">本週尚無 R 成員提交週報</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
