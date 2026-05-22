@@ -224,6 +224,7 @@ export default function MyTasksPage() {
     monday.setDate(diff)
     return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
   })
+  const [aRReportFilterUser, setARReportFilterUser] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -2565,14 +2566,14 @@ export default function MyTasksPage() {
       {/* ── A Tab: R Member Reports Dialog ── */}
       <Dialog open={aRReportDialogOpen} onOpenChange={(open) => {
         setARReportDialogOpen(open)
-        if (!open) setARReportProject(null)
+        if (!open) { setARReportProject(null); setARReportFilterUser(null) }
       }}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-5 pb-3 border-b">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b shrink-0">
             <DialogTitle className="text-base">R 成員週報</DialogTitle>
             {aRReportProject && (
               <DialogDescription className="text-sm">
-                {aRReportProject.name} — 查看執行者本週提交的工作紀錄
+                {aRReportProject.name} — 查看執行者提交的工作紀錄
               </DialogDescription>
             )}
           </DialogHeader>
@@ -2583,6 +2584,7 @@ export default function MyTasksPage() {
                 value={aRReportWeekOf}
                 onChange={(v) => {
                   setARReportWeekOf(v)
+                  setARReportFilterUser(null)
                   fetchARReportData(aRReportProject.id, v)
                 }}
               />
@@ -2593,22 +2595,38 @@ export default function MyTasksPage() {
                 </div>
               ) : (
                 <>
-                  {/* Submission status badges */}
+                  {/* Clickable member filter badges */}
                   <div className="flex flex-wrap gap-2">
-                    {aRReportData.memberStatus.map((m: any) => (
-                      <div
-                        key={m.userId}
+                    {aRReportData.memberStatus.length > 1 && (
+                      <button
+                        onClick={() => setARReportFilterUser(null)}
                         className={cn(
-                          'flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-full border',
-                          m.submitted
-                            ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-800 dark:text-green-400'
-                            : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-800 dark:text-red-400',
+                          'flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-full border transition-colors cursor-pointer',
+                          aRReportFilterUser === null
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted/60',
                         )}
                       >
-                        {m.submitted ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />}
+                        全部
+                      </button>
+                    )}
+                    {aRReportData.memberStatus.map((m: any) => (
+                      <button
+                        key={m.userId}
+                        onClick={() => setARReportFilterUser(prev => prev === m.userId ? null : m.userId)}
+                        className={cn(
+                          'flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-full border transition-colors cursor-pointer',
+                          aRReportFilterUser === m.userId
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : m.submitted
+                              ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-800 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/40'
+                              : 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40',
+                        )}
+                      >
+                        {aRReportFilterUser !== m.userId && (m.submitted ? <UserCheck className="h-3.5 w-3.5" /> : <UserX className="h-3.5 w-3.5" />)}
                         {m.name}
                         {m.submitted && <span className="text-xs opacity-70">({m.reportCount})</span>}
-                      </div>
+                      </button>
                     ))}
                   </div>
 
@@ -2617,9 +2635,11 @@ export default function MyTasksPage() {
                   )}
 
                   {/* Task logs per member */}
-                  {aRReportData.memberStatus.filter((m: any) => m.submitted).map((member: any) => {
+                  {aRReportData.memberStatus
+                    .filter((m: any) => m.submitted && (!aRReportFilterUser || aRReportFilterUser === m.userId))
+                    .map((member: any) => {
                     const memberLogs = aRReportData.reports.filter((r: any) => r.userId === member.userId)
-                    // Group by milestone
+                    // Group by milestone → task
                     const byMilestone = new Map<string, { name: string; logs: any[] }>()
                     for (const log of memberLogs) {
                       const key = log.milestoneId
@@ -2628,37 +2648,65 @@ export default function MyTasksPage() {
                     }
                     return (
                       <div key={member.userId} className="border rounded-lg overflow-hidden">
-                        <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
+                        <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2 sticky top-0 z-10">
                           <UserCheck className="h-4 w-4 text-green-600" />
                           <span className="text-sm font-medium">{member.name}</span>
                           <Badge variant="secondary" className="text-xs ml-auto">{memberLogs.length} 筆紀錄</Badge>
                         </div>
-                        <div className="divide-y">
+                        <div className="max-h-[50vh] overflow-y-auto divide-y">
                           {[...byMilestone.entries()].map(([msId, { name: msName, logs }]) => (
-                            <div key={msId} className="px-4 py-3 space-y-2">
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">{msName}</Badge>
-                              {logs.map((log: any) => (
-                                <div key={log.id} className="pl-2 border-l-2 border-primary/20 space-y-0.5">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-medium text-primary">{log.taskTitle}</span>
-                                    <span className="text-[11px] text-muted-foreground ml-auto">{log.logDate}</span>
+                            <div key={msId} className="px-4 py-3 space-y-3">
+                              <div className="text-xs font-semibold text-muted-foreground">{msName}</div>
+                              {logs.map((log: any) => {
+                                let parsedNextPlans: { date?: string; content: string }[] = []
+                                let parsedAttachments: { name: string; url: string; type?: string }[] = []
+                                try { if (log.nextPlans) parsedNextPlans = JSON.parse(log.nextPlans) } catch {}
+                                try { if (log.attachments) parsedAttachments = JSON.parse(log.attachments) } catch {}
+                                return (
+                                  <div key={log.id} className="pl-3 border-l-2 border-primary/20 space-y-1.5">
+                                    {/* Header: task/subtask label + name + date */}
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" className={cn('text-[10px] px-1 py-0 shrink-0', log.isSubtask ? 'border-amber-300 text-amber-600 dark:text-amber-400' : 'border-blue-300 text-blue-600 dark:text-blue-400')}>
+                                        {log.isSubtask ? '子任務' : '任務'}
+                                      </Badge>
+                                      <span className="text-sm font-medium">{log.taskTitle}</span>
+                                      <span className="text-[11px] text-muted-foreground ml-auto shrink-0 flex items-center gap-1">
+                                        <Calendar className="h-3 w-3" />{log.logDate}
+                                      </span>
+                                    </div>
+                                    {/* Content */}
+                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{log.content}</p>
+                                    {/* Next plans */}
+                                    {parsedNextPlans.length > 0 && (
+                                      <div className="text-xs bg-blue-50 dark:bg-blue-950/20 rounded px-2.5 py-1.5 space-y-0.5">
+                                        <span className="font-medium text-blue-700 dark:text-blue-400">下週計畫：</span>
+                                        {parsedNextPlans.map((p, pi) => (
+                                          <div key={pi} className="text-blue-600 dark:text-blue-400 flex items-start gap-1">
+                                            <span className="shrink-0">•</span>
+                                            <span>{p.date ? `${p.date} ` : ''}{p.content}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {/* Attachments */}
+                                    {parsedAttachments.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {parsedAttachments.map((att, ai) => (
+                                          <a
+                                            key={ai}
+                                            href={att.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                                          >
+                                            <Paperclip className="h-3 w-3" />{att.name}
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="text-sm whitespace-pre-wrap">{log.content}</p>
-                                  {log.nextPlans && (() => {
-                                    try {
-                                      const plans = JSON.parse(log.nextPlans)
-                                      if (Array.isArray(plans) && plans.length > 0) {
-                                        return (
-                                          <p className="text-xs text-blue-600 dark:text-blue-400">
-                                            <span className="font-medium">下週計畫：</span>{plans.map((p: any) => p.content).join('、')}
-                                          </p>
-                                        )
-                                      }
-                                    } catch { /* ignore */ }
-                                    return null
-                                  })()}
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           ))}
                         </div>
@@ -2666,7 +2714,12 @@ export default function MyTasksPage() {
                     )
                   })}
 
-                  {aRReportData.memberStatus.filter((m: any) => m.submitted).length === 0 && aRReportData.memberStatus.length > 0 && (
+                  {/* Show "not submitted" members when filtered */}
+                  {aRReportFilterUser && aRReportData.memberStatus.find((m: any) => m.userId === aRReportFilterUser && !m.submitted) && (
+                    <p className="text-sm text-muted-foreground text-center py-4">此成員本週尚未提交工作紀錄</p>
+                  )}
+
+                  {!aRReportFilterUser && aRReportData.memberStatus.filter((m: any) => m.submitted).length === 0 && aRReportData.memberStatus.length > 0 && (
                     <p className="text-sm text-muted-foreground text-center py-4">本週尚無 R 成員提交工作紀錄</p>
                   )}
                 </>

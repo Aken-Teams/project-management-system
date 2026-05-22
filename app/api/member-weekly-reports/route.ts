@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
               select: {
                 id: true,
                 title: true,
+                parentId: true,
                 milestoneId: true,
                 milestone: { select: { id: true, name: true, sortOrder: true } },
               },
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
         id: l.id,
         taskId: l.task.id,
         taskTitle: l.task.title,
+        isSubtask: !!l.task.parentId,
         milestoneId: l.task.milestoneId,
         milestoneName: l.task.milestone.name,
         userId: l.authorId,
