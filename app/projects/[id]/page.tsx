@@ -614,12 +614,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     <div className="flex flex-wrap gap-1.5">
                       {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).slice().sort((a, b) => (a.role === 'A' ? -1 : b.role === 'A' ? 1 : 0)).map(member => {
                         const roleLabel = TEAM_ROLE_LABELS[member.role as TeamRole] || member.role
-                        const isAccountable = member.role === 'A'
+                        const roleColorMap: Record<string, string> = {
+                          S: 'bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300',
+                          A: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-300',
+                          P: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900 dark:text-emerald-300',
+                          R: 'bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900 dark:text-amber-300',
+                          C: 'bg-cyan-100 text-cyan-800 hover:bg-cyan-100 dark:bg-cyan-900 dark:text-cyan-300',
+                          I: 'bg-gray-100 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300',
+                        }
+                        const colorClass = roleColorMap[member.role] || ''
                         return (
-                          <Badge key={member.id ?? member.name} variant={isAccountable ? 'default' : 'secondary'} className="text-sm">
+                          <Badge key={member.id ?? member.name} variant="outline" className={`text-sm border-transparent ${colorClass}`}>
                             {member.name}
-                            {member.jobTitle && <span className={`ml-1 ${isAccountable ? 'opacity-70' : 'text-muted-foreground'}`}>({member.jobTitle})</span>}
-                            <span className={`ml-1 ${isAccountable ? 'opacity-70' : 'text-muted-foreground'}`}>{roleLabel}</span>
+                            {member.jobTitle && <span className="ml-1 opacity-70">({member.jobTitle})</span>}
+                            <span className="ml-1 opacity-70">{roleLabel}</span>
                           </Badge>
                         )
                       })}
