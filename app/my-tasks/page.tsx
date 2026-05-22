@@ -29,6 +29,7 @@ import { useAuth } from '@/lib/auth-context'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
+import { WeekPicker } from '@/components/ui/week-picker'
 import {
   computeTaskStatus,
   getStatusLabel,
@@ -190,7 +191,7 @@ export default function MyTasksPage() {
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false)
   // P-tab: procurement data
   const [procurementData, setProcurementData] = useState<Record<string, { budgetItems: any[]; capexItems: any[]; loading: boolean }>>({})
-  // R-tab: weekly report dialog
+  // R-tab: weekly report dialog (task-based, matching Gantt chart design)
   const [rReportDialogOpen, setRReportDialogOpen] = useState(false)
   const [rReportDialogProject, setRReportDialogProject] = useState<MyTasksProject | null>(null)
   const [rReportWeekOf, setRReportWeekOf] = useState(() => {
@@ -199,10 +200,15 @@ export default function MyTasksPage() {
     const diff = now.getDate() - day + (day === 0 ? -6 : 1)
     const monday = new Date(now)
     monday.setDate(diff)
-    return monday.toISOString().split('T')[0]
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
   })
-  const [rReportHistory, setRReportHistory] = useState<any[]>([])
-  const [rReportHistoryLoading, setRReportHistoryLoading] = useState(false)
+  const [rSelectedTaskId, setRSelectedTaskId] = useState<string | null>(null)
+  interface RLogRow { date: string; content: string; existingLogId?: string; attachments?: TaskLogAttachment[] }
+  const [rLogRows, setRLogRows] = useState<RLogRow[]>([{ date: '', content: '' }])
+  const [rLogNextWeekPlan, setRLogNextWeekPlan] = useState('')
+  const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
+  const [rUploadingRowIdx, setRUploadingRowIdx] = useState<number | null>(null)
+  const rRowFileInputRef = useRef<HTMLInputElement>(null)
   // A-tab: R member report dialog
   const [aRReportDialogOpen, setARReportDialogOpen] = useState(false)
   const [aRReportProject, setARReportProject] = useState<MyTasksProject | null>(null)
@@ -703,21 +709,154 @@ export default function MyTasksPage() {
     }
   }
 
-  // Open R report dialog and load history
+  // Open R report dialog
   const openRReportDialog = (project: MyTasksProject) => {
     setRReportDialogProject(project)
+    setRSelectedTaskId(null)
+    setRLogRows([{ date: '', content: '' }])
+    setRLogNextWeekPlan('')
     setRReportDialogOpen(true)
-    // Pre-fill forms for all milestones if existing reports
-    const forms: Record<string, { content: string; blockers: string; nextPlan: string }> = {}
-    project.milestones.filter(m => m.status !== 'done').forEach(m => {
-      const key = `${project.id}_${m.id}`
-      const existing = existingReports[key]
-      if (existing) {
-        forms[key] = { content: existing.content, blockers: existing.blockers, nextPlan: existing.nextPlan }
+  }
+
+  // Get user's assigned tasks for R dialog, grouped by milestone
+  const rDialogTasksByMilestone = useMemo(() => {
+    if (!rReportDialogProject || !user) return []
+    const result: { milestone: { id: string; name: string; dueDate: string; status: string }; tasks: Task[] }[] = []
+    for (const ms of rReportDialogProject.milestones) {
+      if (ms.status === 'done') continue
+      // All tasks assigned to the user under this milestone (top-level + subtasks)
+      const assignedTasks = rReportDialogProject.tasks.filter(
+        t => t.milestoneId === ms.id && t.assignee === user.name && !t.parentId
+      )
+      // Also include subtasks assigned to the user
+      const parentIds = rReportDialogProject.tasks.filter(t => t.milestoneId === ms.id && !t.parentId).map(t => t.id)
+      const assignedSubtasks = rReportDialogProject.tasks.filter(
+        t => t.parentId && parentIds.includes(t.parentId) && t.assignee === user.name
+      )
+      const all = [...assignedTasks, ...assignedSubtasks]
+      if (all.length > 0) {
+        result.push({ milestone: ms, tasks: all })
       }
-    })
-    if (Object.keys(forms).length > 0) {
-      setWeeklyReportForms(prev => ({ ...prev, ...forms }))
+    }
+    return result
+  }, [rReportDialogProject, user])
+
+  // Check which tasks have logs in the selected week
+  const rTaskWeekStatus = useMemo(() => {
+    if (!rReportDialogProject) return new Map<string, boolean>()
+    const [y, m, d] = rReportWeekOf.split('-').map(Number)
+    const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const endDate = new Date(y, m - 1, d + 6)
+    const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+    const map = new Map<string, boolean>()
+    for (const group of rDialogTasksByMilestone) {
+      for (const task of group.tasks) {
+        const hasLogs = rReportDialogProject.taskLogs.some(
+          l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd
+        )
+        map.set(task.id, hasLogs)
+      }
+    }
+    return map
+  }, [rReportDialogProject, rReportWeekOf, rDialogTasksByMilestone])
+
+  // Prefill R log rows when task or week changes
+  useEffect(() => {
+    if (!rSelectedTaskId || !rReportDialogProject) return
+    const [y, m, d] = rReportWeekOf.split('-').map(Number)
+    const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const endDate = new Date(y, m - 1, d + 6)
+    const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+    const logs = rReportDialogProject.taskLogs
+      .filter(l => l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd)
+      .sort((a, b) => a.logDate.localeCompare(b.logDate))
+    if (logs.length > 0) {
+      setRLogRows(logs.map(l => ({
+        date: l.logDate,
+        content: l.content,
+        existingLogId: l.id,
+        attachments: l.attachments?.length ? [...l.attachments] : undefined,
+      })))
+      const latestWithPlans = [...logs].reverse().find(l => l.nextPlans?.length)
+      setRLogNextWeekPlan(latestWithPlans?.nextPlans?.map(p => p.content).join('\n') || '')
+    } else {
+      setRLogRows([{ date: '', content: '' }])
+      setRLogNextWeekPlan('')
+    }
+  }, [rSelectedTaskId, rReportWeekOf, rReportDialogProject])
+
+  // R dialog: select a task
+  const handleRSelectTask = (taskId: string) => {
+    setRSelectedTaskId(prev => prev === taskId ? null : taskId)
+  }
+
+  // R dialog: file upload for batch log rows
+  const handleRRowFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0 || rUploadingRowIdx === null) return
+    const idx = rUploadingRowIdx
+    const fileArray = Array.from(files)
+    e.target.value = ''
+    try {
+      const uploaded: TaskLogAttachment[] = []
+      for (const file of fileArray) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        if (res.ok) uploaded.push(await res.json())
+      }
+      if (uploaded.length > 0) {
+        setRLogRows(prev => prev.map((r, i) =>
+          i === idx ? { ...r, attachments: [...(r.attachments || []), ...uploaded] } : r
+        ))
+      }
+    } catch { /* ignore */ } finally {
+      setRUploadingRowIdx(null)
+    }
+  }
+
+  // R dialog: batch submit logs (same API as Gantt chart)
+  const handleRBatchSubmitLogs = async () => {
+    if (!rSelectedTaskId || !user || !rReportDialogProject) return
+    const entries = rLogRows
+      .filter(r => r.content.trim() && r.date)
+      .map(r => ({
+        logDate: r.date,
+        content: r.content.trim(),
+        existingLogId: r.existingLogId,
+        attachments: r.attachments?.length ? r.attachments : undefined,
+      }))
+    if (entries.length === 0) return
+
+    setRSubmittingBatch(true)
+    try {
+      const nextPlans = rLogNextWeekPlan.trim()
+        ? [{ content: rLogNextWeekPlan.trim() }]
+        : []
+      const res = await fetch(`/api/projects/${rReportDialogProject.id}/task-logs/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: rSelectedTaskId,
+          userId: user.id,
+          entries,
+          ...(nextPlans.length > 0 ? { nextPlans } : {}),
+        }),
+      })
+      if (!res.ok) throw new Error()
+      // Refresh task data
+      const refreshRes = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+      if (refreshRes.ok) {
+        const data = await refreshRes.json()
+        setApiProjects(data.projects ?? [])
+        // Update the dialog project reference
+        const updated = (data.projects ?? []).find((p: MyTasksProject) => p.id === rReportDialogProject.id)
+        if (updated) setRReportDialogProject(updated)
+      }
+    } catch {
+      alert('提交失敗，請稍後再試')
+    } finally {
+      setRSubmittingBatch(false)
     }
   }
 
@@ -1041,27 +1180,38 @@ export default function MyTasksPage() {
                 <thead>
                   <tr className="border-b bg-muted/30">
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
-                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">里程碑</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">我的任務</th>
                     <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">本週週報</th>
                     <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rProjects.map(project => {
-                    const activeMilestones = project.milestones.filter(m => m.status !== 'done')
-                    const submittedCount = activeMilestones.filter(m => existingReports[`${project.id}_${m.id}`]).length
+                    // Count user's assigned tasks (non-done milestones)
+                    const activeMsIds = new Set(project.milestones.filter(m => m.status !== 'done').map(m => m.id))
+                    const myTasks = project.tasks.filter(t => t.assignee === user!.name && activeMsIds.has(t.milestoneId))
+                    // Count tasks with logs this week
+                    const [wy, wm, wd] = rReportWeekOf.split('-').map(Number)
+                    const wkStart = rReportWeekOf
+                    const wkEndDate = new Date(wy, wm - 1, wd + 6)
+                    const wkEnd = `${wkEndDate.getFullYear()}-${String(wkEndDate.getMonth() + 1).padStart(2, '0')}-${String(wkEndDate.getDate()).padStart(2, '0')}`
+                    const filledCount = myTasks.filter(t =>
+                      project.taskLogs.some(l => l.taskId === t.id && l.logDate >= wkStart && l.logDate <= wkEnd)
+                    ).length
                     return (
                       <tr key={project.id} className="border-b last:border-0">
                         <td className="px-4 py-3 font-medium">{project.name}</td>
-                        <td className="px-4 py-3 text-center text-muted-foreground">{activeMilestones.length} 個進行中</td>
+                        <td className="px-4 py-3 text-center text-muted-foreground">{myTasks.length} 個任務</td>
                         <td className="px-4 py-3 text-center">
-                          {submittedCount === activeMilestones.length && activeMilestones.length > 0 ? (
+                          {myTasks.length === 0 ? (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">無任務</Badge>
+                          ) : filledCount === myTasks.length ? (
                             <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                              <Check className="h-3 w-3 mr-1" />已送出
+                              <Check className="h-3 w-3 mr-1" />全部已填
                             </Badge>
-                          ) : submittedCount > 0 ? (
+                          ) : filledCount > 0 ? (
                             <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
-                              {submittedCount}/{activeMilestones.length} 已填
+                              {filledCount}/{myTasks.length} 已填
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="text-xs text-muted-foreground">待填寫</Badge>
@@ -2116,155 +2266,274 @@ export default function MyTasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── R Tab: Weekly Report Dialog ── */}
+      {/* ── R Tab: Weekly Report Dialog (Task-based, matching Gantt chart design) ── */}
       <Dialog open={rReportDialogOpen} onOpenChange={(open) => {
         setRReportDialogOpen(open)
-        if (!open) setRReportDialogProject(null)
+        if (!open) { setRReportDialogProject(null); setRSelectedTaskId(null) }
       }}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base">填寫週報</DialogTitle>
             {rReportDialogProject && (
               <DialogDescription className="text-sm">
-                {rReportDialogProject.name} — 選擇週別並填寫各里程碑進度
+                {rReportDialogProject.name} — 選擇任務填寫工作紀錄
               </DialogDescription>
             )}
           </DialogHeader>
           {rReportDialogProject && (
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-              {/* Week selector */}
-              <div className="flex items-center gap-3">
-                <Label htmlFor="r-week-of" className="shrink-0 text-sm">週別</Label>
-                <input
-                  id="r-week-of"
-                  type="date"
-                  value={rReportWeekOf}
-                  onChange={e => setRReportWeekOf(e.target.value)}
-                  className="h-9 text-sm border rounded-md px-3 bg-background w-44"
-                />
-                <span className="text-xs text-muted-foreground">
-                  {new Date(rReportWeekOf).toLocaleDateString('zh-TW')} 那週
-                </span>
-              </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {/* Week selector (matching Gantt chart WeekPicker) */}
+              <WeekPicker
+                value={rReportWeekOf}
+                onChange={(v) => { setRReportWeekOf(v); setRSelectedTaskId(null) }}
+              />
 
-              {/* Milestone report forms */}
-              {rReportDialogProject.milestones
-                .filter(m => m.status !== 'done')
-                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                .map(milestone => {
-                  const key = `${rReportDialogProject!.id}_${milestone.id}`
-                  const existing = existingReports[key]
-                  const form = weeklyReportForms[key]
-                  const isSubmitting = weeklyReportSubmitting === key
+              {/* Task list grouped by milestone */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-1.5">
+                  <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">我的任務</span>
+                  {(() => {
+                    const total = Array.from(rTaskWeekStatus.values()).length
+                    const filled = Array.from(rTaskWeekStatus.values()).filter(Boolean).length
+                    return total > 0 ? (
+                      <span className={cn(
+                        'text-[10px] px-1.5 py-0.5 rounded',
+                        filled === total
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-muted text-muted-foreground',
+                      )}>
+                        {filled}/{total} 已填
+                      </span>
+                    ) : null
+                  })()}
+                </div>
 
-                  return (
-                    <div key={milestone.id} className="border rounded-lg overflow-hidden">
-                      <div className="px-4 py-2.5 bg-muted/30 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{milestone.name}</span>
-                          <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                            {new Date(milestone.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                          </Badge>
-                        </div>
-                        {existing && !form && (
-                          <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                            <Check className="h-3 w-3 mr-1" />已送出
-                          </Badge>
-                        )}
+                {rDialogTasksByMilestone.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">本週沒有指派給你的進行中任務</p>
+                ) : (
+                  rDialogTasksByMilestone.map(group => (
+                    <div key={group.milestone.id} className="space-y-1">
+                      {/* Milestone header */}
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-xs font-medium text-muted-foreground">{group.milestone.name}</span>
+                        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                          截止 {new Date(group.milestone.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                        </Badge>
                       </div>
-                      <div className="px-4 py-3 space-y-3">
-                        {/* Show existing or form */}
-                        {existing && !form ? (
-                          <div className="space-y-2">
-                            <div>
-                              <Label className="text-xs text-muted-foreground">本週記錄</Label>
-                              <p className="text-sm whitespace-pre-wrap mt-0.5">{existing.content}</p>
-                            </div>
-                            {existing.blockers && (
-                              <div>
-                                <Label className="text-xs text-muted-foreground">遇到問題</Label>
-                                <p className="text-sm whitespace-pre-wrap mt-0.5">{existing.blockers}</p>
-                              </div>
-                            )}
-                            {existing.nextPlan && (
-                              <div>
-                                <Label className="text-xs text-muted-foreground">下週計畫</Label>
-                                <p className="text-sm whitespace-pre-wrap mt-0.5">{existing.nextPlan}</p>
-                              </div>
-                            )}
-                            <div className="flex items-center justify-between pt-1">
-                              <span className="text-[11px] text-muted-foreground">
-                                更新於 {new Date(existing.updatedAt).toLocaleString('zh-TW')}
-                              </span>
-                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleEditWeeklyReport(rReportDialogProject!.id, milestone.id)}>
-                                <Pencil className="h-3 w-3 mr-1" />修改
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <div>
-                              <Label className="text-xs">本週記錄 <span className="text-destructive">*</span></Label>
-                              <Textarea
-                                placeholder="描述本週在此里程碑的工作進展..."
-                                value={form?.content || ''}
-                                onChange={e => setWeeklyReportForms(prev => ({
-                                  ...prev,
-                                  [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, content: e.target.value },
-                                }))}
-                                className="mt-1 min-h-[80px] text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">遇到問題</Label>
-                              <Textarea
-                                placeholder="如有阻礙或需要協助的事項..."
-                                value={form?.blockers || ''}
-                                onChange={e => setWeeklyReportForms(prev => ({
-                                  ...prev,
-                                  [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, blockers: e.target.value },
-                                }))}
-                                className="mt-1 min-h-[50px] text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">下週計畫</Label>
-                              <Textarea
-                                placeholder="下週預計進行的工作..."
-                                value={form?.nextPlan || ''}
-                                onChange={e => setWeeklyReportForms(prev => ({
-                                  ...prev,
-                                  [key]: { ...prev[key] || { content: '', blockers: '', nextPlan: '' }, nextPlan: e.target.value },
-                                }))}
-                                className="mt-1 min-h-[50px] text-sm"
-                              />
-                            </div>
-                            <div className="flex items-center justify-end gap-2">
-                              {form && existing && (
-                                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setWeeklyReportForms(prev => { const next = { ...prev }; delete next[key]; return next })}>
-                                  取消
-                                </Button>
+
+                      {/* Task items */}
+                      {group.tasks.map(task => {
+                        const isSelected = rSelectedTaskId === task.id
+                        const hasLogs = rTaskWeekStatus.get(task.id) || false
+                        const taskStatus = computeTaskStatus(task, rReportDialogProject!.taskLogs)
+                        const isSubtask = !!task.parentId
+
+                        return (
+                          <div key={task.id} className="space-y-0">
+                            {/* Task row (clickable) */}
+                            <button
+                              type="button"
+                              onClick={() => handleRSelectTask(task.id)}
+                              className={cn(
+                                'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left transition-all',
+                                isSubtask && 'ml-4',
+                                isSelected
+                                  ? 'border-primary bg-primary/5 shadow-sm'
+                                  : 'border-border hover:bg-muted/50 hover:border-muted-foreground/20',
                               )}
-                              <Button
-                                size="sm"
-                                className="h-8 text-xs gap-1.5"
-                                disabled={!form?.content?.trim() || !!isSubmitting}
-                                onClick={() => handleSubmitWeeklyReport(rReportDialogProject!.id, milestone.id)}
-                              >
-                                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                                {existing ? '更新週報' : '送出週報'}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                            >
+                              {getStatusDot(taskStatus)}
+                              <span className={cn('text-sm flex-1 truncate', isSelected && 'font-medium')}>
+                                {task.title}
+                              </span>
+                              {hasLogs ? (
+                                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />已填
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0">
+                                  未填
+                                </Badge>
+                              )}
+                              <ChevronDown className={cn(
+                                'h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform',
+                                isSelected && 'rotate-180',
+                              )} />
+                            </button>
 
-              {rReportDialogProject.milestones.filter(m => m.status !== 'done').length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">目前沒有進行中的里程碑</p>
-              )}
+                            {/* Expanded: log entry form (matching Gantt chart design) */}
+                            {isSelected && (
+                              <div className={cn('border border-t-0 rounded-b-lg px-4 py-4 space-y-4 bg-background', isSubtask && 'ml-4')}>
+                                {/* Log entry table */}
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground">本周工作紀錄</span>
+                                    <span className="text-[10px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
+                                  </div>
+                                  <div className="rounded-lg border overflow-hidden">
+                                    <table className="w-full border-collapse">
+                                      <thead>
+                                        <tr className="bg-muted/40">
+                                          <th className="text-[11px] font-medium text-muted-foreground text-left px-2 py-1.5 w-[120px] border-b">日期</th>
+                                          <th className="text-[11px] font-medium text-muted-foreground text-left px-2 py-1.5 border-b">工作內容</th>
+                                          <th className="text-[11px] font-medium text-muted-foreground text-center px-1 py-1.5 w-[36px] border-b">附件</th>
+                                          <th className="w-[28px] border-b"></th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {rLogRows.map((row, idx) => {
+                                          const attCount = row.attachments?.length || 0
+                                          return (
+                                            <tr key={idx} className="border-b border-border last:border-b-0">
+                                              <td className="px-1.5 py-1.5 align-top">
+                                                <input
+                                                  type="date"
+                                                  value={row.date}
+                                                  onChange={e => {
+                                                    const updated = [...rLogRows]
+                                                    updated[idx] = { ...updated[idx], date: e.target.value }
+                                                    setRLogRows(updated)
+                                                  }}
+                                                  className="w-full text-xs border rounded-md h-[34px] px-1.5 bg-background"
+                                                />
+                                                {row.existingLogId && (
+                                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
+                                                )}
+                                                {attCount > 0 && (
+                                                  <div className="flex flex-wrap gap-1 mt-1">
+                                                    {row.attachments!.map((att, ai) => att.type === 'image' ? (
+                                                      <a key={ai} href={att.url} target="_blank" rel="noopener">
+                                                        <img src={att.url} alt={att.name} className="h-7 w-7 rounded object-cover border hover:opacity-80" />
+                                                      </a>
+                                                    ) : (
+                                                      <a key={ai} href={att.url} target="_blank" rel="noopener"
+                                                        className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px] hover:bg-muted/80"
+                                                      >
+                                                        <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                                                        <span className="truncate max-w-[50px]">{att.name}</span>
+                                                      </a>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </td>
+                                              <td className="px-1.5 py-1.5 align-top">
+                                                <textarea
+                                                  placeholder="工作內容..."
+                                                  value={row.content}
+                                                  onChange={e => {
+                                                    const updated = [...rLogRows]
+                                                    updated[idx] = { ...updated[idx], content: e.target.value }
+                                                    setRLogRows(updated)
+                                                    e.target.style.height = '34px'
+                                                    e.target.style.height = e.target.scrollHeight + 'px'
+                                                  }}
+                                                  rows={1}
+                                                  className="w-full min-h-[34px] text-xs resize-none border rounded-md bg-background px-2 py-[7px] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
+                                                  style={{ overflow: 'hidden' }}
+                                                />
+                                              </td>
+                                              <td className="px-0.5 py-1.5 align-top text-center">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setRUploadingRowIdx(idx)
+                                                    rRowFileInputRef.current?.click()
+                                                  }}
+                                                  className={cn(
+                                                    'inline-flex items-center justify-center w-[34px] h-[34px] border rounded-md bg-background hover:bg-muted transition-colors',
+                                                    attCount > 0 ? 'text-primary border-primary/30' : 'text-muted-foreground/40',
+                                                  )}
+                                                  title="上傳附件"
+                                                >
+                                                  {rUploadingRowIdx === idx
+                                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    : <Paperclip className="h-3.5 w-3.5" />
+                                                  }
+                                                </button>
+                                              </td>
+                                              <td className="px-0 py-1.5 align-top text-center">
+                                                {rLogRows.length > 1 ? (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setRLogRows(rLogRows.filter((_, i) => i !== idx))}
+                                                    className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                                    title="移除此列"
+                                                  >
+                                                    <X className="h-3.5 w-3.5" />
+                                                  </button>
+                                                ) : <div className="w-[34px] h-[34px]" />}
+                                              </td>
+                                            </tr>
+                                          )
+                                        })}
+                                      </tbody>
+                                    </table>
+
+                                    {/* Hidden file input */}
+                                    <input
+                                      ref={rRowFileInputRef}
+                                      type="file"
+                                      multiple
+                                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                                      className="hidden"
+                                      onChange={handleRRowFileSelect}
+                                    />
+
+                                    <button
+                                      type="button"
+                                      className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2 border-t border-dashed border-primary/20"
+                                      onClick={() => setRLogRows([...rLogRows, { date: '', content: '' }])}
+                                    >
+                                      + 新增一列
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Divider */}
+                                <div className="border-t border-dashed border-border" />
+
+                                {/* Next week plan */}
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground">預計下周工作</span>
+                                    <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">選填</span>
+                                  </div>
+                                  <Textarea
+                                    placeholder="預計下周要做什麼..."
+                                    value={rLogNextWeekPlan}
+                                    onChange={e => setRLogNextWeekPlan(e.target.value)}
+                                    rows={2}
+                                    className="min-h-[60px] text-sm resize-y"
+                                  />
+                                </div>
+
+                                {/* Submit */}
+                                <div className="flex justify-end">
+                                  <Button
+                                    size="sm"
+                                    className="gap-1.5 rounded-lg shadow-sm text-sm"
+                                    disabled={!rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
+                                    onClick={handleRBatchSubmitLogs}
+                                  >
+                                    {rSubmittingBatch ? (
+                                      <><Loader2 className="h-3.5 w-3.5 animate-spin" />儲存中...</>
+                                    ) : (
+                                      <><Send className="h-3.5 w-3.5" />提交週報</>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
