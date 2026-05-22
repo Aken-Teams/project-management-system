@@ -293,7 +293,7 @@ export default function DashboardPage() {
                 重設
               </Button>
             )}
-            {(data.user.role === 'pm' || data.user.role === 'executive') && pendingApprovals > 0 && (
+            {(data.user.role === 'pm' || data.user.role === 'executive' || data.user.role === 'admin') && pendingApprovals > 0 && (
               <Link href="/approvals">
                 <Button size="sm" className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   <ClipboardCheck className="h-4 w-4" />
@@ -653,19 +653,19 @@ export default function DashboardPage() {
               <div className="space-y-2.5">
                 <div className="flex items-start gap-2.5">
                   <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5 hover:bg-secondary">一般成員</Badge>
-                  <span className="text-sm text-muted-foreground">僅看到自己參與的專案，預算卡片改為顯示個人任務統計。</span>
+                  <span className="text-sm text-muted-foreground">僅看到<span className="text-blue-600 dark:text-blue-400 font-medium">自己參與的專案</span>，預算卡片改為顯示個人任務統計。</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5 hover:bg-secondary">專案經理</Badge>
-                  <span className="text-sm text-muted-foreground">可看到所有專案的完整統計與預算使用率。</span>
+                  <span className="text-sm text-muted-foreground">可看到<span className="text-blue-600 dark:text-blue-400 font-medium">所有專案</span>的完整統計與預算使用率，並顯示<span className="text-amber-600 dark:text-amber-400 font-medium">待審核提醒</span>。</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Badge variant="secondary" className="bg-amber-100 hover:bg-amber-100 text-amber-700 dark:bg-amber-900 dark:hover:bg-amber-900 dark:text-amber-300 border-transparent text-[10px] shrink-0 mt-0.5">主管</Badge>
-                  <span className="text-sm text-muted-foreground">可看到所有專案，並在右上角顯示待審核提醒按鈕。</span>
+                  <span className="text-sm text-muted-foreground">可看到<span className="text-blue-600 dark:text-blue-400 font-medium">所有專案</span>，並顯示<span className="text-amber-600 dark:text-amber-400 font-medium">待審核提醒</span>按鈕。</span>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <Badge variant="secondary" className="bg-red-100 hover:bg-red-100 text-red-700 dark:bg-red-900 dark:hover:bg-red-900 dark:text-red-300 border-transparent text-[10px] shrink-0 mt-0.5">管理員</Badge>
-                  <span className="text-sm text-muted-foreground">擁有完整檢視權限，可看到所有專案、預算及風險資訊。</span>
+                  <span className="text-sm text-muted-foreground"><span className="text-red-600 dark:text-red-400 font-medium">完整檢視權限</span>，可看到所有專案、預算及風險資訊，並顯示<span className="text-amber-600 dark:text-amber-400 font-medium">待審核提醒</span>。</span>
                 </div>
               </div>
             </div>

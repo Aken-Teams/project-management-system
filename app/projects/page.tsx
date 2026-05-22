@@ -78,10 +78,8 @@ export default function ProjectsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // 根據角色過濾專案
-  const projects = user?.role === 'member'
-    ? allProjects.filter(p => p.team.includes(user.name) || p.owner === user.name)
-    : allProjects
+  // 所有角色都能看到全部專案（細部權限由專案角色 RACIPS 控制）
+  const projects = allProjects
 
   // 取得所有負責人列表
   const owners = useMemo(() => {
@@ -197,17 +195,8 @@ export default function ProjectsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              {user?.role === 'member' ? '我的專案' : '專案看板'}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {user?.role === 'member'
-                ? '您參與的專案列表'
-                : user?.role === 'executive'
-                  ? '所有專案的整體概覽與追蹤'
-                  : '管理和追蹤所有專案的進度與狀態'
-              }
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">專案看板</h1>
+            <p className="text-sm text-muted-foreground mt-1">管理和追蹤所有專案的進度與狀態</p>
           </div>
           {getRolePermissions(user?.role).canCreateProject && (
             <Link href="/projects/new">
@@ -436,9 +425,7 @@ export default function ProjectsPage() {
                   <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1"><Users className="h-3 w-3" />{project.team.length} 人</span>
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(project.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                    {user?.role !== 'member' && (
-                      <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{(project.budgetUsed / 1000000).toFixed(1)}M/{(project.budget / 1000000).toFixed(1)}M</span>
-                    )}
+                    <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{(project.budgetUsed / 1000000).toFixed(1)}M/{(project.budget / 1000000).toFixed(1)}M</span>
                     <span className="ml-auto">{project.owner} · {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑</span>
                   </div>
                 </CardContent>

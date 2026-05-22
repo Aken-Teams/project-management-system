@@ -328,9 +328,9 @@ export async function GET(request: NextRequest) {
         }
       })
 
-    // ── Pending approvals (for PM and executives only) ──
+    // ── Pending approvals (for PM, executives, and admin) ──
     let pendingApprovals = 0
-    if (user.role === 'pm' || user.role === 'executive') {
+    if (user.role === 'pm' || user.role === 'executive' || user.role === 'admin') {
       const pendingCount = await prisma.delayRequest.count({
         where: {
           status: 'pending',

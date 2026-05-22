@@ -104,7 +104,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const currentUserTeamRole = project?.teamMembers?.find(
     m => m.email === user?.email
   )?.role
-  const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'S' || currentUserTeamRole === 'P' || user?.role === 'admin'
+  const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'P' || user?.role === 'pm' || user?.role === 'executive' || user?.role === 'admin'
   const canEditCapex = currentUserTeamRole === 'P'
   const canEditRoi = user?.role === 'pm' || user?.role === 'admin'
 
@@ -324,17 +324,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 {shareLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
                 分享
               </Button>
-              {(currentUserTeamRole === 'A' || user?.role === 'admin') && (
-                <>
-                  <Button size="default" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                    <Pencil className="h-4 w-4" />
-                    編輯
-                  </Button>
-                  <Button variant="destructive" size="default" className="gap-1.5" onClick={() => setDeleteOpen(true)}>
-                    <Trash2 className="h-4 w-4" />
-                    刪除
-                  </Button>
-                </>
+              {(currentUserTeamRole === 'A' || user?.role === 'pm' || user?.role === 'admin') && (
+                <Button size="default" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-4 w-4" />
+                  編輯
+                </Button>
+              )}
+              {(user?.role === 'pm' || user?.role === 'admin') && (
+                <Button variant="destructive" size="default" className="gap-1.5" onClick={() => setDeleteOpen(true)}>
+                  <Trash2 className="h-4 w-4" />
+                  刪除
+                </Button>
               )}
             </div>
           </div>
@@ -632,7 +632,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 const res = await fetch(`/api/projects/${id}`)
                 if (res.ok) setProject(await res.json())
               }}
-              readOnly={currentUserTeamRole !== 'A' && user?.role !== 'admin'}
+              readOnly={currentUserTeamRole !== 'A' && user?.role !== 'pm' && user?.role !== 'admin'}
             />
           </TabsContent>
 
