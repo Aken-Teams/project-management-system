@@ -60,13 +60,10 @@ export async function GET(request: NextRequest) {
     if (!orgNode) return NextResponse.json({ error: '找不到組織' }, { status: 404 })
 
     const adMembers = collectAllMembers(orgNode)
-    const usernames = [...new Set(adMembers.map(m => m.username.toLowerCase()))]
 
-    // Match DB users by email prefix (username@domain)
+    // Fetch all DB users once (typically dozens~hundreds) and match in memory
+    // This avoids generating hundreds of OR conditions for large org trees
     const dbUsers = await prisma.user.findMany({
-      where: {
-        OR: usernames.map(u => ({ email: { startsWith: u + '@' } })),
-      },
       select: {
         id: true, name: true, email: true, role: true,
         isActive: true, jobTitle: true, organization: true,
@@ -74,13 +71,17 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // Build lookup maps: by email prefix (employeeId) AND by name
     const dbByPrefix = new Map<string, typeof dbUsers[0]>()
+    const dbByName = new Map<string, typeof dbUsers[0]>()
     for (const u of dbUsers) {
       dbByPrefix.set(u.email.split('@')[0].toLowerCase(), u)
+      dbByName.set(u.name.toLowerCase(), u)
     }
 
     const rows = adMembers.map(m => {
-      const db = dbByPrefix.get(m.username.toLowerCase())
+      // Match by email prefix first (employeeId@domain), then fallback to name
+      const db = dbByPrefix.get(m.username.toLowerCase()) ?? dbByName.get(m.displayName.toLowerCase())
       return {
         adUsername: m.username,
         name: db?.name ?? m.displayName,

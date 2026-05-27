@@ -624,8 +624,17 @@ export default function AdminUsersPage() {
         body: JSON.stringify({ email: addingUser.email, name: addingUser.name, role: addRole, organization: addOrg }),
       })
       if (res.ok) {
+        const savedUser = await res.json()
         toast({ title: '已加入系統', description: `${addingUser.name} 已設定為 ${ROLE_LABELS[addRole]}` })
+        // Optimistic update: immediately reflect in-system state
+        const adUsername = addingUser.adUsername
+        setRows(prev => prev.map(r =>
+          r.key === adUsername
+            ? { ...r, inSystem: true, dbId: savedUser.id, role: addRole, isActive: true, email: savedUser.email, name: savedUser.name }
+            : r
+        ))
         setAddingUser(null)
+        // Also refetch in background for full data consistency
         fetchTable()
       }
     } finally {
