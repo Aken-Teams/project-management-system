@@ -154,11 +154,15 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
   const { id } = await params
 
+  // Support ?confirm=true to actually perform the delete
+  const url = new URL(request.url)
+  const confirmed = url.searchParams.get('confirm') === 'true'
+
   const user = await prisma.user.findUnique({
     where: { id },
     select: {
       id: true, name: true, email: true,
-      _count: { select: { ownedProjects: true } },
+      _count: { select: { ownedProjects: true, teamMemberships: true } },
     },
   })
   if (!user) {
@@ -173,7 +177,22 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     )
   }
 
-  // Delete related records then the user
+  // Pre-flight: return impact summary so the UI can show a detailed warning
+  if (!confirmed) {
+    const teamProjects = await prisma.projectTeamMember.findMany({
+      where: { userId: id },
+      select: { project: { select: { name: true } } },
+    })
+    return NextResponse.json({
+      preflight: true,
+      name: user.name,
+      email: user.email,
+      teamMembershipCount: user._count.teamMemberships,
+      teamProjects: teamProjects.map(tp => tp.project.name),
+    })
+  }
+
+  // Confirmed: delete related records then the user
   await prisma.$transaction([
     prisma.projectTeamMember.deleteMany({ where: { userId: id } }),
     prisma.notification.deleteMany({ where: { userId: id } }),

@@ -192,6 +192,7 @@ export interface TeamMember {
   organization?: string
   role: TeamRole
   responsibility: string
+  isActive?: boolean
 }
 
 export const PROJECT_TYPE_LABELS: Record<string, string> = {

@@ -141,7 +141,7 @@ export function dbProjectToFrontend(
     }[]
     teamMembers: {
       id: string
-      user: { name: string; email: string; jobTitle: string; organization: string }
+      user: { name: string; email: string; jobTitle: string; organization: string; isActive: boolean }
       role: string
       jobTitle: string
       organization: string
@@ -377,6 +377,7 @@ export function dbProjectToFrontend(
       organization: tm.organization || tm.user.organization || '',
       role: tm.role as 'R' | 'A' | 'C' | 'I' | 'P' | 'S',
       responsibility: tm.responsibility,
+      isActive: tm.user.isActive,
     })),
     milestones: feMilestones,
     baseline: feBaseline,

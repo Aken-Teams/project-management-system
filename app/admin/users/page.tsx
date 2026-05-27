@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import {
   Search, ChevronLeft, ChevronRight, Pencil, ChevronDown, ChevronRight as ChevronRightIcon,
   Users, Loader2, FolderOpen, ExternalLink, CalendarCheck, AlertCircle, UserPlus, Eye,
-  Trash2, Wrench,
+  Trash2, Wrench, UserX, TriangleAlert, ShieldAlert, Info,
 } from 'lucide-react'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -479,8 +479,12 @@ export default function AdminUsersPage() {
   const [addLoading, setAddLoading] = useState(false)
   const [adding, setAdding] = useState(false)
 
-  // Delete confirmation
+  // Delete / deactivate
   const [deletingUser, setDeletingUser] = useState<DisplayRow | null>(null)
+  const [deletePreflightData, setDeletePreflightData] = useState<{
+    teamMembershipCount: number; teamProjects: string[]
+  } | null>(null)
+  const [deletePreflightLoading, setDeletePreflightLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   // Fix auto.local emails
@@ -648,17 +652,44 @@ export default function AdminUsersPage() {
     }
   }
 
+  // Open delete dialog: first call preflight to get impact data
+  const openDeleteDialog = async (row: DisplayRow) => {
+    if (!row.dbId || !user) return
+    setDeletingUser(row)
+    setDeletePreflightData(null)
+    setDeletePreflightLoading(true)
+    try {
+      const res = await fetch(`/api/admin/users/${row.dbId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-email': user.email },
+      })
+      const data = await res.json()
+      if (data.preflight) {
+        setDeletePreflightData({ teamMembershipCount: data.teamMembershipCount, teamProjects: data.teamProjects })
+      } else if (data.error) {
+        toast({ title: '無法刪除', description: data.error, variant: 'destructive' })
+        setDeletingUser(null)
+      }
+    } catch {
+      toast({ title: '錯誤', description: '無法取得使用者資料', variant: 'destructive' })
+      setDeletingUser(null)
+    } finally {
+      setDeletePreflightLoading(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deletingUser?.dbId || !user) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/admin/users/${deletingUser.dbId}`, {
+      const res = await fetch(`/api/admin/users/${deletingUser.dbId}?confirm=true`, {
         method: 'DELETE',
         headers: { 'x-user-email': user.email },
       })
       if (res.ok) {
-        toast({ title: '已刪除', description: `${deletingUser.name} 已從系統中移除` })
+        toast({ title: '已刪除', description: `${deletingUser.name} 已從系統中永久移除` })
         setDeletingUser(null)
+        setDeletePreflightData(null)
         fetchTable()
       } else {
         const err = await res.json()
@@ -666,6 +697,40 @@ export default function AdminUsersPage() {
       }
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleDeactivate = async (row: DisplayRow) => {
+    if (!row.dbId || !user) return
+    try {
+      const res = await fetch(`/api/admin/users/${row.dbId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-user-email': user.email },
+        body: JSON.stringify({ isActive: false }),
+      })
+      if (res.ok) {
+        toast({ title: '已停用', description: `${row.name} 已停用，專案紀錄保留` })
+        fetchTable()
+      }
+    } catch {
+      toast({ title: '錯誤', description: '操作失敗', variant: 'destructive' })
+    }
+  }
+
+  const handleReactivate = async (row: DisplayRow) => {
+    if (!row.dbId || !user) return
+    try {
+      const res = await fetch(`/api/admin/users/${row.dbId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-user-email': user.email },
+        body: JSON.stringify({ isActive: true }),
+      })
+      if (res.ok) {
+        toast({ title: '已啟用', description: `${row.name} 已重新啟用` })
+        fetchTable()
+      }
+    } catch {
+      toast({ title: '錯誤', description: '操作失敗', variant: 'destructive' })
     }
   }
 
@@ -830,7 +895,16 @@ export default function AdminUsersPage() {
                               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="編輯" onClick={() => openEdit(row)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="刪除" onClick={() => setDeletingUser(row)}>
+                              {row.isActive !== false ? (
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-orange-600" title="停用帳號（保留專案紀錄）" onClick={() => handleDeactivate(row)}>
+                                  <UserX className="h-3.5 w-3.5" />
+                                </Button>
+                              ) : (
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-emerald-600" title="重新啟用帳號" onClick={() => handleReactivate(row)}>
+                                  <UserPlus className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="永久刪除（移除所有紀錄）" onClick={() => openDeleteDialog(row)}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
@@ -978,24 +1052,85 @@ export default function AdminUsersPage() {
         onEditUser={openEditFromDetail}
       />
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingUser} onOpenChange={open => !open && setDeletingUser(null)}>
-        <AlertDialogContent>
+      {/* Delete Confirmation — with preflight impact data */}
+      <AlertDialog open={!!deletingUser} onOpenChange={open => { if (!open) { setDeletingUser(null); setDeletePreflightData(null) } }}>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>確認刪除使用者</AlertDialogTitle>
-            <AlertDialogDescription>
-              確定要刪除 <span className="font-semibold text-foreground">{deletingUser?.name}</span>（{deletingUser?.email}）嗎？
-              此操作會同時移除該使用者在所有專案中的團隊成員記錄，且無法復原。
-            </AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" /> 永久刪除帳號
+            </AlertDialogTitle>
+            <div className="space-y-3 pt-1">
+              <p className="text-sm text-muted-foreground">
+                你即將永久刪除 <span className="font-semibold text-foreground">{deletingUser?.name}</span>（{deletingUser?.email}）。
+              </p>
+
+              {deletePreflightLoading && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> 檢查影響範圍...
+                </div>
+              )}
+
+              {deletePreflightData && deletePreflightData.teamMembershipCount > 0 && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+                  <p className="text-sm font-medium text-destructive flex items-center gap-1.5">
+                    <TriangleAlert className="h-4 w-4" />
+                    此帳號參與了 {deletePreflightData.teamMembershipCount} 個專案
+                  </p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5 pl-6 list-disc">
+                    {deletePreflightData.teamProjects.slice(0, 5).map(name => (
+                      <li key={name}>{name}</li>
+                    ))}
+                    {deletePreflightData.teamProjects.length > 5 && (
+                      <li>...還有 {deletePreflightData.teamProjects.length - 5} 個專案</li>
+                    )}
+                  </ul>
+                  <p className="text-xs text-destructive font-medium">刪除後這些專案中的成員紀錄將一併永久移除！</p>
+                </div>
+              )}
+
+              {deletePreflightData && deletePreflightData.teamMembershipCount === 0 && (
+                <div className="rounded-lg border bg-muted/50 p-3">
+                  <p className="text-sm text-muted-foreground">此帳號沒有參與任何專案，可以安全刪除。</p>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-1.5">
+                <p className="text-sm font-medium text-blue-700 flex items-center gap-1.5">
+                  <Info className="h-4 w-4" /> 員工離職？請改用「停用」
+                </p>
+                <p className="text-xs text-blue-600">
+                  停用帳號會保留所有專案紀錄與歷史資料，僅禁止該帳號登入系統。
+                  適用於員工離職或調動的情況。
+                </p>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                「刪除」僅適用於清理測試帳號或重複建立的帳號。此操作<span className="font-semibold text-destructive">無法復原</span>。
+              </p>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
             <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            {deletingUser?.isActive !== false && (
+              <Button
+                variant="outline"
+                className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                disabled={deleting}
+                onClick={() => {
+                  handleDeactivate(deletingUser!)
+                  setDeletingUser(null)
+                  setDeletePreflightData(null)
+                }}
+              >
+                <UserX className="h-4 w-4 mr-1.5" /> 改為停用
+              </Button>
+            )}
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleting}
+              disabled={deleting || deletePreflightLoading}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? '刪除中...' : '確認刪除'}
+              {deleting ? '刪除中...' : '確認永久刪除'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -612,7 +612,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                       團隊成員
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '' }))).slice().sort((a, b) => (a.role === 'A' ? -1 : b.role === 'A' ? 1 : 0)).map(member => {
+                      {(project.teamMembers ?? project.team.map(n => ({ id: n, name: n, role: 'R' as const, responsibility: '', jobTitle: '', isActive: true as boolean | undefined }))).slice().sort((a, b) => (a.role === 'A' ? -1 : b.role === 'A' ? 1 : 0)).map(member => {
                         const roleLabel = TEAM_ROLE_LABELS[member.role as TeamRole] || member.role
                         const roleColorMap: Record<string, string> = {
                           S: 'bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300',
@@ -624,9 +624,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                         }
                         const colorClass = roleColorMap[member.role] || ''
                         return (
-                          <Badge key={member.id ?? member.name} variant="outline" className={`text-sm border-transparent ${colorClass}`}>
+                          <Badge key={member.id ?? member.name} variant="outline" className={`text-sm border-transparent ${colorClass} ${member.isActive === false ? 'opacity-60' : ''}`}>
                             {member.name}
-                            {member.jobTitle && <span className="ml-1 opacity-70">({member.jobTitle})</span>}
+                            {member.isActive === false && <span className="ml-1 text-orange-600 text-xs">(已離職)</span>}
+                            {member.jobTitle && member.isActive !== false && <span className="ml-1 opacity-70">({member.jobTitle})</span>}
                             <span className="ml-1 opacity-70">{roleLabel}</span>
                           </Badge>
                         )
