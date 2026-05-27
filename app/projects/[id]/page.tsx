@@ -105,7 +105,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const currentUserTeamRole = project?.teamMembers?.find(
     m => m.email === user?.email
   )?.role
-  const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'P' || user?.role === 'pm' || user?.role === 'executive' || user?.role === 'admin'
+  const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'P' || currentUserTeamRole === 'S' || currentUserTeamRole === 'C' || user?.role === 'pm' || user?.role === 'executive' || user?.role === 'admin'
   const canEditCapex = currentUserTeamRole === 'P'
   const canEditRoi = user?.role === 'pm' || user?.role === 'admin'
 

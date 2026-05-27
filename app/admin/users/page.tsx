@@ -96,7 +96,7 @@ const TIER_COLORS: Record<string, string> = {
   CIP: 'bg-amber-100 text-amber-700',
 }
 const TEAM_ROLE_LABELS: Record<string, string> = {
-  R: '執行 (R)', A: '負責 (A)', C: '諮詢 (C)', I: '知會 (I)',
+  S: '簽核 (S)', A: '當責 (A)', P: '採購 (P)', R: '執行 (R)', C: '諮詢 (C)', I: '知會 (I)',
 }
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -784,6 +784,7 @@ export default function AdminUsersPage() {
           <p className="text-sm text-muted-foreground mt-0.5">管理系統所有使用者的角色與部門資訊</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* 修正 auto.local 按鈕暫時隱藏
           {hasAutoLocalUsers && (
             <Button
               variant="outline"
@@ -796,6 +797,7 @@ export default function AdminUsersPage() {
               修正 auto.local Email
             </Button>
           )}
+          */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
