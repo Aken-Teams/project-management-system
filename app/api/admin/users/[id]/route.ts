@@ -146,3 +146,44 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 
   return NextResponse.json(user)
 }
+
+export async function DELETE(request: NextRequest, { params }: RouteContext) {
+  if (!await guardAdmin(request)) {
+    return NextResponse.json({ error: '無權限' }, { status: 403 })
+  }
+
+  const { id } = await params
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true, name: true, email: true,
+      _count: { select: { ownedProjects: true } },
+    },
+  })
+  if (!user) {
+    return NextResponse.json({ error: '找不到使用者' }, { status: 404 })
+  }
+
+  // Prevent deleting users who own projects
+  if (user._count.ownedProjects > 0) {
+    return NextResponse.json(
+      { error: `此使用者擁有 ${user._count.ownedProjects} 個專案，請先轉移專案負責人再刪除` },
+      { status: 400 },
+    )
+  }
+
+  // Delete related records then the user
+  await prisma.$transaction([
+    prisma.projectTeamMember.deleteMany({ where: { userId: id } }),
+    prisma.notification.deleteMany({ where: { userId: id } }),
+    prisma.taskLog.deleteMany({ where: { authorId: id } }),
+    prisma.memberWeeklyReport.deleteMany({ where: { userId: id } }),
+    prisma.projectDraft.deleteMany({ where: { userId: id } }),
+    prisma.shareLink.deleteMany({ where: { createdById: id } }),
+    prisma.delayReviewDecision.deleteMany({ where: { reviewerId: id } }),
+    prisma.user.delete({ where: { id } }),
+  ])
+
+  return NextResponse.json({ success: true, message: `已刪除使用者 ${user.name}` })
+}

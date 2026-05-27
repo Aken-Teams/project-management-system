@@ -151,7 +151,7 @@ function NameAutocompleteInput({
         const res = await fetch(`/api/ad-users/${encodeURIComponent(user.id)}`)
         if (res.ok) {
           const detail: SearchResult = await res.json()
-          onSelect({ ...user, jobTitle: detail.jobTitle || user.jobTitle, organization: detail.organization || user.organization })
+          onSelect({ ...user, jobTitle: detail.jobTitle || user.jobTitle, organization: detail.organization || user.organization, email: detail.email || user.email })
           return
         }
       } catch { /* fallback to search result */ }

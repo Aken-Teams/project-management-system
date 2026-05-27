@@ -199,6 +199,7 @@ interface TeamMemberDraft {
   responsibility: string
   organization?: string
   email?: string
+  jobTitle?: string
 }
 
 interface MilestoneTaskDraft {
@@ -1207,7 +1208,7 @@ export default function NewProjectPage() {
     })
     const teamMembersData = aiTeamDetails
       .filter(m => m.name.trim())
-      .map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
+      .map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility, email: m.email, jobTitle: m.jobTitle, organization: m.organization }))
 
     setIsCreating(true)
     try {
@@ -1322,7 +1323,7 @@ export default function NewProjectPage() {
         teamNames.push(m.name)
       }
     })
-    const teamMembersData = manualTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility }))
+    const teamMembersData = manualTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility, email: m.email, jobTitle: m.jobTitle, organization: m.organization }))
 
     // Validate budget items before submit
     const budgetErrors = validateBudgetItems(manualBudgetItems)

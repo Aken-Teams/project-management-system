@@ -5,6 +5,40 @@ import {
   projectTierToDb,
   demandSourceToDb,
 } from '@/lib/enum-mappers'
+
+const AD_URL = process.env.AD_URL
+const AD_API = process.env.AD_API
+
+async function resolveAdEmail(name: string): Promise<string | null> {
+  if (!AD_URL || !AD_API) return null
+  try {
+    // Fetch AD org tree → find member by displayName → get employee ID → fetch email
+    const searchRes = await fetch(
+      `${AD_URL}/ldap/api/v1/organizations/tree?domain=PANJIT`,
+      { headers: { 'X-API-Key': AD_API } }
+    )
+    if (!searchRes.ok) return null
+    const data = await searchRes.json()
+    const members: { username: string; displayName: string }[] = []
+    const flatten = (node: { members?: { username: string; displayName: string }[]; children?: unknown[] }) => {
+      if (node.members) members.push(...node.members)
+      if (node.children) (node.children as typeof node[]).forEach(flatten)
+    }
+    if (data.tree) flatten(data.tree)
+    const match = members.find(m => m.displayName.toLowerCase() === name.toLowerCase())
+    if (!match) return null
+    // Use employee ID (工號) to fetch user detail
+    const userRes = await fetch(
+      `${AD_URL}/ldap/api/v1/users/${encodeURIComponent(match.username)}`,
+      { headers: { 'X-API-Key': AD_API } }
+    )
+    if (!userRes.ok) return null
+    const userData = await userRes.json()
+    return userData?.user?.mail || null
+  } catch {
+    return null
+  }
+}
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import type { ProjectType as FeProjectType, ProjectTier as FeProjectTier, DemandSource as FeDemandSource } from '@/lib/mock-data'
 
@@ -56,7 +90,7 @@ interface CreateProjectBody {
   budget: number
   ownerName: string
   team: string[]
-  teamMembers?: { name: string; role: string; jobTitle?: string; organization?: string; responsibility: string }[]
+  teamMembers?: { name: string; role: string; jobTitle?: string; organization?: string; responsibility: string; email?: string }[]
   milestones: { id: string; name: string; dueDate: string; startDate?: string }[]
   tasks?: {
     milestoneId: string
@@ -352,19 +386,36 @@ export async function POST(request: NextRequest) {
       // 7. Create team members
       if (body.teamMembers?.length) {
         for (const tm of body.teamMembers) {
-          // Find user by name, or skip
-          let memberUser = await tx.user.findFirst({
-            where: { name: tm.name },
-          })
+          // Find user by email first (most reliable), then by name
+          let memberUser = tm.email
+            ? await tx.user.findUnique({ where: { email: tm.email } })
+            : null
           if (!memberUser) {
-            // Auto-create user as member role
-            memberUser = await tx.user.create({
-              data: {
-                name: tm.name,
-                email: `${tm.name.toLowerCase().replace(/\s+/g, '.')}@auto.local`,
-                role: 'member',
-              },
-            })
+            memberUser = await tx.user.findFirst({ where: { name: tm.name } })
+          }
+          if (!memberUser) {
+            // Resolve real email: use provided email, or look up via AD
+            let resolvedEmail = tm.email && tm.email.includes('@') && !tm.email.endsWith('@auto.local')
+              ? tm.email
+              : null
+            if (!resolvedEmail) {
+              resolvedEmail = await resolveAdEmail(tm.name)
+            }
+            const finalEmail = resolvedEmail
+              || `${tm.name.toLowerCase().replace(/\s+/g, '.')}@auto.local`
+            // Check if a user with that email already exists (e.g. from AD login)
+            memberUser = await tx.user.findUnique({ where: { email: finalEmail } })
+            if (!memberUser) {
+              memberUser = await tx.user.create({
+                data: {
+                  name: tm.name,
+                  email: finalEmail,
+                  role: 'member',
+                  jobTitle: tm.jobTitle?.trim() || '',
+                  organization: tm.organization?.trim() || '',
+                },
+              })
+            }
           }
 
           await tx.projectTeamMember.upsert({

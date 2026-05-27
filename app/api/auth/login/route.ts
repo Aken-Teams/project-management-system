@@ -56,6 +56,10 @@ export async function POST(request: NextRequest) {
               })
             }
 
+            if (!dbUser.isActive) {
+              return NextResponse.json({ error: '此帳號已被停用，請聯繫管理員' }, { status: 403 })
+            }
+
             return NextResponse.json({
               success: true,
               user: {
@@ -100,6 +104,10 @@ export async function POST(request: NextRequest) {
           role: mockUser.role,
         },
       })
+    }
+
+    if (!dbUser.isActive) {
+      return NextResponse.json({ error: '此帳號已被停用，請聯繫管理員' }, { status: 403 })
     }
 
     return NextResponse.json({

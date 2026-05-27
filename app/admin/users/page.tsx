@@ -15,7 +15,13 @@ import { cn } from '@/lib/utils'
 import {
   Search, ChevronLeft, ChevronRight, Pencil, ChevronDown, ChevronRight as ChevronRightIcon,
   Users, Loader2, FolderOpen, ExternalLink, CalendarCheck, AlertCircle, UserPlus, Eye,
+  Trash2, Wrench,
 } from 'lucide-react'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import Link from 'next/link'
 
 // ─── Types ─────────────────────────────────────────────────
@@ -473,6 +479,13 @@ export default function AdminUsersPage() {
   const [addLoading, setAddLoading] = useState(false)
   const [adding, setAdding] = useState(false)
 
+  // Delete confirmation
+  const [deletingUser, setDeletingUser] = useState<DisplayRow | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Fix auto.local emails
+  const [fixingEmails, setFixingEmails] = useState(false)
+
   // Detail sheet
   const [detailDbId, setDetailDbId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -635,6 +648,53 @@ export default function AdminUsersPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!deletingUser?.dbId || !user) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/users/${deletingUser.dbId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-email': user.email },
+      })
+      if (res.ok) {
+        toast({ title: '已刪除', description: `${deletingUser.name} 已從系統中移除` })
+        setDeletingUser(null)
+        fetchTable()
+      } else {
+        const err = await res.json()
+        toast({ title: '無法刪除', description: err.error, variant: 'destructive' })
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleFixAutoEmails = async () => {
+    if (!user) return
+    setFixingEmails(true)
+    try {
+      const res = await fetch('/api/admin/fix-auto-emails', {
+        method: 'POST',
+        headers: { 'x-user-email': user.email },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        toast({
+          title: 'Email 修正完成',
+          description: `已修正 ${data.fixed} 筆，跳過 ${data.skipped} 筆`,
+        })
+        fetchTable()
+      } else {
+        const err = await res.json()
+        toast({ title: '修正失敗', description: err.error, variant: 'destructive' })
+      }
+    } finally {
+      setFixingEmails(false)
+    }
+  }
+
+  const hasAutoLocalUsers = rows.some(r => r.email.endsWith('@auto.local'))
+
   const totalPages = Math.ceil(total / limit)
   // For org view, rows holds ALL filtered results; slice client-side for display
   const displayRows = selectedOrg !== null
@@ -650,6 +710,18 @@ export default function AdminUsersPage() {
           <p className="text-sm text-muted-foreground mt-0.5">管理系統所有使用者的角色與部門資訊</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {hasAutoLocalUsers && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-amber-600 border-amber-200 hover:bg-amber-50"
+              onClick={handleFixAutoEmails}
+              disabled={fixingEmails}
+            >
+              {fixingEmails ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
+              修正 auto.local Email
+            </Button>
+          )}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -757,6 +829,9 @@ export default function AdminUsersPage() {
                               </Button>
                               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="編輯" onClick={() => openEdit(row)}>
                                 <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" title="刪除" onClick={() => setDeletingUser(row)}>
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           ) : (
@@ -902,6 +977,29 @@ export default function AdminUsersPage() {
         authEmail={user?.email ?? ''}
         onEditUser={openEditFromDetail}
       />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deletingUser} onOpenChange={open => !open && setDeletingUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認刪除使用者</AlertDialogTitle>
+            <AlertDialogDescription>
+              確定要刪除 <span className="font-semibold text-foreground">{deletingUser?.name}</span>（{deletingUser?.email}）嗎？
+              此操作會同時移除該使用者在所有專案中的團隊成員記錄，且無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? '刪除中...' : '確認刪除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
