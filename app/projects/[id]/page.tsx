@@ -904,11 +904,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                   </thead>
                   <tbody>
                     {[
-                      { code: 'S', name: '簽核', edit: false, gantt: '唯讀', roi: '—', review: true },
+                      { code: 'S', name: '簽核', edit: false, gantt: '唯讀', roi: '可見', review: true },
                       { code: 'A', name: '當責', edit: true, gantt: '可寫', roi: '可見', review: false },
                       { code: 'P', name: '採購', edit: false, gantt: '唯讀', roi: '可編輯', review: false },
                       { code: 'R', name: '執行', edit: false, gantt: '唯讀', roi: '—', review: false },
-                      { code: 'C', name: '諮詢', edit: false, gantt: '唯讀', roi: '—', review: false },
+                      { code: 'C', name: '諮詢', edit: false, gantt: '唯讀', roi: '可見', review: false },
                       { code: 'I', name: '知會', edit: false, gantt: '唯讀', roi: '—', review: false },
                     ].map((r, i) => (
                       <tr key={r.code} className={`${i % 2 !== 0 ? 'bg-muted/20' : ''} ${currentUserTeamRole === r.code ? 'bg-blue-50/80 dark:bg-blue-950/20' : ''}`}>
