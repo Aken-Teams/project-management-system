@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronRight, Package, DollarSign, CreditCard, Pencil, Save, X, TrendingDown, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,6 +86,22 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
   const [items, setItems] = useState<CapexItemData[]>(initialItems)
   const [expandedBudgetItems, setExpandedBudgetItems] = useState<Set<string>>(new Set())
   const { toast } = useToast()
+
+  // Sticky compact bar: appears when full summary scrolls out of view
+  const summaryCardRef = useRef<HTMLDivElement>(null)
+  const [showStickyBar, setShowStickyBar] = useState(false)
+  const [stickyHovered, setStickyHovered] = useState(false)
+
+  useEffect(() => {
+    const card = summaryCardRef.current
+    if (!card) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyBar(!entry.isIntersecting),
+      { threshold: 0 },
+    )
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [])
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -212,8 +228,8 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
 
   return (
     <div className="space-y-5">
-      {/* ── Summary Card (sticky) ── */}
-      <Card className="sticky top-0 md:top-0 z-10 shadow-md bg-card">
+      {/* ── Full Summary Card (normal flow, not sticky) ── */}
+      <Card ref={summaryCardRef}>
         <CardContent className="pt-5 pb-5">
           {/* Top row: three big numbers */}
           <div className="grid grid-cols-3 gap-4 mb-5">
@@ -244,7 +260,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
             </div>
           </div>
 
-          {/* Bottom row: ROI params in a single line */}
+          {/* Bottom row: ROI params */}
           <div className="flex items-center justify-between border-t pt-4">
             {editingRoi && canEditRoi ? (
               <div className="flex-1 space-y-2">
@@ -306,7 +322,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
               </>
             )}
           </div>
-          {/* Add button inside summary card */}
+          {/* Add button */}
           {!readOnly && (
             <div className="flex justify-end border-t pt-4 mt-1">
               <Button onClick={() => openAddDialog(null)}>
@@ -316,6 +332,80 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
           )}
         </CardContent>
       </Card>
+
+      {/* ── Compact sticky bar (appears when full card scrolls out) ── */}
+      {showStickyBar && (
+        <div
+          className="sticky top-0 z-10 -mx-6 -mt-5"
+          onMouseEnter={() => setStickyHovered(true)}
+          onMouseLeave={() => setStickyHovered(false)}
+        >
+          <div className="bg-card border-b shadow-md px-6 py-2">
+            <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 flex-1 min-w-0 text-sm">
+                <span className="text-muted-foreground">預估 <strong className="text-foreground tabular-nums">{estimatedTotal > 0 ? fmtNT(estimatedTotal) : '-'}</strong></span>
+                <span className="text-muted-foreground">實際 <strong className="text-blue-600 tabular-nums">{grandTotal > 0 ? fmtNT(grandTotal) : '-'}</strong></span>
+                {diff != null && (
+                  <span className={diff <= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {diff <= 0 ? <TrendingDown className="h-3.5 w-3.5 inline mr-0.5" /> : <TrendingUp className="h-3.5 w-3.5 inline mr-0.5" />}
+                    <strong className="tabular-nums">{diff <= 0 ? '節省' : '超支'} {fmtNT(Math.abs(diff))} ({diffPct}%)</strong>
+                  </span>
+                )}
+                {paybackMonths != null && (
+                  <span className="text-muted-foreground">回報期 <strong className="text-red-600 tabular-nums">{paybackMonths.toFixed(1)} 個月</strong></span>
+                )}
+              </div>
+              {!readOnly && (
+                <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => openAddDialog(null)}>
+                  <Plus className="h-3.5 w-3.5 mr-1" /> 新增
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Hover dropdown — full details overlay */}
+          {stickyHovered && (
+            <div className="absolute left-0 right-0 bg-card border-b shadow-xl px-6 py-3">
+              <div className="grid grid-cols-3 gap-4 mb-3">
+                <div className="text-center p-2.5 bg-muted/40 rounded-lg">
+                  <div className="text-[11px] text-muted-foreground mb-0.5">預估支出</div>
+                  <div className="text-base font-bold tabular-nums">{estimatedTotal > 0 ? fmtNT(estimatedTotal) : '-'}</div>
+                </div>
+                <div className="text-center p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="text-[11px] text-muted-foreground mb-0.5">實際採購</div>
+                  <div className="text-lg font-bold tabular-nums">{grandTotal > 0 ? fmtNT(grandTotal) : '-'}</div>
+                  <div className="text-[10px] text-muted-foreground">{items.length} 筆明細</div>
+                </div>
+                <div className={`text-center p-2.5 rounded-lg ${diff != null ? (diff <= 0 ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30') : 'bg-muted/40'}`}>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">差異</div>
+                  {diff != null ? (
+                    <>
+                      <div className={`text-base font-bold tabular-nums flex items-center justify-center gap-1 ${diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {diff <= 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                        {fmtNT(Math.abs(diff))}
+                      </div>
+                      <div className={`text-[10px] ${diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {diff <= 0 ? '節省' : '超支'} ({diffPct}%)
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-base font-bold text-muted-foreground">-</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>毛利率 <strong className="text-foreground">{roiParams?.grossMargin != null ? `${roiParams.grossMargin}%` : '-'}</strong></span>
+                <span>售價 <strong className="text-foreground">{roiParams?.avgPrice != null ? `${roiParams.avgPrice.toLocaleString()} NTD/K` : '-'}</strong></span>
+                <span>產能 <strong className="text-foreground">{roiParams?.capacity != null ? `${roiParams.capacity.toLocaleString()} K/M` : '-'}</strong></span>
+                <span>月獲利 <strong className="text-foreground">{monthlyProfit != null ? fmtNT(monthlyProfit) : '-'}</strong></span>
+                <span>回報期 <strong className={paybackMonths != null ? 'text-red-600' : 'text-foreground'}>
+                  {paybackMonths != null ? `${paybackMonths.toFixed(1)} 個月` : '-'}
+                </strong></span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Budget items + CAPEX grouped ── */}
       <div className="space-y-3">
