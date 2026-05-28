@@ -461,6 +461,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                       item={items[idx]}
                       index={idx}
                       editing={isEditing}
+                      budgetItems={budgetItems}
                       onChange={handleChange}
                       onRemove={handleRemove}
                     />
@@ -508,6 +509,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                       item={items[idx]}
                       index={idx}
                       editing={isEditing}
+                      budgetItems={budgetItems}
                       onChange={handleChange}
                       onRemove={handleRemove}
                     />
@@ -531,17 +533,18 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
 
 // ─── Single CAPEX item row (compact card layout) ───
 
-function CapexItemRow({ item, index, editing, onChange, onRemove }: {
+function CapexItemRow({ item, index, editing, budgetItems, onChange, onRemove }: {
   item: CapexItemData
   index: number
   editing: boolean
+  budgetItems?: BudgetItemRef[]
   onChange: (index: number, field: keyof CapexItemData, value: unknown) => void
   onRemove: (index: number) => void
 }) {
   return (
     <div className="border-b last:border-b-0 px-4 py-3">
       {editing ? (
-        <CapexItemForm item={item} index={index} onChange={onChange} onRemove={onRemove} />
+        <CapexItemForm item={item} index={index} budgetItems={budgetItems} onChange={onChange} onRemove={onRemove} />
       ) : (
         <CapexItemDisplay item={item} />
       )}
@@ -663,9 +666,10 @@ function CapexItemDisplay({ item }: { item: CapexItemData }) {
 
 // ─── Edit form (compact grid) ───
 
-function CapexItemForm({ item, index, onChange, onRemove }: {
+function CapexItemForm({ item, index, budgetItems, onChange, onRemove }: {
   item: CapexItemData
   index: number
+  budgetItems?: BudgetItemRef[]
   onChange: (index: number, field: keyof CapexItemData, value: unknown) => void
   onRemove: (index: number) => void
 }) {
@@ -689,9 +693,29 @@ function CapexItemForm({ item, index, onChange, onRemove }: {
 
   return (
     <div className="space-y-3">
-      {/* Header + Delete */}
-      <div className="flex justify-between items-center">
-        <span className="text-xs font-medium text-muted-foreground">明細 #{index + 1}</span>
+      {/* Header + Link + Delete */}
+      <div className="flex justify-between items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground shrink-0">明細 #{index + 1}</span>
+        {budgetItems && budgetItems.length > 0 && (
+          <Field label="連結預估項目" className="flex-1 max-w-xs">
+            <Select
+              value={item.budgetItemId || '_none'}
+              onValueChange={v => onChange(index, 'budgetItemId', v === '_none' ? null : v)}
+            >
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue placeholder="未連結" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none" className="text-xs">未連結</SelectItem>
+                {budgetItems.map((bi, biIdx) => (
+                  <SelectItem key={bi.id || `_bi_${biIdx}`} value={bi.id || `_bi_${biIdx}`} className="text-xs">
+                    {[bi.station, bi.vendor, bi.equipment].filter(Boolean).join(' / ') || `項目 ${biIdx + 1}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive">

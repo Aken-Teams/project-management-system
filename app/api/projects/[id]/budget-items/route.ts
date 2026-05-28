@@ -21,12 +21,13 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 }
 
 // ─── PUT /api/projects/[id]/budget-items ─────────────────
-// Bulk replace: delete all existing items, then insert the new list.
+// Upsert: update existing items (preserve IDs for CAPEX linkage), create new, delete removed.
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params
   try {
     const { items } = await request.json() as {
       items: {
+        id?: string
         station?: string
         vendor?: string
         equipment: string
@@ -39,22 +40,36 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.projectBudgetItem.deleteMany({ where: { projectId: id } })
-      if (items && items.length > 0) {
-        await tx.projectBudgetItem.createMany({
-          data: items.map((item, i) => ({
-            projectId: id,
-            station: item.station ?? '',
-            vendor: item.vendor ?? '',
-            equipment: item.equipment ?? '',
-            quantity: item.quantity ?? 1,
-            purchaseType: item.purchaseType ?? '',
-            unitPrice: item.unitPrice ?? null,
-            estimatedCost: item.estimatedCost ?? null,
-            actualCost: item.actualCost ?? null,
-            sortOrder: i,
-          })),
-        })
+      const incomingIds = (items ?? []).filter(i => i.id).map(i => i.id!)
+      // Delete items that are no longer in the list
+      await tx.projectBudgetItem.deleteMany({
+        where: { projectId: id, ...(incomingIds.length > 0 ? { id: { notIn: incomingIds } } : {}) },
+      })
+      // Upsert each item: update existing (preserve ID), create new
+      for (let i = 0; i < (items ?? []).length; i++) {
+        const item = items[i]
+        const data = {
+          station: item.station ?? '',
+          vendor: item.vendor ?? '',
+          equipment: item.equipment ?? '',
+          quantity: item.quantity ?? 1,
+          purchaseType: item.purchaseType ?? '',
+          unitPrice: item.unitPrice ?? null,
+          estimatedCost: item.estimatedCost ?? null,
+          actualCost: item.actualCost ?? null,
+          sortOrder: i,
+        }
+        if (item.id) {
+          await tx.projectBudgetItem.upsert({
+            where: { id: item.id },
+            update: data,
+            create: { ...data, id: item.id, projectId: id },
+          })
+        } else {
+          await tx.projectBudgetItem.create({
+            data: { ...data, projectId: id },
+          })
+        }
       }
     })
 
