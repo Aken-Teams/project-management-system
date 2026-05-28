@@ -212,11 +212,11 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
 
   return (
     <div className="space-y-5">
-      {/* ── Summary Card ── */}
-      <Card>
-        <CardContent className="pt-5 pb-4">
+      {/* ── Summary Card (sticky) ── */}
+      <Card className="sticky top-0 md:top-0 z-10 shadow-md bg-card">
+        <CardContent className="pt-5 pb-5">
           {/* Top row: three big numbers */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-3 gap-4 mb-5">
             <div className="text-center p-3 bg-muted/40 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">預估支出</div>
               <div className="text-lg font-bold tabular-nums">{estimatedTotal > 0 ? fmtNT(estimatedTotal) : '-'}</div>
@@ -245,7 +245,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
           </div>
 
           {/* Bottom row: ROI params in a single line */}
-          <div className="flex items-center justify-between border-t pt-3">
+          <div className="flex items-center justify-between border-t pt-4">
             {editingRoi && canEditRoi ? (
               <div className="flex-1 space-y-2">
                 <div className="grid grid-cols-3 gap-3">
@@ -306,17 +306,16 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
               </>
             )}
           </div>
+          {/* Add button inside summary card */}
+          {!readOnly && (
+            <div className="flex justify-end border-t pt-4 mt-1">
+              <Button onClick={() => openAddDialog(null)}>
+                <Plus className="h-4 w-4 mr-1.5" /> 新增採購明細
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* ── Add button ── */}
-      {!readOnly && (
-        <div className="flex justify-end">
-          <Button onClick={() => openAddDialog(null)}>
-            <Plus className="h-4 w-4 mr-1.5" /> 新增採購明細
-          </Button>
-        </div>
-      )}
 
       {/* ── Budget items + CAPEX grouped ── */}
       <div className="space-y-3">
