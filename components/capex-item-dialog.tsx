@@ -202,8 +202,8 @@ export function CapexItemDialog({
             <AccordionItem value="basic">
               <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
                 <span className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-muted-foreground" />
-                  設備基本資訊
+                  <Package className="h-4 w-4 text-blue-500" />
+                  <span className="text-blue-700">設備基本資訊</span>
                   {basicSummary && (
                     <span className="text-xs text-muted-foreground font-normal ml-1">{basicSummary}</span>
                   )}
@@ -252,8 +252,8 @@ export function CapexItemDialog({
             <AccordionItem value="amount">
               <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
                 <span className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  金額與數量
+                  <DollarSign className="h-4 w-4 text-emerald-500" />
+                  <span className="text-emerald-700">金額與數量</span>
                   {draft.orderAmount != null && (
                     <Badge variant="secondary" className="ml-1 text-xs font-normal">
                       {fmtNT(draft.orderAmount)}
@@ -296,8 +296,8 @@ export function CapexItemDialog({
             <AccordionItem value="dates">
               <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
                 <span className="flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                  日期資訊
+                  <CalendarDays className="h-4 w-4 text-amber-500" />
+                  <span className="text-amber-700">日期資訊</span>
                   {dateSummary && (
                     <span className="text-xs text-muted-foreground font-normal ml-1">{dateSummary}</span>
                   )}
@@ -322,8 +322,8 @@ export function CapexItemDialog({
             <AccordionItem value="payment" className="border-b-0">
               <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
                 <span className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  付款排程
+                  <CreditCard className="h-4 w-4 text-violet-500" />
+                  <span className="text-violet-700">付款排程</span>
                   {draft.paymentStatus && (
                     <PaymentBadge status={draft.paymentStatus} />
                   )}

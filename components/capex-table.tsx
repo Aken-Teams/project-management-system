@@ -544,46 +544,47 @@ function CapexItemDisplay({ item }: { item: CapexItemData }) {
         </div>
       </div>
 
-      {/* Row 2: key fields inline */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-        {item.poNumber && <span>PO <strong className="text-foreground">{item.poNumber}</strong></span>}
-        {item.partNumber && <span>料號 <strong className="text-foreground">{item.partNumber}</strong></span>}
-        {item.station && <span>站別 <strong className="text-foreground">{item.station}</strong></span>}
-        {item.currency !== 'TWD' && item.originalPrice != null && (
-          <span>原幣 <strong className="text-foreground">{item.currency} {item.originalPrice.toLocaleString()}</strong></span>
-        )}
-        {item.deliveryDate && <span>入廠 <strong className="text-foreground">{item.deliveryDate}</strong></span>}
-      </div>
-
-      {/* Row 3: payment progress */}
-      {hasPay && (
-        <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5 min-w-[120px]">
-            <span className="text-muted-foreground shrink-0">付款</span>
-            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(payPct, 100)}%` }} />
-            </div>
-            <span className="text-muted-foreground tabular-nums shrink-0">{payPct}%</span>
-          </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            {item.depositPct != null && (
-              <span className={item.depositPayDate ? 'text-green-600' : ''}>
-                訂{fmtPct(item.depositPct)} {item.depositPayDate ? '✓' : '○'}
-              </span>
-            )}
-            {item.deliveryPct != null && (
-              <span className={item.deliveryPayDate ? 'text-green-600' : ''}>
-                交{fmtPct(item.deliveryPct)} {item.deliveryPayDate ? '✓' : '○'}
-              </span>
-            )}
-            {item.acceptancePct != null && (
-              <span className={item.acceptancePayDate ? 'text-green-600' : ''}>
-                驗{fmtPct(item.acceptancePct)} {item.acceptancePayDate ? '✓' : '○'}
-              </span>
-            )}
-          </div>
+      {/* Row 2: key fields + payment (right-aligned) */}
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          {item.poNumber && <span>PO <strong className="text-foreground">{item.poNumber}</strong></span>}
+          {item.partNumber && <span>料號 <strong className="text-foreground">{item.partNumber}</strong></span>}
+          {item.station && <span>站別 <strong className="text-foreground">{item.station}</strong></span>}
+          {item.currency !== 'TWD' && item.originalPrice != null && (
+            <span>原幣 <strong className="text-foreground">{item.currency} {item.originalPrice.toLocaleString()}</strong></span>
+          )}
+          {item.deliveryDate && <span>入廠 <strong className="text-foreground">{item.deliveryDate}</strong></span>}
         </div>
-      )}
+
+        {hasPay && (
+          <div className="shrink-0 flex flex-col items-end gap-0.5 text-xs">
+            <div className="flex items-center gap-1.5 min-w-[120px]">
+              <span className="text-muted-foreground shrink-0">付款</span>
+              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(payPct, 100)}%` }} />
+              </div>
+              <span className="text-muted-foreground tabular-nums shrink-0">{payPct}%</span>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {item.depositPct != null && (
+                <span className={item.depositPayDate ? 'text-green-600' : ''}>
+                  訂{fmtPct(item.depositPct)} {item.depositPayDate ? '✓' : '○'}
+                </span>
+              )}
+              {item.deliveryPct != null && (
+                <span className={item.deliveryPayDate ? 'text-green-600' : ''}>
+                  交{fmtPct(item.deliveryPct)} {item.deliveryPayDate ? '✓' : '○'}
+                </span>
+              )}
+              {item.acceptancePct != null && (
+                <span className={item.acceptancePayDate ? 'text-green-600' : ''}>
+                  驗{fmtPct(item.acceptancePct)} {item.acceptancePayDate ? '✓' : '○'}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
