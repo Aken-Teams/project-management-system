@@ -189,6 +189,12 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
     return totals
   }, [items])
 
+  const capexCountByBudget = useMemo(() => {
+    const counts = new Map<string, number>()
+    groupedItems.forEach((list, key) => counts.set(key, list.length))
+    return counts
+  }, [groupedItems])
+
   const grandTotal = useMemo(() => items.reduce((s, i) => s + (i.orderAmount ?? 0), 0), [items])
   const estimatedTotal = useMemo(() => budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0), [budgetItems])
 
@@ -445,6 +451,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
         onOpenChange={setDialogOpen}
         projectId={projectId}
         budgetItems={budgetItems}
+        capexCountByBudget={capexCountByBudget}
         item={dialogItem}
         defaultBudgetItemId={dialogDefaultBudgetId}
         onSaved={refetch}

@@ -56,13 +56,15 @@ interface CapexItemDialogProps {
   onOpenChange: (open: boolean) => void
   projectId: string
   budgetItems: BudgetItemRef[]
+  /** How many CAPEX items are linked to each budget item */
+  capexCountByBudget?: Map<string, number>
   item: CapexItemData | null
   defaultBudgetItemId?: string | null
   onSaved: () => void
 }
 
 export function CapexItemDialog({
-  open, onOpenChange, projectId, budgetItems,
+  open, onOpenChange, projectId, budgetItems, capexCountByBudget,
   item, defaultBudgetItemId, onSaved,
 }: CapexItemDialogProps) {
   const [draft, setDraft] = useState<CapexItemData>(() =>
@@ -169,18 +171,27 @@ export function CapexItemDialog({
               </SelectTrigger>
               <SelectContent className="max-h-60 overflow-y-auto" position="popper" sideOffset={4}>
                 <SelectItem value="_none">不連結（其他採購項目）</SelectItem>
-                {budgetItems.map((bi, biIdx) => (
-                  <SelectItem key={bi.id || `_bi_${biIdx}`} value={bi.id || `_bi_${biIdx}`}>
-                    <span className="flex items-center gap-2">
-                      {[bi.station, bi.vendor, bi.equipment].filter(Boolean).join(' / ') || `項目 ${biIdx + 1}`}
-                      {bi.estimatedCost != null && (
-                        <span className="text-muted-foreground text-xs">
-                          預估 {fmtNT(bi.estimatedCost)}
-                        </span>
-                      )}
-                    </span>
-                  </SelectItem>
-                ))}
+                {budgetItems.map((bi, biIdx) => {
+                  const biId = bi.id || `_bi_${biIdx}`
+                  const count = capexCountByBudget?.get(biId) ?? 0
+                  return (
+                    <SelectItem key={biId} value={biId}>
+                      <span className="flex items-center gap-2">
+                        {[bi.station, bi.vendor, bi.equipment].filter(Boolean).join(' / ') || `項目 ${biIdx + 1}`}
+                        {bi.estimatedCost != null && (
+                          <span className="text-muted-foreground text-xs">
+                            預估 {fmtNT(bi.estimatedCost)}
+                          </span>
+                        )}
+                        {count > 0 ? (
+                          <span className="text-xs text-blue-600">已有 {count} 筆</span>
+                        ) : (
+                          <span className="text-xs text-orange-500">尚無明細</span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>
