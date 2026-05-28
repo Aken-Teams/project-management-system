@@ -106,7 +106,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     m => m.email === user?.email
   )?.role
   const canViewCapex = currentUserTeamRole === 'A' || currentUserTeamRole === 'P' || currentUserTeamRole === 'S' || currentUserTeamRole === 'C' || user?.role === 'pm' || user?.role === 'executive' || user?.role === 'admin'
-  const canEditCapex = currentUserTeamRole === 'P'
+  const canEditCapex = currentUserTeamRole === 'P' || currentUserTeamRole === 'A'
   const canEditRoi = user?.role === 'pm' || user?.role === 'admin'
 
   const fetchShareLinks = async () => {

@@ -461,7 +461,6 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                       item={items[idx]}
                       index={idx}
                       editing={isEditing}
-                      budgetItems={budgetItems}
                       onChange={handleChange}
                       onRemove={handleRemove}
                     />
@@ -693,29 +692,9 @@ function CapexItemForm({ item, index, budgetItems, onChange, onRemove }: {
 
   return (
     <div className="space-y-3">
-      {/* Header + Link + Delete */}
-      <div className="flex justify-between items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground shrink-0">明細 #{index + 1}</span>
-        {budgetItems && budgetItems.length > 0 && (
-          <Field label="連結預估項目" className="flex-1 max-w-xs">
-            <Select
-              value={item.budgetItemId || '_none'}
-              onValueChange={v => onChange(index, 'budgetItemId', v === '_none' ? null : v)}
-            >
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue placeholder="未連結" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none" className="text-xs">未連結</SelectItem>
-                {budgetItems.map((bi, biIdx) => (
-                  <SelectItem key={bi.id || `_bi_${biIdx}`} value={bi.id || `_bi_${biIdx}`} className="text-xs">
-                    {[bi.station, bi.vendor, bi.equipment].filter(Boolean).join(' / ') || `項目 ${biIdx + 1}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        )}
+      {/* Header + Delete */}
+      <div className="flex justify-between items-center">
+        <span className="text-xs font-medium text-muted-foreground">明細 #{index + 1}</span>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive">
@@ -740,6 +719,30 @@ function CapexItemForm({ item, index, budgetItems, onChange, onRemove }: {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      {/* Link to budget item */}
+      {budgetItems && budgetItems.length > 0 && (
+        <div className="w-full max-w-sm">
+          <Field label="連結預估項目">
+            <Select
+              value={item.budgetItemId || '_none'}
+              onValueChange={v => onChange(index, 'budgetItemId', v === '_none' ? null : v)}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="未連結" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60 overflow-y-auto" position="popper" sideOffset={4}>
+                <SelectItem value="_none" className="text-xs">未連結</SelectItem>
+                {budgetItems.map((bi, biIdx) => (
+                  <SelectItem key={bi.id || `_bi_${biIdx}`} value={bi.id || `_bi_${biIdx}`} className="text-xs">
+                    {[bi.station, bi.vendor, bi.equipment].filter(Boolean).join(' / ') || `項目 ${biIdx + 1}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+      )}
 
       {/* Section 1: Basic */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
