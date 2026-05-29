@@ -184,7 +184,7 @@ export default function AdminReportsPage() {
                 {cronEnabled ? '排程執行中' : '排程已暫停'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {cronEnabled ? '系統依排程自動寄送週報' : '週報已暫停，Cron 呼叫將跳過'}
+                {cronEnabled ? '系統依排程自動寄送週報' : '系統已暫停自動寄送週報，直到重新啟用'}
               </p>
             </div>
           </div>

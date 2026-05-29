@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import {
   Bell, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, RefreshCw,
-  Mail, Paperclip, AlertCircle, Users, Play, Loader2,
+  Mail, Paperclip, AlertCircle, Users, Play, Loader2, PauseCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,7 @@ const FREQ_LABEL: Record<number, string> = { 1: '每週', 2: '每2週', 4: '每4
 const SETTING_KEYS = [
   'notification.schedule.dayOfWeek', 'notification.schedule.hour',
   'report.schedule.dayOfWeek', 'report.schedule.hour',
+  'cron.notification.enabled', 'cron.report.enabled',
 ]
 
 /** ISO week number (1-53) */
@@ -402,6 +403,9 @@ export default function AdminSchedulePage() {
     }
   }
 
+  const notifPaused = settings['cron.notification.enabled'] === 'false'
+  const reportPaused = settings['cron.report.enabled'] === 'false'
+
   const reportDay = parseInt(settings['report.schedule.dayOfWeek'] ?? '5')
   const reportHour = parseInt(settings['report.schedule.hour'] ?? '8')
 
@@ -431,23 +435,55 @@ export default function AdminSchedulePage() {
         <p className="text-sm text-muted-foreground mt-0.5">通知與報告自動排程的執行總覽</p>
       </div>
 
+      {/* Paused banners */}
+      {(notifPaused || reportPaused) && (
+        <div className="flex flex-wrap gap-3">
+          {notifPaused && (
+            <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5">
+              <PauseCircle className="h-4 w-4 text-orange-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-orange-700">通知排程已暫停</p>
+                <p className="text-xs text-orange-600">系統不會自動發送週報通知，可至「通知設定」重新啟用</p>
+              </div>
+            </div>
+          )}
+          {reportPaused && (
+            <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5">
+              <PauseCircle className="h-4 w-4 text-orange-500 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-orange-700">報告排程已暫停</p>
+                <p className="text-xs text-orange-600">系統不會自動寄送週報郵件，可至「報告設定」重新啟用</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Schedule summary badges */}
       <div className="flex flex-wrap gap-3">
         {Object.values(scheduleGroups).map((g, i) => (
-          <div key={i} className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-            <Bell className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-medium text-amber-700">{g.tiers.join('/')}</span>
-            <span className="text-xs text-amber-600">
+          <div key={i} className={cn(
+            'flex items-center gap-2 rounded-lg border px-3 py-2',
+            notifPaused ? 'border-muted bg-muted/30 opacity-60' : 'border-amber-200 bg-amber-50'
+          )}>
+            <Bell className={cn('h-4 w-4', notifPaused ? 'text-muted-foreground' : 'text-amber-600')} />
+            <span className={cn('text-sm font-medium', notifPaused ? 'text-muted-foreground' : 'text-amber-700')}>{g.tiers.join('/')}</span>
+            <span className={cn('text-xs', notifPaused ? 'text-muted-foreground' : 'text-amber-600')}>
               {FREQ_LABEL[g.frequencyWeeks] ?? `每${g.frequencyWeeks}週`}{DAY_NAMES_FULL[g.dayOfWeek]} {String(g.hour).padStart(2, '0')}:00
             </span>
+            {notifPaused && <span className="text-xs text-orange-500 font-medium">已暫停</span>}
           </div>
         ))}
-        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-          <FileText className="h-4 w-4 text-blue-600" />
-          <span className="text-sm font-medium text-blue-700">週報郵件</span>
-          <span className="text-xs text-blue-600">
+        <div className={cn(
+          'flex items-center gap-2 rounded-lg border px-3 py-2',
+          reportPaused ? 'border-muted bg-muted/30 opacity-60' : 'border-blue-200 bg-blue-50'
+        )}>
+          <FileText className={cn('h-4 w-4', reportPaused ? 'text-muted-foreground' : 'text-blue-600')} />
+          <span className={cn('text-sm font-medium', reportPaused ? 'text-muted-foreground' : 'text-blue-700')}>週報郵件</span>
+          <span className={cn('text-xs', reportPaused ? 'text-muted-foreground' : 'text-blue-600')}>
             每{DAY_NAMES_FULL[reportDay]} {String(reportHour).padStart(2, '0')}:00
           </span>
+          {reportPaused && <span className="text-xs text-orange-500 font-medium">已暫停</span>}
         </div>
       </div>
 

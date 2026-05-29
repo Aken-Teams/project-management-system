@@ -337,7 +337,7 @@ export default function AdminNotificationsPage() {
                 {cronEnabled ? '排程執行中' : '排程已暫停'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {cronEnabled ? '系統依排程自動發送通知' : '通知已暫停，Cron 呼叫將跳過'}
+                {cronEnabled ? '系統依排程自動發送通知' : '系統已暫停自動發送通知，直到重新啟用'}
               </p>
             </div>
           </div>
