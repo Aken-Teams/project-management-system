@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import puppeteer from 'puppeteer'
-
-const AD_URL = process.env.AD_URL
-const AD_API = process.env.AD_API
+import { sendMail } from '@/lib/send-mail'
 
 function replaceVars(template: string, vars: Record<string, string>): string {
   return template.replace(/{{(\w+)}}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -195,22 +193,13 @@ export async function POST(request: NextRequest) {
       await browser.close()
     }
 
-    // ── Send email via LDAP/AD API ─────────────────────────────────────────────
-    const mailRes = await fetch(`${AD_URL}/ldap/api/v1/mail/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': AD_API! },
-      body: JSON.stringify({
-        to: allRecipients,
-        subject,
-        body,
-        attachments: [{ filename, content: pdfBase64 }],
-      }),
+    // ── Send email via native https (avoids fetch encoding issues on Windows) ──
+    await sendMail({
+      to: allRecipients,
+      subject,
+      body,
+      attachments: [{ filename, content: pdfBase64 }],
     })
-
-    if (!mailRes.ok) {
-      const errText = await mailRes.text()
-      throw new Error(`郵件發送失敗: ${mailRes.status} ${errText}`)
-    }
 
     const summary = `已發送給 ${allRecipients.length} 位收件人（主管 ${execEmails.length} 人，專案負責人 ${pmEmails.length} 人），共 ${projects.length} 個專案`
     await prisma.cronJobLog.create({

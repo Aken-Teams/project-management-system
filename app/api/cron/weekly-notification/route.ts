@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-
-const AD_URL = process.env.AD_URL
-const AD_API = process.env.AD_API
+import { sendMail } from '@/lib/send-mail'
 
 function replaceVars(template: string, vars: Record<string, string>): string {
   return template.replace(/{{(\w+)}}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -262,13 +260,9 @@ export async function POST(request: NextRequest) {
           }
 
           // Send email to all team members who have an email address
-          if (teamEmails.length > 0 && AD_URL && AD_API) {
+          if (teamEmails.length > 0 && process.env.AD_URL && process.env.AD_API) {
             try {
-              await fetch(`${AD_URL}/ldap/api/v1/mail/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-API-Key': AD_API },
-                body: JSON.stringify({ to: teamEmails, subject: emailSubject, body: emailBody }),
-              })
+              await sendMail({ to: teamEmails, subject: emailSubject, body: emailBody })
             } catch (e) {
               console.error(`Failed to send notification email for "${project.name}":`, e)
             }

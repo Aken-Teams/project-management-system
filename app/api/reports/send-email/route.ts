@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import puppeteer from 'puppeteer'
-
-const AD_URL = process.env.AD_URL!
-const AD_API = process.env.AD_API!
+import { sendMail, parseJsonUtf8 } from '@/lib/send-mail'
 
 // ─── POST /api/reports/send-email ───────────────────────────────────────────
 // Body: { projectIds: string[], recipients: string[], cc?: string[], subject?: string, body?: string, filename?: string }
 // Generates the PDF server-side (same quality as browser print) then sends email.
 export async function POST(request: NextRequest) {
   try {
-    const { projectIds, recipients, cc, subject, body: emailBody, filename } = await request.json()
+    const { projectIds, recipients, cc, subject, body: emailBody, filename } =
+      await parseJsonUtf8<{ projectIds: string[]; recipients: string[]; cc?: string[]; subject?: string; body?: string; filename?: string }>(request)
 
     if (!recipients || recipients.length === 0) {
       return NextResponse.json({ error: '請提供收件人' }, { status: 400 })
@@ -50,34 +49,14 @@ export async function POST(request: NextRequest) {
       await browser.close()
     }
 
-    // 3. Send email with PDF attachment
-    const res = await fetch(`${AD_URL}/ldap/api/v1/mail/send`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': AD_API,
-      },
-      body: JSON.stringify({
-        to: recipients,
-        ...(cc && cc.length > 0 ? { cc } : {}),
-        subject: subject || '專案報告',
-        body: emailBody || '您好，\n\n請查收附件中的專案報告。\n\n此信件由專案管理系統自動發送。',
-        attachments: [
-          {
-            filename: filename || 'report.pdf',
-            content: pdfBase64,
-          },
-        ],
-      }),
+    // 3. Send email with PDF attachment via native https (avoids fetch encoding issues on Windows)
+    const result = await sendMail({
+      to: recipients,
+      ...(cc && cc.length > 0 ? { cc } : {}),
+      subject: subject || '專案報告',
+      body: emailBody || '您好，\n\n請查收附件中的專案報告。\n\n此信件由專案管理系統自動發送。',
+      attachments: [{ filename: filename || 'report.pdf', content: pdfBase64 }],
     })
-
-    if (!res.ok) {
-      const errText = await res.text()
-      console.error('Mail API error:', res.status, errText)
-      return NextResponse.json({ error: '郵件發送失敗' }, { status: 502 })
-    }
-
-    const result = await res.json()
     return NextResponse.json({ success: true, result })
   } catch (error) {
     console.error('Send email route error:', error)
