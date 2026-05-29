@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { Bell, CheckCircle2, AlertCircle, Info, Clock, Mail, MailX, Settings2 } from 'lucide-react'
+import { Bell, CheckCircle2, AlertCircle, Info, Clock, Mail, MailX, Settings2, Power } from 'lucide-react'
 import { TemplateTextarea, applyTemplateSamples, type VariableDef } from '@/components/template-textarea'
 
 const DAY_OPTIONS = [
@@ -116,6 +116,8 @@ export default function AdminNotificationsPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [cronEnabled, setCronEnabled] = useState(true)
+  const [togglingCron, setTogglingCron] = useState(false)
 
   // Data from API
   const [defaultProfile, setDefaultProfile] = useState<Profile | null>(null)
@@ -147,19 +149,46 @@ export default function AdminNotificationsPage() {
 
   const headers = useCallback(() => ({ 'x-user-email': user?.email ?? '' }), [user])
 
-  // Load all profiles
+  // Load all profiles + cron enabled state
   const loadData = useCallback(async () => {
     if (!user) return
     try {
-      const res = await fetch('/api/admin/notification-profiles', { headers: headers() })
-      const data = await res.json()
+      const [profileRes, settingRes] = await Promise.all([
+        fetch('/api/admin/notification-profiles', { headers: headers() }),
+        fetch('/api/admin/settings?keys=cron.notification.enabled', { headers: headers() }),
+      ])
+      const data = await profileRes.json()
       setDefaultProfile(data.defaultProfile)
       setTierProfiles(data.tierProfiles ?? [])
       setTiers(data.tiers ?? [])
+
+      const settingData = await settingRes.json()
+      setCronEnabled(settingData['cron.notification.enabled'] !== 'false')
     } finally {
       setLoading(false)
     }
   }, [user, headers])
+
+  const handleToggleCron = async (enabled: boolean) => {
+    if (!user) return
+    setTogglingCron(true)
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ 'cron.notification.enabled': String(enabled) }),
+      })
+      if (res.ok) {
+        setCronEnabled(enabled)
+        toast({
+          title: enabled ? '通知排程已啟用' : '通知排程已暫停',
+          description: enabled ? '系統將依排程自動發送通知' : '系統暫停發送自動通知，直到重新啟用',
+        })
+      }
+    } finally {
+      setTogglingCron(false)
+    }
+  }
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -295,9 +324,25 @@ export default function AdminNotificationsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">通知設定</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">設定週報通知的觸發時間與訊息內容，可依專案層級個別調整</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold">通知設定</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">設定週報通知的觸發時間與訊息內容，可依專案層級個別調整</p>
+        </div>
+        <div className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 ${cronEnabled ? 'border-emerald-200 bg-emerald-50' : 'border-orange-200 bg-orange-50'}`}>
+          <div className="flex items-center gap-2">
+            <Power className={`h-4 w-4 ${cronEnabled ? 'text-emerald-600' : 'text-orange-500'}`} />
+            <div>
+              <p className={`text-sm font-medium ${cronEnabled ? 'text-emerald-700' : 'text-orange-700'}`}>
+                {cronEnabled ? '排程執行中' : '排程已暫停'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {cronEnabled ? '系統依排程自動發送通知' : '通知已暫停，Cron 呼叫將跳過'}
+              </p>
+            </div>
+          </div>
+          <Switch checked={cronEnabled} onCheckedChange={handleToggleCron} disabled={togglingCron} />
+        </div>
       </div>
 
       <div className="grid grid-cols-[200px_1fr_300px] gap-4 items-start">

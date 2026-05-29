@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { Mail, Paperclip, Info } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Mail, Paperclip, Info, Power } from 'lucide-react'
 import { TemplateTextarea, applyTemplateSamples, type VariableDef } from '@/components/template-textarea'
 
 const DAY_OPTIONS = [
@@ -108,16 +109,42 @@ export default function AdminReportsPage() {
   const [settings, setSettings] = useState<Record<string, string>>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [cronEnabled, setCronEnabled] = useState(true)
+  const [togglingCron, setTogglingCron] = useState(false)
 
   const headers = useCallback(() => ({ 'x-user-email': user?.email ?? '' }), [user])
 
   useEffect(() => {
     if (!user) return
-    fetch(`/api/admin/settings?keys=${SETTING_KEYS.join(',')}`, { headers: headers() })
+    fetch(`/api/admin/settings?keys=${[...SETTING_KEYS, 'cron.report.enabled'].join(',')}`, { headers: headers() })
       .then(r => r.json())
-      .then(data => setSettings(prev => ({ ...prev, ...data })))
+      .then(data => {
+        setCronEnabled(data['cron.report.enabled'] !== 'false')
+        setSettings(prev => ({ ...prev, ...data }))
+      })
       .finally(() => setLoading(false))
   }, [user, headers])
+
+  const handleToggleCron = async (enabled: boolean) => {
+    if (!user) return
+    setTogglingCron(true)
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers() },
+        body: JSON.stringify({ 'cron.report.enabled': String(enabled) }),
+      })
+      if (res.ok) {
+        setCronEnabled(enabled)
+        toast({
+          title: enabled ? '報告排程已啟用' : '報告排程已暫停',
+          description: enabled ? '系統將依排程自動寄送週報' : '系統暫停自動寄送週報，直到重新啟用',
+        })
+      }
+    } finally {
+      setTogglingCron(false)
+    }
+  }
 
   const set = (key: string, value: string) => setSettings(prev => ({ ...prev, [key]: value }))
 
@@ -144,9 +171,25 @@ export default function AdminReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold">報告設定</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">設定自動週報的寄送排程與郵件範本</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold">報告設定</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">設定自動週報的寄送排程與郵件範本</p>
+        </div>
+        <div className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 ${cronEnabled ? 'border-emerald-200 bg-emerald-50' : 'border-orange-200 bg-orange-50'}`}>
+          <div className="flex items-center gap-2">
+            <Power className={`h-4 w-4 ${cronEnabled ? 'text-emerald-600' : 'text-orange-500'}`} />
+            <div>
+              <p className={`text-sm font-medium ${cronEnabled ? 'text-emerald-700' : 'text-orange-700'}`}>
+                {cronEnabled ? '排程執行中' : '排程已暫停'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {cronEnabled ? '系統依排程自動寄送週報' : '週報已暫停，Cron 呼叫將跳過'}
+              </p>
+            </div>
+          </div>
+          <Switch checked={cronEnabled} onCheckedChange={handleToggleCron} disabled={togglingCron} />
+        </div>
       </div>
 
       <div className="grid grid-cols-[1fr_320px] gap-6 items-start">

@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
       where: {
         key: {
           in: [
+            'cron.report.enabled',
             'report.schedule.dayOfWeek',
             'report.schedule.hour',
             'report.email.subject',
@@ -44,6 +45,14 @@ export async function POST(request: NextRequest) {
     const settings: Record<string, string> = Object.fromEntries(
       settingRows.map(r => [r.key, r.value])
     )
+
+    // ── Check if report cron is enabled ─────────────────────────────────────
+    if (settings['cron.report.enabled'] === 'false') {
+      if (isPreview) {
+        return NextResponse.json({ preview: true, paused: true, message: '報告排程已暫停' })
+      }
+      return NextResponse.json({ ok: true, skipped: true, reason: '報告排程已暫停' })
+    }
 
     // ── Schedule gate (skip in preview mode) ──────────────────────────────────
     if (!isPreview) {
@@ -87,7 +96,9 @@ export async function POST(request: NextRequest) {
     }
 
     const dateStr = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
-    const filename = `專案週報_${dateStr.replace(/\//g, '')}.pdf`
+    const now2 = new Date()
+    const dateTag = `${now2.getFullYear()}${String(now2.getMonth() + 1).padStart(2, '0')}${String(now2.getDate()).padStart(2, '0')}`
+    const filename = `weekly_report_${dateTag}.pdf`
 
     const vars = { date: dateStr, reportCount: String(projects.length), projectName: '所有專案' }
     const subject = replaceVars(subjectTemplate, vars)

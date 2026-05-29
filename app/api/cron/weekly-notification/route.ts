@@ -99,6 +99,17 @@ export async function POST(request: NextRequest) {
   const summaryParts: string[] = []
 
   try {
+    // ── Check if notification cron is enabled ───────────────────────────────────
+    const enabledSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'cron.notification.enabled' },
+    })
+    if (enabledSetting?.value === 'false') {
+      if (isPreview) {
+        return NextResponse.json({ preview: true, paused: true, message: '通知排程已暫停' })
+      }
+      return NextResponse.json({ ok: true, skipped: true, reason: '通知排程已暫停' })
+    }
+
     // ── Load all notification profiles ─────────────────────────────────────────
     const allProfiles = await prisma.notificationProfile.findMany()
     const defaultProfile = allProfiles.find(p => p.projectTier === null) ?? null
