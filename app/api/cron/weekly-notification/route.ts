@@ -164,6 +164,7 @@ export async function POST(request: NextRequest) {
 
     // Per-tier summary for logging
     const tierSummary: Record<string, { notified: number; skipped: number }> = {}
+    let evaluatedCount = 0  // projects that passed the schedule gate
 
     for (const project of projects) {
       const tier = project.projectTier ?? null
@@ -180,6 +181,8 @@ export async function POST(request: NextRequest) {
           continue
         }
       }
+
+      evaluatedCount++
 
       // ── Frequency gate: check ISO week vs frequencyWeeks ───────────────────
       if (profile.frequencyWeeks > 1 && isoWeek % profile.frequencyWeeks !== 0) {
@@ -308,6 +311,11 @@ export async function POST(request: NextRequest) {
           skipped.length > 0 ? `${skipped.length} 個因頻率設定跳過` : null,
         ].filter(Boolean).join('，'),
       })
+    }
+
+    // If no projects were evaluated (not the scheduled hour), skip without logging
+    if (evaluatedCount === 0 && !isPreview) {
+      return NextResponse.json({ ok: true, skipped: true, reason: '非排程執行時間，已跳過' })
     }
 
     // Build detailed summary with per-tier info
