@@ -116,7 +116,7 @@ function MilestoneRow({
       className={`${GRID_COLS} px-2 py-1.5 border-l-[3px] border-t border-t-border first:border-t-0 font-medium ${
         index % 2 === 0
           ? 'bg-indigo-50/60 border-l-indigo-400'
-          : 'bg-teal-50/60 border-l-teal-400'
+          : 'bg-amber-50/60 border-l-amber-400'
       }`}
     >
       {/* Drag */}
@@ -273,8 +273,8 @@ function TaskRow({
       style={style}
       className={`${GRID_COLS} px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
         subtaskCount > 0
-          ? msIndex % 2 === 0 ? 'border-l-indigo-300 bg-indigo-50/30' : 'border-l-teal-300 bg-teal-50/30'
-          : msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-teal-200'
+          ? msIndex % 2 === 0 ? 'border-l-indigo-300 bg-indigo-50/30' : 'border-l-amber-300 bg-amber-50/30'
+          : msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-amber-200'
       }`}
     >
       {/* Drag */}
@@ -479,7 +479,7 @@ function InlineTaskInput({
   }
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-teal-200'}`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-amber-200'}`}>
       {/* Drag placeholder */}
       <div />
 
@@ -604,7 +604,7 @@ function SubtaskRow({
 
   return (
     <div className={`${GRID_COLS} px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
-      msIndex % 2 === 0 ? 'border-l-indigo-100 bg-indigo-50/10' : 'border-l-teal-100 bg-teal-50/10'
+      msIndex % 2 === 0 ? 'border-l-indigo-100 bg-indigo-50/10' : 'border-l-amber-200 bg-amber-50/10'
     }`}>
       {/* No drag for subtasks */}
       <div />
@@ -770,7 +770,7 @@ function InlineSubtaskInput({
   }
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-100' : 'border-l-teal-100'}`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-100' : 'border-l-amber-100'}`}>
       <div />
 
       {/* Title */}
