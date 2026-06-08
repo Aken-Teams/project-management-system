@@ -172,6 +172,22 @@ export async function PATCH(
         })
       }
 
+      // 2c. Apply pending task changes (duration, start/end date edits)
+      const pendingTaskChanges = delayRequest.pendingTaskChanges as Array<{
+        taskId: string; durationDays?: number; startDate?: string; endDate?: string
+      }> | null
+      if (pendingTaskChanges && pendingTaskChanges.length > 0) {
+        for (const tc of pendingTaskChanges) {
+          const data: Record<string, unknown> = {}
+          if (tc.durationDays !== undefined) data.durationDays = tc.durationDays
+          if (tc.startDate) data.startDate = new Date(tc.startDate)
+          if (tc.endDate) data.endDate = new Date(tc.endDate)
+          if (Object.keys(data).length > 0) {
+            await tx.task.update({ where: { id: tc.taskId }, data })
+          }
+        }
+      }
+
       // 3. If a specific task triggered the delay, extend its durationDays
       const triggerTaskId = delayRequest.taskId
       if (triggerTaskId) {

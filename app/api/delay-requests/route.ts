@@ -12,12 +12,19 @@ interface CreateDelayRequestBody {
   supportNeeded?: string
   type?: 'delay' | 'date_change'
   taskId?: string       // which task triggered the delay (optional)
-  affectedMilestones: {
+  affectedMilestones?: {
     milestoneId: string
     originalDate: string
     proposedDate: string
     originalStartDate?: string
     proposedStartDate?: string
+  }[]
+  pendingTaskChanges?: {
+    taskId: string
+    taskTitle: string
+    durationDays?: number
+    startDate?: string
+    endDate?: string
   }[]
 }
 
@@ -32,9 +39,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!body.affectedMilestones || body.affectedMilestones.length === 0) {
+    const hasMilestoneChanges = body.affectedMilestones && body.affectedMilestones.length > 0
+    const hasTaskChanges = body.pendingTaskChanges && body.pendingTaskChanges.length > 0
+    if (!hasMilestoneChanges && !hasTaskChanges) {
       return NextResponse.json(
-        { error: '至少需要一個受影響的里程碑' },
+        { error: '至少需要一個受影響的里程碑或任務' },
         { status: 400 },
       )
     }
@@ -75,15 +84,16 @@ export async function POST(request: NextRequest) {
           taskId: body.taskId || null,
           status: 'pending',
           requiredReviewers: sRoleCount,
-          affectedMilestones: {
-            create: body.affectedMilestones.map((am) => ({
+          pendingTaskChanges: hasTaskChanges ? body.pendingTaskChanges : undefined,
+          affectedMilestones: hasMilestoneChanges ? {
+            create: body.affectedMilestones!.map((am) => ({
               milestoneId: am.milestoneId,
               originalDate: new Date(am.originalDate),
               proposedDate: new Date(am.proposedDate),
               ...(am.originalStartDate ? { originalStartDate: new Date(am.originalStartDate) } : {}),
               ...(am.proposedStartDate ? { proposedStartDate: new Date(am.proposedStartDate) } : {}),
             })),
-          },
+          } : undefined,
         },
         include: {
           requester: { select: { name: true } },

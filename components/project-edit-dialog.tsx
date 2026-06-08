@@ -223,6 +223,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     originalDate: string
     proposedDate: string
   }>>([])
+  const [pendingTaskChanges, setPendingTaskChanges] = useState<Array<{
+    taskId: string
+    taskTitle: string
+    durationDays?: number
+    startDate?: string
+    endDate?: string
+  }>>([])
   // ─── Overflow confirmation state ─────────────────────────
   const [overflowConfirmOpen, setOverflowConfirmOpen] = useState(false)
   const overflowConfirmResolveRef = useRef<((confirmed: boolean) => void) | null>(null)
@@ -490,13 +497,24 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     // ─── Batch save work items ──────────────────────────────
     const diff = computeWorkItemsDiff(origMilestones, origTasks, recalcMilestones, tlTasks, tlTaskDates)
 
-    // ─── Detect milestone date changes → require approval (active phase only) ───
-    const dateChanges = detectMilestoneDateChanges()
+    // ─── Detect date changes → require approval (active phase only) ───
+    const msDateChanges = detectMilestoneDateChanges()
+    const taskDateChanges = diff.tasksToUpdate
+      .filter(t => t.durationDays !== undefined || t.startDate !== undefined || t.endDate !== undefined)
+      .map(t => {
+        const orig = origTasks.find(ot => ot.id === t.id)
+        return {
+          taskId: t.id,
+          taskTitle: orig?.title || tlTasks.find(tt => tt.id === t.id)?.title || '',
+          ...(t.durationDays !== undefined ? { durationDays: t.durationDays } : {}),
+          ...(t.startDate !== undefined ? { startDate: t.startDate } : {}),
+          ...(t.endDate !== undefined ? { endDate: t.endDate } : {}),
+        }
+      })
     const startDateChanged = form.startDate !== project.startDate
+    const hasAnyDateChange = msDateChanges.length > 0 || taskDateChanges.length > 0 || startDateChanged
 
-    if (dateChanges.length > 0 && project.phase === 'active') {
-      // Save project metadata with ORIGINAL startDate to avoid inconsistency
-      // (the new startDate will be applied when the delay request is approved)
+    if (hasAnyDateChange && project.phase === 'active') {
       const saveForm = startDateChanged
         ? { ...form, objective: autoObjective, startDate: project.startDate }
         : { ...form, objective: autoObjective }
@@ -514,11 +532,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           return Object.keys(fields).length > 0
         }) as WorkItemsDiff['milestonesToUpdate']
 
-      // Strip startDate/endDate from task updates (keep durationDays etc.)
+      // Strip ALL date-related fields from task updates (defer to approval)
       const strippedTaskUpdates = diff.tasksToUpdate
         .map(task => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { startDate, endDate, ...rest } = task as typeof task & { startDate?: string; endDate?: string }
+          const { startDate, endDate, durationDays, ...rest } = task as typeof task & { startDate?: string; endDate?: string; durationDays?: number }
           return rest
         })
         .filter(task => {
@@ -534,7 +552,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       })
 
       // Open date change dialog for approval
-      setAffectedMilestoneDates(dateChanges)
+      setAffectedMilestoneDates(msDateChanges)
+      setPendingTaskChanges(taskDateChanges)
       setDateChangeDialogOpen(true)
       return false // don't close edit dialog yet
     }
@@ -571,7 +590,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   }
 
   const handleSubmitDateChange = async () => {
-    if (!user || affectedMilestoneDates.length === 0 || !dateChangeReason.trim()) return
+    if (!user || !dateChangeReason.trim()) return
+    if (affectedMilestoneDates.length === 0 && pendingTaskChanges.length === 0) return
     setDateChangeSaving(true)
     const startDateChanged = form.startDate !== project.startDate
     try {
@@ -584,16 +604,18 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           type: 'date_change',
           reason: dateChangeReason.trim(),
           canCatchUp: true,
-          affectedMilestones: affectedMilestoneDates.map((am, idx) => ({
-            milestoneId: am.milestoneId,
-            originalDate: am.originalDate,
-            proposedDate: am.proposedDate,
-            // Attach proposed startDate to first milestone entry
-            ...(idx === 0 && startDateChanged ? {
-              originalStartDate: project.startDate,
-              proposedStartDate: form.startDate,
-            } : {}),
-          })),
+          ...(affectedMilestoneDates.length > 0 ? {
+            affectedMilestones: affectedMilestoneDates.map((am, idx) => ({
+              milestoneId: am.milestoneId,
+              originalDate: am.originalDate,
+              proposedDate: am.proposedDate,
+              ...(idx === 0 && startDateChanged ? {
+                originalStartDate: project.startDate,
+                proposedStartDate: form.startDate,
+              } : {}),
+            })),
+          } : {}),
+          ...(pendingTaskChanges.length > 0 ? { pendingTaskChanges } : {}),
         }),
       })
       if (!res.ok) {
@@ -603,6 +625,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       setDateChangeDialogOpen(false)
       setDateChangeReason('')
       setAffectedMilestoneDates([])
+      setPendingTaskChanges([])
       await onWorkItemsChange?.()
       await onSaved?.()
       onOpenChange(false)
@@ -1501,7 +1524,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               日期變更需要審核
             </DialogTitle>
             <DialogDescription>
-              以下里程碑的日期已變更，需提交審核申請。其他變更（名稱、負責人等）已儲存。
+              以下時程已變更，需提交審核申請。其他變更（名稱、負責人等）已儲存。
             </DialogDescription>
           </DialogHeader>
 
@@ -1512,31 +1535,62 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             </div>
           )}
 
-          <div className="rounded-lg border overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
-              <span>里程碑</span>
-              <span>日期變更</span>
-              <span className="text-right">天數</span>
-            </div>
-            {affectedMilestoneDates.map((am) => {
-              const days = Math.ceil(
-                (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
-              )
-              return (
-                <div key={am.milestoneId} className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center px-3 py-2 border-t text-sm">
-                  <span className="font-medium truncate">{am.milestoneName}</span>
-                  <div className="flex items-center gap-1.5 tabular-nums text-xs whitespace-nowrap">
-                    <span className="text-muted-foreground line-through">{am.originalDate}</span>
-                    <span className="text-muted-foreground">→</span>
-                    <span className="text-amber-600 dark:text-amber-400 font-medium">{am.proposedDate}</span>
+          {affectedMilestoneDates.length > 0 && (
+            <div className="rounded-lg border overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
+                <span>里程碑</span>
+                <span>日期變更</span>
+                <span className="text-right">天數</span>
+              </div>
+              {affectedMilestoneDates.map((am) => {
+                const days = Math.ceil(
+                  (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
+                )
+                return (
+                  <div key={am.milestoneId} className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center px-3 py-2 border-t text-sm">
+                    <span className="font-medium truncate">{am.milestoneName}</span>
+                    <div className="flex items-center gap-1.5 tabular-nums text-xs whitespace-nowrap">
+                      <span className="text-muted-foreground line-through">{am.originalDate}</span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">{am.proposedDate}</span>
+                    </div>
+                    <span className={`text-xs tabular-nums font-medium text-right ${days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                      {days > 0 ? `+${days}` : days}天
+                    </span>
                   </div>
-                  <span className={`text-xs tabular-nums font-medium text-right ${days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {days > 0 ? `+${days}` : days}天
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
+
+          {pendingTaskChanges.length > 0 && (
+            <div className="rounded-lg border overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto] gap-x-4 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
+                <span>任務</span>
+                <span>變更</span>
+              </div>
+              {pendingTaskChanges.map((tc) => {
+                const orig = origTasks.find(t => t.id === tc.taskId)
+                return (
+                  <div key={tc.taskId} className="grid grid-cols-[1fr_auto] gap-x-4 items-center px-3 py-2 border-t text-sm">
+                    <span className="font-medium truncate">{tc.taskTitle}</span>
+                    <div className="flex items-center gap-2 text-xs whitespace-nowrap">
+                      {tc.durationDays !== undefined && orig && (
+                        <span className="tabular-nums">
+                          天數 <span className="text-muted-foreground line-through">{orig.durationDays}</span> → <span className="text-amber-600 font-medium">{tc.durationDays}</span>
+                        </span>
+                      )}
+                      {tc.startDate && orig && tc.startDate !== orig.startDate && (
+                        <span className="tabular-nums">
+                          起 <span className="text-muted-foreground line-through">{orig.startDate}</span> → <span className="text-amber-600 font-medium">{tc.startDate}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-sm">

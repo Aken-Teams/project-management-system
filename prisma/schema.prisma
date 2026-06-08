@@ -395,6 +395,7 @@ model DelayRequest {
   supportResolvedById  String?            @map("support_resolved_by_id")
   supportResolvedNotes String?            @db.Text @map("support_resolved_notes")
   taskId               String?            @map("task_id")
+  pendingTaskChanges   Json?              @map("pending_task_changes")
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
