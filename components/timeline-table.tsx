@@ -19,7 +19,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,11 +58,17 @@ export interface TimelineTeamMember {
   responsibility: string
 }
 
+export interface OverflowInfo {
+  childEnd: string
+  overflowDays: number
+}
+
 export interface TimelineTableProps {
   milestones: TimelineMilestone[]
   tasks: TimelineTask[]
   taskDates: Map<string, { startDate: string; endDate: string }>
   teamMembers: TimelineTeamMember[]
+  overflows?: Map<string, OverflowInfo>
   onMilestoneUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onMilestoneRemove: (index: number) => void
   onMilestoneAdd: () => void
@@ -121,6 +127,7 @@ function MilestoneRow({
   canRemove,
   collapsed,
   taskCount,
+  overflowInfo,
   onUpdate,
   onRemove,
   onToggleCollapse,
@@ -131,6 +138,7 @@ function MilestoneRow({
   canRemove: boolean
   collapsed: boolean
   taskCount: number
+  overflowInfo?: OverflowInfo
   onUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onRemove: (index: number) => void
   onToggleCollapse: () => void
@@ -215,15 +223,23 @@ function MilestoneRow({
       </div>
 
       {/* End date */}
-      <div className="flex justify-center">
+      <div className="flex justify-center items-center gap-0.5">
         {onDateChange ? (
           <DateInput
             value={milestone.endDate || ''}
             onCommit={(v) => onDateChange(index, 'endDate', v)}
-            className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
           />
         ) : (
-          <span className="text-sm text-muted-foreground">{milestone.endDate || '—'}</span>
+          <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{milestone.endDate || '—'}</span>
+        )}
+        {overflowInfo && (
+          <span
+            className="shrink-0 cursor-help"
+            title={`任務結束日（${overflowInfo.childEnd}）超出里程碑結束日（${milestone.endDate}）${overflowInfo.overflowDays} 天`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+          </span>
         )}
       </div>
 
@@ -259,6 +275,7 @@ function TaskRow({
   subtaskCount,
   collapsed,
   msIndex,
+  overflowInfo,
   onRemove,
   onUpdate,
   onToggleAddSubtask,
@@ -272,6 +289,7 @@ function TaskRow({
   subtaskCount: number
   collapsed: boolean
   msIndex: number
+  overflowInfo?: OverflowInfo
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onToggleAddSubtask: () => void
@@ -391,15 +409,23 @@ function TaskRow({
       </div>
 
       {/* End date */}
-      <div className="flex justify-center">
+      <div className="flex justify-center items-center gap-0.5">
         {onDateChange ? (
           <DateInput
             value={endDate || ''}
             onCommit={(v) => onDateChange(task.id, 'endDate', v)}
-            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
           />
         ) : (
-          <span className="text-sm text-muted-foreground">{endDate || '—'}</span>
+          <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{endDate || '—'}</span>
+        )}
+        {overflowInfo && (
+          <span
+            className="shrink-0 cursor-help"
+            title={`子任務結束日（${overflowInfo.childEnd}）超出任務結束日（${endDate}）${overflowInfo.overflowDays} 天`}
+          >
+            <AlertTriangle className="h-3 w-3 text-amber-500" />
+          </span>
         )}
       </div>
 
@@ -905,6 +931,7 @@ export function TimelineTable({
   tasks,
   taskDates,
   teamMembers,
+  overflows,
   onMilestoneUpdate,
   onMilestoneRemove,
   onMilestoneAdd,
@@ -1040,6 +1067,7 @@ export function TimelineTable({
                   canRemove={milestones.length > 1}
                   collapsed={isCollapsed}
                   taskCount={msParentTasks.length}
+                  overflowInfo={overflows?.get(milestone.id)}
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
@@ -1060,6 +1088,7 @@ export function TimelineTable({
                             subtaskCount={subtasks.length}
                             collapsed={subtasksCollapsed}
                             msIndex={msIndex}
+                            overflowInfo={overflows?.get(task.id)}
                             onRemove={onTaskRemove}
                             onUpdate={onTaskUpdate}
                             onToggleAddSubtask={() =>

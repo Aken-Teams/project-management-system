@@ -24,8 +24,8 @@ import {
 import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign, BarChart3 } from 'lucide-react'
 import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/components/budget-list-editor'
 import { GanttChart } from '@/components/gantt-chart'
-import { TimelineTable, type TimelineTeamMember } from '@/components/timeline-table'
-import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, dbToTimelineState, computeWorkItemsDiff, daysBetween } from '@/lib/timeline-utils'
+import { TimelineTable, type TimelineTeamMember, type OverflowInfo } from '@/components/timeline-table'
+import { calculateMilestoneDates, calculateTaskDates, dbToTimelineState, computeWorkItemsDiff, daysBetween } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
   type Project,
@@ -223,6 +223,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     originalDate: string
     proposedDate: string
   }>>([])
+  // ─── Overflow confirmation state ─────────────────────────
+  const [overflowConfirmOpen, setOverflowConfirmOpen] = useState(false)
+  const overflowConfirmResolveRef = useRef<((confirmed: boolean) => void) | null>(null)
 
   // Snapshot of original data for diff on save.
   // Use calculated endDates (not raw DB dueDate) so that stale DB values
@@ -243,6 +246,48 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // Recalculate dates on every render
   const recalcMilestones = calculateMilestoneDates(tlMilestones, form.startDate || project.startDate, tlTasks)
   const tlTaskDates = calculateTaskDates(tlTasks, recalcMilestones)
+
+  // Detect overflow: milestone end < task end, or task end < subtask end
+  const overflowMap = useMemo(() => {
+    const map = new Map<string, OverflowInfo>()
+    for (const ms of recalcMilestones) {
+      if (!ms.endDate) continue
+      const msEnd = new Date(ms.endDate).getTime()
+      const msTasks = tlTasks.filter(t => t.milestoneId === ms.id && !t.parentId)
+      let maxChildEnd = 0
+      let maxChildEndStr = ''
+      for (const t of msTasks) {
+        const dates = tlTaskDates.get(t.id)
+        if (dates) {
+          const tEnd = new Date(dates.endDate).getTime()
+          if (tEnd > maxChildEnd) { maxChildEnd = tEnd; maxChildEndStr = dates.endDate }
+        }
+      }
+      if (maxChildEnd > msEnd) {
+        map.set(ms.id, { childEnd: maxChildEndStr, overflowDays: Math.ceil((maxChildEnd - msEnd) / 86400000) })
+      }
+    }
+    for (const t of tlTasks.filter(t => !t.parentId)) {
+      const subtasks = tlTasks.filter(s => s.parentId === t.id)
+      if (subtasks.length === 0) continue
+      const taskDates = tlTaskDates.get(t.id)
+      if (!taskDates) continue
+      const taskEnd = new Date(taskDates.endDate).getTime()
+      let maxSubEnd = 0
+      let maxSubEndStr = ''
+      for (const s of subtasks) {
+        const sd = tlTaskDates.get(s.id)
+        if (sd) {
+          const sEnd = new Date(sd.endDate).getTime()
+          if (sEnd > maxSubEnd) { maxSubEnd = sEnd; maxSubEndStr = sd.endDate }
+        }
+      }
+      if (maxSubEnd > taskEnd) {
+        map.set(t.id, { childEnd: maxSubEndStr, overflowDays: Math.ceil((maxSubEnd - taskEnd) / 86400000) })
+      }
+    }
+    return map
+  }, [recalcMilestones, tlTasks, tlTaskDates])
 
   // Detect if milestones or tasks changed (for showing reset baseline prompt)
   // Detect which existing milestones have date changes
@@ -267,15 +312,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
     return changes
   }, [recalcMilestones, origMilestones])
-
-  // Auto-resize milestone duration when tasks change (add/remove/reorder)
-  // Skip when tlTasks hasn't changed from its initial value — DB state is authoritative on load
-  const initialTlTasks = useRef(tlTasks)
-  useEffect(() => {
-    if (tlTasks === initialTlTasks.current) return
-    const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks, form.startDate || project.startDate)
-    if (changed) setTlMilestones(updated)
-  }, [tlTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-update project end date from latest milestone end
   const lastMsEndDate = useMemo(() => {
@@ -435,6 +471,15 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
     setError('')
     setWorkItemError('')
+
+    // ─── Overflow confirmation (milestone < tasks, task < subtasks) ───
+    if (overflowMap.size > 0) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        overflowConfirmResolveRef.current = resolve
+        setOverflowConfirmOpen(true)
+      })
+      if (!confirmed) return false
+    }
 
     // Auto-generate objective from SMART (matching creation form logic)
     const smart = form.smartObjective
@@ -1351,6 +1396,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               tasks={tlTasks}
               taskDates={tlTaskDates}
               teamMembers={tlTeamMembers}
+              overflows={overflowMap}
               onMilestoneUpdate={handleTlMilestoneUpdate}
               onMilestoneRemove={handleTlMilestoneRemove}
               onMilestoneAdd={handleTlMilestoneAdd}
@@ -1386,6 +1432,60 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Overflow Confirmation Dialog */}
+      <Dialog open={overflowConfirmOpen} onOpenChange={(open) => {
+        if (!open) {
+          overflowConfirmResolveRef.current?.(false)
+          overflowConfirmResolveRef.current = null
+          setOverflowConfirmOpen(false)
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              時程溢出提醒
+            </DialogTitle>
+            <DialogDescription>
+              以下時程設定不符合包含關係，是否仍要儲存？
+            </DialogDescription>
+          </DialogHeader>
+
+          <ul className="space-y-1.5 text-sm list-disc pl-5">
+            {Array.from(overflowMap.entries()).map(([id]) => {
+              const ms = recalcMilestones.find(m => m.id === id)
+              const task = !ms ? tlTasks.find(t => t.id === id) : null
+              const name = ms?.name || task?.title || id
+              return (
+                <li key={id}>
+                  {ms
+                    ? <>里程碑「<span className="font-medium">{name}</span>」的任務超出里程碑範圍</>
+                    : <>任務「<span className="font-medium">{name}</span>」的子任務超出任務範圍</>
+                  }
+                </li>
+              )
+            })}
+          </ul>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => {
+              overflowConfirmResolveRef.current?.(false)
+              overflowConfirmResolveRef.current = null
+              setOverflowConfirmOpen(false)
+            }}>
+              返回修改
+            </Button>
+            <Button onClick={() => {
+              overflowConfirmResolveRef.current?.(true)
+              overflowConfirmResolveRef.current = null
+              setOverflowConfirmOpen(false)
+            }}>
+              確認儲存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Date Change Approval Dialog */}
       <Dialog open={dateChangeDialogOpen} onOpenChange={(open) => {
