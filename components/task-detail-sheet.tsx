@@ -826,7 +826,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   // Badge text with days info
   const badgeText = (() => {
     if (isCompleted) return '已完成'
-    if (hasPendingDelay && (computedStatus === 'overdue' || computedStatus === 'overdue-not-started')) return '延期申請中'
+    if (project.phase === 'active' && hasPendingDelay && (computedStatus === 'overdue' || computedStatus === 'overdue-not-started')) return '延期申請中'
     if (computedStatus === 'overdue') return `逾期${Math.abs(days)}天`
     if (computedStatus === 'at-risk') return `剩${days}天`
     return getStatusLabel(computedStatus)
@@ -908,7 +908,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                       前置任務尚未完成
                     </div>
                   )}
-                  {hasPendingDelay && (
+                  {project.phase === 'active' && hasPendingDelay && (
                     <div className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
                       <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
                       已申請延期（等待審核）
@@ -935,13 +935,15 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
               </p>
               {!hasSubtasks && isOverdue && !isCompleted && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                  {autoProgress?.percent === 0 && autoProgress?.hasOverdueLogs
-                    ? '提示：任務已逾期，期間內無工作紀錄。請申請延期以繼續回報，核准後進度將重新計算。'
-                    : (autoProgress?.percent ?? 0) >= 99
-                      ? '提示：進度已達計算上限 99%，請「標記完成」結案或「申請延期」調整時程。'
-                      : autoProgress?.hasOverdueLogs
-                        ? '提示：超過預計完成日的工作紀錄不計入進度，請申請延期以更新時程。'
-                        : '提示：任務已逾期，請申請延期或標記完成。'}
+                  {project.phase !== 'active'
+                    ? '提示：任務已逾期，草稿期間可直接調整日期。'
+                    : autoProgress?.percent === 0 && autoProgress?.hasOverdueLogs
+                      ? '提示：任務已逾期，期間內無工作紀錄。請申請延期以繼續回報，核准後進度將重新計算。'
+                      : (autoProgress?.percent ?? 0) >= 99
+                        ? '提示：進度已達計算上限 99%，請「標記完成」結案或「申請延期」調整時程。'
+                        : autoProgress?.hasOverdueLogs
+                          ? '提示：超過預計完成日的工作紀錄不計入進度，請申請延期以更新時程。'
+                          : '提示：任務已逾期，請申請延期或標記完成。'}
                 </p>
               )}
             </div>
@@ -1204,8 +1206,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         </div>
                       )}
 
-                      {/* Overdue entry blocking — date-level validation */}
-                      {overdueEntryDates.length > 0 && (
+                      {/* Overdue entry blocking — date-level validation (active phase only) */}
+                      {project.phase === 'active' && overdueEntryDates.length > 0 && (
                         <div className="rounded-xl border-2 border-red-200 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900 p-4 space-y-3">
                           <div className="flex items-start gap-2.5">
                             <Ban className="h-4.5 w-4.5 text-red-500 shrink-0 mt-0.5" />
@@ -1397,7 +1399,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           </button>
                         )}
 
-                        {(computedStatus === 'at-risk' || computedStatus === 'overdue' || computedStatus === 'overdue-not-started') ? (
+                        {project.phase === 'active' && (computedStatus === 'at-risk' || computedStatus === 'overdue' || computedStatus === 'overdue-not-started') ? (
                           hasPendingDelay ? (
                             <div className="flex items-center gap-3 p-3 rounded-xl border border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/20 text-left opacity-70">
                               <Clock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -2123,8 +2125,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
             </DialogContent>
           </Dialog>
 
-          {/* Extension Form (replaces tabs when shown) */}
-          {!readOnly && showExtensionForm && (
+          {/* Extension Form (replaces tabs when shown, active phase only) */}
+          {!readOnly && project.phase === 'active' && showExtensionForm && (
             <div className="flex-1 overflow-y-auto px-6 py-4 border-t bg-amber-50/30 dark:bg-amber-950/10 space-y-3 animate-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">

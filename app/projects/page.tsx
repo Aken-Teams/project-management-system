@@ -407,6 +407,11 @@ export default function ProjectsPage() {
                       }`}>
                         {project.projectTier}
                       </Badge>
+                      {project.phase === 'draft' && (
+                        <Badge variant="outline" className="text-sm border-amber-500 text-amber-600 bg-amber-50">
+                          草稿
+                        </Badge>
+                      )}
                     </div>
                     <Badge
                       variant="secondary"

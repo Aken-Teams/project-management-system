@@ -74,6 +74,7 @@ export function dbProjectToFrontend(
     smartAchievable: string | null
     smartRelevant: string | null
     smartTimeBound: string | null
+    phase: string
     startDate: Date
     endDate: Date
     status: string
@@ -348,6 +349,7 @@ export function dbProjectToFrontend(
     projectType: projectTypeToFe(proj.projectType),
     ...(proj.projectTier ? { projectTier: projectTierToFe(proj.projectTier as never) } : {}),
     ...(proj.demandSource ? { demandSource: demandSourceToFe(proj.demandSource as never) } : {}),
+    phase: proj.phase as 'draft' | 'active',
     name: proj.name,
     objective: proj.objective,
     purpose: proj.purpose,

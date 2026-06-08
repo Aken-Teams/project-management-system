@@ -58,6 +58,8 @@ import {
   Copy,
   Check,
   ShoppingCart,
+  Rocket,
+  FileEdit,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
@@ -100,6 +102,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [shareLinksLoading, setShareLinksLoading] = useState(false)
   const [shareCopiedId, setShareCopiedId] = useState<string | null>(null)
   const [capexItems, setCapexItems] = useState<CapexItemData[]>([])
+  const [launchLoading, setLaunchLoading] = useState(false)
 
   // Team role of current user in this project
   const currentUserTeamRole = project?.teamMembers?.find(
@@ -200,6 +203,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       throw new Error(err.error || '刪除失敗')
     }
     router.push('/projects')
+  }
+
+  const handleLaunchProject = async () => {
+    if (!project) return
+    setLaunchLoading(true)
+    try {
+      const res = await fetch(`/api/projects/${id}/launch`, { method: 'POST' })
+      if (res.ok) {
+        const r = await fetch(`/api/projects/${id}`)
+        if (r.ok) setProject(await r.json())
+      }
+    } finally {
+      setLaunchLoading(false)
+    }
   }
 
   const [shareError, setShareError] = useState<string | null>(null)
@@ -317,6 +334,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     {getStatusText(project.status)}
                   </span>
                 </Badge>
+                {project.phase === 'draft' && (
+                  <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
+                    <FileEdit className="h-3 w-3 mr-1" />
+                    草稿
+                  </Badge>
+                )}
               </div>
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                 {project.name}
@@ -350,6 +373,30 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <div className="mt-3 p-3 rounded-lg border border-warning/50 bg-warning/10 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
               <span className="text-sm font-medium text-warning">有 {pendingDelays.length} 筆延遲申請待主管審核</span>
+            </div>
+          )}
+
+          {/* Draft mode banner */}
+          {project.phase === 'draft' && (
+            <div className="mt-3 p-4 rounded-lg border border-amber-300 bg-amber-50 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <FileEdit className="h-5 w-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">此專案尚未開案，目前為草稿模式</p>
+                  <p className="text-xs text-amber-600 mt-0.5">草稿期間可自由編輯里程碑與時程，開案後日期異動需提出延遲申請</p>
+                </div>
+              </div>
+              {(currentUserTeamRole === 'A' || user?.role === 'pm' || user?.role === 'admin') && (
+                <Button
+                  size="default"
+                  className="gap-1.5 bg-amber-600 hover:bg-amber-700 shrink-0"
+                  onClick={handleLaunchProject}
+                  disabled={launchLoading}
+                >
+                  {launchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                  開案
+                </Button>
+              )}
             </div>
           )}
         </div>

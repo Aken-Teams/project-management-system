@@ -69,12 +69,15 @@ export interface SmartObjective {
   timeBound: string     // 時限性
 }
 
+export type ProjectPhase = 'draft' | 'active'
+
 export interface Project {
   id: string
   projectCode: string
   projectType: ProjectType
   projectTier?: ProjectTier
   demandSource?: DemandSource
+  phase?: ProjectPhase
   name: string
   objective: string
   purpose: string

@@ -29,6 +29,10 @@ import {
   TrendingUp,
   Minus,
   Undo2,
+  Pencil,
+  Check,
+  X,
+  Loader2,
 } from 'lucide-react'
 
 interface MilestoneDetailSheetProps {
@@ -64,6 +68,28 @@ export function MilestoneDetailSheet({
   const [extensionDate, setExtensionDate] = useState('')
   const [extensionSupport, setExtensionSupport] = useState('')
   const [submittingExtension, setSubmittingExtension] = useState(false)
+  const [editingDueDate, setEditingDueDate] = useState(false)
+  const [draftDueDate, setDraftDueDate] = useState('')
+  const [savingDate, setSavingDate] = useState(false)
+
+  const handleSaveDueDate = async () => {
+    if (!milestone || !draftDueDate) return
+    setSavingDate(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/milestones/${milestone.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate: draftDueDate }),
+      })
+      if (res.ok) {
+        setEditingDueDate(false)
+        onTaskUpdate?.()
+      }
+    } finally {
+      setSavingDate(false)
+    }
+  }
+
   // Tasks belonging to this milestone (parent tasks only)
   const msTasks = useMemo(() => {
     if (!milestone) return []
@@ -292,7 +318,34 @@ export function MilestoneDetailSheet({
                 <Calendar className="h-3.5 w-3.5" />
                 到期日
               </div>
-              <div className="text-sm font-medium">{fmtDate(milestone.dueDate)}</div>
+              {!readOnly && project.phase === 'draft' && editingDueDate ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={draftDueDate}
+                    onChange={e => setDraftDueDate(e.target.value)}
+                    className="text-sm border rounded px-1.5 py-0.5 bg-background w-full"
+                  />
+                  <button onClick={handleSaveDueDate} disabled={savingDate} className="text-green-600 hover:text-green-700">
+                    {savingDate ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </button>
+                  <button onClick={() => setEditingDueDate(false)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium">{fmtDate(milestone.dueDate)}</span>
+                  {!readOnly && project.phase === 'draft' && (
+                    <button
+                      onClick={() => { setDraftDueDate(milestone.dueDate); setEditingDueDate(true) }}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Task count */}
@@ -386,7 +439,7 @@ export function MilestoneDetailSheet({
                 </Badge>
               )}
               {/* Delay request button */}
-              {!readOnly && isMilestoneOverdue && milestone.progress < 100 && !hasPendingDelay && !showExtensionForm && (
+              {!readOnly && project.phase === 'active' && isMilestoneOverdue && milestone.progress < 100 && !hasPendingDelay && !showExtensionForm && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -397,7 +450,7 @@ export function MilestoneDetailSheet({
                   提出延期
                 </Button>
               )}
-              {!readOnly && hasPendingDelay && (
+              {!readOnly && project.phase === 'active' && hasPendingDelay && (
                 <Badge className="ml-auto text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 gap-1">
                   <Clock className="h-3 w-3" />
                   延期審核中
@@ -407,7 +460,7 @@ export function MilestoneDetailSheet({
           )}
 
           {/* Extension form (shown when "提出延期" button clicked) */}
-          {!readOnly && showExtensionForm && (
+          {!readOnly && project.phase === 'active' && showExtensionForm && (
             <div className="rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/10 p-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-2">
                 <div className="h-6 w-6 rounded flex items-center justify-center bg-amber-100 dark:bg-amber-900/30">

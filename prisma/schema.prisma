@@ -63,6 +63,11 @@ enum RiskImpact {
   high
 }
 
+enum ProjectPhase {
+  draft
+  active
+}
+
 enum RiskProbability {
   low
   medium
@@ -161,6 +166,7 @@ model Project {
 
   startDate       DateTime      @map("start_date")
   endDate         DateTime      @map("end_date")
+  phase           ProjectPhase  @default(draft)
   status          ProjectStatus @default(green)
   progress        Int           @default(0)
   budget          Float         @default(0)
