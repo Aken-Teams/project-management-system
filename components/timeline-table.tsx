@@ -89,10 +89,11 @@ const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_140px_140px_88px_52px_28px] gap
 // React 19 resets controlled <input type="date"> values before the batched
 // state update completes, fighting with the native calendar picker.
 // Using an uncontrolled input + ref sync avoids this entirely.
-function DateInput({ value, onCommit, className }: {
+function DateInput({ value, onCommit, className, min }: {
   value: string
   onCommit: (value: string) => void
   className?: string
+  min?: string
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const onCommitRef = useRef(onCommit)
@@ -109,6 +110,7 @@ function DateInput({ value, onCommit, className }: {
       ref={ref}
       type="date"
       defaultValue={value}
+      min={min}
       onChange={(e) => {
         if (e.target.value) onCommitRef.current(e.target.value)
       }}
@@ -227,6 +229,7 @@ function MilestoneRow({
         {onDateChange ? (
           <DateInput
             value={milestone.endDate || ''}
+            min={milestone.startDate || undefined}
             onCommit={(v) => onDateChange(index, 'endDate', v)}
             className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
           />
@@ -413,6 +416,7 @@ function TaskRow({
         {onDateChange ? (
           <DateInput
             value={endDate || ''}
+            min={startDate || undefined}
             onCommit={(v) => onDateChange(task.id, 'endDate', v)}
             className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
           />
@@ -708,6 +712,7 @@ function SubtaskRow({
         {onDateChange ? (
           <DateInput
             value={endDate || ''}
+            min={startDate || undefined}
             onCommit={(v) => onDateChange(task.id, 'endDate', v)}
             className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />

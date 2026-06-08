@@ -814,51 +814,94 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     setTlMilestones(prev => arrayMove(prev, oldIdx, newIdx))
   }, [])
 
-  // Auto-sync parent durationDays = sum of children durationDays
-  const syncParentDurations = useCallback((tasks: typeof tlTasks, skipId?: string) => {
-    const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!))
-    if (parentIds.size === 0) return tasks
-    let changed = false
-    const updated = tasks.map(t => {
-      if (!parentIds.has(t.id)) return t
-      if (t.id === skipId) return t
-      const childSum = tasks
-        .filter(c => c.parentId === t.id)
-        .reduce((sum, c) => sum + Math.max(c.durationDays || 1, 1), 0)
-      if (childSum > 0 && t.durationDays !== childSum) {
-        changed = true
-        return { ...t, durationDays: childSum }
+  // ─── Bubble-up: child changes → auto-adjust parent duration ───
+  // subtask change → parent task adjusts; task change → milestone adjusts.
+  // directEditId: skip this task in parent-sync (user is editing it directly).
+  const applyTaskChangeWithBubbleUp = useCallback((
+    newTasks: typeof tlTasks,
+    directEditId?: string,
+  ) => {
+    const start = form.startDate || project.startDate
+
+    // Pass 1: compute dates with current milestones + new tasks
+    const msComputed = calculateMilestoneDates(tlMilestones, start, newTasks)
+    const dates = calculateTaskDates(newTasks, msComputed)
+
+    // Pass 2: bubble subtask → parent task (span-based, not sum)
+    const parentIds = new Set(newTasks.filter(t => t.parentId).map(t => t.parentId!))
+    let tasksChanged = false
+    let finalTasks = newTasks
+
+    if (parentIds.size > 0) {
+      finalTasks = newTasks.map(t => {
+        if (!parentIds.has(t.id) || t.id === directEditId) return t
+        const td = dates.get(t.id)
+        if (!td) return t
+        const children = newTasks.filter(c => c.parentId === t.id)
+        const maxChildEnd = Math.max(...children.map(c => {
+          const cd = dates.get(c.id)
+          return cd ? new Date(cd.endDate).getTime() : 0
+        }))
+        if (maxChildEnd <= 0) return t
+        const needed = Math.ceil((maxChildEnd - new Date(td.startDate).getTime()) / 86400000) + 1
+        if (needed > 0 && needed !== t.durationDays) {
+          tasksChanged = true
+          return { ...t, durationDays: needed }
+        }
+        return t
+      })
+    }
+
+    // Pass 3: recompute dates if tasks changed, then bubble task → milestone
+    const msComputed2 = tasksChanged ? calculateMilestoneDates(tlMilestones, start, finalTasks) : msComputed
+    const dates2 = tasksChanged ? calculateTaskDates(finalTasks, msComputed2) : dates
+
+    let msChanged = false
+    const newMilestones = tlMilestones.map((ms, idx) => {
+      const msData = msComputed2[idx]
+      if (!msData?.startDate) return ms
+      const msTasks = finalTasks.filter(t => t.milestoneId === ms.id)
+      if (msTasks.length === 0) return ms
+      const maxEnd = Math.max(...msTasks.map(t => {
+        const td = dates2.get(t.id)
+        return td ? new Date(td.endDate).getTime() : 0
+      }))
+      if (maxEnd <= 0) return ms
+      const needed = Math.ceil((maxEnd - new Date(msData.startDate).getTime()) / 86400000) + 1
+      if (needed > 0 && needed !== ms.durationDays) {
+        msChanged = true
+        return { ...ms, durationDays: needed }
       }
-      return t
+      return ms
     })
-    return changed ? updated : tasks
-  }, [])
+
+    setTlTasks(finalTasks)
+    if (msChanged) setTlMilestones(newMilestones)
+  }, [tlMilestones, form.startDate, project.startDate])
 
   const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationDays: number; parentId?: string }) => {
-    setTlTasks(prev => syncParentDurations([...prev, task]))
-  }, [syncParentDurations])
+    applyTaskChangeWithBubbleUp([...tlTasks, task])
+  }, [tlTasks, applyTaskChangeWithBubbleUp])
 
   const handleTlTaskRemove = useCallback((taskId: string) => {
-    setTlTasks(prev => {
-      const remaining = prev.filter(t => t.id !== taskId && t.parentId !== taskId)
-      return syncParentDurations(remaining)
-    })
-  }, [syncParentDurations])
+    const remaining = tlTasks.filter(t => t.id !== taskId && t.parentId !== taskId)
+    applyTaskChangeWithBubbleUp(remaining)
+  }, [tlTasks, applyTaskChangeWithBubbleUp])
 
   const handleTlTaskUpdate = useCallback((taskId: string, field: string, value: string | number) => {
-    setTlTasks(prev => {
-      const updated = prev.map(t => t.id === taskId ? { ...t, [field]: value } : t)
-      return syncParentDurations(updated)
-    })
-  }, [syncParentDurations])
+    const updated = tlTasks.map(t => t.id === taskId ? { ...t, [field]: value } : t)
+    const isParent = tlTasks.some(t => t.parentId === taskId)
+    applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
+  }, [tlTasks, applyTaskChangeWithBubbleUp])
 
   const handleTlTaskReorder = useCallback((oldIdx: number, newIdx: number) => {
-    setTlTasks(prev => arrayMove(prev, oldIdx, newIdx))
-  }, [])
+    applyTaskChangeWithBubbleUp(arrayMove(tlTasks, oldIdx, newIdx))
+  }, [tlTasks, applyTaskChangeWithBubbleUp])
 
   // ─── Date change handlers (reverse-calculate durationDays from date) ──
 
   const handleTlMilestoneDateChange = useCallback((index: number, field: 'startDate' | 'endDate', value: string) => {
+    // Direct milestone edit → no bubble up
     if (!value) return
     if (field === 'endDate') {
       const ms = recalcMilestones[index]
@@ -880,25 +923,20 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     if (!value) return
     const taskDates = tlTaskDates.get(taskId)
     if (!taskDates) return
+    const isParent = tlTasks.some(t => t.parentId === taskId)
 
     if (field === 'endDate') {
       const newDuration = daysBetween(taskDates.startDate, value) + 1
       if (newDuration < 1) return
-      setTlTasks(prev => {
-        const updated = prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
-        const isParent = prev.some(t => t.parentId === taskId)
-        return syncParentDurations(updated, isParent ? taskId : undefined)
-      })
+      const updated = tlTasks.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
+      applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     } else {
       const currentEnd = taskDates.endDate
       const newDuration = daysBetween(value, currentEnd) + 1
-      setTlTasks(prev => {
-        const updated = prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
-        const isParent = prev.some(t => t.parentId === taskId)
-        return syncParentDurations(updated, isParent ? taskId : undefined)
-      })
+      const updated = tlTasks.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
+      applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     }
-  }, [tlTaskDates, syncParentDurations])
+  }, [tlTasks, tlTaskDates, applyTaskChangeWithBubbleUp])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
