@@ -18,7 +18,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, Link2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -300,7 +300,7 @@ function TaskRow({
           placeholder="任務名稱"
         />
         {subtaskCount > 0 && (
-          <span className="shrink-0 text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 font-medium">
+          <span className="shrink-0 text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 font-medium" title="天數與日期由子任務自動計算">
             {subtaskCount} 子任務
           </span>
         )}
@@ -316,10 +316,11 @@ function TaskRow({
         </Button>
       </div>
 
-      {/* Duration (read-only when parent has subtasks) */}
+      {/* Duration (auto-calculated when parent has subtasks) */}
       <div className="flex justify-center">
         {subtaskCount > 0 ? (
-          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務天數加總">
+          <span className="h-7 w-14 flex items-center justify-center gap-0.5 text-sm rounded text-muted-foreground" title="由子任務天數加總，可手動覆寫">
+            <Link2 className="h-3 w-3 text-blue-400 shrink-0" />
             {task.durationDays || 0}
           </span>
         ) : (
@@ -336,12 +337,16 @@ function TaskRow({
       {/* Start date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
-            value={startDate || ''}
-            onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
-            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-          />
+          <div className="relative flex items-center w-full">
+            {subtaskCount > 0 && <Link2 className="absolute left-0.5 h-3 w-3 text-blue-400 pointer-events-none z-10" />}
+            <Input
+              type="date"
+              value={startDate || ''}
+              onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
+              className={`h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 ${subtaskCount > 0 ? 'pl-4 pr-1' : 'px-1'}`}
+              title={subtaskCount > 0 ? '預設由子任務計算，可手動覆寫' : undefined}
+            />
+          </div>
         ) : (
           <span className="text-sm text-muted-foreground">{startDate || '—'}</span>
         )}
@@ -350,12 +355,16 @@ function TaskRow({
       {/* End date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
-            value={endDate || ''}
-            onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
-            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-          />
+          <div className="relative flex items-center w-full">
+            {subtaskCount > 0 && <Link2 className="absolute left-0.5 h-3 w-3 text-blue-400 pointer-events-none z-10" />}
+            <Input
+              type="date"
+              value={endDate || ''}
+              onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
+              className={`h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 ${subtaskCount > 0 ? 'pl-4 pr-1' : 'px-1'}`}
+              title={subtaskCount > 0 ? '預設由子任務計算，可手動覆寫' : undefined}
+            />
+          </div>
         ) : (
           <span className="text-sm text-muted-foreground">{endDate || '—'}</span>
         )}

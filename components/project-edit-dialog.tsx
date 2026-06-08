@@ -442,11 +442,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     // ─── Batch save work items ──────────────────────────────
     const diff = computeWorkItemsDiff(origMilestones, origTasks, recalcMilestones, tlTasks, tlTaskDates)
 
-    // ─── Detect milestone date changes → require approval ───
+    // ─── Detect milestone date changes → require approval (active phase only) ───
     const dateChanges = detectMilestoneDateChanges()
     const startDateChanged = form.startDate !== project.startDate
 
-    if (dateChanges.length > 0) {
+    if (dateChanges.length > 0 && project.phase === 'active') {
       // Save project metadata with ORIGINAL startDate to avoid inconsistency
       // (the new startDate will be applied when the delay request is approved)
       const saveForm = startDateChanged
@@ -744,12 +744,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   }, [])
 
   // Auto-sync parent durationDays = sum of children durationDays
-  const syncParentDurations = useCallback((tasks: typeof tlTasks) => {
+  const syncParentDurations = useCallback((tasks: typeof tlTasks, skipId?: string) => {
     const parentIds = new Set(tasks.filter(t => t.parentId).map(t => t.parentId!))
     if (parentIds.size === 0) return tasks
     let changed = false
     const updated = tasks.map(t => {
       if (!parentIds.has(t.id)) return t
+      if (t.id === skipId) return t
       const childSum = tasks
         .filter(c => c.parentId === t.id)
         .reduce((sum, c) => sum + Math.max(c.durationDays || 1, 1), 0)
@@ -812,19 +813,21 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     if (!taskDates) return
 
     if (field === 'endDate') {
-      // Compute new durationDays from computed startDate to new endDate
       const newDuration = daysBetween(taskDates.startDate, value) + 1
       if (newDuration < 1) return
-      setTlTasks(prev => syncParentDurations(
-        prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
-      ))
+      setTlTasks(prev => {
+        const updated = prev.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
+        const isParent = prev.some(t => t.parentId === taskId)
+        return syncParentDurations(updated, isParent ? taskId : undefined)
+      })
     } else {
-      // startDate change — directly set task's own startDate (overlapping)
       const currentEnd = taskDates.endDate
       const newDuration = daysBetween(value, currentEnd) + 1
-      setTlTasks(prev => syncParentDurations(
-        prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
-      ))
+      setTlTasks(prev => {
+        const updated = prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
+        const isParent = prev.some(t => t.parentId === taskId)
+        return syncParentDurations(updated, isParent ? taskId : undefined)
+      })
     }
   }, [tlTaskDates, syncParentDurations])
 
