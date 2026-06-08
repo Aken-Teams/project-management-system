@@ -203,6 +203,8 @@ export async function PATCH(
       })
       if (!project) return
 
+      const affectedMsIds = new Set(delayRequest.affectedMilestones.map(am => am.milestoneId))
+
       for (const ms of project.milestones) {
         const msStart = (ms as any).startDate
           ? new Date((ms as any).startDate)
@@ -253,7 +255,16 @@ export async function PATCH(
           if (taskEnd > newDueDate) newDueDate = taskEnd
         }
 
-        if (newDueDate > msDueDate) {
+        if (affectedMsIds.has(ms.id)) {
+          // Directly affected: keep approved date, but extend if tasks need more time
+          if (newDueDate > msDueDate) {
+            await tx.milestone.update({
+              where: { id: ms.id },
+              data: { dueDate: newDueDate },
+            })
+          }
+        } else if (newDueDate.getTime() !== msDueDate.getTime()) {
+          // Non-affected milestone: cascade any direction
           await tx.milestone.update({
             where: { id: ms.id },
             data: { dueDate: newDueDate },

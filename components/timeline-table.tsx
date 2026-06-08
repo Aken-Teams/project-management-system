@@ -18,7 +18,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, Link2 } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -113,7 +113,11 @@ function MilestoneRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} px-2 py-1.5 bg-primary/5 border-l-[3px] border-l-primary border-t border-t-border first:border-t-0 font-medium`}
+      className={`${GRID_COLS} px-2 py-1.5 border-l-[3px] border-t border-t-border first:border-t-0 font-medium ${
+        index % 2 === 0
+          ? 'bg-indigo-50/60 border-l-indigo-400'
+          : 'bg-teal-50/60 border-l-teal-400'
+      }`}
     >
       {/* Drag */}
       <div
@@ -220,6 +224,7 @@ function TaskRow({
   teamMembers,
   subtaskCount,
   collapsed,
+  msIndex,
   onRemove,
   onUpdate,
   onToggleAddSubtask,
@@ -232,6 +237,7 @@ function TaskRow({
   teamMembers: TimelineTeamMember[]
   subtaskCount: number
   collapsed: boolean
+  msIndex: number
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onToggleAddSubtask: () => void
@@ -265,7 +271,11 @@ function TaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] border-l-blue-200`}
+      className={`${GRID_COLS} px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
+        subtaskCount > 0
+          ? msIndex % 2 === 0 ? 'border-l-indigo-300 bg-indigo-50/30' : 'border-l-teal-300 bg-teal-50/30'
+          : msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-teal-200'
+      }`}
     >
       {/* Drag */}
       <div
@@ -282,12 +292,12 @@ function TaskRow({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="shrink-0 flex items-center justify-center h-5 w-5 rounded hover:bg-muted transition-colors"
+            className="shrink-0 flex items-center justify-center h-5 w-5 rounded hover:bg-blue-100 transition-colors"
             title={collapsed ? '展開子任務' : '收合子任務'}
           >
             {collapsed
-              ? <ChevronRight className="h-3 w-3 text-blue-400" />
-              : <ChevronDown className="h-3 w-3 text-blue-400" />
+              ? <ChevronRight className="h-3 w-3 text-blue-500" />
+              : <ChevronDown className="h-3 w-3 text-blue-500" />
             }
           </button>
         ) : (
@@ -319,8 +329,7 @@ function TaskRow({
       {/* Duration (auto-calculated when parent has subtasks) */}
       <div className="flex justify-center">
         {subtaskCount > 0 ? (
-          <span className="h-7 w-14 flex items-center justify-center gap-0.5 text-sm rounded text-muted-foreground" title="由子任務天數加總，可手動覆寫">
-            <Link2 className="h-3 w-3 text-blue-400 shrink-0" />
+          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務天數加總">
             {task.durationDays || 0}
           </span>
         ) : (
@@ -337,16 +346,12 @@ function TaskRow({
       {/* Start date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <div className="relative flex items-center w-full">
-            {subtaskCount > 0 && <Link2 className="absolute left-0.5 h-3 w-3 text-blue-400 pointer-events-none z-10" />}
-            <Input
-              type="date"
-              value={startDate || ''}
-              onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
-              className={`h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 ${subtaskCount > 0 ? 'pl-4 pr-1' : 'px-1'}`}
-              title={subtaskCount > 0 ? '預設由子任務計算，可手動覆寫' : undefined}
-            />
-          </div>
+          <Input
+            type="date"
+            value={startDate || ''}
+            onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
         ) : (
           <span className="text-sm text-muted-foreground">{startDate || '—'}</span>
         )}
@@ -355,16 +360,12 @@ function TaskRow({
       {/* End date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <div className="relative flex items-center w-full">
-            {subtaskCount > 0 && <Link2 className="absolute left-0.5 h-3 w-3 text-blue-400 pointer-events-none z-10" />}
-            <Input
-              type="date"
-              value={endDate || ''}
-              onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
-              className={`h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 ${subtaskCount > 0 ? 'pl-4 pr-1' : 'px-1'}`}
-              title={subtaskCount > 0 ? '預設由子任務計算，可手動覆寫' : undefined}
-            />
-          </div>
+          <Input
+            type="date"
+            value={endDate || ''}
+            onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+          />
         ) : (
           <span className="text-sm text-muted-foreground">{endDate || '—'}</span>
         )}
@@ -427,10 +428,12 @@ function TaskRow({
 function InlineTaskInput({
   milestoneId,
   teamMembers,
+  msIndex,
   onAdd,
 }: {
   milestoneId: string
   teamMembers: TimelineTeamMember[]
+  msIndex: number
   onAdd: (task: TimelineTask) => void
 }) {
   const [title, setTitle] = useState('')
@@ -476,7 +479,7 @@ function InlineTaskInput({
   }
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] border-l-blue-200`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-teal-200'}`}>
       {/* Drag placeholder */}
       <div />
 
@@ -571,6 +574,7 @@ function SubtaskRow({
   startDate,
   endDate,
   teamMembers,
+  msIndex,
   onRemove,
   onUpdate,
   onDateChange,
@@ -579,6 +583,7 @@ function SubtaskRow({
   startDate?: string
   endDate?: string
   teamMembers: TimelineTeamMember[]
+  msIndex: number
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
@@ -598,7 +603,9 @@ function SubtaskRow({
   const p = priorityConfig[task.priority]
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm bg-muted/5 border-l-[3px] border-l-slate-200`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
+      msIndex % 2 === 0 ? 'border-l-indigo-100 bg-indigo-50/10' : 'border-l-teal-100 bg-teal-50/10'
+    }`}>
       {/* No drag for subtasks */}
       <div />
 
@@ -706,11 +713,13 @@ function SubtaskRow({
 function InlineSubtaskInput({
   parentTask,
   teamMembers,
+  msIndex,
   onAdd,
   onCancel,
 }: {
   parentTask: TimelineTask
   teamMembers: TimelineTeamMember[]
+  msIndex: number
   onAdd: (task: TimelineTask) => void
   onCancel: () => void
 }) {
@@ -761,7 +770,7 @@ function InlineSubtaskInput({
   }
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 bg-muted/5 border-l-[3px] border-l-slate-200`}>
+    <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-100' : 'border-l-teal-100'}`}>
       <div />
 
       {/* Title */}
@@ -1020,6 +1029,7 @@ export function TimelineTable({
                             teamMembers={teamMembers}
                             subtaskCount={subtasks.length}
                             collapsed={subtasksCollapsed}
+                            msIndex={msIndex}
                             onRemove={onTaskRemove}
                             onUpdate={onTaskUpdate}
                             onToggleAddSubtask={() =>
@@ -1035,6 +1045,7 @@ export function TimelineTable({
                               startDate={taskDates.get(st.id)?.startDate}
                               endDate={taskDates.get(st.id)?.endDate}
                               teamMembers={teamMembers}
+                              msIndex={msIndex}
                               onRemove={onTaskRemove}
                               onUpdate={onTaskUpdate}
                               onDateChange={onTaskDateChange}
@@ -1044,6 +1055,7 @@ export function TimelineTable({
                             <InlineSubtaskInput
                               parentTask={task}
                               teamMembers={teamMembers}
+                              msIndex={msIndex}
                               onAdd={(subtask) => {
                                 onTaskAdd(subtask)
                               }}
@@ -1053,7 +1065,7 @@ export function TimelineTable({
                         </div>
                       )
                     })}
-                    <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} onAdd={onTaskAdd} />
+                    <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} msIndex={msIndex} onAdd={onTaskAdd} />
                   </>
                 )}
               </div>

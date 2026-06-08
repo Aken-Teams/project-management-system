@@ -392,7 +392,9 @@ export function computeWorkItemsDiff(
     // sortOrder: position within milestone
     const tasksInMs = currentTasks.filter(ct => ct.milestoneId === t.milestoneId)
     const newSort = tasksInMs.indexOf(t)
-    changes.sortOrder = newSort
+    const origTasksInMs = origTasks.filter(ot => ot.milestoneId === orig.milestoneId)
+    const origSort = origTasksInMs.findIndex(ot => ot.id === t.id)
+    if (newSort !== origSort) { changes.sortOrder = newSort; hasChange = true }
     if (hasChange) tasksToUpdate.push(changes as WorkItemsDiff['tasksToUpdate'][number])
   })
 
