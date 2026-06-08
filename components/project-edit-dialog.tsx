@@ -272,7 +272,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   useEffect(() => {
     const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks, form.startDate || project.startDate)
     if (changed) setTlMilestones(updated)
-  }, [tlTasks]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tlTasks, tlMilestones]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-update project end date from latest milestone end
   const lastMsEndDate = useMemo(() => {
@@ -790,14 +790,22 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const handleTlMilestoneDateChange = useCallback((index: number, field: 'startDate' | 'endDate', value: string) => {
     if (!value) return
     if (field === 'endDate') {
-      // Compute new durationDays from the computed startDate to the new endDate
       const ms = recalcMilestones[index]
       if (!ms?.startDate) return
-      const newDuration = daysBetween(ms.startDate, value) + 1
+      let newDuration = daysBetween(ms.startDate, value) + 1
       if (newDuration < 1) return
+      // Enforce minimum: milestone can't be shorter than its tasks require
+      const msTasks = tlTasks.filter(t => t.milestoneId === ms.id && !t.parentId)
+      if (msTasks.length > 0) {
+        let maxEndOffset = 0
+        for (const t of msTasks) {
+          const offset = t.startDate ? Math.max(0, daysBetween(ms.startDate, t.startDate)) : 0
+          maxEndOffset = Math.max(maxEndOffset, offset + Math.max(t.durationDays || 1, 1))
+        }
+        if (maxEndOffset > newDuration) newDuration = maxEndOffset
+      }
       setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
     } else {
-      // startDate change — directly set milestone's own startDate (overlapping)
       setTlMilestones(prev => prev.map((m, i) => {
         if (i !== index) return m
         const currentEnd = recalcMilestones[index]?.endDate
@@ -805,7 +813,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
       }))
     }
-  }, [recalcMilestones])
+  }, [recalcMilestones, tlTasks])
 
   const handleTlTaskDateChange = useCallback((taskId: string, field: 'startDate' | 'endDate', value: string) => {
     if (!value) return
