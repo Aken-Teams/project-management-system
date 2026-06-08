@@ -87,6 +87,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [budgetItems, setBudgetItems] = useState<{ id?: string; station: string; vendor: string; equipment: string; quantity: number; unitPrice: number | null; estimatedCost: number | null; actualCost: number | null }[]>([])
   const [roiParams, setRoiParams] = useState<RoiParams | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [editKey, setEditKey] = useState(0)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [roleHelpOpen, setRoleHelpOpen] = useState(false)
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -377,7 +378,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </Button>
               )}
               {(currentUserTeamRole === 'A' || user?.role === 'pm' || user?.role === 'admin') && (
-                <Button size="default" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                <Button size="default" className="gap-1.5" onClick={() => { setEditKey(k => k + 1); setEditOpen(true) }}>
                   <Pencil className="h-4 w-4" />
                   編輯
                 </Button>
@@ -737,30 +738,29 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       </div>
 
       {/* Edit / Delete Dialogs */}
-      {editOpen && (
-        <ProjectEditDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          project={project}
-          onSave={handleSaveProject}
-          onTeamChange={async () => {
-            const res = await fetch(`/api/projects/${id}`)
-            if (res.ok) setProject(await res.json())
-          }}
-          onRiskChange={async () => {
-            const res = await fetch(`/api/projects/${id}`)
-            if (res.ok) setProject(await res.json())
-          }}
-          onWorkItemsChange={async () => {
-            const res = await fetch(`/api/projects/${id}`)
-            if (res.ok) setProject(await res.json())
-          }}
-          onSaved={async () => {
-            const res = await fetch(`/api/projects/${id}/budget-items`)
-            if (res.ok) setBudgetItems(await res.json())
-          }}
-        />
-      )}
+      <ProjectEditDialog
+        key={editKey}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        project={project}
+        onSave={handleSaveProject}
+        onTeamChange={async () => {
+          const res = await fetch(`/api/projects/${id}`)
+          if (res.ok) setProject(await res.json())
+        }}
+        onRiskChange={async () => {
+          const res = await fetch(`/api/projects/${id}`)
+          if (res.ok) setProject(await res.json())
+        }}
+        onWorkItemsChange={async () => {
+          const res = await fetch(`/api/projects/${id}`)
+          if (res.ok) setProject(await res.json())
+        }}
+        onSaved={async () => {
+          const res = await fetch(`/api/projects/${id}/budget-items`)
+          if (res.ok) setBudgetItems(await res.json())
+        }}
+      />
       <ProjectDeleteDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

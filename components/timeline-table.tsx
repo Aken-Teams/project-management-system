@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { cn } from '@/lib/utils'
 import {
   DndContext,
   closestCenter,
@@ -77,6 +78,41 @@ export interface TimelineTableProps {
 
 // ─── Column grid class (shared across all rows) ─────────────
 const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_140px_140px_88px_52px_28px] gap-0 items-center'
+
+// ─── DateInput (uncontrolled to bypass React 19 controlled-input rollback) ──
+// React 19 resets controlled <input type="date"> values before the batched
+// state update completes, fighting with the native calendar picker.
+// Using an uncontrolled input + ref sync avoids this entirely.
+function DateInput({ value, onCommit, className }: {
+  value: string
+  onCommit: (value: string) => void
+  className?: string
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const onCommitRef = useRef(onCommit)
+  onCommitRef.current = onCommit
+
+  useEffect(() => {
+    if (ref.current && ref.current.value !== value) {
+      ref.current.value = value
+    }
+  }, [value])
+
+  return (
+    <input
+      ref={ref}
+      type="date"
+      defaultValue={value}
+      onChange={(e) => {
+        if (e.target.value) onCommitRef.current(e.target.value)
+      }}
+      className={cn(
+        'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+        className,
+      )}
+    />
+  )
+}
 
 // ─── MilestoneRow ───────────────────────────────────────────
 function MilestoneRow({
@@ -168,10 +204,9 @@ function MilestoneRow({
       {/* Start date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
+          <DateInput
             value={milestone.startDate || ''}
-            onChange={(e) => onDateChange(index, 'startDate', e.target.value)}
+            onCommit={(v) => onDateChange(index, 'startDate', v)}
             className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
@@ -182,10 +217,9 @@ function MilestoneRow({
       {/* End date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
+          <DateInput
             value={milestone.endDate || ''}
-            onChange={(e) => onDateChange(index, 'endDate', e.target.value)}
+            onCommit={(v) => onDateChange(index, 'endDate', v)}
             className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
@@ -346,10 +380,9 @@ function TaskRow({
       {/* Start date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
+          <DateInput
             value={startDate || ''}
-            onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
+            onCommit={(v) => onDateChange(task.id, 'startDate', v)}
             className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
@@ -360,10 +393,9 @@ function TaskRow({
       {/* End date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
+          <DateInput
             value={endDate || ''}
-            onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
+            onCommit={(v) => onDateChange(task.id, 'endDate', v)}
             className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
@@ -635,10 +667,9 @@ function SubtaskRow({
       {/* Start date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
+          <DateInput
             value={startDate || ''}
-            onChange={(e) => onDateChange(task.id, 'startDate', e.target.value)}
+            onCommit={(v) => onDateChange(task.id, 'startDate', v)}
             className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
@@ -649,10 +680,9 @@ function SubtaskRow({
       {/* End date */}
       <div className="flex justify-center">
         {onDateChange ? (
-          <Input
-            type="date"
+          <DateInput
             value={endDate || ''}
-            onChange={(e) => onDateChange(task.id, 'endDate', e.target.value)}
+            onCommit={(v) => onDateChange(task.id, 'endDate', v)}
             className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (

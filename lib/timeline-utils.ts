@@ -175,19 +175,19 @@ export function autoExpandMilestones<T extends MilestoneInput>(
     const msTasks = tasks.filter(t => t.milestoneId === ms.id && !t.parentId)
     if (msTasks.length === 0) return ms
 
-    let maxEndOffset = 0
-    for (const t of msTasks) {
-      let offsetDays = 0
-      if (t.startDate) {
-        offsetDays = Math.max(0, daysBetween(msStartStr, t.startDate))
-      }
-      const endOffset = offsetDays + (t.durationDays || 1)
-      maxEndOffset = Math.max(maxEndOffset, endOffset)
-    }
+    const msStartDate = new Date(msStartStr)
+    const allMsTasks = tasks.filter(t => t.milestoneId === ms.id)
+    const scheduled = scheduleTasksFromStart(msTasks, allMsTasks, msStartDate)
 
-    if (maxEndOffset > 0 && maxEndOffset > (ms.durationDays || 0)) {
+    let maxEndDate = msStartDate
+    for (const [, dates] of scheduled) {
+      if (dates.endDate > maxEndDate) maxEndDate = dates.endDate
+    }
+    const neededDays = Math.max(1, Math.ceil((maxEndDate.getTime() - msStartDate.getTime()) / 86400000) + 1)
+
+    if (neededDays > (ms.durationDays || 0)) {
       changed = true
-      return { ...ms, durationDays: maxEndOffset }
+      return { ...ms, durationDays: neededDays }
     }
     return ms
   })
@@ -244,11 +244,7 @@ export function dbToTimelineState(
     const msEnd = new Date(ms.dueDate)
     const dateSpanDays = Math.max(1, Math.ceil((msEnd.getTime() - msStart.getTime()) / (1000 * 60 * 60 * 24)) + 1)
 
-    // Use actual date span, but ensure tasks fit
-    const msTasks = dbTasks.filter(t => t.milestoneId === ms.id && !t.parentId)
-    const taskSumDays = msTasks.reduce((sum, t) => sum + (t.durationDays || 0), 0)
-
-    const durationDays = Math.max(dateSpanDays, taskSumDays, 1)
+    const durationDays = Math.max(dateSpanDays, 1)
 
     return {
       id: ms.id,

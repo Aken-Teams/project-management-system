@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -268,11 +268,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     return changes
   }, [recalcMilestones, origMilestones])
 
-  // Auto-resize milestone duration to match task total (expand + shrink)
+  // Auto-resize milestone duration when tasks change (add/remove/reorder)
+  // Skip when tlTasks hasn't changed from its initial value — DB state is authoritative on load
+  const initialTlTasks = useRef(tlTasks)
   useEffect(() => {
+    if (tlTasks === initialTlTasks.current) return
     const { milestones: updated, changed } = autoExpandMilestones(tlMilestones, tlTasks, form.startDate || project.startDate)
     if (changed) setTlMilestones(updated)
-  }, [tlTasks, tlMilestones]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tlTasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-update project end date from latest milestone end
   const lastMsEndDate = useMemo(() => {
@@ -792,18 +795,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     if (field === 'endDate') {
       const ms = recalcMilestones[index]
       if (!ms?.startDate) return
-      let newDuration = daysBetween(ms.startDate, value) + 1
+      const newDuration = daysBetween(ms.startDate, value) + 1
       if (newDuration < 1) return
-      // Enforce minimum: milestone can't be shorter than its tasks require
-      const msTasks = tlTasks.filter(t => t.milestoneId === ms.id && !t.parentId)
-      if (msTasks.length > 0) {
-        let maxEndOffset = 0
-        for (const t of msTasks) {
-          const offset = t.startDate ? Math.max(0, daysBetween(ms.startDate, t.startDate)) : 0
-          maxEndOffset = Math.max(maxEndOffset, offset + Math.max(t.durationDays || 1, 1))
-        }
-        if (maxEndOffset > newDuration) newDuration = maxEndOffset
-      }
       setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
     } else {
       setTlMilestones(prev => prev.map((m, i) => {
@@ -813,7 +806,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
       }))
     }
-  }, [recalcMilestones, tlTasks])
+  }, [recalcMilestones])
 
   const handleTlTaskDateChange = useCallback((taskId: string, field: 'startDate' | 'endDate', value: string) => {
     if (!value) return
@@ -843,6 +836,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-4xl max-h-[90vh] flex flex-col"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>編輯專案</DialogTitle>
@@ -1371,6 +1367,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             {workItemError && (
               <p className="text-sm text-destructive">{workItemError}</p>
             )}
+
           </TabsContent>
 
         </Tabs>
