@@ -407,11 +407,13 @@ export default function ProjectsPage() {
                       }`}>
                         {project.projectTier}
                       </Badge>
-                      {project.phase === 'draft' && (
-                        <Badge variant="outline" className="text-sm border-amber-500 text-amber-600 bg-amber-50">
-                          草稿
-                        </Badge>
-                      )}
+                      <Badge variant="outline" className={`text-sm ${
+                        project.phase === 'draft'
+                          ? 'border-amber-400 text-amber-600 bg-amber-50'
+                          : 'border-emerald-400 text-emerald-600 bg-emerald-50'
+                      }`}>
+                        {project.phase === 'draft' ? '草稿' : '已開案'}
+                      </Badge>
                     </div>
                     <Badge
                       variant="secondary"

@@ -103,6 +103,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [shareCopiedId, setShareCopiedId] = useState<string | null>(null)
   const [capexItems, setCapexItems] = useState<CapexItemData[]>([])
   const [launchLoading, setLaunchLoading] = useState(false)
+  const [phaseDialogOpen, setPhaseDialogOpen] = useState(false)
 
   // Team role of current user in this project
   const currentUserTeamRole = project?.teamMembers?.find(
@@ -205,11 +206,16 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     router.push('/projects')
   }
 
-  const handleLaunchProject = async () => {
+  const handleTogglePhase = async () => {
     if (!project) return
+    const targetPhase = project.phase === 'draft' ? 'active' : 'draft'
     setLaunchLoading(true)
     try {
-      const res = await fetch(`/api/projects/${id}/launch`, { method: 'POST' })
+      const res = await fetch(`/api/projects/${id}/launch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phase: targetPhase }),
+      })
       if (res.ok) {
         const r = await fetch(`/api/projects/${id}`)
         if (r.ok) setProject(await r.json())
@@ -334,12 +340,16 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                     {getStatusText(project.status)}
                   </span>
                 </Badge>
-                {project.phase === 'draft' && (
-                  <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
-                    <FileEdit className="h-3 w-3 mr-1" />
-                    草稿
-                  </Badge>
-                )}
+                <Badge variant="outline" className={
+                  project.phase === 'draft'
+                    ? 'border-amber-400 text-amber-700 bg-amber-50'
+                    : 'border-emerald-400 text-emerald-700 bg-emerald-50'
+                }>
+                  {project.phase === 'draft'
+                    ? <><FileEdit className="h-3 w-3 mr-1" />草稿</>
+                    : <><Rocket className="h-3 w-3 mr-1" />已開案</>
+                  }
+                </Badge>
               </div>
               <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                 {project.name}
@@ -353,6 +363,19 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 {shareLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
                 分享
               </Button>
+              {(currentUserTeamRole === 'A' || user?.role === 'pm' || user?.role === 'admin') && (
+                <Button
+                  variant="outline"
+                  size="default"
+                  className={`gap-1.5 ${project.phase === 'draft' ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-600 hover:border-emerald-500' : 'bg-amber-500 hover:bg-amber-400 text-white border-amber-500 hover:border-amber-400'}`}
+                  onClick={() => setPhaseDialogOpen(true)}
+                >
+                  {project.phase === 'draft'
+                    ? <><Rocket className="h-4 w-4" />開案</>
+                    : <><FileEdit className="h-4 w-4" />退回草稿</>
+                  }
+                </Button>
+              )}
               {(currentUserTeamRole === 'A' || user?.role === 'pm' || user?.role === 'admin') && (
                 <Button size="default" className="gap-1.5" onClick={() => setEditOpen(true)}>
                   <Pencil className="h-4 w-4" />
@@ -376,29 +399,6 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             </div>
           )}
 
-          {/* Draft mode banner */}
-          {project.phase === 'draft' && (
-            <div className="mt-3 p-4 rounded-lg border border-amber-300 bg-amber-50 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <FileEdit className="h-5 w-5 text-amber-600 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-amber-800">此專案尚未開案，目前為草稿模式</p>
-                  <p className="text-xs text-amber-600 mt-0.5">草稿期間可自由編輯里程碑與時程，開案後日期異動需提出延遲申請</p>
-                </div>
-              </div>
-              {(currentUserTeamRole === 'A' || user?.role === 'pm' || user?.role === 'admin') && (
-                <Button
-                  size="default"
-                  className="gap-1.5 bg-amber-600 hover:bg-amber-700 shrink-0"
-                  onClick={handleLaunchProject}
-                  disabled={launchLoading}
-                >
-                  {launchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-                  開案
-                </Button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Stats Bar - Horizontal compact */}
@@ -767,6 +767,42 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         project={project}
         onConfirm={handleDeleteProject}
       />
+
+      {/* Phase Toggle Dialog */}
+      <Dialog open={phaseDialogOpen} onOpenChange={setPhaseDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {project.phase === 'draft'
+                ? <><Rocket className="h-5 w-5 text-emerald-600" />確認開案</>
+                : <><FileEdit className="h-5 w-5 text-amber-600" />確認退回草稿</>
+              }
+            </DialogTitle>
+            <DialogDescription>
+              {project.phase === 'draft'
+                ? '開案後，里程碑日期將建立基準線，後續日期異動需提出延遲申請經主管審核。'
+                : '退回草稿後，可自由編輯里程碑與時程，不需提出延遲申請。'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setPhaseDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={async () => {
+                setPhaseDialogOpen(false)
+                await handleTogglePhase()
+              }}
+              disabled={launchLoading}
+              className={project.phase === 'draft' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'}
+            >
+              {launchLoading && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              {project.phase === 'draft' ? '確認開案' : '確認退回草稿'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Share Dialog */}
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
