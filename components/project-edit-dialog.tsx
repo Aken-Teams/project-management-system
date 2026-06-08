@@ -514,6 +514,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     const startDateChanged = form.startDate !== project.startDate
     const hasAnyDateChange = msDateChanges.length > 0 || taskDateChanges.length > 0 || startDateChanged
 
+    // ─── Save budget items (must run regardless of date-change path) ───
+    await fetch(`/api/projects/${project.id}/budget-items`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: budgetItems }),
+    })
+
     if (hasAnyDateChange && project.phase === 'active') {
       const saveForm = startDateChanged
         ? { ...form, objective: autoObjective, startDate: project.startDate }
@@ -563,13 +570,6 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
     // ─── No date changes: proceed with normal full save ──
     await executeBatchSave(diff)
-
-    // ─── Save budget items ───────────────────────────────
-    await fetch(`/api/projects/${project.id}/budget-items`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: budgetItems }),
-    })
 
     return true
   }
