@@ -416,28 +416,61 @@ export function ProjectDelayTab({ project, onRefresh, readOnly }: Props) {
           </div>
 
           {/* Affected milestones */}
-          <div>
-            <h4 className="text-sm font-semibold mb-1.5 flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" /> 受影響里程碑
-            </h4>
-            <div className="space-y-1.5">
-              {r.affectedMilestones.map(am => {
-                const ms = project.milestones.find(m => m.id === am.milestoneId)
-                const days = calcDays(am.originalDate, am.proposedDate)
-                return (
-                  <div key={am.milestoneId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
-                    <span className="font-medium">{ms?.name || am.milestoneId}</span>
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <span className="text-muted-foreground line-through">{formatDate(am.originalDate)}</span>
-                      <ArrowRight className="h-3 w-3" />
-                      <span className="font-medium text-amber-600">{formatDate(am.proposedDate)}</span>
-                      <Badge variant="outline" className="text-[10px] px-1 py-0">{days >= 0 ? '+' : ''}{days}天</Badge>
+          {r.affectedMilestones.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold mb-1.5 flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" /> 受影響里程碑
+              </h4>
+              <div className="space-y-1.5">
+                {r.affectedMilestones.map(am => {
+                  const ms = project.milestones.find(m => m.id === am.milestoneId)
+                  const days = calcDays(am.originalDate, am.proposedDate)
+                  return (
+                    <div key={am.milestoneId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
+                      <span className="font-medium">{ms?.name || am.milestoneId}</span>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-muted-foreground line-through">{formatDate(am.originalDate)}</span>
+                        <ArrowRight className="h-3 w-3" />
+                        <span className="font-medium text-amber-600">{formatDate(am.proposedDate)}</span>
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">{days >= 0 ? '+' : ''}{days}天</Badge>
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Affected tasks / subtasks */}
+          {r.pendingTaskChanges && r.pendingTaskChanges.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold mb-1.5 flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" /> 任務 / 子任務變更
+              </h4>
+              <div className="space-y-1.5">
+                {r.pendingTaskChanges.map(tc => {
+                  // 找原值（頂層任務或子任務），顯示「原 → 新」
+                  const orig: { durationDays?: number; startDate?: string } =
+                    project.tasks.find(t => t.id === tc.taskId)
+                    || (project.tasks.flatMap(t => t.subtasks ?? []).find(s => s.id === tc.taskId) as { durationDays?: number; startDate?: string } | undefined)
+                    || {}
+                  return (
+                    <div key={tc.taskId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
+                      <span className="font-medium truncate">{tc.taskTitle}</span>
+                      <div className="flex items-center gap-2 text-xs whitespace-nowrap tabular-nums">
+                        {tc.durationDays !== undefined && (
+                          <span>天數 {orig.durationDays !== undefined && (<><span className="text-muted-foreground line-through">{orig.durationDays}</span> → </>)}<span className="font-medium text-amber-600">{tc.durationDays}</span></span>
+                        )}
+                        {tc.startDate && orig.startDate !== tc.startDate && (
+                          <span>起 {orig.startDate && (<><span className="text-muted-foreground line-through">{formatDate(orig.startDate)}</span> → </>)}<span className="font-medium text-amber-600">{formatDate(tc.startDate)}</span></span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Support needed */}
           {r.supportNeeded && r.supportNeeded.trim() !== '' && (

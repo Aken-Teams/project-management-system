@@ -261,6 +261,7 @@ export async function GET(request: NextRequest) {
         ...(am.originalStartDate ? { originalStartDate: am.originalStartDate.toISOString().split('T')[0] } : {}),
         ...(am.proposedStartDate ? { proposedStartDate: am.proposedStartDate.toISOString().split('T')[0] } : {}),
       })),
+      ...(Array.isArray(dr.pendingTaskChanges) && dr.pendingTaskChanges.length > 0 ? { pendingTaskChanges: dr.pendingTaskChanges } : {}),
       ...(dr.reviewer ? { reviewedBy: dr.reviewer.name } : {}),
       ...(dr.reviewedAt ? { reviewedAt: dr.reviewedAt.toISOString() } : {}),
       ...(dr.reviewNotes ? { reviewNotes: dr.reviewNotes } : {}),

@@ -49,6 +49,13 @@ export interface DelayRequest {
     originalStartDate?: string
     proposedStartDate?: string
   }[]
+  pendingTaskChanges?: {
+    taskId: string
+    taskTitle: string
+    durationDays?: number
+    startDate?: string
+    endDate?: string
+  }[]
   canCatchUp: boolean
   supportNeeded: string
   status: 'pending' | 'approved' | 'rejected'

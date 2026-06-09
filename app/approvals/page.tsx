@@ -67,6 +67,13 @@ interface DelayRequestItem {
   supportNeeded: string
   status: 'pending' | 'approved' | 'rejected'
   affectedMilestones: AffectedMilestone[]
+  pendingTaskChanges?: {
+    taskId: string
+    taskTitle: string
+    durationDays?: number
+    startDate?: string
+    endDate?: string
+  }[]
   taskId?: string
   taskTitle?: string
   reviewedBy?: string
@@ -671,31 +678,57 @@ export default function ApprovalsPage() {
           )}
 
           {/* Affected milestones */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-muted-foreground" /> 受影響里程碑
-            </h4>
-            <div className="space-y-2">
-              {request.affectedMilestones.map(am => {
-                const delayDays = calculateDelayDays(am.originalDate, am.proposedDate)
-                return (
-                  <div key={am.milestoneId} className="flex items-center gap-2 p-3 rounded-lg border">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{am.milestoneName}</div>
-                      <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-                        {formatDate(am.originalDate)}
-                        <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-                        {formatDate(am.proposedDate)}
+          {request.affectedMilestones.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-muted-foreground" /> 受影響里程碑
+              </h4>
+              <div className="space-y-2">
+                {request.affectedMilestones.map(am => {
+                  const delayDays = calculateDelayDays(am.originalDate, am.proposedDate)
+                  return (
+                    <div key={am.milestoneId} className="flex items-center gap-2 p-3 rounded-lg border">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{am.milestoneName}</div>
+                        <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                          {formatDate(am.originalDate)}
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                          {formatDate(am.proposedDate)}
+                        </div>
                       </div>
+                      <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-xs shrink-0">
+                        {delayDays >= 0 ? '+' : ''}{delayDays} 天
+                      </Badge>
                     </div>
-                    <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-xs shrink-0">
-                      {delayDays >= 0 ? '+' : ''}{delayDays} 天
-                    </Badge>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Affected tasks / subtasks */}
+          {request.pendingTaskChanges && request.pendingTaskChanges.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-muted-foreground" /> 任務 / 子任務變更
+              </h4>
+              <div className="space-y-2">
+                {request.pendingTaskChanges.map(tc => (
+                  <div key={tc.taskId} className="flex items-center justify-between gap-2 p-3 rounded-lg border text-sm">
+                    <span className="font-medium truncate">{tc.taskTitle}</span>
+                    <div className="flex items-center gap-2 text-xs whitespace-nowrap tabular-nums text-muted-foreground">
+                      {tc.durationDays !== undefined && (
+                        <span>天數 → <span className="font-medium text-amber-600">{tc.durationDays}</span></span>
+                      )}
+                      {tc.startDate && (
+                        <span>起 → <span className="font-medium text-amber-600">{formatDate(tc.startDate)}</span></span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Can catch up + support needed */}
           {request.type !== 'date_change' && (
