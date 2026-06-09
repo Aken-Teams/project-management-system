@@ -954,8 +954,43 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       }
     })
 
-    setTlTasks(finalTasks)
-    if (msChanged) setTlMilestones(newMilestones)
+    // ── 方案 A 延後順延：某里程碑因任務變動而「結束日往後」(延後) →
+    //    把它後面的里程碑 + 其任務/子任務整塊往後同樣天數（保留彼此相對關係）。
+    //    提前(往前)不動下游；只在該里程碑的任務這次真的有動時才觸發。 ──
+    const shiftStr = (s: string, n: number) => {
+      const d = new Date(s)
+      d.setDate(d.getDate() + n)
+      return d.toISOString().split('T')[0]
+    }
+    let outTasks = finalTasks
+    let outMilestones = newMilestones
+    const newMsComputed = calculateMilestoneDates(newMilestones, start, finalTasks)
+    for (let i = 0; i < tlMilestones.length; i++) {
+      const oldEnd = recalcMilestones[i]?.endDate
+      const newEnd = newMsComputed[i]?.endDate
+      if (!oldEnd || !newEnd) continue
+      const delta = daysBetween(oldEnd, newEnd)
+      if (delta <= 0) continue // 只順延，不處理提前
+      const msId = tlMilestones[i].id
+      const tasksMoved = finalTasks.some(t => {
+        if (t.milestoneId !== msId) return false
+        const a = dates2.get(t.id)
+        const b = tlTaskDates.get(t.id)
+        return !!a && !!b && (a.startDate !== b.startDate || a.endDate !== b.endDate)
+      })
+      if (!tasksMoved) continue // 避免無關里程碑（如 overflow 自動修正）誤觸發順延
+      const downstreamIds = new Set(tlMilestones.slice(i + 1).map(m => m.id))
+      if (downstreamIds.size === 0) break
+      outMilestones = newMilestones.map((m, j) => (j > i && m.startDate)
+        ? { ...m, startDate: shiftStr(m.startDate, delta) } : m)
+      outTasks = finalTasks.map(t => (downstreamIds.has(t.milestoneId) && t.startDate)
+        ? { ...t, startDate: shiftStr(t.startDate, delta) } : t)
+      msChanged = true
+      break
+    }
+
+    setTlTasks(outTasks)
+    if (msChanged) setTlMilestones(outMilestones)
     if (extendedNames.length > 0) {
       toast.info('父層已自動延伸涵蓋子層', {
         description: `${extendedNames.join('、')}不能小於其子項，已自動延伸範圍以包住子層。`,
