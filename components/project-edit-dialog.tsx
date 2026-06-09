@@ -827,7 +827,10 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     const msComputed = calculateMilestoneDates(tlMilestones, start, newTasks)
     const dates = calculateTaskDates(newTasks, msComputed)
 
-    // Pass 2: bubble subtask → parent task (span-based, not sum)
+    // Pass 2: 方案 A — sync each parent task's durationDays to its
+    // subtasks' envelope span. The computed dates (td) already hold the
+    // envelope (earliest subtask start ～ latest subtask end), so the span
+    // is simply daysBetween(start, end) + 1.
     const parentIds = new Set(newTasks.filter(t => t.parentId).map(t => t.parentId!))
     let tasksChanged = false
     let finalTasks = newTasks
@@ -837,16 +840,10 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         if (!parentIds.has(t.id) || t.id === directEditId) return t
         const td = dates.get(t.id)
         if (!td) return t
-        const children = newTasks.filter(c => c.parentId === t.id)
-        const maxChildEnd = Math.max(...children.map(c => {
-          const cd = dates.get(c.id)
-          return cd ? new Date(cd.endDate).getTime() : 0
-        }))
-        if (maxChildEnd <= 0) return t
-        const needed = Math.ceil((maxChildEnd - new Date(td.startDate).getTime()) / 86400000) + 1
-        if (needed > 0 && needed !== t.durationDays) {
+        const span = daysBetween(td.startDate, td.endDate) + 1
+        if (span > 0 && span !== t.durationDays) {
           tasksChanged = true
-          return { ...t, durationDays: needed }
+          return { ...t, durationDays: span }
         }
         return t
       })

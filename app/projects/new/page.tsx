@@ -1190,7 +1190,8 @@ export default function NewProjectPage() {
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
-          durationDays: t.durationDays || 1,
+          // 方案 A：父任務天數＝子任務 envelope 跨度（dates 已是最早開始～最晚結束）
+          durationDays: dates ? daysBetween(dates.startDate, dates.endDate) + 1 : (t.durationDays || 1),
           startDate: dates?.startDate || parentDates?.startDate || aiEditableData.startDate,
           endDate: dates?.endDate || parentDates?.endDate || ms?.dueDate || aiEditableData.endDate,
           dependencies: [] as string[],
@@ -1307,7 +1308,8 @@ export default function NewProjectPage() {
           description: '',
           assignee: t.assignee.trim() || '未指派',
           priority: t.priority,
-          durationDays: t.durationDays || 1,
+          // 方案 A：父任務天數＝子任務 envelope 跨度（dates 已是最早開始～最晚結束）
+          durationDays: dates ? daysBetween(dates.startDate, dates.endDate) + 1 : (t.durationDays || 1),
           startDate: dates?.startDate || parentDates?.startDate || fallbackStart,
           endDate: dates?.endDate || parentDates?.endDate || ms?.dueDate || manualData.endDate,
           ...(t.parentId ? { parentTempId: t.parentId } : {}),

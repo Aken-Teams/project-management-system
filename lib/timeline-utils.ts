@@ -26,13 +26,19 @@ export function daysBetween(start: string, end: string): number {
 }
 
 // ─── Milestone date calculation ──────────────────────────────
-// Hybrid: milestones with explicit startDate use it (overlapping);
+// Hybrid seed: milestones with explicit startDate use it (overlapping);
 // milestones without startDate follow sequential/waterfall order.
+//
+// 方案 A（嚴格層級綁定）: a milestone that HAS tasks does not keep an
+// independent range — its start/end are derived as the envelope of its
+// tasks (earliest task start ～ latest task end). The seed start only
+// anchors where undated tasks fall in sequence and where the next
+// sequential (startDate-less) milestone begins.
 
 export function calculateMilestoneDates<T extends MilestoneInput>(
   milestones: T[],
   projectStartDate: string,
-  _tasks: TaskInput[],
+  tasks: TaskInput[],
 ): T[] {
   if (!projectStartDate) return milestones
 
@@ -45,17 +51,37 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
       return { ...milestone, startDate: undefined, endDate: undefined }
     }
 
-    // Explicit startDate → overlapping; otherwise → sequential waterfall
-    const msStart = milestone.startDate
+    // Seed: explicit startDate → overlapping; otherwise → sequential waterfall
+    const seedStart = milestone.startDate
       ? new Date(milestone.startDate)
       : new Date(sequentialDate)
 
-    const endDate = new Date(msStart)
-    endDate.setDate(endDate.getDate() + effectiveDays - 1)
+    let msStart = seedStart
+    let msEnd = new Date(seedStart)
+    msEnd.setDate(msEnd.getDate() + effectiveDays - 1)
+
+    // 方案 A: milestone with tasks spans exactly its tasks' envelope
+    // (earliest task start ～ latest task end).
+    const msTopTasks = tasks.filter(t => t.milestoneId === milestone.id && !t.parentId)
+    if (msTopTasks.length > 0) {
+      const scheduled = scheduleTasksFromStart(msTopTasks, tasks, seedStart)
+      let minStart: Date | null = null
+      let maxEnd: Date | null = null
+      for (const t of msTopTasks) {
+        const d = scheduled.get(t.id)
+        if (!d) continue
+        if (!minStart || d.startDate < minStart) minStart = d.startDate
+        if (!maxEnd || d.endDate > maxEnd) maxEnd = d.endDate
+      }
+      if (minStart && maxEnd) {
+        msStart = minStart
+        msEnd = maxEnd
+      }
+    }
 
     // Advance sequential cursor so the next milestone without startDate
-    // follows after the latest end date seen so far
-    const nextDay = new Date(endDate)
+    // follows after the latest (envelope) end date seen so far
+    const nextDay = new Date(msEnd)
     nextDay.setDate(nextDay.getDate() + 1)
     if (nextDay > sequentialDate) {
       sequentialDate = nextDay
@@ -64,7 +90,7 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
     return {
       ...milestone,
       startDate: msStart.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      endDate: msEnd.toISOString().split('T')[0],
     }
   })
 }
@@ -73,6 +99,11 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
 // Hybrid: tasks with explicit startDate use it (overlapping);
 // tasks without startDate follow sequential order within milestone.
 // Same logic applies to subtasks within a parent task.
+//
+// 方案 A（嚴格層級綁定）: a task that HAS subtasks does not keep an
+// independent range — its start/end are derived as the envelope of its
+// subtasks (earliest subtask start ～ latest subtask end). The task's own
+// startDate/durationDays only seed where undated subtasks fall in sequence.
 
 export interface ScheduledDate { startDate: Date; endDate: Date }
 
@@ -87,13 +118,16 @@ export function scheduleTasksFromStart(
   for (const task of parentTasks) {
     const taskDays = Math.max(task.durationDays || 1, 1)
     const taskStart = task.startDate ? new Date(task.startDate) : new Date(sequentialDate)
-    const taskEnd = new Date(taskStart)
-    taskEnd.setDate(taskEnd.getDate() + taskDays - 1)
-    result.set(task.id, { startDate: taskStart, endDate: taskEnd })
+    let effectiveStart = taskStart
+    let effectiveEnd = new Date(taskStart)
+    effectiveEnd.setDate(effectiveEnd.getDate() + taskDays - 1)
 
-    // Schedule subtasks — hybrid sequential + overlapping
+    // Schedule subtasks first — hybrid sequential + overlapping — while
+    // tracking the envelope (earliest start ～ latest end) across them.
     const subtasks = allTasks.filter(t => t.parentId === task.id)
     let subSequential = new Date(taskStart)
+    let minSubStart: Date | null = null
+    let maxSubEnd: Date | null = null
     for (const sub of subtasks) {
       const subDays = Math.max(sub.durationDays || 1, 1)
       const subStart = sub.startDate ? new Date(sub.startDate) : new Date(subSequential)
@@ -101,13 +135,23 @@ export function scheduleTasksFromStart(
       subEnd.setDate(subEnd.getDate() + subDays - 1)
       result.set(sub.id, { startDate: subStart, endDate: subEnd })
 
+      if (!minSubStart || subStart < minSubStart) minSubStart = subStart
+      if (!maxSubEnd || subEnd > maxSubEnd) maxSubEnd = subEnd
+
       const nextSubDay = new Date(subEnd)
       nextSubDay.setDate(nextSubDay.getDate() + 1)
       if (nextSubDay > subSequential) subSequential = nextSubDay
     }
 
-    // Advance sequential cursor
-    const nextDay = new Date(taskEnd)
+    // 方案 A: task with subtasks spans exactly its subtasks' envelope.
+    if (minSubStart && maxSubEnd) {
+      effectiveStart = minSubStart
+      effectiveEnd = maxSubEnd
+    }
+    result.set(task.id, { startDate: effectiveStart, endDate: effectiveEnd })
+
+    // Advance sequential cursor past this task's (possibly expanded) end
+    const nextDay = new Date(effectiveEnd)
     nextDay.setDate(nextDay.getDate() + 1)
     if (nextDay > sequentialDate) sequentialDate = nextDay
   }

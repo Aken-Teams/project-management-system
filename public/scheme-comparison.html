@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日期模型方案評估 — 方案 A vs 方案 B</title>
+<style>
+  :root {
+    --c-ms: #6366f1;        /* 里程碑 紫 */
+    --c-ms-soft: #e0e2ff;
+    --c-task-strict: #3b82f6; /* 任務（嚴格）藍 */
+    --c-task-flex: #f59e0b;   /* 任務（彈性）橘 */
+    --c-sub: #10b981;         /* 子任務 綠 */
+    --c-warn: #ef4444;
+    --ink: #1e293b;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+    color: var(--ink); background: var(--bg); margin: 0;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 15px; }
+  h2 { font-size: 21px; margin: 44px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 16px; margin: 0 0 10px; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; padding: 14px 18px; background: #fff;
+            border: 1px solid var(--line); border-radius: 12px; font-size: 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+
+  /* gantt */
+  .gantt { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .row { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 12px; min-height: 38px; }
+  .row .label { font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+  .row .label.indent { padding-left: 18px; color: var(--muted); }
+  .row .label.indent2 { padding-left: 34px; color: var(--muted); }
+  .track {
+    position: relative; height: 26px;
+    display: grid; grid-template-columns: repeat(12, 1fr);
+    background: repeating-linear-gradient(90deg, #fff 0, #fff calc(8.333% - 1px), var(--line) calc(8.333% - 1px), var(--line) 8.333%);
+    border-radius: 6px;
+  }
+  .months { display: grid; grid-template-columns: 150px 1fr; gap: 12px; margin-bottom: 6px; }
+  .months .scale { display: grid; grid-template-columns: repeat(12, 1fr); font-size: 11px; color: var(--muted); text-align: center; }
+  .bar {
+    grid-row: 1; height: 20px; margin-top: 3px; border-radius: 5px; color: #fff;
+    font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,.12);
+    transition: all .18s ease;
+  }
+  .bar.ms { background: var(--c-ms); }
+  .bar.task-strict { background: var(--c-task-strict); }
+  .bar.task-flex { background: var(--c-task-flex); }
+  .bar.sub { background: var(--c-sub); }
+  .bar.derived { opacity: .92; }
+  .lock { font-size: 10px; opacity: .9; }
+  .warnbadge { color: var(--c-warn); font-weight: 700; }
+
+  /* controls */
+  .controls { display: flex; flex-wrap: wrap; gap: 18px; margin: 14px 0 0; }
+  .ctrl-group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .ctrl-group h4 { margin: 0 0 8px; font-size: 13px; }
+  .ctrl-group.disabled { opacity: .42; pointer-events: none; }
+  .btn { border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 5px 11px;
+         cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .btn:hover { background: var(--bg); }
+  .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .toggle { display: inline-flex; background: #eef2f7; border-radius: 10px; padding: 4px; gap: 4px; }
+  .toggle button { border: 0; background: transparent; padding: 8px 20px; border-radius: 7px;
+                   cursor: pointer; font-size: 15px; font-weight: 600; color: var(--muted); }
+  .toggle button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  .callout { border-left: 4px solid var(--c-ms); background: #fff; border: 1px solid var(--line);
+             border-left-width: 4px; border-radius: 8px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+  .callout.warn { border-left-color: var(--c-warn); }
+  .callout.ok { border-left-color: var(--c-sub); }
+  .schemeNote { min-height: 24px; font-size: 14px; font-weight: 600; margin-top: 10px; }
+
+  /* compare cards */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
+  .card .head { padding: 16px 20px; color: #fff; }
+  .card.A .head { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+  .card.B .head { background: linear-gradient(135deg, #d97706, #f59e0b); }
+  .card .head .tag { display: inline-block; background: rgba(255,255,255,.25); border-radius: 6px;
+                     padding: 2px 10px; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+  .card .head h3 { margin: 0; font-size: 18px; color: #fff; }
+  .card .head .ess { font-size: 13px; opacity: .95; margin-top: 4px; }
+  .card .body { padding: 16px 20px; }
+  .li { display: flex; gap: 8px; font-size: 14px; margin: 7px 0; }
+  .li .mk { flex: 0 0 18px; font-weight: 700; }
+  .li.good .mk { color: var(--c-sub); }
+  .li.bad .mk { color: var(--c-warn); }
+  .li.flex .mk { color: var(--c-task-flex); }
+  .verdict { margin-top: 14px; padding: 11px 14px; border-radius: 8px; font-size: 13px; }
+  .card.A .verdict { background: #eff6ff; color: #1e40af; }
+  .card.B .verdict { background: #fffbeb; color: #92400e; }
+
+  /* mini gantt for asymmetry */
+  .mini { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .mini h4 { margin: 0 0 10px; font-size: 14px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+  .qbox { background: linear-gradient(135deg,#1e293b,#334155); color:#fff; border-radius:14px; padding:22px 26px; }
+  .qbox h3 { color:#fff; }
+  .qbox .q { font-size:16px; font-weight:600; margin:14px 0 6px; }
+  .qbox .opt { font-size:14px; opacity:.92; margin:4px 0 4px 16px; }
+
+  @media (max-width: 820px) {
+    .cards, .two { grid-template-columns: 1fr; }
+    .row, .months { grid-template-columns: 110px 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>專案日期模型 — 方案評估</h1>
+  <p class="sub">用「里程碑 / 任務 / 子任務」三層的排程行為，比較<strong>方案 A（嚴格貼齊）</strong>與<strong>方案 B（彈性 + 不一致警示）</strong>。下方可以實際拉拉看，感受兩者差別。</p>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--c-ms)"></i>里程碑 Milestone</span>
+    <span><i class="dot" style="background:var(--c-task-strict)"></i>任務 Task（嚴格 / 自動推算）</span>
+    <span><i class="dot" style="background:var(--c-task-flex)"></i>任務 Task（彈性 / 可手動）</span>
+    <span><i class="dot" style="background:var(--c-sub)"></i>子任務 Subtask</span>
+    <span><i class="warnbadge">⚠</i> 父子日期不一致</span>
+  </div>
+
+  <!-- ───────── 互動體驗 ───────── -->
+  <h2>① 互動體驗：自己拉拉看</h2>
+  <p>切換方案，調整「子任務 A2」跟「任務 A」的長度，觀察<strong>任務</strong>與<strong>里程碑</strong>怎麼反應。</p>
+
+  <div style="display:flex;align-items:center;gap:16px;margin:14px 0;flex-wrap:wrap;">
+    <div class="toggle">
+      <button id="tabA" class="active" onclick="setScheme('A')">方案 A · 嚴格貼齊</button>
+      <button id="tabB" onclick="setScheme('B')">方案 B · 彈性 + 警示</button>
+    </div>
+    <button class="btn" onclick="resetDemo()">↺ 重置</button>
+  </div>
+
+  <div class="gantt">
+    <div class="months">
+      <div></div>
+      <div class="scale">
+        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
+        <span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label"><i class="dot" style="background:var(--c-ms)"></i>里程碑 M <span id="msLock" class="lock"></span></div>
+      <div class="track"><div id="bar-ms" class="bar ms"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent" id="lbl-taskA">任務 A <span id="taskLock" class="lock"></span> <span id="taskWarn" class="warnbadge"></span></div>
+      <div class="track"><div id="bar-taskA" class="bar"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent2">子任務 A1</div>
+      <div class="track"><div id="bar-subA1" class="bar sub"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent2">子任務 A2 ✎</div>
+      <div class="track"><div id="bar-subA2" class="bar sub"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent">任務 B</div>
+      <div class="track"><div id="bar-taskB" class="bar task-strict"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent2">子任務 B1</div>
+      <div class="track"><div id="bar-subB1" class="bar sub"></div></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-group">
+      <h4>子任務 A2（可自由調整）</h4>
+      <button class="btn" onclick="move('subA2',-1)">← 提前</button>
+      <button class="btn" onclick="move('subA2',1)">延後 →</button>
+      &nbsp;
+      <button class="btn" onclick="resize('subA2',-1)">－ 縮短</button>
+      <button class="btn" onclick="resize('subA2',1)">＋ 拉長</button>
+    </div>
+    <div class="ctrl-group" id="taskCtrl">
+      <h4>任務 A（只有方案 B 能手動）</h4>
+      <button class="btn" onclick="move('taskA',-1)">← 提前</button>
+      <button class="btn" onclick="move('taskA',1)">延後 →</button>
+      &nbsp;
+      <button class="btn" onclick="resize('taskA',-1)">－ 縮短</button>
+      <button class="btn" onclick="resize('taskA',1)">＋ 拉長</button>
+    </div>
+  </div>
+
+  <div id="schemeNote" class="schemeNote"></div>
+
+  <!-- ───────── 並排對照 ───────── -->
+  <h2>② 方案總結對照</h2>
+  <div class="cards">
+    <div class="card A">
+      <div class="head">
+        <span class="tag">方案 A</span>
+        <h3>嚴格層級綁定</h3>
+        <div class="ess">父層日期 = 子層的最早開始 ～ 最晚結束，系統自動算、自動貼齊。</div>
+      </div>
+      <div class="body">
+        <div class="li good"><span class="mk">✓</span>子任務全部起訖 = 任務起訖（完全涵蓋）</div>
+        <div class="li good"><span class="mk">✓</span>任務全部起訖 = 里程碑起訖（完全涵蓋）</div>
+        <div class="li good"><span class="mk">✓</span>改子任務 → 父層日期自動跟著變，永遠對齊</div>
+        <div class="li good"><span class="mk">✓</span>報表 / 甘特圖一定一致，不會有「父比子短」的矛盾</div>
+        <div class="li bad"><span class="mk">✗</span>父層日期<strong>不能單獨手動調</strong>（它是算出來的）</div>
+        <div class="li bad"><span class="mk">✗</span>使用者改了父層格子，下次重算又被蓋回 → 覺得「亂跳」</div>
+        <div class="verdict"><strong>適合：</strong>重視資料一致、報表正確、稽核可信。代價是彈性低，父層只能透過改子層來動。</div>
+      </div>
+    </div>
+
+    <div class="card B">
+      <div class="head">
+        <span class="tag">方案 B</span>
+        <h3>彈性日期 + 不一致警示</h3>
+        <div class="ess">子任務改 → 任務跟著建議；但任務也可往內縮，子任務不硬性跟隨，僅以 ⚠ 提示。</div>
+      </div>
+      <div class="body">
+        <div class="li flex"><span class="mk">◆</span>任務日期可獨立手動設定（彈性卡控）</div>
+        <div class="li flex"><span class="mk">◆</span>允許任務範圍小於子任務（父 &lt; 子），不強制涵蓋</div>
+        <div class="li flex"><span class="mk">◆</span>不一致時跳 ⚠ 告知，由人判斷是否合理</div>
+        <div class="li good"><span class="mk">✓</span>任務可代表「審查點 / 關鍵節點」，不必把所有細項包進去</div>
+        <div class="li bad"><span class="mk">✗</span>父子日期可能不一致，需各自維護、人工確認</div>
+        <div class="li bad"><span class="mk">✗</span>跨里程碑連動：改了這裡的任務，可能又牽動到別處的父層（見下方③）</div>
+        <div class="verdict"><strong>適合：</strong>客戶要高度彈性、任務當審查點用。代價是父層不再等於子層總和，甘特可能出現父短子長，需人工確認合理性。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────── 隱藏陷阱：兄弟重疊 ───────── -->
+  <h2>③ 隱藏陷阱（A / B 都會中）：兄弟重疊，讓「天數對不起來、改了沒反應」</h2>
+  <p>系統允許同層項目<strong>重疊</strong>（例：子任務 A <b>1/15～1/20</b>、子任務 B <b>1/18～1/30</b>）。父層 = 子層的<strong>最早開始～最晚結束（跨度）</strong>，<u>不是工期相加</u>。這會從兩個方向製造誤解，自己拉拉看：</p>
+
+  <div class="gantt">
+    <div class="months">
+      <div></div>
+      <div class="scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span></div>
+    </div>
+    <div class="row">
+      <div class="label"><i class="dot" style="background:var(--c-task-strict)"></i>任務（父．跨度）<span class="lock">🔒 算出來的</span></div>
+      <div class="track"><div id="bar-ovP" class="bar"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent">子任務 A ✎</div>
+      <div class="track"><div id="bar-ovA" class="bar sub"></div></div>
+    </div>
+    <div class="row">
+      <div class="label indent">子任務 B ✎</div>
+      <div class="track"><div id="bar-ovB" class="bar sub"></div></div>
+    </div>
+  </div>
+
+  <div id="ovStats" style="font-size:14px;font-weight:600;margin:12px 0 0;text-align:center;"></div>
+
+  <div class="controls">
+    <div class="ctrl-group">
+      <h4>子任務 A</h4>
+      <button class="btn" onclick="ovMove('A',-1)">← 提前</button>
+      <button class="btn" onclick="ovMove('A',1)">延後 →</button>&nbsp;
+      <button class="btn" onclick="ovResize('A',-1)">－ 縮短</button>
+      <button class="btn" onclick="ovResize('A',1)">＋ 拉長</button>
+    </div>
+    <div class="ctrl-group">
+      <h4>子任務 B</h4>
+      <button class="btn" onclick="ovMove('B',-1)">← 提前</button>
+      <button class="btn" onclick="ovMove('B',1)">延後 →</button>&nbsp;
+      <button class="btn" onclick="ovResize('B',-1)">－ 縮短</button>
+      <button class="btn" onclick="ovResize('B',1)">＋ 拉長</button>
+    </div>
+    <div class="ctrl-group" style="border:0;background:transparent;padding-top:18px;">
+      <button class="btn" onclick="ovReset()">↺ 重置</button>
+    </div>
+  </div>
+
+  <div id="ovNote" class="schemeNote"></div>
+
+  <div class="callout ok">
+    <strong>收斂方式：</strong>父層那一欄不要叫「日曆天」、要標成「<strong>跨度</strong>」（並把它跟葉節點的「工期」分開呈現）；
+    而且使用者改的子任務若不在邊界上、父層沒變動時，主動提示「<u>此項在父層範圍內，未改變父層日期</u>」，
+    讓「沒反應」變成「看得懂的沒反應」。
+  </div>
+
+  <!-- ───────── B 的隱憂 ───────── -->
+  <h2>④ 方案 B 要先想清楚的隱憂：跨里程碑連動</h2>
+  <div class="callout warn">
+    <strong>你提到的困擾就在這裡：</strong>方案 B 允許「子任務 → 任務」連動。當你在<u>里程碑二</u>裡調好了某個任務，
+    它的子任務若同時被別的規則牽動，又會回頭去動<u>里程碑一</u>那邊已經喬好的任務 —— 變成「這區改好、那區又跑掉」。
+    本質是：<strong>彈性一旦開放到「每一層都能互相牽動」，連動鏈就會跨越里程碑，難以預期。</strong>
+  </div>
+  <div class="callout ok">
+    <strong>收斂方式：</strong>把「彈性」限制在<strong>葉節點（最底層子任務）</strong>，連動只「由下往上」單向傳遞、<strong>不橫向跨里程碑</strong>。
+    父層（里程碑、含子任務的任務）一律是「算出來的結果」而非「可被牽動的輸入」，就不會出現 A 區改好、B 區跑掉的情況。
+  </div>
+
+  <!-- ───────── 延後 vs 提前 ───────── -->
+  <h2>⑤ 不論選 A 或 B，都要先決定：延後與提前該不該對稱？</h2>
+  <p>這是讓使用者覺得「系統不照我改」的隱藏主因 —— <strong>延後</strong>往下順延很合理，<strong>提前</strong>卻不一定該把下游一起往前拉。</p>
+  <div class="two">
+    <div class="mini">
+      <h4>🔻 延後：里程碑一 +10 天 → 下游順延（合理）</h4>
+      <div class="months"><div></div><div class="scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span></div></div>
+      <div class="row"><div class="label">里程碑一</div><div class="track"><div class="bar ms" style="grid-column:2/5"></div></div></div>
+      <div class="row"><div class="label muted">→ 延後後</div><div class="track"><div class="bar ms" style="grid-column:2/6;opacity:.6"></div></div></div>
+      <div class="row"><div class="label">里程碑二</div><div class="track"><div class="bar task-strict" style="grid-column:6/9"></div></div></div>
+      <div class="row"><div class="label muted">→ 跟著順延</div><div class="track"><div class="bar task-strict" style="grid-column:7/10;opacity:.6"></div></div></div>
+      <p class="muted" style="font-size:13px;margin-top:8px;">卡住了，後面只能往後 → <strong>下游跟著動，正確。</strong></p>
+    </div>
+    <div class="mini">
+      <h4>🔺 提前：里程碑一 −15 天 → 下游該動嗎？</h4>
+      <div class="months"><div></div><div class="scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span></div></div>
+      <div class="row"><div class="label">里程碑一</div><div class="track"><div class="bar ms" style="grid-column:4/7"></div></div></div>
+      <div class="row"><div class="label muted">→ 提前後</div><div class="track"><div class="bar ms" style="grid-column:2/5;opacity:.6"></div></div></div>
+      <div class="row"><div class="label">里程碑二</div><div class="track"><div class="bar task-flex" style="grid-column:7/10"></div></div></div>
+      <div class="row"><div class="label warnbadge">？維持</div><div class="track"><div class="bar task-flex" style="grid-column:7/10;opacity:.5;border:2px dashed #fff"></div></div></div>
+      <p class="muted" style="font-size:13px;margin-top:8px;">提早完成只是多了 buffer，里程碑二對客戶的承諾<strong>通常不變</strong>。若系統把它也往前拉 → 使用者覺得「我只改一個、為何全跑掉」。</p>
+    </div>
+  </div>
+
+  <!-- ───────── 決策 ───────── -->
+  <h2>⑥ 給客戶的關鍵決策問題</h2>
+  <div class="qbox">
+    <h3>用三個問題，就能決定要走哪個方案</h3>
+
+    <div class="q">Q1．你有沒有一種里程碑 / 任務，是你「刻意」讓它的截止日比裡面最晚的工作還早結束？</div>
+    <div class="opt">沒有 → 你要的其實是 <strong>方案 A</strong>（彈性放在子任務即可，父層自動算）。</div>
+    <div class="opt">有 → 你需要 <strong>方案 B</strong>，並接受父子可能不一致、需人工確認。</div>
+
+    <div class="q">Q2．「彈性」你要開到哪一層？</div>
+    <div class="opt">只要能決定每件事「做幾天、哪天做」 → 彈性放在<strong>葉節點</strong>就夠（A 即可）。</div>
+    <div class="opt">連「父層日期要獨立於子層」都要 → 才需要 B 的橫向彈性（但要承擔③的連動風險）。</div>
+
+    <div class="q">Q3．當一個里程碑「提前」完成，後面的里程碑要「跟著提前」還是「維持原承諾日」？</div>
+    <div class="opt">維持原承諾日（多數情況）→ 提前<strong>不該</strong>無腦 cascade 到下游。</div>
+    <div class="opt">跟著壓縮 → 才讓提前往下傳遞。</div>
+  </div>
+
+</div>
+
+<script>
+  // 月份模型：1～12。每個項目 { s: 起始月, e: 結束月(含) }
+  const init = {
+    subA1:  { s: 3, e: 4 },
+    subA2:  { s: 5, e: 6 },
+    taskA:  { s: 3, e: 6 },   // 方案 B 的手動值；方案 A 會被覆蓋成 envelope
+    taskB:  { s: 7, e: 9 },
+    subB1:  { s: 7, e: 9 },
+  };
+  let st = structuredClone(init);
+  let scheme = 'A';
+
+  function clamp(v){ return Math.max(1, Math.min(12, v)); }
+
+  function move(key, d){
+    const it = st[key];
+    let s = it.s + d, e = it.e + d;
+    if (s < 1 || e > 12) return;
+    it.s = s; it.e = e; render();
+  }
+  function resize(key, d){
+    const it = st[key];
+    let e = clamp(it.e + d);
+    if (e < it.s) e = it.s;
+    it.e = e; render();
+  }
+  function resetDemo(){ st = structuredClone(init); render(); }
+
+  function setScheme(s){
+    scheme = s;
+    document.getElementById('tabA').classList.toggle('active', s==='A');
+    document.getElementById('tabB').classList.toggle('active', s==='B');
+    // 切到 A 時，把任務 A 還原成由子任務算出來的範圍
+    if (s === 'A') {
+      st.taskA.s = Math.min(st.subA1.s, st.subA2.s);
+      st.taskA.e = Math.max(st.subA1.e, st.subA2.e);
+    }
+    render();
+  }
+
+  function place(id, item, cls){
+    const el = document.getElementById(id);
+    el.style.gridColumn = `${item.s} / ${item.e + 1}`;
+    el.className = 'bar ' + cls;
+    el.textContent = `${item.s}月～${item.e}月`;
+  }
+
+  function render(){
+    const taskCtrl = document.getElementById('taskCtrl');
+    const taskLock = document.getElementById('taskLock');
+    const msLock = document.getElementById('msLock');
+    const taskWarn = document.getElementById('taskWarn');
+    const note = document.getElementById('schemeNote');
+
+    // 子任務一律照自己
+    place('bar-subA1', st.subA1, 'sub');
+    place('bar-subA2', st.subA2, 'sub');
+    place('bar-subB1', st.subB1, 'sub');
+    place('bar-taskB', st.taskB, 'task-strict');
+
+    const subEnvS = Math.min(st.subA1.s, st.subA2.s);
+    const subEnvE = Math.max(st.subA1.e, st.subA2.e);
+
+    if (scheme === 'A') {
+      // 任務 A = 子任務 envelope，自動、唯讀
+      const tA = { s: subEnvS, e: subEnvE };
+      st.taskA = tA;
+      place('bar-taskA', tA, 'task-strict derived');
+      taskCtrl.classList.add('disabled');
+      taskLock.textContent = '🔒 自動推算';
+      taskWarn.textContent = '';
+
+      // 里程碑 = 所有任務 envelope，自動、唯讀
+      const ms = { s: Math.min(tA.s, st.taskB.s), e: Math.max(tA.e, st.taskB.e) };
+      place('bar-ms', ms, 'ms');
+      msLock.textContent = '🔒 自動推算';
+
+      note.style.color = 'var(--c-task-strict)';
+      note.textContent = '方案 A：任務 A 永遠等於子任務的範圍（被算出來、不能手動）。改子任務 A2，任務與里程碑自動跟著貼齊，永不出現不一致。';
+    } else {
+      // 任務 A 用手動值；可小於子任務 → 警示
+      place('bar-taskA', st.taskA, 'task-flex');
+      taskCtrl.classList.remove('disabled');
+      taskLock.textContent = '✎ 可手動';
+
+      const inconsistent = (subEnvS < st.taskA.s) || (subEnvE > st.taskA.e);
+      taskWarn.textContent = inconsistent ? '⚠ 子任務超出任務範圍' : '';
+
+      // 里程碑 = 任務 envelope（用任務的手動值；提示用）
+      const ms = { s: Math.min(st.taskA.s, st.taskB.s), e: Math.max(st.taskA.e, st.taskB.e) };
+      place('bar-ms', ms, 'ms');
+      msLock.textContent = '';
+
+      if (inconsistent) {
+        note.style.color = 'var(--c-warn)';
+        note.textContent = '方案 B：任務 A 被你縮短到比子任務還小（父 < 子）。系統不硬性拉齊，只跳 ⚠ 提示，由你判斷這是不是「審查點」的刻意設計 —— 這就是「彈性卡控」。';
+      } else {
+        note.style.color = 'var(--c-task-flex)';
+        note.textContent = '方案 B：任務 A 可獨立手動調整。目前仍涵蓋所有子任務，無不一致。試著把任務 A「縮短」到比子任務 A2 小，看 ⚠ 跳出來。';
+      }
+    }
+  }
+
+  render();
+
+  // ───────── 重疊互動 ─────────
+  const ovInit = { A: { s: 2, e: 4 }, B: { s: 3, e: 6 } };
+  let ov = structuredClone(ovInit);
+  function ovClampMove(it, d){ if (it.s + d < 1 || it.e + d > 12) return; it.s += d; it.e += d; }
+  function ovMove(k, d){ ovClampMove(ov[k], d); render2(); }
+  function ovResize(k, d){ const it = ov[k]; let e = Math.max(it.s, Math.min(12, it.e + d)); it.e = e; render2(); }
+  function ovReset(){ ov = structuredClone(ovInit); render2(); }
+  function place2(id, it, cls){
+    const el = document.getElementById(id);
+    el.style.gridColumn = `${it.s} / ${it.e + 1}`;
+    el.className = 'bar ' + cls;
+    el.textContent = `${it.s}月～${it.e}月`;
+  }
+  function render2(){
+    place2('bar-ovA', ov.A, 'sub');
+    place2('bar-ovB', ov.B, 'sub');
+    const s = Math.min(ov.A.s, ov.B.s), e = Math.max(ov.A.e, ov.B.e);
+    place2('bar-ovP', { s, e }, 'task-strict derived');
+
+    const span = e - s + 1;
+    const sum = (ov.A.e - ov.A.s + 1) + (ov.B.e - ov.B.s + 1);
+    const overlap = Math.max(0, Math.min(ov.A.e, ov.B.e) - Math.max(ov.A.s, ov.B.s) + 1);
+
+    const stats = document.getElementById('ovStats');
+    const mism = span !== sum;
+    stats.innerHTML =
+      `父層跨度 <b style="color:var(--c-task-strict)">${span} 月</b>` +
+      `　｜　子任務工期合計 <b style="color:var(--c-sub)">${sum} 月</b>` +
+      `　｜　重疊 <b style="color:${overlap > 0 ? 'var(--c-warn)' : 'var(--muted)'}">${overlap} 月</b>` +
+      (mism ? `　→ <span class="warnbadge">對不起來！</span>` : '');
+
+    const startBy = ov.A.s < ov.B.s ? 'A' : (ov.B.s < ov.A.s ? 'B' : 'A、B');
+    const endBy = ov.A.e > ov.B.e ? 'A' : (ov.B.e > ov.A.e ? 'B' : 'A、B');
+    const innerA = ov.A.s > s && ov.A.e < e;   // A 完全在內側，改它不動父層
+    const innerB = ov.B.s > s && ov.B.e < e;
+
+    const note = document.getElementById('ovNote');
+    let msg = `父層開始由子任務 <b>${startBy}</b> 決定、結束由子任務 <b>${endBy}</b> 決定。`;
+    if (innerA || innerB) {
+      note.style.color = 'var(--c-warn)';
+      msg += `目前子任務 <b>${innerA ? 'A' : 'B'}</b> 完全被包在中間 —— 怎麼改它，父層都不會動。使用者會以為「我改了、系統卻沒反應」。`;
+    } else if (mism) {
+      note.style.color = 'var(--c-warn)';
+      msg += `因為重疊 ${overlap} 月，父層跨度 ${span} ≠ 工期合計 ${sum}。使用者常以為「加起來」就是父層天數 → 覺得算錯。`;
+    } else {
+      note.style.color = 'var(--c-sub)';
+      msg += `目前沒有重疊，跨度 = 工期合計，最直覺。試著把兩個子任務拉到重疊，看天數怎麼「對不起來」。`;
+    }
+    note.innerHTML = msg;
+  }
+  render2();
+</script>
+</body>
+</html>

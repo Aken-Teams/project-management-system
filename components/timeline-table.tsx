@@ -155,6 +155,13 @@ function MilestoneRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
+  // 方案 A：有任務的里程碑，起訖 = 任務最早開始～最晚結束（envelope），
+  // 為衍生值，不可手動編輯；天數由 envelope 跨度換算。
+  const hasTasks = taskCount > 0
+  const derivedDuration = hasTasks && milestone.startDate && milestone.endDate
+    ? Math.round((new Date(milestone.endDate).getTime() - new Date(milestone.startDate).getTime()) / 86400000) + 1
+    : (milestone.durationDays || 0)
+
   return (
     <div
       ref={setNodeRef}
@@ -202,18 +209,26 @@ function MilestoneRow({
 
       {/* Duration */}
       <div className="flex justify-center">
-        <Input
-          type="number"
-          min={0}
-          value={milestone.durationDays || ''}
-          onChange={(e) => onUpdate(index, 'durationDays', Number(e.target.value) || 0)}
-          className="h-8 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
-        />
+        {hasTasks ? (
+          <span className="h-8 w-14 flex items-center justify-center text-sm text-muted-foreground" title="由任務日期自動計算（最早開始～最晚結束）">
+            {derivedDuration}
+          </span>
+        ) : (
+          <Input
+            type="number"
+            min={0}
+            value={milestone.durationDays || ''}
+            onChange={(e) => onUpdate(index, 'durationDays', Number(e.target.value) || 0)}
+            className="h-8 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
+          />
+        )}
       </div>
 
-      {/* Start date */}
+      {/* Start date — read-only (derived) when the milestone has tasks */}
       <div className="flex justify-center">
-        {onDateChange ? (
+        {hasTasks ? (
+          <span className="text-sm text-muted-foreground" title="由任務自動計算">{milestone.startDate || '—'}</span>
+        ) : onDateChange ? (
           <DateInput
             value={milestone.startDate || ''}
             onCommit={(v) => onDateChange(index, 'startDate', v)}
@@ -224,9 +239,11 @@ function MilestoneRow({
         )}
       </div>
 
-      {/* End date */}
+      {/* End date — read-only (derived) when the milestone has tasks */}
       <div className="flex justify-center items-center gap-0.5">
-        {onDateChange ? (
+        {hasTasks ? (
+          <span className="text-sm text-muted-foreground">{milestone.endDate || '—'}</span>
+        ) : onDateChange ? (
           <DateInput
             value={milestone.endDate || ''}
             min={milestone.startDate || undefined}
@@ -322,6 +339,13 @@ function TaskRow({
 
   const p = priorityConfig[task.priority]
 
+  // 方案 A：有子任務的任務，日期 = 子任務最早開始～最晚結束（envelope），
+  // 為衍生值，不可手動編輯；天數由 envelope 跨度換算（非子任務天數加總）。
+  const hasSubtasks = subtaskCount > 0
+  const derivedDuration = hasSubtasks && startDate && endDate
+    ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1
+    : (task.durationDays || 0)
+
   return (
     <div
       ref={setNodeRef}
@@ -383,9 +407,9 @@ function TaskRow({
 
       {/* Duration (auto-calculated when parent has subtasks) */}
       <div className="flex justify-center">
-        {subtaskCount > 0 ? (
-          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務天數加總">
-            {task.durationDays || 0}
+        {hasSubtasks ? (
+          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務日期自動計算（最早開始～最晚結束）">
+            {derivedDuration}
           </span>
         ) : (
           <Input
@@ -398,9 +422,11 @@ function TaskRow({
         )}
       </div>
 
-      {/* Start date */}
+      {/* Start date — read-only (derived) when the task has subtasks */}
       <div className="flex justify-center">
-        {onDateChange ? (
+        {hasSubtasks ? (
+          <span className="text-sm text-muted-foreground" title="由子任務自動計算">{startDate || '—'}</span>
+        ) : onDateChange ? (
           <DateInput
             value={startDate || ''}
             onCommit={(v) => onDateChange(task.id, 'startDate', v)}
@@ -411,9 +437,11 @@ function TaskRow({
         )}
       </div>
 
-      {/* End date */}
+      {/* End date — read-only (derived) when the task has subtasks */}
       <div className="flex justify-center items-center gap-0.5">
-        {onDateChange ? (
+        {hasSubtasks ? (
+          <span className="text-sm text-muted-foreground" title="由子任務自動計算">{endDate || '—'}</span>
+        ) : onDateChange ? (
           <DateInput
             value={endDate || ''}
             min={startDate || undefined}
