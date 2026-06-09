@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign, BarChart3 } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign, BarChart3, CornerDownRight } from 'lucide-react'
 import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/components/budget-list-editor'
 import { GanttChart } from '@/components/gantt-chart'
 import { TimelineTable, type TimelineTeamMember, type OverflowInfo } from '@/components/timeline-table'
@@ -1827,62 +1827,101 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
             </div>
           )}
 
-          {affectedMilestoneDates.length > 0 && (
-            <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
-                <span>里程碑</span>
-                <span>日期變更</span>
-                <span className="text-right">天數</span>
-              </div>
-              {affectedMilestoneDates.map((am) => {
-                const days = Math.ceil(
-                  (new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / (1000 * 60 * 60 * 24)
-                )
-                return (
-                  <div key={am.milestoneId} className="grid grid-cols-[1fr_auto_auto] gap-x-4 items-center px-3 py-2 border-t text-sm">
-                    <span className="font-medium truncate">{am.milestoneName}</span>
-                    <div className="flex items-center gap-1.5 tabular-nums text-xs whitespace-nowrap">
-                      <span className="text-muted-foreground line-through">{am.originalDate}</span>
-                      <span className="text-muted-foreground">→</span>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{am.proposedDate}</span>
-                    </div>
-                    <span className={`text-xs tabular-nums font-medium text-right ${days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                      {days > 0 ? `+${days}` : days}天
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          {(affectedMilestoneDates.length > 0 || pendingTaskChanges.length > 0) && (() => {
+            // 任務變更的內容（天數 / 起始日）
+            const renderTaskChange = (taskId: string) => {
+              const tc = pendingTaskChanges.find(p => p.taskId === taskId)
+              const orig = origTasks.find(t => t.id === taskId)
+              if (!tc || !orig) return null
+              return (
+                <span className="flex items-center gap-2 text-xs whitespace-nowrap tabular-nums">
+                  {tc.durationDays !== undefined && (
+                    <span>天數 <span className="text-muted-foreground line-through">{orig.durationDays}</span> → <span className="text-amber-600 font-medium">{tc.durationDays}</span></span>
+                  )}
+                  {tc.startDate && tc.startDate !== orig.startDate && (
+                    <span>起 <span className="text-muted-foreground line-through">{orig.startDate}</span> → <span className="text-amber-600 font-medium">{tc.startDate}</span></span>
+                  )}
+                </span>
+              )
+            }
+            const lookup = (id: string) => tlTasks.find(t => t.id === id) || origTasks.find(t => t.id === id)
+            const msChange = new Map(affectedMilestoneDates.map(am => [am.milestoneId, am]))
+            // 把每個任務變更歸到里程碑（含子任務的父任務）
+            const nodes = pendingTaskChanges.map(tc => {
+              const meta = lookup(tc.taskId)
+              return { taskId: tc.taskId, title: tc.taskTitle, milestoneId: meta?.milestoneId, parentId: meta?.parentId as string | undefined }
+            })
+            // 里程碑顯示順序：先受影響的，再補上「只有任務變動」的
+            const msIds: string[] = []
+            affectedMilestoneDates.forEach(am => { if (!msIds.includes(am.milestoneId)) msIds.push(am.milestoneId) })
+            nodes.forEach(n => { if (n.milestoneId && !msIds.includes(n.milestoneId)) msIds.push(n.milestoneId) })
 
-          {pendingTaskChanges.length > 0 && (
-            <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto] gap-x-4 px-3 py-2 bg-muted/60 border-b text-xs font-medium text-muted-foreground">
-                <span>任務</span>
-                <span>變更</span>
-              </div>
-              {pendingTaskChanges.map((tc) => {
-                const orig = origTasks.find(t => t.id === tc.taskId)
-                return (
-                  <div key={tc.taskId} className="grid grid-cols-[1fr_auto] gap-x-4 items-center px-3 py-2 border-t text-sm">
-                    <span className="font-medium truncate">{tc.taskTitle}</span>
-                    <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                      {tc.durationDays !== undefined && orig && (
-                        <span className="tabular-nums">
-                          天數 <span className="text-muted-foreground line-through">{orig.durationDays}</span> → <span className="text-amber-600 font-medium">{tc.durationDays}</span>
+            return (
+              <div className="rounded-lg border overflow-hidden divide-y">
+                {msIds.map(msId => {
+                  const am = msChange.get(msId)
+                  const msName = am?.milestoneName || tlMilestones.find(m => m.id === msId)?.name || '里程碑'
+                  const days = am ? Math.ceil((new Date(am.proposedDate).getTime() - new Date(am.originalDate).getTime()) / 86400000) : null
+                  const msNodes = nodes.filter(n => n.milestoneId === msId)
+                  // 要顯示的頂層任務 = 直接變動的頂層任務 + 有子任務變動的父任務
+                  const topIds: string[] = []
+                  msNodes.forEach(n => {
+                    const top = n.parentId ?? n.taskId
+                    if (!topIds.includes(top)) topIds.push(top)
+                  })
+                  // 順延：里程碑有日期變更，但底下任務都只有「起始日位移」、沒有天數改變
+                  const hasDurationChange = msNodes.some(n => pendingTaskChanges.find(p => p.taskId === n.taskId)?.durationDays !== undefined)
+                  const isCascade = !!am && !hasDurationChange
+                  return (
+                    <div key={msId} className="px-3 py-2.5 text-sm">
+                      {/* 里程碑列 */}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-medium truncate">{msName}</span>
+                          {isCascade && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 text-[11px] font-medium rounded bg-blue-100 text-blue-700 px-1.5 py-0.5 dark:bg-blue-900 dark:text-blue-300" title="此里程碑因上游延後而自動順延，不是你直接修改的">
+                              <CornerDownRight className="h-3 w-3" />自動順延
+                            </span>
+                          )}
                         </span>
-                      )}
-                      {tc.startDate && orig && tc.startDate !== orig.startDate && (
-                        <span className="tabular-nums">
-                          起 <span className="text-muted-foreground line-through">{orig.startDate}</span> → <span className="text-amber-600 font-medium">{tc.startDate}</span>
-                        </span>
-                      )}
+                        {am ? (
+                          <span className="flex items-center gap-1.5 text-xs whitespace-nowrap tabular-nums">
+                            <span className="text-muted-foreground line-through">{am.originalDate}</span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">{am.proposedDate}</span>
+                            <span className={`font-medium ${days && days > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {days && days > 0 ? `+${days}` : days}天
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">任務調整</span>
+                        )}
+                      </div>
+                      {/* 任務 / 子任務 */}
+                      {topIds.map(topId => {
+                        const topTitle = lookup(topId)?.title || pendingTaskChanges.find(p => p.taskId === topId)?.taskTitle || '任務'
+                        const subs = msNodes.filter(n => n.parentId === topId)
+                        return (
+                          <div key={topId}>
+                            <div className="flex items-center justify-between gap-2 mt-1 pl-3">
+                              <span className="text-muted-foreground truncate">└ {topTitle}</span>
+                              {renderTaskChange(topId)}
+                            </div>
+                            {subs.map(s => (
+                              <div key={s.taskId} className="flex items-center justify-between gap-2 mt-0.5 pl-8">
+                                <span className="text-muted-foreground/80 truncate text-xs">└ {s.title}</span>
+                                {renderTaskChange(s.taskId)}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           <div className="space-y-1.5">
             <Label className="text-sm">
