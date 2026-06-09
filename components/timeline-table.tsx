@@ -229,12 +229,15 @@ function MilestoneRow({
             type="button"
             onClick={() => onToggleLock(index)}
             className={cn(
-              'shrink-0 flex items-center justify-center h-6 w-6 rounded transition-colors',
-              isManual ? 'text-amber-600 hover:bg-amber-100' : 'text-muted-foreground/50 hover:bg-muted hover:text-foreground',
+              'shrink-0 inline-flex items-center gap-1 h-6 px-1.5 rounded-md border text-[11px] font-medium transition-colors',
+              isManual
+                ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700',
             )}
-            title={isManual ? '手動模式：日期可加寬（不可低於子層）。點擊改回自動貼齊' : '自動貼齊子層。點擊解鎖以手動加寬'}
+            title={isManual ? '手動模式：日期可加寬（不可低於子層）。點擊改回自動貼齊' : '自動貼齊任務（鎖定）。點擊解鎖以手動加寬'}
           >
             {isManual ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+            <span>{isManual ? '手動' : '自動'}</span>
           </button>
         )}
       </div>
@@ -397,7 +400,7 @@ function TaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
+      className={`${GRID_COLS} group px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
         subtaskCount > 0
           ? msIndex % 2 === 0 ? 'border-l-indigo-300 bg-indigo-50/30' : 'border-l-amber-300 bg-amber-50/30'
           : msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-amber-200'
@@ -435,7 +438,7 @@ function TaskRow({
           className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1 truncate"
           placeholder="任務名稱"
         />
-        {subtaskCount > 0 && (
+        {subtaskCount > 0 && collapsed && (
           <span className="shrink-0 text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 font-medium" title="天數與日期由子任務自動計算">
             {subtaskCount} 子任務
           </span>
@@ -445,12 +448,15 @@ function TaskRow({
             type="button"
             onClick={() => onToggleLock(task.id)}
             className={cn(
-              'shrink-0 flex items-center justify-center h-6 w-6 rounded transition-colors',
-              isManual ? 'text-amber-600 hover:bg-amber-100' : 'text-muted-foreground/50 hover:bg-muted hover:text-foreground',
+              'shrink-0 inline-flex items-center gap-1 h-6 px-1.5 rounded-md border text-[11px] font-medium transition-colors',
+              isManual
+                ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700',
             )}
-            title={isManual ? '手動模式：日期可加寬（不可低於子任務）。點擊改回自動貼齊' : '自動貼齊子任務。點擊解鎖以手動加寬'}
+            title={isManual ? '手動模式：日期可加寬（不可低於子任務）。點擊改回自動貼齊' : '自動貼齊子任務（鎖定）。點擊解鎖以手動加寬'}
           >
-            {isManual ? <LockOpen className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+            {isManual ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+            <span>{isManual ? '手動' : '自動'}</span>
           </button>
         )}
         <Button
@@ -458,7 +464,7 @@ function TaskRow({
           variant="ghost"
           size="icon"
           onClick={onToggleAddSubtask}
-          className="shrink-0 h-6 w-6 text-muted-foreground/50 hover:text-primary hover:bg-primary/10"
+          className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
           title="新增子任務"
         >
           <Plus className="h-3.5 w-3.5" />

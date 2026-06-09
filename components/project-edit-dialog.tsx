@@ -234,6 +234,19 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [overflowConfirmOpen, setOverflowConfirmOpen] = useState(false)
   const overflowConfirmResolveRef = useRef<((confirmed: boolean) => void) | null>(null)
 
+  // ─── 方案 A：手動父層「自動貼齊?」確認視窗 ─────────────────
+  type SnapTarget = {
+    kind: 'milestone' | 'task'
+    id: string
+    name: string
+    childStart: string
+    childEnd: string
+    manualStart: string
+    manualEnd: string
+  }
+  const [snapTargets, setSnapTargets] = useState<SnapTarget[]>([])
+  const [snapDialogOpen, setSnapDialogOpen] = useState(false)
+
   // Snapshot of original data for diff on save.
   // Use calculated endDates (not raw DB dueDate) so that stale DB values
   // (e.g. after a project startDate change was approved) don't cause false positives.
@@ -876,9 +889,56 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       return ms
     })
 
+    // ── Phase 2: 改子層後，手動父層的「自動 envelope」≠「手動值」→ 提示自動貼齊 ──
+    // 只在「該父層的子層 envelope 因這次編輯而改變」且「仍與手動值不同」時才提示，
+    // 避免每次無關編輯都跳窗，也不會重複提示既有的不一致。
+    const envFrom = (ids: string[], dm: Map<string, { startDate: string; endDate: string }>) => {
+      let s: string | undefined
+      let e: string | undefined
+      for (const id of ids) {
+        const d = dm.get(id)
+        if (!d) continue
+        if (!s || d.startDate < s) s = d.startDate
+        if (!e || d.endDate > e) e = d.endDate
+      }
+      return { s, e }
+    }
+    const candidates: SnapTarget[] = []
+    for (const t of finalTasks) {
+      if (!t.manualDates) continue
+      const kidIds = finalTasks.filter(c => c.parentId === t.id).map(c => c.id)
+      if (kidIds.length === 0) continue
+      const envNew = envFrom(kidIds, dates2)
+      const envOld = envFrom(kidIds, tlTaskDates)
+      const own = dates2.get(t.id)
+      if (!own || !envNew.s || !envNew.e) continue
+      if ((envNew.s !== envOld.s || envNew.e !== envOld.e) &&
+          (envNew.s !== own.startDate || envNew.e !== own.endDate)) {
+        candidates.push({ kind: 'task', id: t.id, name: t.title, childStart: envNew.s, childEnd: envNew.e, manualStart: own.startDate, manualEnd: own.endDate })
+      }
+    }
+    newMilestones.forEach((m, idx) => {
+      if (!m.manualDates) return
+      const own = msComputed2[idx]
+      if (!own?.startDate || !own?.endDate) return
+      const kidIds = finalTasks.filter(t => t.milestoneId === m.id && !t.parentId).map(t => t.id)
+      if (kidIds.length === 0) return
+      const envNew = envFrom(kidIds, dates2)
+      if (!envNew.s || !envNew.e) return
+      const envOld = envFrom(kidIds, tlTaskDates)
+      if ((envNew.s !== envOld.s || envNew.e !== envOld.e) &&
+          (envNew.s !== own.startDate || envNew.e !== own.endDate)) {
+        candidates.push({ kind: 'milestone', id: m.id, name: m.name, childStart: envNew.s, childEnd: envNew.e, manualStart: own.startDate, manualEnd: own.endDate })
+      }
+    })
+
     setTlTasks(finalTasks)
     if (msChanged) setTlMilestones(newMilestones)
-  }, [tlMilestones, form.startDate, project.startDate])
+    if (candidates.length > 0) {
+      setSnapTargets(candidates)
+      setSnapDialogOpen(true)
+    }
+  }, [tlMilestones, tlTaskDates, form.startDate, project.startDate])
 
   const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationDays: number; parentId?: string }) => {
     applyTaskChangeWithBubbleUp([...tlTasks, task])
@@ -973,6 +1033,26 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       return { ...t, manualDates: !t.manualDates, startDate: env.start ?? t.startDate, durationDays: Math.max(dur, 1) }
     }))
   }, [envelopeOfChildren])
+
+  // 「自動貼齊」：把這些手動父層改回自動，並把日期重設成子層 envelope。
+  const applySnapToAuto = useCallback((targets: SnapTarget[]) => {
+    const taskTargets = new Map(targets.filter(t => t.kind === 'task').map(t => [t.id, t] as const))
+    const msTargets = new Map(targets.filter(t => t.kind === 'milestone').map(t => [t.id, t] as const))
+    if (taskTargets.size > 0) {
+      setTlTasks(prev => prev.map(t => {
+        const tg = taskTargets.get(t.id)
+        if (!tg) return t
+        return { ...t, manualDates: false, startDate: tg.childStart, durationDays: Math.max(daysBetween(tg.childStart, tg.childEnd) + 1, 1) }
+      }))
+    }
+    if (msTargets.size > 0) {
+      setTlMilestones(prev => prev.map(m => {
+        const tg = msTargets.get(m.id)
+        if (!tg) return m
+        return { ...m, manualDates: false, startDate: tg.childStart, durationDays: Math.max(daysBetween(tg.childStart, tg.childEnd) + 1, 1) }
+      }))
+    }
+  }, [])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1581,6 +1661,45 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               setOverflowConfirmOpen(false)
             }}>
               確認儲存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 方案 A：手動父層「自動貼齊?」確認視窗 */}
+      <Dialog open={snapDialogOpen} onOpenChange={(o) => { if (!o) setSnapDialogOpen(false) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              要自動貼齊嗎？
+            </DialogTitle>
+            <DialogDescription>
+              以下項目目前是「手動」日期，但底下子層的範圍已經改變，跟手動值不一致。
+              要讓它自動貼齊子層（改回自動），還是維持你手動設定的日期？
+            </DialogDescription>
+          </DialogHeader>
+
+          <ul className="space-y-2 text-sm">
+            {snapTargets.map((t) => (
+              <li key={`${t.kind}-${t.id}`} className="rounded-md border p-2.5">
+                <div className="font-medium">
+                  {t.kind === 'milestone' ? '里程碑' : '任務'}「{t.name}」
+                </div>
+                <div className="text-muted-foreground mt-1 space-y-0.5">
+                  <div>子層現在：<span className="text-foreground">{t.childStart} ～ {t.childEnd}</span></div>
+                  <div>手動設定：<span className="text-amber-700">{t.manualStart} ～ {t.manualEnd}</span></div>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setSnapDialogOpen(false)}>
+              維持手動
+            </Button>
+            <Button onClick={() => { applySnapToAuto(snapTargets); setSnapDialogOpen(false) }}>
+              自動貼齊
             </Button>
           </DialogFooter>
         </DialogContent>
