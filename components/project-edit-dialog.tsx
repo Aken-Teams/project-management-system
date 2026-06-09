@@ -906,17 +906,24 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       return { s, e }
     }
     const candidates: SnapTarget[] = []
+    const extendedNames: string[] = []  // 手動父層因子層超出而被自動延伸 → 通知
     for (const t of finalTasks) {
-      if (!t.manualDates || snapDismissedIds.has(t.id)) continue
+      if (!t.manualDates) continue
       const kidIds = finalTasks.filter(c => c.parentId === t.id).map(c => c.id)
       if (kidIds.length === 0) continue
-      const envNew = envFrom(kidIds, dates2)
-      const envOld = envFrom(kidIds, tlTaskDates)
       const own = dates2.get(t.id)
       const ownOld = tlTaskDates.get(t.id)
-      if (!own || !envNew.s || !envNew.e) continue
-      // 只有「父層自己這次沒被改」(= 使用者改的是子層) 才提醒；
-      // 改父層加寬（父層自己範圍變了）不提醒。
+      if (!own) continue
+      // (1) 自動延伸：父層自己被撐大(變寬) 且不是使用者在改父層 → 子層超出、父層自動包住
+      if (t.id !== directEditId && ownOld &&
+          (own.startDate < ownOld.startDate || own.endDate > ownOld.endDate)) {
+        extendedNames.push(`任務「${t.title}」`)
+      }
+      // (2) 自動貼齊提醒：只有「父層自己沒被改(=改的是子層)」且仍與手動值不同才提醒
+      if (snapDismissedIds.has(t.id)) continue
+      const envNew = envFrom(kidIds, dates2)
+      const envOld = envFrom(kidIds, tlTaskDates)
+      if (!envNew.s || !envNew.e) continue
       const parentUnchanged = !!ownOld && own.startDate === ownOld.startDate && own.endDate === ownOld.endDate
       if (parentUnchanged &&
           (envNew.s !== envOld.s || envNew.e !== envOld.e) &&
@@ -925,11 +932,19 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       }
     }
     newMilestones.forEach((m, idx) => {
-      if (!m.manualDates || snapDismissedIds.has(m.id)) return
+      if (!m.manualDates) return
       const own = msComputed2[idx]
+      const ownOld = recalcMilestones[idx]
       if (!own?.startDate || !own?.endDate) return
       const kidIds = finalTasks.filter(t => t.milestoneId === m.id && !t.parentId).map(t => t.id)
       if (kidIds.length === 0) return
+      // (1) 自動延伸（里程碑由別處編輯，故只要被撐大就通知）
+      if (ownOld?.startDate && ownOld?.endDate &&
+          (own.startDate < ownOld.startDate || own.endDate > ownOld.endDate)) {
+        extendedNames.push(`里程碑「${m.name}」`)
+      }
+      // (2) 自動貼齊提醒
+      if (snapDismissedIds.has(m.id)) return
       const envNew = envFrom(kidIds, dates2)
       if (!envNew.s || !envNew.e) return
       const envOld = envFrom(kidIds, tlTaskDates)
@@ -941,11 +956,16 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
     setTlTasks(finalTasks)
     if (msChanged) setTlMilestones(newMilestones)
+    if (extendedNames.length > 0) {
+      toast.info('父層已自動延伸涵蓋子層', {
+        description: `${extendedNames.join('、')}不能小於其子項，已自動延伸範圍以包住子層。`,
+      })
+    }
     if (candidates.length > 0) {
       setSnapTargets(candidates)
       setSnapDialogOpen(true)
     }
-  }, [tlMilestones, tlTaskDates, form.startDate, project.startDate, snapDismissedIds])
+  }, [tlMilestones, tlTaskDates, recalcMilestones, form.startDate, project.startDate, snapDismissedIds])
 
   const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationDays: number; parentId?: string }) => {
     applyTaskChangeWithBubbleUp([...tlTasks, task])

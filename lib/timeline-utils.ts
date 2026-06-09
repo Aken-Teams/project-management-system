@@ -75,10 +75,16 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
         if (!minStart || d.startDate < minStart) minStart = d.startDate
         if (!maxEnd || d.endDate > maxEnd) maxEnd = d.endDate
       }
-      // Auto → snap to envelope; manual → keep the user's own (widened) range.
-      if (minStart && maxEnd && !milestone.manualDates) {
-        msStart = minStart
-        msEnd = maxEnd
+      // Auto → snap to envelope. Manual → keep the user's own (widened) range,
+      // but always at least the tasks' envelope (never narrower than children).
+      if (minStart && maxEnd) {
+        if (milestone.manualDates) {
+          if (minStart < msStart) msStart = minStart
+          if (maxEnd > msEnd) msEnd = maxEnd
+        } else {
+          msStart = minStart
+          msEnd = maxEnd
+        }
       }
     }
 
@@ -146,11 +152,17 @@ export function scheduleTasksFromStart(
       if (nextSubDay > subSequential) subSequential = nextSubDay
     }
 
-    // 方案 A: auto task snaps to its subtasks' envelope; a manually
-    // overridden task keeps its own (user-widened) range.
-    if (minSubStart && maxSubEnd && !task.manualDates) {
-      effectiveStart = minSubStart
-      effectiveEnd = maxSubEnd
+    // 方案 A: auto task snaps to its subtasks' envelope. A manual task keeps
+    // its own (widened) range, but is always at least the subtasks' envelope —
+    // it must never be narrower than its children (no parent < child).
+    if (minSubStart && maxSubEnd) {
+      if (task.manualDates) {
+        if (minSubStart < effectiveStart) effectiveStart = minSubStart
+        if (maxSubEnd > effectiveEnd) effectiveEnd = maxSubEnd
+      } else {
+        effectiveStart = minSubStart
+        effectiveEnd = maxSubEnd
+      }
     }
     result.set(task.id, { startDate: effectiveStart, endDate: effectiveEnd })
 
