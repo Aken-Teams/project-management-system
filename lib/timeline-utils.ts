@@ -7,6 +7,7 @@ interface MilestoneInput {
   durationDays: number
   startDate?: string
   endDate?: string
+  manualDates?: boolean
 }
 
 interface TaskInput {
@@ -15,6 +16,7 @@ interface TaskInput {
   durationDays: number
   parentId?: string | null
   startDate?: string
+  manualDates?: boolean
 }
 
 // ─── Date helper ─────────────────────────────────────────────
@@ -73,7 +75,8 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
         if (!minStart || d.startDate < minStart) minStart = d.startDate
         if (!maxEnd || d.endDate > maxEnd) maxEnd = d.endDate
       }
-      if (minStart && maxEnd) {
+      // Auto → snap to envelope; manual → keep the user's own (widened) range.
+      if (minStart && maxEnd && !milestone.manualDates) {
         msStart = minStart
         msEnd = maxEnd
       }
@@ -108,7 +111,7 @@ export function calculateMilestoneDates<T extends MilestoneInput>(
 export interface ScheduledDate { startDate: Date; endDate: Date }
 
 export function scheduleTasksFromStart(
-  parentTasks: { id: string; durationDays: number; startDate?: string }[],
+  parentTasks: { id: string; durationDays: number; startDate?: string; manualDates?: boolean }[],
   allTasks: { id: string; durationDays: number; parentId?: string | null; startDate?: string }[],
   msStart: Date,
 ): Map<string, ScheduledDate> {
@@ -143,8 +146,9 @@ export function scheduleTasksFromStart(
       if (nextSubDay > subSequential) subSequential = nextSubDay
     }
 
-    // 方案 A: task with subtasks spans exactly its subtasks' envelope.
-    if (minSubStart && maxSubEnd) {
+    // 方案 A: auto task snaps to its subtasks' envelope; a manually
+    // overridden task keeps its own (user-widened) range.
+    if (minSubStart && maxSubEnd && !task.manualDates) {
       effectiveStart = minSubStart
       effectiveEnd = maxSubEnd
     }
@@ -247,6 +251,7 @@ interface DbMilestone {
   dueDate: string
   status: string
   progress: number
+  manualDates?: boolean
 }
 
 interface DbTask {
@@ -259,6 +264,7 @@ interface DbTask {
   startDate: string
   endDate: string
   parentId?: string | null
+  manualDates?: boolean
 }
 
 export function dbToTimelineState(
@@ -294,6 +300,7 @@ export function dbToTimelineState(
       id: ms.id,
       name: ms.name,
       durationDays,
+      manualDates: ms.manualDates ?? false,
       // Carry the explicit startDate so overlapping is preserved
       ...(ms.startDate ? { startDate: new Date(ms.startDate).toISOString().split('T')[0] } : {}),
     }
@@ -306,6 +313,7 @@ export function dbToTimelineState(
     assignee: t.assignee,
     priority: t.priority as 'low' | 'medium' | 'high',
     durationDays: t.durationDays || 1,
+    manualDates: t.manualDates ?? false,
     ...(t.parentId ? { parentId: t.parentId } : {}),
     // Carry explicit startDate for overlapping tasks
     ...(t.startDate ? { startDate: new Date(t.startDate).toISOString().split('T')[0] } : {}),
@@ -317,8 +325,8 @@ export function dbToTimelineState(
 // ─── Diff computation for batch save ─────────────────────────
 
 export interface WorkItemsDiff {
-  milestonesToAdd: { name: string; dueDate: string; startDate?: string; sortOrder: number }[]
-  milestonesToUpdate: { id: string; name?: string; dueDate?: string; startDate?: string; sortOrder?: number }[]
+  milestonesToAdd: { name: string; dueDate: string; startDate?: string; sortOrder: number; manualDates?: boolean }[]
+  milestonesToUpdate: { id: string; name?: string; dueDate?: string; startDate?: string; sortOrder?: number; manualDates?: boolean }[]
   milestonesToDelete: string[]
   tasksToAdd: {
     tempId: string
@@ -330,6 +338,7 @@ export interface WorkItemsDiff {
     startDate: string
     endDate: string
     parentId?: string
+    manualDates?: boolean
   }[]
   tasksToUpdate: {
     id: string
@@ -341,13 +350,14 @@ export interface WorkItemsDiff {
     endDate?: string
     milestoneId?: string
     sortOrder?: number
+    manualDates?: boolean
   }[]
   tasksToDelete: string[]
   projectEndDate?: string
 }
 
 export function computeWorkItemsDiff(
-  origMilestones: { id: string; name: string; dueDate: string; startDate?: string | null }[],
+  origMilestones: { id: string; name: string; dueDate: string; startDate?: string | null; manualDates?: boolean }[],
   origTasks: DbTask[],
   currentMilestones: TimelineMilestone[],
   currentTasks: TimelineTask[],
@@ -371,6 +381,7 @@ export function computeWorkItemsDiff(
       dueDate: m.endDate || '',
       startDate: m.startDate,
       sortOrder: currentMilestones.indexOf(m),
+      manualDates: m.manualDates ?? false,
     }))
 
   // Milestones to update
@@ -387,6 +398,7 @@ export function computeWorkItemsDiff(
     if (m.startDate !== origStart) { changes.startDate = m.startDate || null; hasChange = true }
     const origIdx = origMilestones.findIndex(o => o.id === m.id)
     if (idx !== origIdx) { changes.sortOrder = idx; hasChange = true }
+    if ((m.manualDates ?? false) !== (orig.manualDates ?? false)) { changes.manualDates = m.manualDates ?? false; hasChange = true }
     if (hasChange) milestonesToUpdate.push(changes as WorkItemsDiff['milestonesToUpdate'][number])
   })
 
@@ -410,6 +422,7 @@ export function computeWorkItemsDiff(
         durationDays: t.durationDays,
         startDate: dates?.startDate || '',
         endDate: dates?.endDate || '',
+        manualDates: t.manualDates ?? false,
         ...(t.parentId ? { parentId: t.parentId } : {}),
       }
     })
@@ -435,6 +448,7 @@ export function computeWorkItemsDiff(
     const origTasksInMs = origTasks.filter(ot => ot.milestoneId === orig.milestoneId)
     const origSort = origTasksInMs.findIndex(ot => ot.id === t.id)
     if (newSort !== origSort) { changes.sortOrder = newSort; hasChange = true }
+    if ((t.manualDates ?? false) !== (orig.manualDates ?? false)) { changes.manualDates = t.manualDates ?? false; hasChange = true }
     if (hasChange) tasksToUpdate.push(changes as WorkItemsDiff['tasksToUpdate'][number])
   })
 

@@ -19,7 +19,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle, Lock, LockOpen } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +38,7 @@ export interface TimelineMilestone {
   durationDays: number
   startDate?: string
   endDate?: string
+  manualDates?: boolean
 }
 
 export interface TimelineTask {
@@ -49,6 +50,7 @@ export interface TimelineTask {
   durationDays: number
   parentId?: string
   startDate?: string
+  manualDates?: boolean
 }
 
 export interface TimelineTeamMember {
@@ -74,11 +76,13 @@ export interface TimelineTableProps {
   onMilestoneAdd: () => void
   onMilestoneReorder: (oldIndex: number, newIndex: number) => void
   onMilestoneDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
+  onMilestoneToggleLock?: (index: number) => void
   onTaskAdd: (task: TimelineTask) => void
   onTaskRemove: (taskId: string) => void
   onTaskUpdate: (taskId: string, field: keyof TimelineTask, value: string | number) => void
   onTaskReorder: (oldIndex: number, newIndex: number) => void
   onTaskDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
+  onTaskToggleLock?: (taskId: string) => void
   onGanttPreview?: () => void
 }
 
@@ -89,11 +93,12 @@ const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_140px_140px_88px_52px_28px] gap
 // React 19 resets controlled <input type="date"> values before the batched
 // state update completes, fighting with the native calendar picker.
 // Using an uncontrolled input + ref sync avoids this entirely.
-function DateInput({ value, onCommit, className, min }: {
+function DateInput({ value, onCommit, className, min, max }: {
   value: string
   onCommit: (value: string) => void
   className?: string
   min?: string
+  max?: string
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const onCommitRef = useRef(onCommit)
@@ -111,6 +116,7 @@ function DateInput({ value, onCommit, className, min }: {
       type="date"
       defaultValue={value}
       min={min}
+      max={max}
       onChange={(e) => {
         if (e.target.value) onCommitRef.current(e.target.value)
       }}
@@ -130,10 +136,13 @@ function MilestoneRow({
   collapsed,
   taskCount,
   overflowInfo,
+  envelopeStart,
+  envelopeEnd,
   onUpdate,
   onRemove,
   onToggleCollapse,
   onDateChange,
+  onToggleLock,
 }: {
   milestone: TimelineMilestone
   index: number
@@ -141,10 +150,13 @@ function MilestoneRow({
   collapsed: boolean
   taskCount: number
   overflowInfo?: OverflowInfo
+  envelopeStart?: string
+  envelopeEnd?: string
   onUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onRemove: (index: number) => void
   onToggleCollapse: () => void
   onDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
+  onToggleLock?: (index: number) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: milestone.id })
@@ -155,9 +167,16 @@ function MilestoneRow({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  // 方案 A：有任務的里程碑，起訖 = 任務最早開始～最晚結束（envelope），
-  // 為衍生值，不可手動編輯；天數由 envelope 跨度換算。
+  // 方案 A：有任務的里程碑，起訖 = 任務最早開始～最晚結束（envelope）。
+  // 預設鎖定（唯讀 envelope）；解鎖（manualDates）後可手動加寬，但卡死不可低於子層。
   const hasTasks = taskCount > 0
+  const isManual = hasTasks && !!milestone.manualDates
+  const isAutoLocked = hasTasks && !isManual
+  // 手動值與子層 envelope 不一致（父層大於子層）→ ⚠ 提醒
+  const inconsistent = !!isManual && (
+    (!!envelopeStart && !!milestone.startDate && milestone.startDate !== envelopeStart) ||
+    (!!envelopeEnd && !!milestone.endDate && milestone.endDate !== envelopeEnd)
+  )
   const derivedDuration = hasTasks && milestone.startDate && milestone.endDate
     ? Math.round((new Date(milestone.endDate).getTime() - new Date(milestone.startDate).getTime()) / 86400000) + 1
     : (milestone.durationDays || 0)
@@ -205,6 +224,19 @@ function MilestoneRow({
             {taskCount} 任務
           </span>
         )}
+        {hasTasks && onToggleLock && (
+          <button
+            type="button"
+            onClick={() => onToggleLock(index)}
+            className={cn(
+              'shrink-0 flex items-center justify-center h-6 w-6 rounded transition-colors',
+              isManual ? 'text-amber-600 hover:bg-amber-100' : 'text-muted-foreground/50 hover:bg-muted hover:text-foreground',
+            )}
+            title={isManual ? '手動模式：日期可加寬（不可低於子層）。點擊改回自動貼齊' : '自動貼齊子層。點擊解鎖以手動加寬'}
+          >
+            {isManual ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+          </button>
+        )}
       </div>
 
       {/* Duration */}
@@ -224,39 +256,42 @@ function MilestoneRow({
         )}
       </div>
 
-      {/* Start date — read-only (derived) when the milestone has tasks */}
+      {/* Start date — locked(read-only envelope) / manual(editable, 不可晚於最早任務) / 無任務(自由) */}
       <div className="flex justify-center">
-        {hasTasks ? (
+        {isAutoLocked ? (
           <span className="text-sm text-muted-foreground" title="由任務自動計算">{milestone.startDate || '—'}</span>
-        ) : onDateChange ? (
+        ) : (isManual || !hasTasks) && onDateChange ? (
           <DateInput
             value={milestone.startDate || ''}
+            max={isManual ? (envelopeStart || undefined) : undefined}
             onCommit={(v) => onDateChange(index, 'startDate', v)}
-            className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", isManual && "text-amber-700")}
           />
         ) : (
           <span className="text-sm text-muted-foreground">{milestone.startDate || '—'}</span>
         )}
       </div>
 
-      {/* End date — read-only (derived) when the milestone has tasks */}
+      {/* End date — locked / manual(不可早於最晚任務) / 無任務(自由) */}
       <div className="flex justify-center items-center gap-0.5">
-        {hasTasks ? (
+        {isAutoLocked ? (
           <span className="text-sm text-muted-foreground">{milestone.endDate || '—'}</span>
-        ) : onDateChange ? (
+        ) : (isManual || !hasTasks) && onDateChange ? (
           <DateInput
             value={milestone.endDate || ''}
-            min={milestone.startDate || undefined}
+            min={isManual ? (envelopeEnd || undefined) : (milestone.startDate || undefined)}
             onCommit={(v) => onDateChange(index, 'endDate', v)}
-            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
+            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", (overflowInfo || isManual) && "text-amber-700")}
           />
         ) : (
           <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{milestone.endDate || '—'}</span>
         )}
-        {overflowInfo && (
+        {(overflowInfo || inconsistent) && (
           <span
             className="shrink-0 cursor-help"
-            title={`任務結束日（${overflowInfo.childEnd}）超出里程碑結束日（${milestone.endDate}）${overflowInfo.overflowDays} 天`}
+            title={overflowInfo
+              ? `任務結束日（${overflowInfo.childEnd}）超出里程碑結束日（${milestone.endDate}）${overflowInfo.overflowDays} 天`
+              : `手動加寬中：里程碑範圍大於任務（任務 ${envelopeStart ?? ''}～${envelopeEnd ?? ''}）。理想應與任務一致`}
           >
             <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
           </span>
@@ -296,11 +331,14 @@ function TaskRow({
   collapsed,
   msIndex,
   overflowInfo,
+  envelopeStart,
+  envelopeEnd,
   onRemove,
   onUpdate,
   onToggleAddSubtask,
   onToggleCollapse,
   onDateChange,
+  onToggleLock,
 }: {
   task: TimelineTask
   startDate?: string
@@ -310,11 +348,14 @@ function TaskRow({
   collapsed: boolean
   msIndex: number
   overflowInfo?: OverflowInfo
+  envelopeStart?: string
+  envelopeEnd?: string
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onToggleAddSubtask: () => void
   onToggleCollapse: () => void
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
+  onToggleLock?: (taskId: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
@@ -339,9 +380,15 @@ function TaskRow({
 
   const p = priorityConfig[task.priority]
 
-  // 方案 A：有子任務的任務，日期 = 子任務最早開始～最晚結束（envelope），
-  // 為衍生值，不可手動編輯；天數由 envelope 跨度換算（非子任務天數加總）。
+  // 方案 A：有子任務的任務，日期 = 子任務最早開始～最晚結束（envelope）。
+  // 預設鎖定（唯讀 envelope）；解鎖（manualDates）後可手動加寬，但卡死不可低於子層。
   const hasSubtasks = subtaskCount > 0
+  const isManual = hasSubtasks && !!task.manualDates
+  const isAutoLocked = hasSubtasks && !isManual
+  const inconsistent = !!isManual && (
+    (!!envelopeStart && !!startDate && startDate !== envelopeStart) ||
+    (!!envelopeEnd && !!endDate && endDate !== envelopeEnd)
+  )
   const derivedDuration = hasSubtasks && startDate && endDate
     ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1
     : (task.durationDays || 0)
@@ -393,6 +440,19 @@ function TaskRow({
             {subtaskCount} 子任務
           </span>
         )}
+        {hasSubtasks && onToggleLock && (
+          <button
+            type="button"
+            onClick={() => onToggleLock(task.id)}
+            className={cn(
+              'shrink-0 flex items-center justify-center h-6 w-6 rounded transition-colors',
+              isManual ? 'text-amber-600 hover:bg-amber-100' : 'text-muted-foreground/50 hover:bg-muted hover:text-foreground',
+            )}
+            title={isManual ? '手動模式：日期可加寬（不可低於子任務）。點擊改回自動貼齊' : '自動貼齊子任務。點擊解鎖以手動加寬'}
+          >
+            {isManual ? <LockOpen className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+          </button>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -422,39 +482,42 @@ function TaskRow({
         )}
       </div>
 
-      {/* Start date — read-only (derived) when the task has subtasks */}
+      {/* Start date — locked(read-only) / manual(可加寬,不可晚於最早子任務) / 葉節點(自由) */}
       <div className="flex justify-center">
-        {hasSubtasks ? (
+        {isAutoLocked ? (
           <span className="text-sm text-muted-foreground" title="由子任務自動計算">{startDate || '—'}</span>
-        ) : onDateChange ? (
+        ) : (isManual || !hasSubtasks) && onDateChange ? (
           <DateInput
             value={startDate || ''}
+            max={isManual ? (envelopeStart || undefined) : undefined}
             onCommit={(v) => onDateChange(task.id, 'startDate', v)}
-            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
+            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", isManual && "text-amber-700")}
           />
         ) : (
           <span className="text-sm text-muted-foreground">{startDate || '—'}</span>
         )}
       </div>
 
-      {/* End date — read-only (derived) when the task has subtasks */}
+      {/* End date — locked / manual(不可早於最晚子任務) / 葉節點(自由) */}
       <div className="flex justify-center items-center gap-0.5">
-        {hasSubtasks ? (
+        {isAutoLocked ? (
           <span className="text-sm text-muted-foreground" title="由子任務自動計算">{endDate || '—'}</span>
-        ) : onDateChange ? (
+        ) : (isManual || !hasSubtasks) && onDateChange ? (
           <DateInput
             value={endDate || ''}
-            min={startDate || undefined}
+            min={isManual ? (envelopeEnd || undefined) : (startDate || undefined)}
             onCommit={(v) => onDateChange(task.id, 'endDate', v)}
-            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
+            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", (overflowInfo || isManual) && "text-amber-700")}
           />
         ) : (
           <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{endDate || '—'}</span>
         )}
-        {overflowInfo && (
+        {(overflowInfo || inconsistent) && (
           <span
             className="shrink-0 cursor-help"
-            title={`子任務結束日（${overflowInfo.childEnd}）超出任務結束日（${endDate}）${overflowInfo.overflowDays} 天`}
+            title={overflowInfo
+              ? `子任務結束日（${overflowInfo.childEnd}）超出任務結束日（${endDate}）${overflowInfo.overflowDays} 天`
+              : `手動加寬中：任務範圍大於子任務（子任務 ${envelopeStart ?? ''}～${envelopeEnd ?? ''}）。理想應與子任務一致`}
           >
             <AlertTriangle className="h-3 w-3 text-amber-500" />
           </span>
@@ -970,15 +1033,30 @@ export function TimelineTable({
   onMilestoneAdd,
   onMilestoneReorder,
   onMilestoneDateChange,
+  onMilestoneToggleLock,
   onTaskAdd,
   onTaskRemove,
   onTaskUpdate,
   onTaskReorder,
   onTaskDateChange,
+  onTaskToggleLock,
   onGanttPreview,
 }: TimelineTableProps) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
+
+  // Envelope (子層最早開始 ～ 最晚結束) of a parent's children, from computed dates.
+  const envelopeOf = (childIds: string[]): { start?: string; end?: string } => {
+    let start: string | undefined
+    let end: string | undefined
+    for (const id of childIds) {
+      const d = taskDates.get(id)
+      if (!d) continue
+      if (!start || d.startDate < start) start = d.startDate
+      if (!end || d.endDate > end) end = d.endDate
+    }
+    return { start, end }
+  }
 
   const toggleCollapse = (msId: string) => {
     setCollapsedIds((prev) => {
@@ -1092,6 +1170,7 @@ export function TimelineTable({
           {milestones.map((milestone, msIndex) => {
             const msParentTasks = tasks.filter((t) => t.milestoneId === milestone.id && !t.parentId)
             const isCollapsed = collapsedIds.has(milestone.id)
+            const msEnvelope = envelopeOf(msParentTasks.map(t => t.id))
             return (
               <div key={milestone.id}>
                 <MilestoneRow
@@ -1101,16 +1180,20 @@ export function TimelineTable({
                   collapsed={isCollapsed}
                   taskCount={msParentTasks.length}
                   overflowInfo={overflows?.get(milestone.id)}
+                  envelopeStart={msEnvelope.start}
+                  envelopeEnd={msEnvelope.end}
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
                   onDateChange={onMilestoneDateChange}
+                  onToggleLock={onMilestoneToggleLock}
                 />
                 {!isCollapsed && (
                   <>
                     {msParentTasks.map((task) => {
                       const subtasks = tasks.filter((st) => st.parentId === task.id)
                       const subtasksCollapsed = collapsedIds.has(task.id)
+                      const taskEnvelope = envelopeOf(subtasks.map(st => st.id))
                       return (
                         <div key={task.id}>
                           <TaskRow
@@ -1122,6 +1205,8 @@ export function TimelineTable({
                             collapsed={subtasksCollapsed}
                             msIndex={msIndex}
                             overflowInfo={overflows?.get(task.id)}
+                            envelopeStart={taskEnvelope.start}
+                            envelopeEnd={taskEnvelope.end}
                             onRemove={onTaskRemove}
                             onUpdate={onTaskUpdate}
                             onToggleAddSubtask={() =>
@@ -1129,6 +1214,7 @@ export function TimelineTable({
                             }
                             onToggleCollapse={() => toggleCollapse(task.id)}
                             onDateChange={onTaskDateChange}
+                            onToggleLock={onTaskToggleLock}
                           />
                           {!subtasksCollapsed && subtasks.map((st) => (
                             <SubtaskRow

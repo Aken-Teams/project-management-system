@@ -94,6 +94,7 @@ export function dbProjectToFrontend(
       status: string
       progress: number
       sortOrder: number
+      manualDates?: boolean
     }[]
     baselines: {
       id: string
@@ -116,6 +117,9 @@ export function dbProjectToFrontend(
       completedAt: Date | null
       completedBy: string | null
       parentId: string | null
+      originalStartDate: Date | null
+      originalEndDate: Date | null
+      manualDates?: boolean
       dependsOn: { prerequisiteId: string }[]
       children: {
         id: string
@@ -208,6 +212,7 @@ export function dbProjectToFrontend(
       dueDate: m.dueDate.toISOString().split('T')[0],
       status: m.status === 'in_progress' ? ('in-progress' as const) : (m.status as 'todo' | 'done' | 'blocked'),
       progress: m.progress,
+      manualDates: m.manualDates ?? false,
     }))
 
   // Build baseline from baselines table, fallback to current milestones
@@ -236,6 +241,7 @@ export function dbProjectToFrontend(
     durationDays: t.durationDays,
     startDate: t.startDate.toISOString().split('T')[0],
     endDate: t.endDate.toISOString().split('T')[0],
+    manualDates: t.manualDates ?? false,
     dependencies: (t.dependsOn || []).map((d) => d.prerequisiteId),
     progress: t.progress,
     ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),

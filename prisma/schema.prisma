@@ -224,6 +224,8 @@ model Milestone {
   status    TaskStatus @default(todo)
   progress  Int        @default(0)
   sortOrder Int        @default(0) @map("sort_order")
+  // 方案 A：true = 使用者手動覆寫日期（解鎖加寬），不再自動貼齊任務 envelope
+  manualDates Boolean  @default(false) @map("manual_dates")
 
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -273,6 +275,8 @@ model Task {
   originalStartDate DateTime? @map("original_start_date")
   originalEndDate   DateTime? @map("original_end_date")
   parentId    String?    @map("parent_id")
+  // 方案 A：true = 使用者手動覆寫日期（解鎖加寬），不再自動貼齊子任務 envelope
+  manualDates Boolean    @default(false) @map("manual_dates")
 
   project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestone   Milestone  @relation(fields: [milestoneId], references: [id], onDelete: Cascade)

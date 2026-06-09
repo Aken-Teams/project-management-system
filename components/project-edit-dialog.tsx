@@ -239,7 +239,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // (e.g. after a project startDate change was approved) don't cause false positives.
   const [origMilestones] = useState(() => {
     const initRecalc = calculateMilestoneDates(tlInit.milestones, project.startDate, tlInit.tasks)
-    return initRecalc.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.endDate || '', startDate: ms.startDate }))
+    return initRecalc.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.endDate || '', startDate: ms.startDate, manualDates: ms.manualDates ?? false }))
   })
   const [origTasks] = useState(() =>
     (project.tasks ?? []).map(t => ({
@@ -247,6 +247,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       assignee: t.assignee, priority: t.priority,
       durationDays: t.durationDays, startDate: t.startDate, endDate: t.endDate,
       parentId: t.parentId ?? undefined,
+      manualDates: (t as { manualDates?: boolean }).manualDates ?? false,
     }))
   )
 
@@ -837,7 +838,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
     if (parentIds.size > 0) {
       finalTasks = newTasks.map(t => {
-        if (!parentIds.has(t.id) || t.id === directEditId) return t
+        // Skip manual (unlocked) parents — they keep their own widened range.
+        if (!parentIds.has(t.id) || t.id === directEditId || t.manualDates) return t
         const td = dates.get(t.id)
         if (!td) return t
         const span = daysBetween(td.startDate, td.endDate) + 1
@@ -855,6 +857,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
     let msChanged = false
     const newMilestones = tlMilestones.map((ms, idx) => {
+      // Skip manual (unlocked) milestones — they keep their own widened range.
+      if (ms.manualDates) return ms
       const msData = msComputed2[idx]
       if (!msData?.startDate) return ms
       const msTasks = finalTasks.filter(t => t.milestoneId === ms.id)
@@ -934,6 +938,41 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     }
   }, [tlTasks, tlTaskDates, applyTaskChangeWithBubbleUp])
+
+  // ─── Lock toggle (方案 A 解鎖/鎖回) ───────────────────────
+  // 解鎖 → 進手動模式；鎖回 → 回自動。兩者都把日期重設成目前子層 envelope，
+  // 之後使用者在手動模式下才能往外加寬。
+  const envelopeOfChildren = useCallback((childIds: string[]) => {
+    let start: string | undefined
+    let end: string | undefined
+    for (const id of childIds) {
+      const d = tlTaskDates.get(id)
+      if (!d) continue
+      if (!start || d.startDate < start) start = d.startDate
+      if (!end || d.endDate > end) end = d.endDate
+    }
+    return { start, end }
+  }, [tlTaskDates])
+
+  const handleTlMilestoneToggleLock = useCallback((index: number) => {
+    setTlMilestones(prev => prev.map((m, i) => {
+      if (i !== index) return m
+      const childIds = tlTasks.filter(t => t.milestoneId === m.id && !t.parentId).map(t => t.id)
+      const env = envelopeOfChildren(childIds)
+      const dur = env.start && env.end ? daysBetween(env.start, env.end) + 1 : m.durationDays
+      return { ...m, manualDates: !m.manualDates, startDate: env.start ?? m.startDate, durationDays: Math.max(dur, 1) }
+    }))
+  }, [tlTasks, envelopeOfChildren])
+
+  const handleTlTaskToggleLock = useCallback((taskId: string) => {
+    setTlTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t
+      const childIds = prev.filter(s => s.parentId === taskId).map(s => s.id)
+      const env = envelopeOfChildren(childIds)
+      const dur = env.start && env.end ? daysBetween(env.start, env.end) + 1 : t.durationDays
+      return { ...t, manualDates: !t.manualDates, startDate: env.start ?? t.startDate, durationDays: Math.max(dur, 1) }
+    }))
+  }, [envelopeOfChildren])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1460,11 +1499,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onMilestoneAdd={handleTlMilestoneAdd}
               onMilestoneReorder={handleTlMilestoneReorder}
               onMilestoneDateChange={handleTlMilestoneDateChange}
+              onMilestoneToggleLock={handleTlMilestoneToggleLock}
               onTaskAdd={handleTlTaskAdd}
               onTaskRemove={handleTlTaskRemove}
               onTaskUpdate={handleTlTaskUpdate}
               onTaskReorder={handleTlTaskReorder}
               onTaskDateChange={handleTlTaskDateChange}
+              onTaskToggleLock={handleTlTaskToggleLock}
               onGanttPreview={() => setGanttPreviewOpen(true)}
             />
 

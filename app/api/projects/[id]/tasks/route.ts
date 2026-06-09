@@ -17,6 +17,7 @@ interface AddTaskBody {
   endDate: string
   durationDays?: number
   parentId?: string
+  manualDates?: boolean
 }
 
 export async function POST(
@@ -85,6 +86,7 @@ export async function POST(
         endDate: end,
         durationDays,
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        manualDates: body.manualDates ?? false,
         ...(body.parentId ? { parentId: body.parentId } : {}),
       },
     })

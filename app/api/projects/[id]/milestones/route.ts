@@ -9,6 +9,7 @@ interface AddMilestoneBody {
   name: string
   dueDate: string
   startDate?: string
+  manualDates?: boolean
 }
 
 export async function POST(
@@ -43,6 +44,7 @@ export async function POST(
         startDate: body.startDate ? new Date(body.startDate) : undefined,
         dueDate: new Date(body.dueDate),
         sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        manualDates: body.manualDates ?? false,
       },
     })
 

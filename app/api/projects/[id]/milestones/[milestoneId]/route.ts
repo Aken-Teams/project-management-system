@@ -12,6 +12,7 @@ interface UpdateMilestoneBody {
   dueDate?: string
   status?: string
   sortOrder?: number
+  manualDates?: boolean
 }
 
 export async function PUT(
@@ -57,6 +58,7 @@ export async function PUT(
     }
     if (body.status !== undefined) data.status = body.status as TaskStatus
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
+    if (body.manualDates !== undefined) data.manualDates = body.manualDates
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: '沒有提供任何更新欄位' }, { status: 400 })

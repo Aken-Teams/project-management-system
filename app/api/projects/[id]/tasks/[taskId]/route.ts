@@ -21,6 +21,7 @@ interface UpdateTaskBody {
   sortOrder?: number
   durationDays?: number
   completedBy?: string
+  manualDates?: boolean
 }
 
 export async function PUT(
@@ -71,6 +72,7 @@ export async function PUT(
     if (body.endDate !== undefined) data.endDate = new Date(body.endDate)
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
     if (body.durationDays !== undefined) data.durationDays = body.durationDays
+    if (body.manualDates !== undefined) data.manualDates = body.manualDates
 
     // When dates or duration are manually changed, clear stale original dates
     // (set by delay approval) so the Gantt chart no longer shows phantom extensions
