@@ -246,6 +246,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   }
   const [snapTargets, setSnapTargets] = useState<SnapTarget[]>([])
   const [snapDialogOpen, setSnapDialogOpen] = useState(false)
+  // 使用者對某父層按過「維持手動」→ 記住，之後不再對它跳「自動貼齊?」提醒
+  const [snapDismissedIds, setSnapDismissedIds] = useState<Set<string>>(new Set())
 
   // Snapshot of original data for diff on save.
   // Use calculated endDates (not raw DB dueDate) so that stale DB values
@@ -905,20 +907,25 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
     const candidates: SnapTarget[] = []
     for (const t of finalTasks) {
-      if (!t.manualDates) continue
+      if (!t.manualDates || snapDismissedIds.has(t.id)) continue
       const kidIds = finalTasks.filter(c => c.parentId === t.id).map(c => c.id)
       if (kidIds.length === 0) continue
       const envNew = envFrom(kidIds, dates2)
       const envOld = envFrom(kidIds, tlTaskDates)
       const own = dates2.get(t.id)
+      const ownOld = tlTaskDates.get(t.id)
       if (!own || !envNew.s || !envNew.e) continue
-      if ((envNew.s !== envOld.s || envNew.e !== envOld.e) &&
+      // 只有「父層自己這次沒被改」(= 使用者改的是子層) 才提醒；
+      // 改父層加寬（父層自己範圍變了）不提醒。
+      const parentUnchanged = !!ownOld && own.startDate === ownOld.startDate && own.endDate === ownOld.endDate
+      if (parentUnchanged &&
+          (envNew.s !== envOld.s || envNew.e !== envOld.e) &&
           (envNew.s !== own.startDate || envNew.e !== own.endDate)) {
         candidates.push({ kind: 'task', id: t.id, name: t.title, childStart: envNew.s, childEnd: envNew.e, manualStart: own.startDate, manualEnd: own.endDate })
       }
     }
     newMilestones.forEach((m, idx) => {
-      if (!m.manualDates) return
+      if (!m.manualDates || snapDismissedIds.has(m.id)) return
       const own = msComputed2[idx]
       if (!own?.startDate || !own?.endDate) return
       const kidIds = finalTasks.filter(t => t.milestoneId === m.id && !t.parentId).map(t => t.id)
@@ -938,7 +945,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       setSnapTargets(candidates)
       setSnapDialogOpen(true)
     }
-  }, [tlMilestones, tlTaskDates, form.startDate, project.startDate])
+  }, [tlMilestones, tlTaskDates, form.startDate, project.startDate, snapDismissedIds])
 
   const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationDays: number; parentId?: string }) => {
     applyTaskChangeWithBubbleUp([...tlTasks, task])
@@ -964,6 +971,16 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const handleTlMilestoneDateChange = useCallback((index: number, field: 'startDate' | 'endDate', value: string) => {
     // Direct milestone edit → no bubble up
     if (!value) return
+    // 編輯「手動里程碑」的起始日前，先把底下「未固定起始日」的任務釘在原位，
+    // 避免里程碑加寬時任務被一起拉走。
+    if (field === 'startDate' && tlMilestones[index]?.manualDates) {
+      const msId = tlMilestones[index].id
+      setTlTasks(prev => prev.map(t => {
+        if (t.milestoneId !== msId || t.parentId || t.startDate) return t
+        const d = tlTaskDates.get(t.id)
+        return d ? { ...t, startDate: d.startDate } : t
+      }))
+    }
     if (field === 'endDate') {
       const ms = recalcMilestones[index]
       if (!ms?.startDate) return
@@ -978,7 +995,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
       }))
     }
-  }, [recalcMilestones])
+  }, [recalcMilestones, tlMilestones, tlTaskDates])
 
   const handleTlTaskDateChange = useCallback((taskId: string, field: 'startDate' | 'endDate', value: string) => {
     if (!value) return
@@ -986,15 +1003,26 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     if (!taskDates) return
     const isParent = tlTasks.some(t => t.parentId === taskId)
 
+    // 編輯「手動父任務」的日期前，先把它底下「還沒固定起始日」的子任務釘在
+    // 目前位置（寫入明確 startDate），避免父任務加寬時子任務被一起拉走。
+    const editedTask = tlTasks.find(t => t.id === taskId)
+    const base = (isParent && editedTask?.manualDates)
+      ? tlTasks.map(t => {
+          if (t.parentId !== taskId || t.startDate) return t
+          const d = tlTaskDates.get(t.id)
+          return d ? { ...t, startDate: d.startDate } : t
+        })
+      : tlTasks
+
     if (field === 'endDate') {
       const newDuration = daysBetween(taskDates.startDate, value) + 1
       if (newDuration < 1) return
-      const updated = tlTasks.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
+      const updated = base.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
       applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     } else {
       const currentEnd = taskDates.endDate
       const newDuration = daysBetween(value, currentEnd) + 1
-      const updated = tlTasks.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
+      const updated = base.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
       applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     }
   }, [tlTasks, tlTaskDates, applyTaskChangeWithBubbleUp])
@@ -1015,6 +1043,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   }, [tlTaskDates])
 
   const handleTlMilestoneToggleLock = useCallback((index: number) => {
+    const id = tlMilestones[index]?.id
+    // 重新鎖定/解鎖 = 新的決定 → 清掉「維持手動」記憶
+    if (id) setSnapDismissedIds(prev => { const n = new Set(prev); n.delete(id); return n })
     setTlMilestones(prev => prev.map((m, i) => {
       if (i !== index) return m
       const childIds = tlTasks.filter(t => t.milestoneId === m.id && !t.parentId).map(t => t.id)
@@ -1022,9 +1053,10 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       const dur = env.start && env.end ? daysBetween(env.start, env.end) + 1 : m.durationDays
       return { ...m, manualDates: !m.manualDates, startDate: env.start ?? m.startDate, durationDays: Math.max(dur, 1) }
     }))
-  }, [tlTasks, envelopeOfChildren])
+  }, [tlMilestones, tlTasks, envelopeOfChildren])
 
   const handleTlTaskToggleLock = useCallback((taskId: string) => {
+    setSnapDismissedIds(prev => { const n = new Set(prev); n.delete(taskId); return n })
     setTlTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t
       const childIds = prev.filter(s => s.parentId === taskId).map(s => s.id)
@@ -1036,6 +1068,12 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
   // 「自動貼齊」：把這些手動父層改回自動，並把日期重設成子層 envelope。
   const applySnapToAuto = useCallback((targets: SnapTarget[]) => {
+    // 改回自動的父層不再屬於「維持手動」名單
+    setSnapDismissedIds(prev => {
+      const n = new Set(prev)
+      for (const t of targets) n.delete(t.id)
+      return n
+    })
     const taskTargets = new Map(targets.filter(t => t.kind === 'task').map(t => [t.id, t] as const))
     const msTargets = new Map(targets.filter(t => t.kind === 'milestone').map(t => [t.id, t] as const))
     if (taskTargets.size > 0) {
@@ -1695,7 +1733,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           </ul>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setSnapDialogOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              // 記住這些父層選了「維持手動」→ 之後不再提醒
+              setSnapDismissedIds(prev => new Set([...prev, ...snapTargets.map(t => t.id)]))
+              setSnapDialogOpen(false)
+            }}>
               維持手動
             </Button>
             <Button onClick={() => { applySnapToAuto(snapTargets); setSnapDialogOpen(false) }}>
