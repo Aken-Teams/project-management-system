@@ -216,10 +216,19 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   // Helper: compute milestone bar span (planned)
   const getMilestoneBarRange = (ms: Milestone, msTasks: Task[]) => {
     if (msTasks.length === 0) return { start: ms.dueDate, end: ms.dueDate }
-    const earliest = msTasks.reduce((min, t) =>
-      new Date(t.startDate).getTime() < new Date(min).getTime() ? t.startDate : min
-    , msTasks[0].startDate)
-    return { start: earliest, end: ms.dueDate }
+    // 方案 A：里程碑長條 = 它任務(含子任務)的 envelope（最早開始 ～ 最晚結束），
+    // 與編輯表同一套；不依賴可能不同步的 dueDate。
+    let start = msTasks[0].startDate
+    let end = msTasks[0].endDate
+    for (const t of msTasks) {
+      if (t.startDate < start) start = t.startDate
+      if (t.endDate > end) end = t.endDate
+      for (const s of tasks.filter(st => st.parentId === t.id)) {
+        if (s.startDate < start) start = s.startDate
+        if (s.endDate > end) end = s.endDate
+      }
+    }
+    return { start, end }
   }
 
   // Helper: get actual start for a single task (earliest log date, or completedAt as fallback)
@@ -437,6 +446,9 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           {tasksByMilestone.map(({ milestone, tasks: msTasks }, msIndex) => {
             const expanded = expandedMs.has(milestone.id)
             const msBar = getMilestoneBarRange(milestone, msTasks)
+            // 方案 A：里程碑的有效結束 = 任務 envelope 的最晚結束（與編輯表一致）。
+            // 里程碑長條、到期標籤、逾期判斷都用這個，不用可能不同步的 dueDate。
+            const msEnd = msBar.end
 
             // Compute aggregated milestone progress from subtask-aware task progress
             const msAggregatedProgress = (() => {
@@ -501,7 +513,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       )}
                     </div>
                     <div className="text-sm text-muted-foreground ml-[38px] mt-0.5">
-                      到期：{formatDate(milestone.dueDate)}
+                      到期：{formatDate(msEnd)}
                     </div>
                   </div>
                   <div
@@ -518,7 +530,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       const msCompletedAt = msAllDoneAgg
                         ? msTasks.reduce<string | null>((latest, t) => t.completedAt && (!latest || t.completedAt > latest) ? t.completedAt : latest, null)
                         : null
-                      const msPlanColors = getPlanBarColors(milestone.dueDate, msAggregatedProgress, msCompletedAt, msDisplayStatus)
+                      const msPlanColors = getPlanBarColors(msEnd, msAggregatedProgress, msCompletedAt, msDisplayStatus)
                       const msDone = msAllDoneAgg
                       // Milestone has extension only if any task's duration actually increased
                       const msHasExtension = msTasks.some(t => {
@@ -540,7 +552,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             return !l || o > l ? o : l
                           }, null)
                         : null
-                      const msPlanEnd = msHasExtension && msOrigEnd ? msOrigEnd : milestone.dueDate
+                      const msPlanEnd = msHasExtension && msOrigEnd ? msOrigEnd : msEnd
                       return (
                       <>
                         {/* Plan bar (upper — original plan portion) */}
@@ -561,7 +573,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                           <div
                             className="absolute h-3.5 rounded-r-sm"
                             style={{
-                              ...barStyle(msOrigEnd!, milestone.dueDate),
+                              ...barStyle(msOrigEnd!, msEnd),
                               top: 4,
                               backgroundColor: EXTENSION_COLOR.bg,
                               border: msDone
@@ -601,14 +613,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             return !l || o > l ? o : l
                           }, null)
                         : null
-                      const nbMsPlanEnd = nbMsHasExtension && nbMsOrigEnd ? nbMsOrigEnd : milestone.dueDate
+                      const nbMsPlanEnd = nbMsHasExtension && nbMsOrigEnd ? nbMsOrigEnd : msEnd
                       return (
                       <>
                         {/* Single merged milestone bar — plan outline with progress fill */}
                         <div
                           className="absolute h-5 rounded-sm overflow-hidden"
                           style={{
-                            ...barStyle(msBar.start, milestone.dueDate),
+                            ...barStyle(msBar.start, msEnd),
                             top: 10,
                             backgroundColor: PLAN_COLOR.bg,
                             border: `1px solid ${PLAN_COLOR.border}80`,
@@ -620,7 +632,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         <span
                           className="absolute text-[10px] font-medium whitespace-nowrap"
                           style={{
-                            left: `calc(${parseFloat(barStyle(msBar.start, milestone.dueDate).left) + parseFloat(barStyle(msBar.start, milestone.dueDate).width)}% + 4px)`,
+                            left: `calc(${parseFloat(barStyle(msBar.start, msEnd).left) + parseFloat(barStyle(msBar.start, msEnd).width)}% + 4px)`,
                             top: 13,
                           }}
                         >
@@ -633,12 +645,12 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                               return !latest || t.completedAt > latest ? t.completedAt : latest
                             }, null)
                             if (msDone && latestCompletion) {
-                              const diff = getTimeDiffLabel({ endDate: milestone.dueDate, completedAt: latestCompletion, progress: 100, status: 'done' })
+                              const diff = getTimeDiffLabel({ endDate: msEnd, completedAt: latestCompletion, progress: 100, status: 'done' })
                               return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
                             }
                             // In-progress milestone overdue
-                            if (!msDone && today > new Date(milestone.dueDate)) {
-                              const overdueDays = Math.round((today.getTime() - new Date(milestone.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+                            if (!msDone && today > new Date(msEnd)) {
+                              const overdueDays = Math.round((today.getTime() - new Date(msEnd).getTime()) / (1000 * 60 * 60 * 24))
                               if (overdueDays > 0) return <span style={{ color: '#ef4444' }}>{' '}逾期{overdueDays}天</span>
                             }
                             return null
@@ -1118,7 +1130,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             const d = new Date(t.completedAt)
             return !latest || d > latest ? d : latest
           }, null) : null
-          const plannedEnd = new Date(ms.dueDate)
+          const plannedEnd = new Date(getMilestoneBarRange(ms, msTks).end)
           const diffDays = ms.progress >= 100 && latestCompletion
             ? Math.round((plannedEnd.getTime() - latestCompletion.getTime()) / (1000 * 60 * 60 * 24))
             : null

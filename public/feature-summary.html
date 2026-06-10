@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>本次修改說明 — 5 大重點（圖解）</title>
+<style>
+  :root{
+    --ms:#6366f1; --task:#3b82f6; --sub:#10b981; --manual:#f59e0b; --cascade:#93c5fd;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9;
+  }
+  *{box-sizing:border-box;}
+  body{font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink);
+       background:var(--bg);margin:0;line-height:1.65;}
+  .wrap{width:1180px;margin:0 auto;padding:30px 26px 70px;}
+  h1{font-size:26px;margin:0 0 4px;}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:15px;}
+
+  /* 橫式重點條 */
+  .slide{background:#fff;border:1px solid var(--line);border-radius:16px;
+         box-shadow:0 1px 3px rgba(0,0,0,.05);margin-bottom:18px;
+         display:grid;grid-template-columns:1fr 1.15fr;gap:26px;padding:22px 26px;align-items:center;}
+  .head{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .num{flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:#2563eb;color:#fff;
+       font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:center;}
+  .title{font-size:19px;font-weight:700;}
+  .one{background:#eff6ff;border-left:4px solid #2563eb;border-radius:8px;padding:8px 12px;
+       font-size:14.5px;margin:4px 0 10px;}
+  ul{margin:4px 0 0;padding-left:18px;}
+  li{margin:3px 0;font-size:13.5px;}
+  .why{margin-top:10px;font-size:12.5px;color:#475569;background:#f8fafc;border:1px dashed #cbd5e1;
+       border-radius:8px;padding:6px 11px;}
+  .why b{color:#334155;}
+
+  .tag{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;border-radius:6px;padding:1px 7px;}
+  .tag.lock{background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;}
+  .tag.manual{background:#fef3c7;color:#b45309;border:1px solid #fde68a;}
+  .tag.cascade{background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;}
+
+  /* 示意圖 */
+  .fig{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;}
+  .figcap{font-size:11.5px;color:var(--muted);text-align:center;margin-top:8px;}
+  .g{display:grid;gap:6px;}
+  .row{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:8px;}
+  .lab{font-size:11.5px;color:#475569;display:flex;align-items:center;gap:4px;white-space:nowrap;}
+  .lab.i{padding-left:12px;color:var(--muted);}
+  .lab.i2{padding-left:24px;color:var(--muted);}
+  .track{position:relative;height:18px;border-radius:5px;
+         display:grid;grid-template-columns:repeat(var(--c,6),1fr);
+         background:repeating-linear-gradient(90deg,#fff 0,#fff calc(100%/var(--c) - 1px),#eef2f7 calc(100%/var(--c) - 1px),#eef2f7 calc(100%/var(--c)));}
+  .bar{grid-row:1;height:15px;margin-top:1.5px;border-radius:4px;color:#fff;font-size:9.5px;font-weight:600;
+       display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;}
+  .ms{background:var(--ms);} .tk{background:var(--task);} .sb{background:var(--sub);}
+  .mn{background:var(--manual);} .cc{background:var(--cascade);color:#1e3a8a;}
+  .ghost{opacity:.45;border:1px dashed #fff;}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:11.5px;color:#475569;margin-bottom:10px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+
+  /* 小彈窗示意 */
+  .pop{border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.1);
+       padding:12px 14px;max-width:280px;margin:10px auto 0;}
+  .pop h5{margin:0 0 6px;font-size:13px;display:flex;align-items:center;gap:6px;}
+  .pop p{margin:0 0 10px;font-size:11.5px;color:var(--muted);}
+  .pop .btns{display:flex;gap:8px;justify-content:flex-end;}
+  .btn{font-size:11.5px;border-radius:7px;padding:4px 12px;font-weight:600;}
+  .btn.ghost{border:1px solid var(--line);background:#fff;color:#334155;}
+  .btn.primary{background:#2563eb;color:#fff;}
+
+  /* 巢狀清單示意 */
+  .tree{font-size:12.5px;}
+  .tree .mrow{display:flex;justify-content:space-between;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line);}
+  .tree .trow{display:flex;justify-content:space-between;gap:8px;padding:3px 8px 3px 22px;color:var(--muted);font-size:11.5px;}
+  .tree .nm{font-weight:600;display:flex;align-items:center;gap:6px;}
+  .tree .chg{font-size:11px;white-space:nowrap;}
+  .old{color:#94a3b8;text-decoration:line-through;} .new{color:#d97706;font-weight:600;}
+  .arrow{color:#94a3b8;margin:0 3px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>本次系統修改說明 · 5 大重點（圖解）</h1>
+  <p class="sub">每一塊「左說明、右示意圖」，可單獨截圖或整頁截。</p>
+
+  <div class="legend">
+    <span><i class="dot ms"></i>里程碑</span>
+    <span><i class="dot tk"></i>任務</span>
+    <span><i class="dot sb"></i>子任務</span>
+    <span><i class="dot mn"></i>手動加寬</span>
+    <span><i class="dot cc"></i>自動順延</span>
+  </div>
+
+  <!-- 1 -->
+  <div class="slide">
+    <div class="text">
+      <div class="head"><div class="num">1</div><div class="title">父層日期自動算、預設鎖定</div></div>
+      <div class="one">里程碑、任務的日期，是由<b>底下子項自動算出來</b>的，不是手填。</div>
+      <ul>
+        <li><b>里程碑</b> = 它所有<b>任務</b>的「最早開始～最晚結束」。</li>
+        <li><b>任務</b> = 它所有<b>子任務</b>的「最早開始～最晚結束」。</li>
+        <li>只有<b>最底層子項</b>能自由填；父層 <span class="tag lock">🔒 自動</span> 預設鎖定、唯讀。</li>
+        <li>父層永遠<b>不會比子層小</b>。</li>
+      </ul>
+      <div class="why"><b>為什麼：</b>資料一致、報表/甘特一定對齊，減少人為錯誤。</div>
+    </div>
+    <div class="fig">
+      <div class="g" style="--c:6">
+        <div class="row"><div class="lab"><i class="dot ms"></i>里程碑 🔒</div><div class="track"><div class="bar ms" style="grid-column:1/7">自動：1～6 月</div></div></div>
+        <div class="row"><div class="lab i"><i class="dot tk"></i>任務 A</div><div class="track"><div class="bar tk" style="grid-column:1/4">1～3</div></div></div>
+        <div class="row"><div class="lab i2"><i class="dot sb"></i>子任務</div><div class="track"><div class="bar sb" style="grid-column:1/3"></div><div class="bar sb" style="grid-column:3/4"></div></div></div>
+        <div class="row"><div class="lab i"><i class="dot tk"></i>任務 B</div><div class="track"><div class="bar tk" style="grid-column:4/7">4～6</div></div></div>
+        <div class="row"><div class="lab i2"><i class="dot sb"></i>子任務</div><div class="track"><div class="bar sb" style="grid-column:4/7"></div></div></div>
+      </div>
+      <div class="figcap">里程碑(1～6) = 任務 A(1～3)＋B(4～6) 的最早～最晚，自動算出</div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="slide">
+    <div class="text">
+      <div class="head"><div class="num">2</div><div class="title">可解鎖手動加寬（彈性 + 卡控）</div></div>
+      <div class="one">點<b>鎖頭</b>解鎖，就能手動把父層<b>放大</b>（留 buffer）。</div>
+      <ul>
+        <li>切換 <span class="tag lock">🔒 自動</span> ↔ <span class="tag manual">🔓 手動</span>。</li>
+        <li><b>只能放大，不能縮到比子層小</b>（日期選擇器會擋）。</li>
+        <li>手動加寬會<b>被記住</b>，重開、別人開都還在。</li>
+      </ul>
+      <div class="why"><b>為什麼：</b>給客戶能手動調的彈性，同時守住「父不小於子」的底線。</div>
+    </div>
+    <div class="fig">
+      <div class="g" style="--c:8">
+        <div class="row"><div class="lab"><i class="dot mn"></i>任務 🔓手動</div><div class="track"><div class="bar mn" style="grid-column:1/9">手動加寬：1～8</div></div></div>
+        <div class="row"><div class="lab i"><i class="dot sb"></i>子任務</div><div class="track"><div class="bar sb" style="grid-column:3/7">3～6</div></div></div>
+        <div class="row"><div class="lab" style="color:#94a3b8">可放大區</div><div class="track" style="background:none"><div class="bar ghost mn" style="grid-column:1/3">←</div><div class="bar ghost mn" style="grid-column:7/9">→</div></div></div>
+      </div>
+      <div class="figcap">任務手動拉到 1～8（比子任務 3～6 寬）✔；但不能縮進 3～6 以內 ✘</div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="slide">
+    <div class="text">
+      <div class="head"><div class="num">3</div><div class="title">改子層時的智慧提醒</div></div>
+      <div class="one">手動狀態下改子層，系統幫你顧好一致性。</div>
+      <ul>
+        <li>子層<b>超出</b>手動父層 → 父層<b>自動延伸包住</b> ＋ 一句說明（不會父&lt;子）。</li>
+        <li>自動值<b>≠</b>手動值 → 跳「<b>要自動貼齊嗎？</b>」：自動貼齊 / 維持手動。</li>
+        <li>按過「維持手動」後<b>不再為它跳提醒</b>。只改父層加寬也<b>不跳</b>。</li>
+      </ul>
+      <div class="why"><b>為什麼：</b>自動/手動切換清楚可預期，不默默亂改也不一直打擾。</div>
+    </div>
+    <div class="fig">
+      <div class="g" style="--c:8">
+        <div class="row"><div class="lab"><i class="dot mn"></i>任務(手動)</div><div class="track"><div class="bar mn" style="grid-column:2/5">2～4</div></div></div>
+        <div class="row"><div class="lab i"><i class="dot sb"></i>子任務</div><div class="track"><div class="bar sb" style="grid-column:2/7">拉到 2～6（超出）</div></div></div>
+        <div class="row"><div class="lab" style="color:#16a34a">自動延伸後</div><div class="track"><div class="bar mn ghost" style="grid-column:2/7">任務自動變 2～6 包住</div></div></div>
+      </div>
+      <div class="pop">
+        <h5>⏰ 要自動貼齊嗎？</h5>
+        <p>子層的範圍變了，跟你手動設定不一致。</p>
+        <div class="btns"><span class="btn ghost">維持手動</span><span class="btn primary">自動貼齊</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="slide">
+    <div class="text">
+      <div class="head"><div class="num">4</div><div class="title">延後順延、提前不動 <span class="tag cascade">↳ 自動順延</span></div></div>
+      <div class="one">開案後改日期要<b>送審</b>；延後帶動後面，提前只動那一筆。</div>
+      <ul>
+        <li><b>延後</b>一個里程碑 → 後面的里程碑/任務/子任務<b>整塊往後</b>同樣天數。</li>
+        <li><b>提前</b>一個里程碑 → <b>只有該筆變</b>，後面<b>維持不動</b>。</li>
+        <li>編輯表/甘特，以<b>最後通過審核的日期</b>為準。</li>
+      </ul>
+      <div class="why"><b>為什麼：</b>延後後面只能順延才合理；提前只是多了 buffer，承諾日不該被一起拉前。</div>
+    </div>
+    <div class="fig">
+      <div style="font-size:12px;font-weight:600;color:#dc2626;margin-bottom:4px;">▼ 延後 +N → 後面跟著順延</div>
+      <div class="g" style="--c:10;margin-bottom:12px;">
+        <div class="row"><div class="lab">里程碑一</div><div class="track"><div class="bar ms" style="grid-column:1/4"></div><div class="bar ms ghost" style="grid-column:4/6">+N</div></div></div>
+        <div class="row"><div class="lab">里程碑二</div><div class="track"><div class="bar tk" style="grid-column:6/9"></div><div class="bar cc" style="grid-column:8/11">順延 +N</div></div></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:#16a34a;margin-bottom:4px;">▲ 提前 → 後面不動</div>
+      <div class="g" style="--c:10">
+        <div class="row"><div class="lab">里程碑一</div><div class="track"><div class="bar ms ghost" style="grid-column:2/5">提前</div><div class="bar ms" style="grid-column:4/7"></div></div></div>
+        <div class="row"><div class="lab">里程碑二</div><div class="track"><div class="bar tk" style="grid-column:7/10">維持不動</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="slide">
+    <div class="text">
+      <div class="head"><div class="num">5</div><div class="title">審核畫面更清楚</div></div>
+      <div class="one">送審 / 審核畫面，一眼看懂「誰因為什麼而變」。</div>
+      <ul>
+        <li><b>巢狀</b>：里程碑 → 哪個任務變 → 任務底下哪個子任務變。</li>
+        <li>被連帶的里程碑標 <span class="tag cascade">↳ 自動順延</span>，跟親手改的區分。</li>
+        <li>修掉舊問題：以前「只縮短任務、里程碑沒變」時審核畫面<b>整片空白</b>，現在會正常列出<b>任務/子任務變更</b>。</li>
+      </ul>
+      <div class="why"><b>為什麼：</b>審核者不必猜，清楚看到每筆變更來龍去脈。</div>
+    </div>
+    <div class="fig">
+      <div class="tree">
+        <div class="mrow"><span class="nm">自動化方案設計</span><span class="chg"><span class="old">06-25</span><span class="arrow">→</span><span class="new">06-30　+5天</span></span></div>
+        <div class="trow"><span>└ RFID 標籤類型選定</span><span class="chg">天數 <span class="old">7</span><span class="arrow">→</span><span class="new">12</span></span></div>
+        <div class="mrow"><span class="nm">設備/系統開發 <span class="tag cascade">↳ 自動順延</span></span><span class="chg"><span class="old">07-16</span><span class="arrow">→</span><span class="new">07-21　+5天</span></span></div>
+        <div class="trow"><span>└ WMS 軟體客製化開發</span><span class="chg">起 <span class="old">06-26</span><span class="arrow">→</span><span class="new">07-01</span></span></div>
+        <div class="trow"><span>└ 貨架改造與條碼黏貼</span><span class="chg">起 <span class="old">07-03</span><span class="arrow">→</span><span class="new">07-08</span></span></div>
+      </div>
+      <div class="figcap">里程碑底下列出實際變動的任務/子任務；順延的里程碑加上標籤</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
