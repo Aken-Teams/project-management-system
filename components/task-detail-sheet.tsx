@@ -380,8 +380,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     const [y, m, d] = selectedWeekStart.split('-').map(Number)
     const weekStart = fmtLocalDate(new Date(y, m - 1, d))
     const weekEnd = fmtLocalDate(new Date(y, m - 1, d + 6))
+    // 只載「自己」填的紀錄；別人(R)的不自動代入，要由「R 週報」按鈕匯入
     const logs = project.taskLogs
-      .filter(l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd)
+      .filter(l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd && l.author === user?.name)
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
     if (logs.length > 0) {
       setLogRows(logs.map(l => ({
@@ -401,7 +402,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       setLogRows([{ date: '', content: '' }])
       setLogNextWeekPlan('')
     }
-  }, [selectedWeekStart, task?.id, open, project.taskLogs, fmtLocalDate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedWeekStart, task?.id, open, project.taskLogs, fmtLocalDate, user?.name]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // File upload for batch log rows
   const rowFileInputRef = useRef<HTMLInputElement>(null)

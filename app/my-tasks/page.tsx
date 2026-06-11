@@ -778,8 +778,9 @@ export default function MyTasksPage() {
     const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const endDate = new Date(y, m - 1, d + 6)
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+    // 只載「自己」填的紀錄；別人的不自動代入
     const logs = rReportDialogProject.taskLogs
-      .filter(l => l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd)
+      .filter(l => l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd && l.author === user?.name)
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
     if (logs.length > 0) {
       setRLogRows(logs.map(l => ({
@@ -794,7 +795,7 @@ export default function MyTasksPage() {
       setRLogRows([{ date: '', content: '' }])
       setRLogNextWeekPlan('')
     }
-  }, [rSelectedTaskId, rReportWeekOf, rReportDialogProject])
+  }, [rSelectedTaskId, rReportWeekOf, rReportDialogProject, user?.name])
 
   // R dialog: select a task
   const handleRSelectTask = (taskId: string) => {

@@ -161,6 +161,8 @@ export async function GET(request: NextRequest) {
           logDate: tl.logDate.toISOString().split('T')[0],
           content: tl.content,
           createdAt: tl.createdAt.toISOString(),
+          ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
+          ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
         })),
         pendingDelayMilestoneIds: [
           ...new Set(
