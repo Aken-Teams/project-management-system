@@ -1039,10 +1039,18 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               const ib = msOrder.get(b[0]) ?? 999
               return ia - ib
             })
-            milestoneMap.forEach(tasks => tasks.forEach(t => {
-              t.logs.sort((a, b) => a.logDate.localeCompare(b.logDate))
-              t.subtasks.forEach(s => s.logs.sort((a, b) => a.logDate.localeCompare(b.logDate)))
-            }))
+            // 里程碑底下的「任務 / 子任務」照專案任務順序排列；各自的紀錄照日期
+            const taskOrder = new Map(project.tasks.map((t, i) => [t.id, i]))
+            const byTaskOrder = (a: { taskId: string }, b: { taskId: string }) =>
+              (taskOrder.get(a.taskId) ?? 999) - (taskOrder.get(b.taskId) ?? 999)
+            milestoneMap.forEach(tasks => {
+              tasks.sort(byTaskOrder)
+              tasks.forEach(t => {
+                t.subtasks.sort(byTaskOrder)
+                t.logs.sort((a, b) => a.logDate.localeCompare(b.logDate))
+                t.subtasks.forEach(s => s.logs.sort((a, b) => a.logDate.localeCompare(b.logDate)))
+              })
+            })
 
             // Filter delay requests
             let filteredDelayRequests = week.delayRequests
