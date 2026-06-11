@@ -56,7 +56,12 @@ import {
   Download,
   HelpCircle,
   CalendarDays,
+  Maximize2,
+  Minimize2,
+  LayoutDashboard,
 } from 'lucide-react'
+import { ProjectReportSummary } from '@/components/project-report-summary'
+import { ProjectTeamSummary } from '@/components/project-team-summary'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -302,7 +307,8 @@ export default function ReportsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [ganttExpanded, setGanttExpanded] = useState(true)
   const [ganttMsExpanded, setGanttMsExpanded] = useState<Set<string>>(new Set())
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('summary')
+  const [presentationMode, setPresentationMode] = useState(false)
   const [tierFilter, setTierFilter] = useState<ProjectTier | null>(null)
   const currentYear = new Date().getFullYear()
   const [dateFrom, setDateFrom] = useState<Date>(new Date(currentYear, 0, 1))
@@ -356,11 +362,19 @@ export default function ReportsPage() {
 
   // ── Fetch full project detail when single project selected ──
   useEffect(() => {
+    if (!presentationMode) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPresentationMode(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [presentationMode])
+
+  useEffect(() => {
     if (selectedProjectId === 'all') {
       setDetailProject(null)
+      setPresentationMode(false)
       return
     }
-    setActiveTab('overview')
+    setActiveTab('summary')
     const controller = new AbortController()
     const fetchDetail = async () => {
       setDetailLoading(true)
@@ -1048,6 +1062,11 @@ export default function ReportsPage() {
                   ))}
                 </div>}
                 <div className="flex-1" />
+                {selectedProjectId !== 'all' && (
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => { setActiveTab('summary'); setPresentationMode(true) }}>
+                    <Maximize2 className="h-3.5 w-3.5" /> 簡報模式
+                  </Button>
+                )}
                 {(user?.role === 'pm' || user?.role === 'admin') && (
                 <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleOpenEmailDialog}>
                   <Mail className="h-3.5 w-3.5" /> Email
@@ -1639,8 +1658,11 @@ export default function ReportsPage() {
           {selectedProject && (
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="bg-transparent border-b rounded-none w-full justify-start h-auto p-0">
+                <TabsTrigger value="summary" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
+                  <LayoutDashboard className="h-3.5 w-3.5" /> 重點
+                </TabsTrigger>
                 <TabsTrigger value="overview" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
-                  <BarChart3 className="h-3.5 w-3.5" /> 總覽
+                  <BarChart3 className="h-3.5 w-3.5" /> 統計總覽
                 </TabsTrigger>
                 <TabsTrigger value="schedule" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none px-4 py-2.5 gap-1.5">
                   <Calendar className="h-3.5 w-3.5" /> 時程
@@ -1653,7 +1675,12 @@ export default function ReportsPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* ── Tab: 總覽 ── */}
+              {/* ── Tab: 重點（主管簡報） ── */}
+              <TabsContent value="summary" className="mt-4">
+                {detailProject && <ProjectReportSummary project={detailProject} />}
+              </TabsContent>
+
+              {/* ── Tab: 統計總覽 ── */}
               <TabsContent value="overview" className="space-y-4 mt-4">
                 {/* Donut Charts — 3-col */}
                 <div className="grid gap-4 lg:grid-cols-3">
@@ -1870,25 +1897,37 @@ export default function ReportsPage() {
                             <FileText className="h-3.5 w-3.5" /> 任務明細
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                          {tasksByMilestone.map(({ milestone, tasks: msTasks }) => (
-                            <div key={milestone.id}>
-                              <div className="flex items-center gap-2 mb-2 pb-1 border-b">
-                                <span className={cn(
-                                  'h-2 w-2 rounded-full shrink-0',
-                                  milestone.status === 'done' ? 'bg-emerald-500' :
-                                  milestone.status === 'in-progress' ? 'bg-blue-500' :
-                                  milestone.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
-                                )} />
-                                <span className="text-sm font-semibold">{milestone.name}</span>
-                                <span className="text-xs text-muted-foreground ml-auto">
-                                  {milestone.progress}% &middot; 到期 {milestone.dueDate}
-                                </span>
-                              </div>
+                        <CardContent className="space-y-2">
+                          {tasksByMilestone.map(({ milestone, tasks: msTasks }) => {
+                            const allT = msTasks.flatMap(t => [t, ...(t.subtasks || [])])
+                            const totalN = allT.length
+                            const doneN = allT.filter(t => t.status === 'done').length
+                            const blockedN = allT.filter(t => t.status === 'blocked').length
+                            return (
+                            <Collapsible key={milestone.id} defaultOpen={false}>
+                              <CollapsibleTrigger asChild>
+                                <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-muted/40 hover:bg-muted cursor-pointer transition-colors">
+                                  <span className={cn(
+                                    'h-2 w-2 rounded-full shrink-0',
+                                    milestone.status === 'done' ? 'bg-emerald-500' :
+                                    milestone.status === 'in-progress' ? 'bg-blue-500' :
+                                    milestone.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
+                                  )} />
+                                  <span className="text-sm font-semibold">{milestone.name}</span>
+                                  {blockedN > 0 && <span className="text-[10px] rounded-full bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 px-1.5 py-0.5">受阻 {blockedN}</span>}
+                                  <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+                                    <span className="tabular-nums">{doneN}/{totalN} 完成</span>
+                                    <span className="tabular-nums">{milestone.progress}%</span>
+                                    <span>到期 {milestone.dueDate}</span>
+                                    <ChevronDown className="h-3.5 w-3.5 transition-transform" />
+                                  </span>
+                                </div>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
                               {msTasks.length === 0 ? (
-                                <p className="text-xs text-muted-foreground pl-4">無任務</p>
+                                <p className="text-xs text-muted-foreground pl-4 py-2">無任務</p>
                               ) : (
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto mt-1">
                                   <table className="w-full text-sm table-fixed">
                                     <colgroup>
                                       <col className="w-[35%]" />
@@ -1963,8 +2002,10 @@ export default function ReportsPage() {
                                   </table>
                                 </div>
                               )}
-                            </div>
-                          ))}
+                              </CollapsibleContent>
+                            </Collapsible>
+                            )
+                          })}
                         </CardContent>
                       </Card>
                     )}
@@ -1974,37 +2015,7 @@ export default function ReportsPage() {
 
               {/* ── Tab: 團隊 ── */}
               <TabsContent value="team" className="space-y-4 mt-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5" /> 團隊工作量
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {displayTeamWorkload.map(m => (
-                      <div key={m.name} className="flex items-center gap-3">
-                        <span className="text-sm font-medium w-[72px] truncate shrink-0">{m.name}</span>
-                        <div className="flex-1 h-5 rounded bg-muted overflow-hidden relative">
-                          <div
-                            className="h-full rounded bg-primary/80 transition-all"
-                            style={{ width: `${(m.total / maxMemberTasks) * 100}%` }}
-                          />
-                          <div
-                            className="h-full rounded bg-emerald-500 absolute top-0 left-0 transition-all"
-                            style={{ width: `${(m.done / maxMemberTasks) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-sm text-muted-foreground shrink-0 w-[52px] text-right">{m.done}/{m.total}</span>
-                      </div>
-                    ))}
-                    {displayTeamWorkload.length > 0 && (
-                      <div className="flex items-center gap-4 text-[10px] text-muted-foreground pt-1">
-                        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-emerald-500 inline-block" />已完成</span>
-                        <span className="flex items-center gap-1"><span className="h-2 w-4 rounded bg-primary/80 inline-block" />總任務</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                {detailProject && <ProjectTeamSummary project={detailProject} />}
 
                 {detailProject && recentActivity.length > 0 && (
                   <Card>
@@ -2232,6 +2243,24 @@ export default function ReportsPage() {
             </Tabs>
           )}
         </div>
+
+      {/* ── 簡報模式（全螢幕投影） ── */}
+      {presentationMode && detailProject && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-background/95 backdrop-blur px-6 py-3">
+            <LayoutDashboard className="h-5 w-5 text-primary" />
+            <span className="font-semibold text-lg">專案重點簡報</span>
+            <span className="text-sm text-muted-foreground">{new Date().toLocaleDateString('zh-TW')}</span>
+            <Button variant="outline" size="sm" className="ml-auto gap-1.5" onClick={() => setPresentationMode(false)}>
+              <Minimize2 className="h-4 w-4" /> 結束簡報
+            </Button>
+          </div>
+          <div className="max-w-[1800px] mx-auto px-8 py-6">
+            <ProjectReportSummary project={detailProject} presentation />
+          </div>
+        </div>
+      )}
+
       {/* ── Help Dialog ── */}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">

@@ -253,6 +253,7 @@ export default function MyTasksPage() {
 
   // Compute user roles across all projects
   const ROLE_TAB_CONFIG: Record<string, { label: string; icon: string; desc: string }> = {
+    MY: { label: '我的任務週報', icon: 'file', desc: '填寫被指派任務的工作週報（不分角色）' },
     A: { label: '當責', icon: 'clipboard', desc: '填寫週報、管理任務' },
     R: { label: '執行', icon: 'wrench', desc: '填寫工作週報' },
     P: { label: '採購', icon: 'shopping-cart', desc: '管理採購資訊' },
@@ -272,10 +273,18 @@ export default function MyTasksPage() {
     return map
   }, [apiProjects])
 
+  // 「我的任務週報」：所有「有指派任務給我」的專案（不分 RACI 角色）
+  const myReportProjects = useMemo(
+    () => apiProjects.filter(p => !!user && p.tasks.some(t => t.assignee === user.name)),
+    [apiProjects, user],
+  )
+
   const availableRoles = useMemo(() => {
-    const order = ['S', 'A', 'P', 'R', 'C', 'I']
-    return order.filter(r => userRolesMap.has(r))
-  }, [userRolesMap])
+    // R 改由「我的任務週報(MY)」涵蓋，所以角色頁籤不再列 R
+    const order = ['S', 'A', 'P', 'C', 'I']
+    const roleTabs = order.filter(r => userRolesMap.has(r))
+    return myReportProjects.length > 0 ? ['MY', ...roleTabs] : roleTabs
+  }, [userRolesMap, myReportProjects])
 
   // Auto-set initial active role
   useEffect(() => {
@@ -285,15 +294,14 @@ export default function MyTasksPage() {
   }, [availableRoles, activeRole])
 
   const roleProjects = useMemo(() => userRolesMap.get(activeRole) || [], [userRolesMap, activeRole])
-  const rProjects = useMemo(() => apiProjects.filter(p => p.userRole === 'R'), [apiProjects])
 
-  // Fetch existing weekly reports for R-role projects
+  // Fetch existing weekly reports for projects where I have assigned tasks
   useEffect(() => {
-    if (!user || rProjects.length === 0) return
+    if (!user || myReportProjects.length === 0) return
     setWeeklyReportLoading(true)
     const fetchReports = async () => {
       const reports: Record<string, { id: string; content: string; blockers: string; nextPlan: string; updatedAt: string }> = {}
-      for (const p of rProjects) {
+      for (const p of myReportProjects) {
         try {
           const res = await fetch(`/api/member-weekly-reports?projectId=${p.id}&userId=${user.id}`)
           if (res.ok) {
@@ -309,7 +317,7 @@ export default function MyTasksPage() {
       setWeeklyReportLoading(false)
     }
     fetchReports()
-  }, [user, rProjects])
+  }, [user, myReportProjects])
 
   // Fetch procurement data for P-role projects
   const pProjects = useMemo(() => apiProjects.filter(p => p.userRole === 'P'), [apiProjects])
@@ -1239,7 +1247,7 @@ export default function MyTasksPage() {
           <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">
             {availableRoles.map(role => {
               const cfg = ROLE_TAB_CONFIG[role]
-              const count = userRolesMap.get(role)?.length || 0
+              const count = role === 'MY' ? myReportProjects.length : (userRolesMap.get(role)?.length || 0)
               return (
                 <button
                   key={role}
@@ -1251,7 +1259,7 @@ export default function MyTasksPage() {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <span className="font-bold">{role}</span>
+                  {role !== 'MY' && <span className="font-bold">{role}</span>}
                   <span>{cfg?.label || role}</span>
                   <span className="text-xs opacity-60">{count}</span>
                 </button>
@@ -1260,8 +1268,8 @@ export default function MyTasksPage() {
           </div>
         )}
 
-        {/* ═══ R Tab — 執行者週報 (Table Layout) ═══ */}
-        {activeRole === 'R' && rProjects.length > 0 && (
+        {/* ═══ 我的任務週報 Tab — 依「被指派任務」(不分角色) ═══ */}
+        {activeRole === 'MY' && myReportProjects.length > 0 && (
           <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1274,7 +1282,7 @@ export default function MyTasksPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rProjects.map(project => {
+                  {myReportProjects.map(project => {
                     // Count user's assigned tasks (non-done milestones)
                     const activeMsIds = new Set(project.milestones.filter(m => m.status !== 'done').map(m => m.id))
                     const myTasks = project.tasks.filter(t => t.assignee === user!.name && activeMsIds.has(t.milestoneId))
@@ -2879,8 +2887,8 @@ export default function MyTasksPage() {
                 <ClipboardList className="h-4 w-4 text-blue-500" /> 頁面說明
               </h3>
               <p className="text-sm text-muted-foreground">
-                此頁面依據您在各專案中的<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色 (SAPRCI)</span> 分頁顯示，
-                每個角色頁籤僅列出您擁有該角色的專案。<span className="text-amber-600 dark:text-amber-400 font-medium">所有系統角色</span>都可以使用此頁面。
+                最前面的<span className="text-blue-600 dark:text-blue-400 font-medium">「我的任務週報」</span>分頁，列出所有<span className="font-medium">有指派任務給您</span>的專案（不分角色），可在此填寫工作週報。
+                其餘分頁依您在各專案中的<span className="text-blue-600 dark:text-blue-400 font-medium">專案角色 (SAPRCI)</span> 顯示，每個角色頁籤僅列出您擁有該角色的專案。
               </p>
             </div>
 
@@ -2899,20 +2907,27 @@ export default function MyTasksPage() {
                   </thead>
                   <tbody>
                     {[
-                      { role: 'S', label: '簽核', desc: '查看專案進度、前往審核中心審核延期', color: 'text-emerald-600 dark:text-emerald-400' },
-                      { role: 'A', label: '當責', desc: '查看所有任務進度、查看 R 成員週報、管理任務', color: 'text-amber-600 dark:text-amber-400' },
-                      { role: 'P', label: '採購', desc: '查看及管理專案的預算項目與資本支出', color: 'text-purple-600 dark:text-purple-400' },
-                      { role: 'R', label: '執行', desc: '填寫工作週報（依任務逐筆紀錄工作內容）', color: 'text-blue-600 dark:text-blue-400' },
-                      { role: 'C', label: '諮詢', desc: '查看專案進度總覽（唯讀）', color: 'text-muted-foreground' },
-                      { role: 'I', label: '知會', desc: '查看專案進度總覽（唯讀）', color: 'text-muted-foreground' },
+                      { role: '', label: '我的任務週報', desc: '填寫「被指派任務」的工作週報（不分角色）', color: 'text-blue-600 dark:text-blue-400', tab: true },
+                      { role: 'S', label: '簽核', desc: '查看專案進度、前往審核中心審核延期', color: 'text-emerald-600 dark:text-emerald-400', tab: true },
+                      { role: 'A', label: '當責', desc: '查看所有任務進度、查看成員週報、管理任務', color: 'text-amber-600 dark:text-amber-400', tab: true },
+                      { role: 'P', label: '採購', desc: '查看及管理專案的預算項目與資本支出', color: 'text-purple-600 dark:text-purple-400', tab: true },
+                      { role: 'R', label: '執行', desc: '執行任務；被指派任務時於「我的任務週報」填報', color: 'text-blue-600 dark:text-blue-400', tab: false },
+                      { role: 'C', label: '諮詢', desc: '查看專案進度總覽（唯讀）', color: 'text-muted-foreground', tab: true },
+                      { role: 'I', label: '知會', desc: '查看專案進度總覽（唯讀）', color: 'text-muted-foreground', tab: true },
                     ].map((r, i) => (
-                      <tr key={r.role} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
+                      <tr key={r.label} className={i % 2 !== 0 ? 'bg-muted/20' : ''}>
                         <td className="px-3 py-2">
-                          <span className={cn('font-bold', r.color)}>{r.role}</span>
-                          <span className="text-muted-foreground ml-1 text-xs">({r.label})</span>
+                          {r.role ? (
+                            <>
+                              <span className={cn('font-bold', r.color)}>{r.role}</span>
+                              <span className="text-muted-foreground ml-1 text-xs">({r.label})</span>
+                            </>
+                          ) : (
+                            <span className={cn('font-medium', r.color)}>{r.label}</span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          <span className="text-emerald-600">✓</span>
+                          {r.tab ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">—</span>}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{r.desc}</td>
                       </tr>
@@ -2942,9 +2957,9 @@ export default function MyTasksPage() {
                     {[
                       { op: '審核延期申請', S: true, A: false, P: false, R: false, CI: false },
                       { op: '查看所有任務進度', S: false, A: true, P: false, R: false, CI: false },
-                      { op: '查看 R 成員週報', S: false, A: true, P: false, R: false, CI: false },
+                      { op: '查看成員週報', S: false, A: true, P: false, R: false, CI: false },
                       { op: '管理預算/資本支出', S: false, A: false, P: true, R: false, CI: false },
-                      { op: '填寫工作週報', S: false, A: false, P: false, R: true, CI: false },
+                      { op: '填寫工作週報（有被指派任務時，不分角色）', S: true, A: true, P: true, R: true, CI: true },
                       { op: '查看專案概況', S: true, A: true, P: true, R: true, CI: true },
                       { op: '前往甘特圖', S: true, A: true, P: true, R: true, CI: true },
                     ].map((r, i) => (
