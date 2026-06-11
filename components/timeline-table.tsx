@@ -539,7 +539,7 @@ function TaskRow({
           <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
             <SelectValue placeholder="—" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-[200px]">
             <SelectItem value=" ">未指派</SelectItem>
             {teamMembers.filter(m => m.name.trim()).map((m) => (
               <SelectItem key={m.id} value={m.name}>
@@ -683,7 +683,7 @@ function InlineTaskInput({
             <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5 text-muted-foreground">
               <SelectValue placeholder="—" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-[200px]">
               <SelectItem value=" ">未指派</SelectItem>
               {teamMembers.map((m) => (
                 <SelectItem key={m.id} value={m.name}>
@@ -827,7 +827,7 @@ function SubtaskRow({
           <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
             <SelectValue placeholder="—" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-[200px]">
             <SelectItem value=" ">未指派</SelectItem>
             {teamMembers.filter(m => m.name.trim()).map((m) => (
               <SelectItem key={m.id} value={m.name}>
@@ -973,7 +973,7 @@ function InlineSubtaskInput({
             <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5 text-muted-foreground">
               <SelectValue placeholder="—" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-[200px]">
               <SelectItem value=" ">未指派</SelectItem>
               {teamMembers.map((m) => (
                 <SelectItem key={m.id} value={m.name}>

@@ -172,8 +172,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
   const barStyle = (start: string, end: string) => {
     const left = toPercent(start)
-    const right = toPercent(end)
-    return { left: `${left}%`, width: `${Math.max(right - left, 0.6)}%` }
+    // 結束日「含當天」：右緣算到結束日的隔天起點，避免長條短一天、
+    // 以及同日/單日長條被最小寬度撐到凸出規劃結束日。
+    const endNext = new Date(end)
+    endNext.setDate(endNext.getDate() + 1)
+    const right = toPercent(endNext.toISOString().split('T')[0])
+    // 最小寬度只當「避免 0 寬」的安全值；不可大到讓單日長條凸出結束日
+    // （寬視圖下 1 天可能 < 0.6%，舊值 0.6 會把實際長條撐出去一天）。
+    return { left: `${left}%`, width: `${Math.max(right - left, 0.1)}%` }
   }
 
   // Today line
