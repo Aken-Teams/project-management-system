@@ -826,6 +826,69 @@ export default function MyTasksPage() {
     }
   }
 
+  // R dialog: 刪除工作紀錄列 / 附件（含確認視窗 + 實體刪檔）
+  const [rPendingDelete, setRPendingDelete] = useState<
+    | { kind: 'row'; idx: number }
+    | { kind: 'att'; rowIdx: number; attIdx: number }
+    | null
+  >(null)
+  const [rDeleting, setRDeleting] = useState(false)
+
+  const deleteUploadedFile = (url?: string) =>
+    url ? fetch(`/api/upload?url=${encodeURIComponent(url)}`, { method: 'DELETE' }).catch(() => {}) : Promise.resolve()
+
+  const refreshRReportData = async () => {
+    if (!user || !rReportDialogProject) return
+    const res = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+    if (res.ok) {
+      const data = await res.json()
+      setApiProjects(data.projects ?? [])
+      const updated = (data.projects ?? []).find((p: MyTasksProject) => p.id === rReportDialogProject.id)
+      if (updated) setRReportDialogProject(updated)
+    }
+  }
+
+  const performRDelete = async () => {
+    if (!rPendingDelete || !rReportDialogProject) return
+    setRDeleting(true)
+    try {
+      if (rPendingDelete.kind === 'row') {
+        const row = rLogRows[rPendingDelete.idx]
+        if (row?.existingLogId) {
+          await fetch(`/api/projects/${rReportDialogProject.id}/task-logs/${row.existingLogId}`, { method: 'DELETE' })
+          await refreshRReportData()
+        }
+        await Promise.all((row?.attachments || []).map(a => deleteUploadedFile(a.url)))
+        setRLogRows(prev => {
+          const next = prev.filter((_, i) => i !== rPendingDelete.idx)
+          return next.length > 0 ? next : [{ date: '', content: '' }]
+        })
+      } else {
+        const { rowIdx, attIdx } = rPendingDelete
+        const row = rLogRows[rowIdx]
+        const removed = row?.attachments?.[attIdx]
+        const newAtts = (row?.attachments || []).filter((_, i) => i !== attIdx)
+        if (row?.existingLogId) {
+          await fetch(`/api/projects/${rReportDialogProject.id}/task-logs/${row.existingLogId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachments: newAtts }),
+          })
+          await refreshRReportData()
+        }
+        await deleteUploadedFile(removed?.url)
+        setRLogRows(prev => prev.map((r, i) =>
+          i === rowIdx ? { ...r, attachments: newAtts.length ? newAtts : undefined } : r
+        ))
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRDeleting(false)
+      setRPendingDelete(null)
+    }
+  }
+
   // R dialog: batch submit logs (same API as Gantt chart)
   const handleRBatchSubmitLogs = async () => {
     if (!rSelectedTaskId || !user || !rReportDialogProject) return
@@ -2168,6 +2231,30 @@ export default function MyTasksPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* 刪除 R 週報填寫中的工作紀錄列 / 附件確認 */}
+      <AlertDialog open={!!rPendingDelete} onOpenChange={open => { if (!open && !rDeleting) setRPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{rPendingDelete?.kind === 'att' ? '確認刪除附件' : '確認刪除工作紀錄'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {rPendingDelete?.kind === 'att'
+                ? '確定要刪除這個附件嗎？此操作無法復原。'
+                : '確定要刪除這筆工作紀錄嗎？此操作無法復原。'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={rDeleting}
+              onClick={(e) => { e.preventDefault(); performRDelete() }}
+            >
+              {rDeleting ? '刪除中…' : '刪除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Milestone Date Change Dialog ── */}
       <Dialog open={msDateDialogOpen} onOpenChange={open => { if (!open) { setMsDateDialogOpen(false); setMsDateDialogData(null) } }}>
         <DialogContent className="max-w-md">
@@ -2428,16 +2515,34 @@ export default function MyTasksPage() {
                                                 {attCount > 0 && (
                                                   <div className="flex flex-wrap gap-1 mt-1">
                                                     {row.attachments!.map((att, ai) => att.type === 'image' ? (
-                                                      <a key={ai} href={att.url} target="_blank" rel="noopener">
-                                                        <img src={att.url} alt={att.name} className="h-7 w-7 rounded object-cover border hover:opacity-80" />
-                                                      </a>
+                                                      <div key={ai} className="relative group/att">
+                                                        <a href={att.url} target="_blank" rel="noopener">
+                                                          <img src={att.url} alt={att.name} className="h-7 w-7 rounded object-cover border hover:opacity-80" />
+                                                        </a>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => setRPendingDelete({ kind: 'att', rowIdx: idx, attIdx: ai })}
+                                                          className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                                                          title="刪除附件"
+                                                        >
+                                                          <X className="h-2 w-2" />
+                                                        </button>
+                                                      </div>
                                                     ) : (
-                                                      <a key={ai} href={att.url} target="_blank" rel="noopener"
-                                                        className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px] hover:bg-muted/80"
-                                                      >
-                                                        <Paperclip className="h-2.5 w-2.5 shrink-0" />
-                                                        <span className="truncate max-w-[50px]">{att.name}</span>
-                                                      </a>
+                                                      <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px]">
+                                                        <a href={att.url} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
+                                                          <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                                                          <span className="truncate max-w-[50px]">{att.name}</span>
+                                                        </a>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => setRPendingDelete({ kind: 'att', rowIdx: idx, attIdx: ai })}
+                                                          className="shrink-0 text-muted-foreground/60 hover:text-destructive"
+                                                          title="刪除附件"
+                                                        >
+                                                          <X className="h-2.5 w-2.5" />
+                                                        </button>
+                                                      </div>
                                                     ))}
                                                   </div>
                                                 )}
@@ -2478,14 +2583,14 @@ export default function MyTasksPage() {
                                                 </button>
                                               </td>
                                               <td className="px-0 py-1.5 align-top text-center">
-                                                {rLogRows.length > 1 ? (
+                                                {(row.existingLogId || rLogRows.length > 1) ? (
                                                   <button
                                                     type="button"
-                                                    onClick={() => setRLogRows(rLogRows.filter((_, i) => i !== idx))}
+                                                    onClick={() => setRPendingDelete({ kind: 'row', idx })}
                                                     className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                                    title="移除此列"
+                                                    title={row.existingLogId ? '刪除此紀錄' : '移除此列'}
                                                   >
-                                                    <X className="h-3.5 w-3.5" />
+                                                    <Trash2 className="h-3.5 w-3.5" />
                                                   </button>
                                                 ) : <div className="w-[34px] h-[34px]" />}
                                               </td>

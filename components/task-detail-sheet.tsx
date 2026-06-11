@@ -495,6 +495,61 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     setImportSubLogsOpen(false)
   }
 
+  // ── 刪除工作紀錄列 / 附件（含確認視窗）──
+  const [pendingDelete, setPendingDelete] = useState<
+    | { kind: 'row'; idx: number }
+    | { kind: 'att'; rowIdx: number; attIdx: number }
+    | null
+  >(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // 刪除 public/uploads 內的實體檔案（避免孤兒檔）
+  const deleteUploadedFile = (url?: string) =>
+    url ? fetch(`/api/upload?url=${encodeURIComponent(url)}`, { method: 'DELETE' }).catch(() => {}) : Promise.resolve()
+
+  const performDelete = async () => {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      if (pendingDelete.kind === 'row') {
+        const row = logRows[pendingDelete.idx]
+        // 已存進 DB 的紀錄 → 真的刪除；草稿列 → 只移除本地。整列的附件實體檔也一併刪。
+        if (row?.existingLogId) {
+          await fetch(`/api/projects/${project.id}/task-logs/${row.existingLogId}`, { method: 'DELETE' })
+          onTaskUpdate?.()
+        }
+        await Promise.all((row?.attachments || []).map(a => deleteUploadedFile(a.url)))
+        setLogRows(prev => {
+          const next = prev.filter((_, i) => i !== pendingDelete.idx)
+          return next.length > 0 ? next : [{ date: '', content: '' }]
+        })
+      } else {
+        const { rowIdx, attIdx } = pendingDelete
+        const row = logRows[rowIdx]
+        const removed = row?.attachments?.[attIdx]
+        const newAtts = (row?.attachments || []).filter((_, i) => i !== attIdx)
+        // 已存進 DB 的紀錄 → 即時更新附件；草稿列 → 只改本地
+        if (row?.existingLogId) {
+          await fetch(`/api/projects/${project.id}/task-logs/${row.existingLogId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ attachments: newAtts }),
+          })
+          onTaskUpdate?.()
+        }
+        await deleteUploadedFile(removed?.url)
+        setLogRows(prev => prev.map((r, i) =>
+          i === rowIdx ? { ...r, attachments: newAtts.length ? newAtts : undefined } : r
+        ))
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeleting(false)
+      setPendingDelete(null)
+    }
+  }
+
   // ── Batch log submission (weekly) ──
   const handleBatchSubmitLogs = async () => {
     if (!task || !user) return
@@ -1077,20 +1132,38 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                       {row.existingLogId && (
                                         <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
                                       )}
-                                      {/* Attachment thumbnails under date */}
+                                      {/* Attachment thumbnails under date（可刪除） */}
                                       {attCount > 0 && (
                                         <div className="flex flex-wrap gap-1 mt-1">
                                           {row.attachments!.map((att, ai) => att.type === 'image' ? (
-                                            <a key={ai} href={att.url} target="_blank" rel="noopener">
-                                              <img src={att.url} alt={att.name} className="h-7 w-7 rounded object-cover border hover:opacity-80" />
-                                            </a>
+                                            <div key={ai} className="relative group/att">
+                                              <a href={att.url} target="_blank" rel="noopener">
+                                                <img src={att.url} alt={att.name} className="h-7 w-7 rounded object-cover border hover:opacity-80" />
+                                              </a>
+                                              <button
+                                                type="button"
+                                                onClick={() => setPendingDelete({ kind: 'att', rowIdx: idx, attIdx: ai })}
+                                                className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                                                title="刪除附件"
+                                              >
+                                                <X className="h-2 w-2" />
+                                              </button>
+                                            </div>
                                           ) : (
-                                            <a key={ai} href={att.url} target="_blank" rel="noopener"
-                                              className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px] hover:bg-muted/80"
-                                            >
-                                              <Paperclip className="h-2.5 w-2.5 shrink-0" />
-                                              <span className="truncate max-w-[50px]">{att.name}</span>
-                                            </a>
+                                            <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px]">
+                                              <a href={att.url} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
+                                                <Paperclip className="h-2.5 w-2.5 shrink-0" />
+                                                <span className="truncate max-w-[50px]">{att.name}</span>
+                                              </a>
+                                              <button
+                                                type="button"
+                                                onClick={() => setPendingDelete({ kind: 'att', rowIdx: idx, attIdx: ai })}
+                                                className="shrink-0 text-muted-foreground/60 hover:text-destructive"
+                                                title="刪除附件"
+                                              >
+                                                <X className="h-2.5 w-2.5" />
+                                              </button>
+                                            </div>
                                           ))}
                                         </div>
                                       )}
@@ -1132,14 +1205,14 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                       </button>
                                     </td>
                                     <td className="px-0 py-1.5 align-top text-center">
-                                      {logRows.length > 1 ? (
+                                      {(row.existingLogId || logRows.length > 1) ? (
                                         <button
                                           type="button"
-                                          onClick={() => setLogRows(logRows.filter((_, i) => i !== idx))}
+                                          onClick={() => setPendingDelete({ kind: 'row', idx })}
                                           className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                          title="移除此列"
+                                          title={row.existingLogId ? '刪除此紀錄' : '移除此列'}
                                         >
-                                          <X className="h-3.5 w-3.5" />
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </button>
                                       ) : <div className="w-[34px] h-[34px]" />}
                                     </td>
@@ -2238,6 +2311,30 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
               onClick={handleConfirmDeleteLog}
             >
               刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 刪除填寫中的工作紀錄列 / 附件確認 */}
+      <AlertDialog open={!!pendingDelete} onOpenChange={open => { if (!open && !deleting) setPendingDelete(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingDelete?.kind === 'att' ? '確認刪除附件' : '確認刪除工作紀錄'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete?.kind === 'att'
+                ? '確定要刪除這個附件嗎？此操作無法復原。'
+                : '確定要刪除這筆工作紀錄嗎？此操作無法復原。'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={(e) => { e.preventDefault(); performDelete() }}
+            >
+              {deleting ? '刪除中…' : '刪除'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
