@@ -2550,6 +2550,12 @@ export default function MyTasksPage() {
                                               </td>
                                               <td className="px-1.5 py-1.5 align-top">
                                                 <textarea
+                                                  ref={(el) => {
+                                                    if (!el) return
+                                                    el.style.height = '34px'
+                                                    el.style.height = Math.min(el.scrollHeight, 240) + 'px'
+                                                    el.style.overflowY = el.scrollHeight > 240 ? 'auto' : 'hidden'
+                                                  }}
                                                   placeholder="工作內容..."
                                                   value={row.content}
                                                   onChange={e => {
@@ -2557,11 +2563,11 @@ export default function MyTasksPage() {
                                                     updated[idx] = { ...updated[idx], content: e.target.value }
                                                     setRLogRows(updated)
                                                     e.target.style.height = '34px'
-                                                    e.target.style.height = e.target.scrollHeight + 'px'
+                                                    e.target.style.height = Math.min(e.target.scrollHeight, 240) + 'px'
+                                                    e.target.style.overflowY = e.target.scrollHeight > 240 ? 'auto' : 'hidden'
                                                   }}
                                                   rows={1}
                                                   className="w-full min-h-[34px] text-xs resize-none border rounded-md bg-background px-2 py-[7px] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
-                                                  style={{ overflow: 'hidden' }}
                                                 />
                                               </td>
                                               <td className="px-0.5 py-1.5 align-top text-center">

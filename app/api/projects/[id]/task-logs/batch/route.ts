@@ -73,11 +73,12 @@ export async function POST(
           })
           updated.push(entry.existingLogId)
         } else {
-          // Check if a log already exists for this date+task (upsert by date)
+          // 同一任務+同一天+同一作者才視為同一筆（A 與 R 各自獨立，不互相覆蓋）
           const existing = await tx.taskLog.findFirst({
             where: {
               taskId: body.taskId,
               logDate: new Date(entry.logDate),
+              authorId: user.id,
             },
           })
 
@@ -114,7 +115,7 @@ export async function POST(
         const latestDate = sortedEntries[0]?.logDate
         if (latestDate) {
           const latestLog = await tx.taskLog.findFirst({
-            where: { taskId: body.taskId, logDate: new Date(latestDate) },
+            where: { taskId: body.taskId, logDate: new Date(latestDate), authorId: user.id },
           })
           if (latestLog) {
             await tx.taskLog.update({

@@ -161,6 +161,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [rReportCopied, setRReportCopied] = useState(false)
 
+  // 審核者模式：可編輯週報的人(專案A / 系統 pm / 系統 admin)。系統角色優先：
+  // 這些人視為「審核者(A)」——自己寫的紀錄歸到 R 週報、不自動載入填寫表。
+  const isReviewer = !readOnly
+
   // Helper: compute R members' logs for the current log week (used in both tabs)
   const rMemberLogs = useMemo(() => {
     if (!task) return { weekLogs: [] as TaskLog[], byAuthor: new Map<string, TaskLog[]>(), targetTaskMap: new Map<string, { title: string; assignee: string }>(), tasksWithoutLogs: [] as [string, { title: string; assignee: string }][] }
@@ -176,16 +180,17 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       taskMap.set(mt.id, { title: mt.title, assignee: mt.assignee })
       if (mt.subtasks) { for (const sub of mt.subtasks) taskMap.set(sub.id, { title: sub.title, assignee: sub.assignee }) }
     }
+    // 審核者(A/admin/pm)連自己寫的也算 R 紀錄；一般人只看別人的
     const logs = project.taskLogs
-      .filter(l => milestoneTaskIds.has(l.taskId) && l.logDate >= wkStart && l.logDate <= wkEnd && l.author !== user?.name)
+      .filter(l => milestoneTaskIds.has(l.taskId) && l.logDate >= wkStart && l.logDate <= wkEnd && (isReviewer || l.author !== user?.name))
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
     const grouped = new Map<string, TaskLog[]>()
     for (const log of logs) { if (!grouped.has(log.author)) grouped.set(log.author, []); grouped.get(log.author)!.push(log) }
-    const otherTasks = Array.from(taskMap.entries()).filter(([, info]) => info.assignee && info.assignee !== user?.name)
+    const otherTasks = Array.from(taskMap.entries()).filter(([, info]) => info.assignee && (isReviewer || info.assignee !== user?.name))
     const withLogs = new Set(logs.map(l => l.taskId))
     const without = otherTasks.filter(([id]) => !withLogs.has(id))
     return { weekLogs: logs, byAuthor: grouped, targetTaskMap: taskMap, tasksWithoutLogs: without }
-  }, [task, selectedWeekStart, project.tasks, project.taskLogs, user?.name])
+  }, [task, selectedWeekStart, project.tasks, project.taskLogs, user?.name, isReviewer])
 
   const buildRReportText = useCallback(() => {
     const lines: string[] = []
@@ -380,8 +385,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     const [y, m, d] = selectedWeekStart.split('-').map(Number)
     const weekStart = fmtLocalDate(new Date(y, m - 1, d))
     const weekEnd = fmtLocalDate(new Date(y, m - 1, d + 6))
-    // 只載「自己」填的紀錄；別人(R)的不自動代入，要由「R 週報」按鈕匯入
-    const logs = project.taskLogs
+    // 只載「自己」填的紀錄；別人(R)的不自動代入，要由「R 週報」按鈕匯入。
+    // 審核者(A/admin/pm)更不自動載入——自己寫的也歸 R 週報，填寫表保持空白。
+    const logs = isReviewer ? [] : project.taskLogs
       .filter(l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd && l.author === user?.name)
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
     if (logs.length > 0) {
@@ -402,7 +408,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       setLogRows([{ date: '', content: '' }])
       setLogNextWeekPlan('')
     }
-  }, [selectedWeekStart, task?.id, open, project.taskLogs, fmtLocalDate, user?.name]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedWeekStart, task?.id, open, project.taskLogs, fmtLocalDate, user?.name, isReviewer]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // File upload for batch log rows
   const rowFileInputRef = useRef<HTMLInputElement>(null)
@@ -1171,19 +1177,25 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                     </td>
                                     <td className="px-1.5 py-1.5 align-top">
                                       <textarea
+                                        // 依內容自動長高（含程式代入的長文），最高 240px 後內捲
+                                        ref={(el) => {
+                                          if (!el) return
+                                          el.style.height = '34px'
+                                          el.style.height = Math.min(el.scrollHeight, 240) + 'px'
+                                          el.style.overflowY = el.scrollHeight > 240 ? 'auto' : 'hidden'
+                                        }}
                                         placeholder="工作內容..."
                                         value={row.content}
                                         onChange={e => {
                                           const updated = [...logRows]
                                           updated[idx] = { ...updated[idx], content: e.target.value }
                                           setLogRows(updated)
-                                          // Auto-resize height
                                           e.target.style.height = '34px'
-                                          e.target.style.height = e.target.scrollHeight + 'px'
+                                          e.target.style.height = Math.min(e.target.scrollHeight, 240) + 'px'
+                                          e.target.style.overflowY = e.target.scrollHeight > 240 ? 'auto' : 'hidden'
                                         }}
                                         rows={1}
                                         className="w-full min-h-[34px] text-xs resize-none border rounded-md bg-background px-2 py-[7px] focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/30"
-                                        style={{ overflow: 'hidden' }}
                                       />
                                     </td>
                                     <td className="px-0.5 py-1.5 align-top text-center">
@@ -1631,7 +1643,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     if (mt.subtasks) { for (const sub of mt.subtasks) targetTaskMap.set(sub.id, { title: sub.title, assignee: sub.assignee }) }
                   }
                   const weekLogs = project.taskLogs
-                    .filter(l => milestoneTaskIds.has(l.taskId) && l.logDate >= wkStart && l.logDate <= wkEnd && (readOnly || l.author !== user?.name))
+                    .filter(l => milestoneTaskIds.has(l.taskId) && l.logDate >= wkStart && l.logDate <= wkEnd && (readOnly || isReviewer || l.author !== user?.name))
                     .sort((a, b) => a.logDate.localeCompare(b.logDate))
                   const byAuthor = new Map<string, typeof weekLogs>()
                   for (const log of weekLogs) { if (!byAuthor.has(log.author)) byAuthor.set(log.author, []); byAuthor.get(log.author)!.push(log) }
