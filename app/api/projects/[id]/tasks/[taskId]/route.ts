@@ -16,10 +16,12 @@ interface UpdateTaskBody {
   startDate?: string
   endDate?: string
   milestoneId?: string
+  parentId?: string | null
   status?: string
   progress?: number
   sortOrder?: number
   durationDays?: number
+  completedAt?: string
   completedBy?: string
   manualDates?: boolean
 }
@@ -84,6 +86,15 @@ export async function PUT(
       const ms = await prisma.milestone.findFirst({ where: { id: body.milestoneId, projectId: id } })
       if (!ms) return NextResponse.json({ error: '找不到該里程碑' }, { status: 404 })
       data.milestoneId = body.milestoneId
+    }
+    if (body.parentId !== undefined) {
+      if (body.parentId === null) {
+        data.parentId = null
+      } else {
+        const parent = await prisma.task.findFirst({ where: { id: body.parentId, projectId: id } })
+        if (!parent) return NextResponse.json({ error: '找不到上層任務' }, { status: 404 })
+        data.parentId = body.parentId
+      }
     }
 
     if (Object.keys(data).length === 0) {

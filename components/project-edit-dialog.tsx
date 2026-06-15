@@ -15,6 +15,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,7 +34,7 @@ import {
 import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign, BarChart3, CornerDownRight } from 'lucide-react'
 import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/components/budget-list-editor'
 import { GanttChart } from '@/components/gantt-chart'
-import { TimelineTable, type TimelineTeamMember, type OverflowInfo } from '@/components/timeline-table'
+import { TimelineTable, type TimelineTeamMember, type OverflowInfo, type DropMode } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, dbToTimelineState, computeWorkItemsDiff, daysBetween } from '@/lib/timeline-utils'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
@@ -212,6 +222,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const [tlTasks, setTlTasks] = useState(tlInit.tasks)
   const [workItemError, setWorkItemError] = useState('')
   const [ganttPreviewOpen, setGanttPreviewOpen] = useState(false)
+  // Pending drag-move that needs confirmation (flattens subtasks)
+  const [pendingMove, setPendingMove] = useState<{ tasks: typeof tlTasks; milestones: typeof tlMilestones; toast?: string } | null>(null)
   // ─── Date change approval state ──────────────────────────
   const { user } = useAuth()
   const [dateChangeDialogOpen, setDateChangeDialogOpen] = useState(false)
@@ -360,15 +372,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   type WorkItemsDiff = ReturnType<typeof computeWorkItemsDiff>
 
   const executeBatchSave = async (diff: WorkItemsDiff) => {
-    // 1. Delete tasks first (milestone DELETE rejects if tasks exist)
-    for (const taskId of diff.tasksToDelete) {
-      await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
-    }
-    // 2. Delete milestones
-    for (const msId of diff.milestonesToDelete) {
-      await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
-    }
-    // 3. Create new milestones → collect real IDs
+    // Order matters for the drag-move feature: a milestone/parent-task delete
+    // CASCADES to its children. So we create + update everything first (which
+    // reparents any children OFF a milestone/task that is about to be deleted),
+    // and only delete at the very end — by then the deleted item is empty.
+    // 1. Create new milestones → collect real IDs
     const newMsIdMap = new Map<string, string>()
     for (const ms of diff.milestonesToAdd) {
       const res = await fetch(`/api/projects/${project.id}/milestones`, {
@@ -382,7 +390,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         if (draftMs) newMsIdMap.set(draftMs.id, created.id)
       }
     }
-    // 4. Update existing milestones
+    // 2. Update existing milestones
     for (const ms of diff.milestonesToUpdate) {
       await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
         method: 'PUT',
@@ -390,7 +398,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         body: JSON.stringify(ms),
       })
     }
-    // 5. Create new tasks (resolve draft milestone/parent IDs)
+    // 3. Create new tasks (resolve draft milestone/parent IDs)
     const newTaskIdMap = new Map<string, string>()
     for (const task of diff.tasksToAdd) {
       const resolvedMsId = newMsIdMap.get(task.milestoneId) || task.milestoneId
@@ -407,13 +415,24 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
         newTaskIdMap.set(task.tempId, created.id)
       }
     }
-    // 6. Update existing tasks
+    // 4. Update existing tasks (resolve draft milestone/parent IDs from this session)
     for (const task of diff.tasksToUpdate) {
+      const resolved: typeof task = { ...task }
+      if (task.milestoneId) resolved.milestoneId = newMsIdMap.get(task.milestoneId) || task.milestoneId
+      if (task.parentId) resolved.parentId = newTaskIdMap.get(task.parentId) || task.parentId
       await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(task),
+        body: JSON.stringify(resolved),
       })
+    }
+    // 5. Delete tasks (children already reparented away above; safe now)
+    for (const taskId of diff.tasksToDelete) {
+      await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
+    }
+    // 6. Delete milestones (their tasks already moved/deleted; now empty)
+    for (const msId of diff.milestonesToDelete) {
+      await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
     }
     // 7. Rebuild sequential task dependencies on ANY work item change
     const hasAnyWorkItemChange =
@@ -829,6 +848,161 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   const handleTlMilestoneReorder = useCallback((oldIdx: number, newIdx: number) => {
     setTlMilestones(prev => arrayMove(prev, oldIdx, newIdx))
   }, [])
+
+  // ─── Tree drag-move: reparent / convert between 子任務 · 任務 · 里程碑 ───
+  // Dates are preserved by anchoring the moved item to its currently-computed
+  // start/end (explicit startDate + durationDays), so it keeps the same dates
+  // wherever it lands. Parents remain envelopes of their children.
+  // 方案 B（整包搬移／資料夾式）：拖父層時子層整組跟著走。當降階會讓子任務
+  // 超出兩層（里程碑▸任務▸子任務），把多出來的層壓平成同一層的子任務。
+  // 日期一律錨定，搬移後不變。回傳結果與是否需要「壓平確認」。
+  const computeMove = (activeId: string, overId: string, mode: DropMode):
+    { tasks: typeof tlTasks; milestones: typeof tlMilestones; flatten: boolean; toast?: string } | null => {
+    if (activeId === overId) return null
+    type TT = (typeof tlTasks)[number]
+    const span = (s?: string, e?: string, fallback = 1) =>
+      s && e ? Math.max(1, Math.round((new Date(e).getTime() - new Date(s).getTime()) / 86400000) + 1) : fallback
+
+    const activeMs = tlMilestones.find(m => m.id === activeId)
+    const activeTask = tlTasks.find(t => t.id === activeId)
+    const overMs = tlMilestones.find(m => m.id === overId)
+    const overTask = tlTasks.find(t => t.id === overId)
+    if (!activeMs && !activeTask) return null
+
+    const anchor = (t: TT): TT => {
+      const d = tlTaskDates.get(t.id)
+      return d?.startDate && d?.endDate
+        ? { ...t, startDate: d.startDate, durationDays: span(d.startDate, d.endDate), manualDates: false }
+        : { ...t }
+    }
+
+    // dragged subtree: direct task children (for a milestone) + all subtask-level descendants
+    const childTasks = activeMs ? tlTasks.filter(t => t.milestoneId === activeId && !t.parentId) : []
+    const childIds = new Set(childTasks.map(c => c.id))
+    const subDesc = activeMs
+      ? tlTasks.filter(t => t.parentId && childIds.has(t.parentId))
+      : tlTasks.filter(t => t.parentId === activeId)
+    const subtreeIds = new Set<string>([activeId, ...childTasks.map(c => c.id), ...subDesc.map(s => s.id)])
+    if (subtreeIds.has(overId)) return null // can't drop into itself / its own subtree
+
+    // ── Milestone dropped on a milestone edge → reorder (stays a milestone) ──
+    if (activeMs && overMs && mode !== 'inside') {
+      const oldIdx = tlMilestones.findIndex(m => m.id === activeId)
+      const newIdx = tlMilestones.findIndex(m => m.id === overId)
+      if (oldIdx === -1 || newIdx === -1) return null
+      return { tasks: tlTasks, milestones: arrayMove(tlMilestones, oldIdx, newIdx), flatten: false }
+    }
+
+    // ── Task dropped on a milestone edge → promote to a NEW milestone ──
+    if (activeTask && overMs && mode !== 'inside') {
+      const d = tlTaskDates.get(activeId)
+      const newMsId = `draft-ms-${Date.now()}`
+      const newMs = { id: newMsId, name: activeTask.title || '新里程碑', durationDays: span(d?.startDate, d?.endDate, activeTask.durationDays || 1), startDate: d?.startDate, manualDates: false }
+      const movedSubs = subDesc.map(s => ({ ...anchor(s), parentId: undefined, milestoneId: newMsId }))
+      const rest = tlTasks.filter(t => !subtreeIds.has(t.id))
+      const newMilestones = [...tlMilestones]
+      const at = tlMilestones.findIndex(m => m.id === overMs.id)
+      newMilestones.splice(mode === 'before' ? at : at + 1, 0, newMs)
+      return { tasks: [...rest, ...movedSubs], milestones: newMilestones, flatten: false, toast: `已將「${activeTask.title}」升為里程碑` }
+    }
+
+    // ── General: place the dragged item as a TASK or SUBTASK at the target ──
+    let rootLevel: 'task' | 'subtask'
+    let targetParentId: string | undefined
+    let targetMs: string
+    if (overMs && mode === 'inside') { rootLevel = 'task'; targetParentId = undefined; targetMs = overMs.id }
+    else if (overTask) {
+      const overIsSub = !!overTask.parentId
+      targetMs = overTask.milestoneId
+      if (mode === 'inside' && !overIsSub) { rootLevel = 'subtask'; targetParentId = overTask.id }
+      else if (overIsSub) { rootLevel = 'subtask'; targetParentId = overTask.parentId }
+      else { rootLevel = 'task'; targetParentId = undefined }
+    } else return null
+
+    // build the root as a task (a milestone becomes a brand-new draft task)
+    let removeMsId: string | null = null
+    let rootTask: TT
+    if (activeMs) {
+      const md = recalcMilestones.find(m => m.id === activeId)
+      rootTask = {
+        id: `draft-task-${Date.now()}`, milestoneId: targetMs, title: activeMs.name || '新任務',
+        assignee: '', priority: 'medium', durationDays: span(md?.startDate, md?.endDate, activeMs.durationDays || 1),
+        startDate: md?.startDate, manualDates: false,
+      } as TT
+      removeMsId = activeId
+    } else {
+      rootTask = { ...anchor(activeTask as TT), milestoneId: targetMs }
+    }
+
+    // descendants in visual (document) order — each task immediately followed by
+    // its own subtasks — so flattening keeps the on-screen order (no reshuffling).
+    const allDesc: TT[] = activeMs
+      ? childTasks.flatMap(ct => [ct, ...tlTasks.filter(x => x.parentId === ct.id)])
+      : subDesc
+    let movedSubs: TT[]
+    let flatten = false
+    if (rootLevel === 'task') {
+      rootTask = { ...rootTask, parentId: undefined }
+      // children → subtasks of root; grandchildren get flattened up to the same level
+      movedSubs = allDesc.map(s => ({ ...anchor(s), parentId: rootTask.id, milestoneId: targetMs }))
+      flatten = !!activeMs && subDesc.length > 0 // milestone whose tasks had subtasks
+    } else {
+      rootTask = { ...rootTask, parentId: targetParentId }
+      // root becomes a subtask → ALL its descendants flatten to siblings
+      movedSubs = allDesc.map(s => ({ ...anchor(s), parentId: targetParentId, milestoneId: targetMs }))
+      flatten = allDesc.length > 0
+    }
+
+    const rest = tlTasks.filter(t => !subtreeIds.has(t.id))
+    const blockEnd = (arr: TT[], id: string) => { let i = -1; arr.forEach((t, k) => { if (t.id === id || t.parentId === id) i = k }); return i }
+    let at: number
+    if (overMs && mode === 'inside') { let i = -1; rest.forEach((t, k) => { if (t.milestoneId === overMs.id) i = k }); at = i + 1 }
+    else {
+      const ot = overTask as TT
+      const overIdx = rest.findIndex(t => t.id === ot.id)
+      const overIsSub = !!ot.parentId
+      if (mode === 'inside' && !overIsSub) at = blockEnd(rest, ot.id) + 1
+      else if (overIsSub) at = mode === 'before' ? overIdx : overIdx + 1
+      else at = mode === 'before' ? overIdx : blockEnd(rest, ot.id) + 1
+    }
+    const newTasks = [...rest]
+    newTasks.splice(at < 0 ? newTasks.length : at, 0, rootTask, ...movedSubs)
+    const newMilestones = removeMsId ? tlMilestones.filter(m => m.id !== removeMsId) : tlMilestones
+    return { tasks: newTasks, milestones: newMilestones, flatten }
+  }
+
+  const applyMove = (r: { tasks: typeof tlTasks; milestones: typeof tlMilestones; toast?: string }) => {
+    setTlTasks(r.tasks)
+    setTlMilestones(r.milestones)
+    if (r.toast) toast.success(r.toast)
+  }
+
+  const runMove = (r: ReturnType<typeof computeMove>) => {
+    if (!r) return
+    if (r.flatten) setPendingMove(r) // needs "flatten subtasks" confirmation
+    else applyMove(r)
+  }
+
+  const handleItemMove = (activeId: string, overId: string, mode: DropMode) => {
+    runMove(computeMove(activeId, overId, mode))
+  }
+
+  // One-click indent: make a top-level task a subtask of the task directly above it.
+  const handleIndent = (taskId: string) => {
+    const t = tlTasks.find(x => x.id === taskId)
+    if (!t || t.parentId) return
+    const tops = tlTasks.filter(x => x.milestoneId === t.milestoneId && !x.parentId)
+    const idx = tops.findIndex(x => x.id === taskId)
+    if (idx <= 0) { toast.info('上方沒有可作為父層的任務'); return }
+    runMove(computeMove(taskId, tops[idx - 1].id, 'inside'))
+  }
+
+  // One-click outdent: promote a subtask back to a task, placed right after its old parent.
+  const handleOutdent = (taskId: string) => {
+    const t = tlTasks.find(x => x.id === taskId)
+    if (!t || !t.parentId) return
+    runMove(computeMove(taskId, t.parentId, 'after'))
+  }
 
   // ─── Bubble-up: child changes → auto-adjust parent duration ───
   // subtask change → parent task adjusts; task change → milestone adjusts.
@@ -1680,6 +1854,9 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onTaskDateChange={handleTlTaskDateChange}
               onTaskToggleLock={handleTlTaskToggleLock}
               onGanttPreview={() => setGanttPreviewOpen(true)}
+              onItemMove={handleItemMove}
+              onIndent={handleIndent}
+              onOutdent={handleOutdent}
             />
 
             {workItemError && (
@@ -1955,6 +2132,51 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 壓平子任務確認 */}
+      <AlertDialog open={!!pendingMove} onOpenChange={(o) => { if (!o) setPendingMove(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確認搬移：子任務會被壓平</AlertDialogTitle>
+            <AlertDialogDescription>
+              底下的任務和子任務，會<b className="text-foreground">全部變成同一層的「子任務」</b>（不會刪資料，只是階層被拉平）。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {/* 圖解：拖曳前 → 拖曳後 */}
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+              <div>
+                <div className="text-[11px] font-bold text-muted-foreground mb-1.5">拖曳前</div>
+                <div className="space-y-1 text-xs">
+                  <div className="rounded bg-amber-100 text-amber-900 px-2 py-1 font-semibold">里程碑／任務</div>
+                  <div className="rounded bg-background border px-2 py-1 ml-3">任務 A</div>
+                  <div className="rounded bg-background border px-2 py-1 ml-6 text-muted-foreground">└ 子任務 a1</div>
+                  <div className="rounded bg-background border px-2 py-1 ml-6 text-muted-foreground">└ 子任務 a2</div>
+                </div>
+              </div>
+              <div className="text-2xl text-muted-foreground text-center leading-none">→</div>
+              <div>
+                <div className="text-[11px] font-bold text-blue-600 mb-1.5">拖曳後（壓平）</div>
+                <div className="space-y-1 text-xs">
+                  <div className="rounded bg-blue-100 text-blue-900 px-2 py-1 font-semibold">任務／子任務</div>
+                  <div className="rounded bg-blue-50 border border-blue-200 text-blue-900 px-2 py-1 ml-3">子任務 A</div>
+                  <div className="rounded bg-blue-50 border border-blue-200 text-blue-900 px-2 py-1 ml-3">子任務 a1</div>
+                  <div className="rounded bg-blue-50 border border-blue-200 text-blue-900 px-2 py-1 ml-3">子任務 a2</div>
+                </div>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-2 text-center">原本「任務 ▸ 子任務」的階層 → 全部拉平成同一層子任務</div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingMove(null)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (pendingMove) applyMove(pendingMove); setPendingMove(null) }}>
+              確定壓平搬移
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Gantt Preview Dialog */}
       <Dialog open={ganttPreviewOpen} onOpenChange={setGanttPreviewOpen}>

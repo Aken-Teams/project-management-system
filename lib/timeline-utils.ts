@@ -350,6 +350,7 @@ export interface WorkItemsDiff {
     startDate: string
     endDate: string
     parentId?: string
+    sortOrder?: number
     manualDates?: boolean
   }[]
   tasksToUpdate: {
@@ -361,6 +362,7 @@ export interface WorkItemsDiff {
     startDate?: string
     endDate?: string
     milestoneId?: string
+    parentId?: string | null
     sortOrder?: number
     manualDates?: boolean
   }[]
@@ -419,6 +421,23 @@ export function computeWorkItemsDiff(
     .filter(t => !currentTaskIds.has(t.id))
     .map(t => t.id)
 
+  // Dense per-milestone sortOrder in visual order (each top-level task immediately
+  // followed by its subtasks). Both the Gantt and the table sort each sibling group
+  // by sortOrder, so keeping it dense & consistent makes saved order == on-screen order.
+  const visualSortMap = (list: Array<{ id: string; milestoneId: string; parentId?: string | null }>): Map<string, number> => {
+    const map = new Map<string, number>()
+    for (const msId of [...new Set(list.map(t => t.milestoneId))]) {
+      let idx = 0
+      for (const top of list.filter(t => t.milestoneId === msId && !t.parentId)) {
+        map.set(top.id, idx++)
+        for (const sub of list.filter(s => s.parentId === top.id)) map.set(sub.id, idx++)
+      }
+    }
+    return map
+  }
+  const currentSortMap = visualSortMap(currentTasks)
+  const origSortMap = visualSortMap(origTasks)
+
   // Tasks to add (parent tasks first, then subtasks — so parent IDs resolve correctly)
   const newParentTasks = currentTasks.filter(t => !origTaskIds.has(t.id) && !t.parentId)
   const newSubtasks = currentTasks.filter(t => !origTaskIds.has(t.id) && t.parentId)
@@ -434,6 +453,7 @@ export function computeWorkItemsDiff(
         durationDays: t.durationDays,
         startDate: dates?.startDate || '',
         endDate: dates?.endDate || '',
+        sortOrder: currentSortMap.get(t.id) ?? 0,
         manualDates: t.manualDates ?? false,
         ...(t.parentId ? { parentId: t.parentId } : {}),
       }
@@ -454,11 +474,11 @@ export function computeWorkItemsDiff(
     if (dates?.startDate && dates.startDate !== orig.startDate) { changes.startDate = dates.startDate; hasChange = true }
     if (dates?.endDate && dates.endDate !== orig.endDate) { changes.endDate = dates.endDate; hasChange = true }
     if (t.milestoneId !== orig.milestoneId) { changes.milestoneId = t.milestoneId; hasChange = true }
-    // sortOrder: position within milestone
-    const tasksInMs = currentTasks.filter(ct => ct.milestoneId === t.milestoneId)
-    const newSort = tasksInMs.indexOf(t)
-    const origTasksInMs = origTasks.filter(ot => ot.milestoneId === orig.milestoneId)
-    const origSort = origTasksInMs.findIndex(ot => ot.id === t.id)
+    if ((t.parentId ?? null) !== (orig.parentId ?? null)) { changes.parentId = t.parentId ?? null; hasChange = true }
+    // sortOrder: dense per-milestone visual rank (see visualSortMap above).
+    // Any insert/remove/move/reorder shifts ranks → all affected siblings re-emit.
+    const newSort = currentSortMap.get(t.id) ?? 0
+    const origSort = origSortMap.get(t.id) ?? -1
     if (newSort !== origSort) { changes.sortOrder = newSort; hasChange = true }
     if ((t.manualDates ?? false) !== (orig.manualDates ?? false)) { changes.manualDates = t.manualDates ?? false; hasChange = true }
     if (hasChange) tasksToUpdate.push(changes as WorkItemsDiff['tasksToUpdate'][number])

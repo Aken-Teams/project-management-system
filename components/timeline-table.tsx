@@ -5,12 +5,25 @@ import { cn } from '@/lib/utils'
 import {
   DndContext,
   closestCenter,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
   PointerSensor,
   KeyboardSensor,
   type DragEndEvent,
+  type DragOverEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core'
+
+// Row under the pointer = the drop target (matches the pointer-based before/inside/after
+// mode). Falls back to rect/closest when the pointer is in a gap between rows.
+const treeCollision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args)
+  if (hits.length) return hits
+  const rect = rectIntersection(args)
+  return rect.length ? rect : closestCenter(args)
+}
 import {
   SortableContext,
   useSortable,
@@ -19,7 +32,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle, Lock, LockOpen } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle, Lock, LockOpen, IndentIncrease, IndentDecrease } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -84,7 +97,14 @@ export interface TimelineTableProps {
   onTaskDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
   onTaskToggleLock?: (taskId: string) => void
   onGanttPreview?: () => void
+  // Tree drag-move: reparent / convert between subtask · task · milestone (dates preserved)
+  onItemMove?: (activeId: string, overId: string, mode: DropMode) => void
+  // One-click nesting: indent a top-level task under the row above; outdent a subtask to a task
+  onIndent?: (taskId: string) => void
+  onOutdent?: (taskId: string) => void
 }
+
+export type DropMode = 'inside' | 'before' | 'after'
 
 // ─── Column grid class (shared across all rows) ─────────────
 const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_140px_140px_88px_52px_28px] gap-0 items-center'
@@ -128,6 +148,22 @@ function DateInput({ value, onCommit, className, min, max }: {
   )
 }
 
+// ─── Drop indicator helpers (tree drag-move) ────────────────
+function dropRingClass(mode?: DropMode): string {
+  if (!mode) return ''
+  if (mode === 'inside') return 'ring-2 ring-inset ring-blue-500 bg-blue-50/60'
+  if (mode === 'before') return 'shadow-[inset_0_3px_0_0_#3b82f6]'
+  return 'shadow-[inset_0_-3px_0_0_#3b82f6]'
+}
+function DropBadge({ mode, inside, edge }: { mode?: DropMode; inside: string; edge: string }) {
+  if (!mode) return null
+  return (
+    <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 z-20 rounded bg-blue-500 text-white text-[10px] px-1.5 py-0.5 shadow whitespace-nowrap">
+      {mode === 'inside' ? inside : edge}
+    </span>
+  )
+}
+
 // ─── MilestoneRow ───────────────────────────────────────────
 function MilestoneRow({
   milestone,
@@ -143,6 +179,8 @@ function MilestoneRow({
   onToggleCollapse,
   onDateChange,
   onToggleLock,
+  dropHint,
+  dropBadge,
 }: {
   milestone: TimelineMilestone
   index: number
@@ -157,6 +195,8 @@ function MilestoneRow({
   onToggleCollapse: () => void
   onDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
   onToggleLock?: (index: number) => void
+  dropHint?: DropMode
+  dropBadge?: DropMode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: milestone.id })
@@ -185,12 +225,13 @@ function MilestoneRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} px-2 py-1.5 border-l-[3px] border-t border-t-border first:border-t-0 font-medium ${
+      className={cn(`${GRID_COLS} relative px-2 py-1.5 border-l-[3px] border-t border-t-border first:border-t-0 font-medium ${
         index % 2 === 0
           ? 'bg-indigo-50/60 border-l-indigo-400'
           : 'bg-amber-50/60 border-l-amber-400'
-      }`}
+      }`, dropRingClass(dropHint))}
     >
+      <DropBadge mode={dropBadge} inside="放入·成為任務" edge="成為里程碑" />
       {/* Drag */}
       <div
         {...attributes}
@@ -342,6 +383,8 @@ function TaskRow({
   onToggleCollapse,
   onDateChange,
   onToggleLock,
+  onIndent,
+  dropHint,
 }: {
   task: TimelineTask
   startDate?: string
@@ -359,6 +402,8 @@ function TaskRow({
   onToggleCollapse: () => void
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
   onToggleLock?: (taskId: string) => void
+  onIndent?: (taskId: string) => void
+  dropHint?: DropMode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
@@ -400,12 +445,13 @@ function TaskRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`${GRID_COLS} group px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
+      className={cn(`${GRID_COLS} group relative px-2 py-1 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
         subtaskCount > 0
           ? msIndex % 2 === 0 ? 'border-l-indigo-300 bg-indigo-50/30' : 'border-l-amber-300 bg-amber-50/30'
           : msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-amber-200'
-      }`}
+      }`, dropRingClass(dropHint))}
     >
+      <DropBadge mode={dropHint} inside="放入·成為子任務" edge="成為任務" />
       {/* Drag */}
       <div
         {...attributes}
@@ -458,6 +504,18 @@ function TaskRow({
             {isManual ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
             <span>{isManual ? '手動' : '自動'}</span>
           </button>
+        )}
+        {onIndent && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onIndent(task.id)}
+            className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
+            title="縮排成上一列任務的子任務"
+          >
+            <IndentIncrease className="h-3.5 w-3.5" />
+          </Button>
         )}
         <Button
           type="button"
@@ -737,6 +795,8 @@ function SubtaskRow({
   onRemove,
   onUpdate,
   onDateChange,
+  onOutdent,
+  dropHint,
 }: {
   task: TimelineTask
   startDate?: string
@@ -746,7 +806,17 @@ function SubtaskRow({
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
+  onOutdent?: (taskId: string) => void
+  dropHint?: DropMode
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: task.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
   const cyclePriority = () => {
     const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
     const idx = order.indexOf(task.priority)
@@ -762,11 +832,22 @@ function SubtaskRow({
   const p = priorityConfig[task.priority]
 
   return (
-    <div className={`${GRID_COLS} px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
-      msIndex % 2 === 0 ? 'border-l-indigo-100 bg-indigo-50/10' : 'border-l-amber-200 bg-amber-50/10'
-    }`}>
-      {/* No drag for subtasks */}
-      <div />
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(`${GRID_COLS} group relative px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
+        msIndex % 2 === 0 ? 'border-l-indigo-100 bg-indigo-50/10' : 'border-l-amber-200 bg-amber-50/10'
+      }`, dropRingClass(dropHint))}
+    >
+      <DropBadge mode={dropHint} inside="成為子任務" edge="成為子任務" />
+      {/* Drag */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-center cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="h-3 w-3 text-muted-foreground/30" />
+      </div>
 
       {/* Name (deeper indent) */}
       <div className="pl-10 flex items-center gap-1 min-w-0 pr-2">
@@ -777,6 +858,18 @@ function SubtaskRow({
           className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1 truncate"
           placeholder="子任務名稱"
         />
+        {onOutdent && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onOutdent(task.id)}
+            className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
+            title="升階成任務"
+          >
+            <IndentDecrease className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* Duration */}
@@ -1047,9 +1140,15 @@ export function TimelineTable({
   onTaskDateChange,
   onTaskToggleLock,
   onGanttPreview,
+  onItemMove,
+  onIndent,
+  onOutdent,
 }: TimelineTableProps) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
+  const [dropHint, setDropHint] = useState<{ overId: string; mode: DropMode; activeIsMs: boolean } | null>(null)
+  // Mirror of the last-shown drop hint — drop applies exactly what the badge showed (WYSIWYG)
+  const dropHintRef = useRef<{ overId: string; mode: DropMode } | null>(null)
 
   // Envelope (子層最早開始 ～ 最晚結束) of a parent's children, from computed dates.
   const envelopeOf = (childIds: string[]): { start?: string; end?: string } => {
@@ -1088,45 +1187,81 @@ export function TimelineTable({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  // Build flat list of sortable IDs: [ms1, task1a, task1b, ms2, task2a, ...]
-  // Exclude subtasks — they follow their parent and are not independently sortable
+  // Build flat list of sortable IDs in render order: [ms1, task1a, sub1a1, task1b, ms2, ...]
+  // Subtasks are included (independently draggable); collapsed branches are skipped.
   const flatIds: string[] = []
   for (const ms of milestones) {
     flatIds.push(ms.id)
+    if (collapsedIds.has(ms.id)) continue
     for (const t of tasks.filter((t) => t.milestoneId === ms.id && !t.parentId)) {
       flatIds.push(t.id)
+      if (collapsedIds.has(t.id)) continue
+      for (const st of tasks.filter((s) => s.parentId === t.id)) flatIds.push(st.id)
     }
   }
 
+  // Determine drop position within the hovered row using the actual pointer
+  // position (initial pointer + drag delta) — far more accurate than the dragged
+  // element's box. Middle 50% = inside (nest), top/bottom 25% = before/after.
+  const computeMode = (event: DragEndEvent | DragOverEvent): DropMode => {
+    const overRect = event.over?.rect
+    if (!overRect || overRect.height === 0) return 'inside'
+    const act = event.activatorEvent as PointerEvent | undefined
+    let pointerY: number
+    if (act && typeof act.clientY === 'number') {
+      pointerY = act.clientY + event.delta.y
+    } else {
+      const r = event.active.rect.current.translated
+      pointerY = r ? r.top + r.height / 2 : overRect.top + overRect.height / 2
+    }
+    const rel = (pointerY - overRect.top) / overRect.height
+    return rel < 0.25 ? 'before' : rel > 0.75 ? 'after' : 'inside'
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) { setDropHint(null); dropHintRef.current = null; return }
+    const activeIsMs = milestones.some((m) => m.id === String(active.id))
+    const overId = String(over.id)
+    const mode = computeMode(event)
+    dropHintRef.current = { overId, mode }
+    setDropHint({ overId, mode, activeIsMs })
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
+    const hint = dropHintRef.current
+    setDropHint(null)
+    dropHintRef.current = null
     const { active, over } = event
     if (!over || active.id === over.id) return
 
     const activeId = String(active.id)
     const overId = String(over.id)
+    // Apply exactly the hint last shown for this row; only recompute as a fallback.
+    const mode: DropMode = hint && hint.overId === overId ? hint.mode : computeMode(event)
 
+    // Tree move (reparent / convert) handled by parent when provided
+    if (onItemMove) {
+      onItemMove(activeId, overId, mode)
+      return
+    }
+
+    // ── Fallback: same-level reorder only ──
     const isMilestoneDrag = milestones.some((m) => m.id === activeId)
-
     if (isMilestoneDrag) {
-      // Milestone → milestone reorder
       const isMilestoneTarget = milestones.some((m) => m.id === overId)
       if (!isMilestoneTarget) return
       const oldIndex = milestones.findIndex((m) => m.id === activeId)
       const newIndex = milestones.findIndex((m) => m.id === overId)
-      if (oldIndex !== -1 && newIndex !== -1) {
-        onMilestoneReorder(oldIndex, newIndex)
-      }
+      if (oldIndex !== -1 && newIndex !== -1) onMilestoneReorder(oldIndex, newIndex)
     } else {
-      // Task → task reorder (same milestone only)
       const draggedTask = tasks.find((t) => t.id === activeId)
       const targetTask = tasks.find((t) => t.id === overId)
       if (!draggedTask || !targetTask) return
       if (draggedTask.milestoneId !== targetTask.milestoneId) return
       const oldIndex = tasks.findIndex((t) => t.id === activeId)
       const newIndex = tasks.findIndex((t) => t.id === overId)
-      if (oldIndex !== -1 && newIndex !== -1) {
-        onTaskReorder(oldIndex, newIndex)
-      }
+      if (oldIndex !== -1 && newIndex !== -1) onTaskReorder(oldIndex, newIndex)
     }
   }
 
@@ -1171,7 +1306,7 @@ export function TimelineTable({
         </div>
 
         {/* Rows */}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={treeCollision} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={() => { setDropHint(null); dropHintRef.current = null }}>
         <SortableContext items={flatIds} strategy={verticalListSortingStrategy}>
           {milestones.map((milestone, msIndex) => {
             const msParentTasks = tasks.filter((t) => t.milestoneId === milestone.id && !t.parentId)
@@ -1188,6 +1323,8 @@ export function TimelineTable({
                   overflowInfo={overflows?.get(milestone.id)}
                   envelopeStart={msEnvelope.start}
                   envelopeEnd={msEnvelope.end}
+                  dropHint={dropHint?.overId === milestone.id ? dropHint.mode : undefined}
+                  dropBadge={dropHint?.overId === milestone.id && !(dropHint.activeIsMs && dropHint.mode !== 'inside') ? dropHint.mode : undefined}
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
@@ -1213,6 +1350,7 @@ export function TimelineTable({
                             overflowInfo={overflows?.get(task.id)}
                             envelopeStart={taskEnvelope.start}
                             envelopeEnd={taskEnvelope.end}
+                            dropHint={dropHint?.overId === task.id ? dropHint.mode : undefined}
                             onRemove={onTaskRemove}
                             onUpdate={onTaskUpdate}
                             onToggleAddSubtask={() =>
@@ -1221,6 +1359,7 @@ export function TimelineTable({
                             onToggleCollapse={() => toggleCollapse(task.id)}
                             onDateChange={onTaskDateChange}
                             onToggleLock={onTaskToggleLock}
+                            onIndent={onIndent}
                           />
                           {!subtasksCollapsed && subtasks.map((st) => (
                             <SubtaskRow
@@ -1230,9 +1369,11 @@ export function TimelineTable({
                               endDate={taskDates.get(st.id)?.endDate}
                               teamMembers={teamMembers}
                               msIndex={msIndex}
+                              dropHint={dropHint?.overId === st.id ? dropHint.mode : undefined}
                               onRemove={onTaskRemove}
                               onUpdate={onTaskUpdate}
                               onDateChange={onTaskDateChange}
+                              onOutdent={onOutdent}
                             />
                           ))}
                           {!subtasksCollapsed && addingSubtaskForId === task.id && (
