@@ -371,7 +371,7 @@ export interface WorkItemsDiff {
 }
 
 export function computeWorkItemsDiff(
-  origMilestones: { id: string; name: string; dueDate: string; startDate?: string | null; manualDates?: boolean }[],
+  origMilestones: { id: string; name: string; dueDate: string; startDate?: string | null; rawStartDate?: string | null; manualDates?: boolean }[],
   origTasks: DbTask[],
   currentMilestones: TimelineMilestone[],
   currentTasks: TimelineTask[],
@@ -407,9 +407,13 @@ export function computeWorkItemsDiff(
     let hasChange = false
     if (m.name !== orig.name) { changes.name = m.name; hasChange = true }
     if (m.endDate && m.endDate !== orig.dueDate) { changes.dueDate = m.endDate; hasChange = true }
-    // Track startDate changes
+    // Track startDate changes. Also re-sync drift: if the milestone's *stored*
+    // start (rawStartDate) no longer matches its computed envelope start, correct
+    // it — otherwise the saved milestone start silently drifts away from its tasks.
     const origStart = orig.startDate || undefined
-    if (m.startDate !== origStart) { changes.startDate = m.startDate || null; hasChange = true }
+    const rawStart = orig.rawStartDate || undefined
+    const drifted = !!rawStart && !!m.startDate && rawStart !== m.startDate
+    if (m.startDate !== origStart || drifted) { changes.startDate = m.startDate || null; hasChange = true }
     const origIdx = origMilestones.findIndex(o => o.id === m.id)
     if (idx !== origIdx) { changes.sortOrder = idx; hasChange = true }
     if ((m.manualDates ?? false) !== (orig.manualDates ?? false)) { changes.manualDates = m.manualDates ?? false; hasChange = true }

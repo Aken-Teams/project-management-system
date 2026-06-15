@@ -241,21 +241,19 @@ async function repairTaskDates(project: {
       continue
     }
 
-    // Check if any task (parent OR subtask) has dates outside [msStart, msDueDate]
+    // Overlap model: a milestone EXPANDS to fit its tasks, so a task is ALLOWED to
+    // start before / outside the sequential waterfall position (that's overlap).
+    // Only repair genuinely BROKEN dates (missing / NaN / end-before-start) — never
+    // re-sequence valid tasks. The old "outside [msStart, msDueDate]" check was
+    // silently overwriting user edits with a sequential layout on every load.
     const allMsTasks = project.tasks.filter(t => t.milestoneId === ms.id)
-    const needsRepair = allMsTasks.some(t =>
-      t.startDate.getTime() < msStart.getTime() - 86400000 ||
-      t.startDate.getTime() > msDueDate.getTime() + 86400000 ||
-      t.endDate.getTime() > msDueDate.getTime() + 86400000
-    )
+    const isBroken = (s: Date | null, e: Date | null) =>
+      !s || !e || isNaN(s.getTime()) || isNaN(e.getTime()) || e.getTime() < s.getTime()
+    const needsRepair = allMsTasks.some(t => isBroken(t.startDate, t.endDate))
 
-    // Also check subtasks outside their parent's date range
     const needsSubRepair = !needsRepair && parentTasks.some(parent => {
       const subs = project.tasks.filter(t => t.parentId === parent.id)
-      return subs.some(s =>
-        s.startDate.getTime() < parent.startDate.getTime() - 86400000 ||
-        s.endDate.getTime() > parent.endDate.getTime() + 86400000
-      )
+      return subs.some(s => isBroken(s.startDate, s.endDate))
     })
 
     if (!needsRepair && !needsSubRepair) {

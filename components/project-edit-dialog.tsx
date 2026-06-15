@@ -266,7 +266,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // (e.g. after a project startDate change was approved) don't cause false positives.
   const [origMilestones] = useState(() => {
     const initRecalc = calculateMilestoneDates(tlInit.milestones, project.startDate, tlInit.tasks)
-    return initRecalc.map(ms => ({ id: ms.id, name: ms.name, dueDate: ms.endDate || '', startDate: ms.startDate, manualDates: ms.manualDates ?? false }))
+    return initRecalc.map((ms, i) => ({
+      id: ms.id, name: ms.name, dueDate: ms.endDate || '', startDate: ms.startDate,
+      // raw stored startDate — used to detect drift between the milestone's saved
+      // start and its task envelope, so we can re-sync it on save.
+      rawStartDate: tlInit.milestones[i]?.startDate,
+      manualDates: ms.manualDates ?? false,
+    }))
   })
   const [origTasks] = useState(() =>
     (project.tasks ?? []).map(t => ({
@@ -1217,12 +1223,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       if (newDuration < 1) return
       setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, durationDays: newDuration } : m))
     } else {
-      setTlMilestones(prev => prev.map((m, i) => {
-        if (i !== index) return m
-        const currentEnd = recalcMilestones[index]?.endDate
-        const newDuration = currentEnd ? daysBetween(value, currentEnd) + 1 : m.durationDays
-        return { ...m, startDate: value, durationDays: Math.max(newDuration, 1) }
-      }))
+      // 平移：保留天數，里程碑整段移到新的起始日（結束日跟著一起動），與任務一致。
+      setTlMilestones(prev => prev.map((m, i) => i === index ? { ...m, startDate: value } : m))
     }
   }, [recalcMilestones, tlMilestones, tlTaskDates])
 
@@ -1249,9 +1251,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       const updated = base.map(t => t.id === taskId ? { ...t, durationDays: newDuration } : t)
       applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     } else {
-      const currentEnd = taskDates.endDate
-      const newDuration = daysBetween(value, currentEnd) + 1
-      const updated = base.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t)
+      // 平移：保留天數，整條任務移到新的起始日（結束日跟著一起動）。
+      const updated = base.map(t => t.id === taskId ? { ...t, startDate: value } : t)
       applyTaskChangeWithBubbleUp(updated, isParent ? taskId : undefined)
     }
   }, [tlTasks, tlTaskDates, applyTaskChangeWithBubbleUp])

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import { cn } from '@/lib/utils'
 import {
   DndContext,
@@ -165,7 +165,7 @@ function DropBadge({ mode, inside, edge }: { mode?: DropMode; inside: string; ed
 }
 
 // ─── MilestoneRow ───────────────────────────────────────────
-function MilestoneRow({
+const MilestoneRow = memo(function MilestoneRow({
   milestone,
   index,
   canRemove,
@@ -363,10 +363,15 @@ function MilestoneRow({
       </div>
     </div>
   )
-}
+}, (a, b) =>
+  a.milestone === b.milestone && a.index === b.index && a.canRemove === b.canRemove &&
+  a.collapsed === b.collapsed && a.taskCount === b.taskCount && a.overflowInfo === b.overflowInfo &&
+  a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
+  a.onUpdate === b.onUpdate && a.onRemove === b.onRemove && a.onDateChange === b.onDateChange &&
+  a.onToggleLock === b.onToggleLock && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge)
 
 // ─── TaskRow ────────────────────────────────────────────────
-function TaskRow({
+const TaskRow = memo(function TaskRow({
   task,
   startDate,
   endDate,
@@ -639,7 +644,13 @@ function TaskRow({
       </div>
     </div>
   )
-}
+}, (a, b) =>
+  a.task === b.task && a.startDate === b.startDate && a.endDate === b.endDate &&
+  a.teamMembers === b.teamMembers && a.subtaskCount === b.subtaskCount && a.collapsed === b.collapsed &&
+  a.msIndex === b.msIndex && a.overflowInfo === b.overflowInfo &&
+  a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
+  a.onRemove === b.onRemove && a.onUpdate === b.onUpdate && a.onDateChange === b.onDateChange &&
+  a.onToggleLock === b.onToggleLock && a.onIndent === b.onIndent && a.dropHint === b.dropHint)
 
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
@@ -786,7 +797,7 @@ function InlineTaskInput({
 }
 
 // ─── SubtaskRow ─────────────────────────────────────────────
-function SubtaskRow({
+const SubtaskRow = memo(function SubtaskRow({
   task,
   startDate,
   endDate,
@@ -958,7 +969,7 @@ function SubtaskRow({
       </div>
     </div>
   )
-}
+})
 
 // ─── InlineSubtaskInput ─────────────────────────────────────
 function InlineSubtaskInput({
@@ -1183,7 +1194,9 @@ export function TimelineTable({
   }
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    // Small activation distance: distinguishes a click from a drag and avoids the
+    // pointer getting "stuck" when grabbing the handle near inputs/buttons.
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
@@ -1220,10 +1233,17 @@ export function TimelineTable({
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event
-    if (!over || active.id === over.id) { setDropHint(null); dropHintRef.current = null; return }
-    const activeIsMs = milestones.some((m) => m.id === String(active.id))
+    if (!over || active.id === over.id) {
+      if (dropHintRef.current) { setDropHint(null); dropHintRef.current = null }
+      return
+    }
     const overId = String(over.id)
     const mode = computeMode(event)
+    // Skip redundant state updates — only re-render when the target/mode actually
+    // changes, otherwise dragging over a long list re-renders every row constantly.
+    const prev = dropHintRef.current
+    if (prev && prev.overId === overId && prev.mode === mode) return
+    const activeIsMs = milestones.some((m) => m.id === String(active.id))
     dropHintRef.current = { overId, mode }
     setDropHint({ overId, mode, activeIsMs })
   }
