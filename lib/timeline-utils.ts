@@ -27,79 +27,32 @@ export function daysBetween(start: string, end: string): number {
   return Math.round((e.getTime() - s.getTime()) / 86400000)
 }
 
-// ─── Milestone date calculation ──────────────────────────────
-// Hybrid seed: milestones with explicit startDate use it (overlapping);
-// milestones without startDate follow sequential/waterfall order.
-//
-// 方案 A（嚴格層級綁定）: a milestone that HAS tasks does not keep an
-// independent range — its start/end are derived as the envelope of its
-// tasks (earliest task start ～ latest task end). The seed start only
-// anchors where undated tasks fall in sequence and where the next
-// sequential (startDate-less) milestone begins.
+// ─── Milestone date calculation (ABSOLUTE mode — ADR-01) ─────
+// Each milestone keeps its OWN start date; end = start + duration - 1.
+// No sequential/waterfall placement, no task-envelope binding — editing one
+// item never moves another. (Sequential cascade lives only in the delay-request
+// approval flow now.) A milestone with no startDate falls back to project start
+// (it should have been seeded at creation — see seedSequentialDates).
 
 export function calculateMilestoneDates<T extends MilestoneInput>(
   milestones: T[],
   projectStartDate: string,
-  tasks: TaskInput[],
+  _tasks?: TaskInput[], // kept for signature compat; milestones no longer follow tasks
 ): T[] {
   if (!projectStartDate) return milestones
 
-  let sequentialDate = new Date(projectStartDate)
-
   return milestones.map((milestone) => {
     const effectiveDays = milestone.durationDays || 0
-
     if (effectiveDays <= 0) {
       return { ...milestone, startDate: undefined, endDate: undefined }
     }
-
-    // Seed: explicit startDate → overlapping; otherwise → sequential waterfall
-    const seedStart = milestone.startDate
-      ? new Date(milestone.startDate)
-      : new Date(sequentialDate)
-
-    let msStart = seedStart
-    let msEnd = new Date(seedStart)
-    msEnd.setDate(msEnd.getDate() + effectiveDays - 1)
-
-    // 方案 A: milestone with tasks spans exactly its tasks' envelope
-    // (earliest task start ～ latest task end).
-    const msTopTasks = tasks.filter(t => t.milestoneId === milestone.id && !t.parentId)
-    if (msTopTasks.length > 0) {
-      const scheduled = scheduleTasksFromStart(msTopTasks, tasks, seedStart)
-      let minStart: Date | null = null
-      let maxEnd: Date | null = null
-      for (const t of msTopTasks) {
-        const d = scheduled.get(t.id)
-        if (!d) continue
-        if (!minStart || d.startDate < minStart) minStart = d.startDate
-        if (!maxEnd || d.endDate > maxEnd) maxEnd = d.endDate
-      }
-      // Auto → snap to envelope. Manual → keep the user's own (widened) range,
-      // but always at least the tasks' envelope (never narrower than children).
-      if (minStart && maxEnd) {
-        if (milestone.manualDates) {
-          if (minStart < msStart) msStart = minStart
-          if (maxEnd > msEnd) msEnd = maxEnd
-        } else {
-          msStart = minStart
-          msEnd = maxEnd
-        }
-      }
-    }
-
-    // Advance sequential cursor so the next milestone without startDate
-    // follows after the latest (envelope) end date seen so far
-    const nextDay = new Date(msEnd)
-    nextDay.setDate(nextDay.getDate() + 1)
-    if (nextDay > sequentialDate) {
-      sequentialDate = nextDay
-    }
-
+    const startStr = milestone.startDate || projectStartDate
+    const end = new Date(startStr)
+    end.setDate(end.getDate() + effectiveDays - 1)
     return {
       ...milestone,
-      startDate: msStart.toISOString().split('T')[0],
-      endDate: msEnd.toISOString().split('T')[0],
+      startDate: startStr,
+      endDate: end.toISOString().split('T')[0],
     }
   })
 }
@@ -174,29 +127,67 @@ export function scheduleTasksFromStart(
   return result
 }
 
-// ─── Task date calculation ───────────────────────────────────
-// Tasks use their own startDate; default to milestone start.
+// ─── Task date calculation (ABSOLUTE mode — ADR-01) ──────────
+// Every task/subtask keeps its OWN start date; end = start + duration - 1.
+// No sequential placement, no parent/subtask envelope. A task with no startDate
+// falls back to its milestone's start (should be seeded — see seedSequentialDates).
 
 export function calculateTaskDates(
   tasks: TaskInput[],
   milestones: { id: string; startDate?: string; endDate?: string }[],
 ): Map<string, { startDate: string; endDate: string }> {
   const result = new Map<string, { startDate: string; endDate: string }>()
+  const msStart = new Map(milestones.map(m => [m.id, m.startDate]))
 
-  for (const ms of milestones) {
-    if (!ms.startDate) continue
-    const msTasks = tasks.filter(t => t.milestoneId === ms.id && t.durationDays > 0 && !t.parentId)
-    const msStartDate = new Date(ms.startDate)
-
-    const scheduled = scheduleTasksFromStart(msTasks, tasks, msStartDate)
-    for (const [id, dates] of scheduled) {
-      result.set(id, {
-        startDate: dates.startDate.toISOString().split('T')[0],
-        endDate: dates.endDate.toISOString().split('T')[0],
-      })
-    }
+  for (const t of tasks) {
+    const days = Math.max(t.durationDays || 1, 1)
+    const startStr = t.startDate || msStart.get(t.milestoneId)
+    if (!startStr) continue
+    const end = new Date(startStr)
+    end.setDate(end.getDate() + days - 1)
+    result.set(t.id, {
+      startDate: startStr,
+      endDate: end.toISOString().split('T')[0],
+    })
   }
   return result
+}
+
+// ─── One-time sequential seed (initial layout only) ──────────
+// Assigns absolute startDates back-to-back (milestones sequential; tasks sequential
+// within a milestone; subtasks sequential within a parent). Called ONCE when applying
+// a template / loading, so items start with concrete non-overlapping dates. After this
+// the dates are edited locally and NEVER auto-re-sequenced.
+export function seedSequentialDates<
+  M extends { id: string; durationDays: number; startDate?: string },
+  K extends { id: string; milestoneId: string; parentId?: string | null; durationDays: number; startDate?: string },
+>(milestones: M[], tasks: K[], projectStartDate: string): { milestones: M[]; tasks: K[] } {
+  if (!projectStartDate) return { milestones, tasks }
+  const iso = (d: Date) => d.toISOString().split('T')[0]
+  const taskStart = new Map<string, string>()
+  let msCursor = new Date(projectStartDate)
+
+  const seededMs = milestones.map((m) => {
+    const msDays = Math.max(m.durationDays || 1, 1)
+    const msStart = new Date(msCursor)
+    const tCursor = new Date(msStart)
+    for (const t of tasks.filter(t => t.milestoneId === m.id && !t.parentId)) {
+      const tDays = Math.max(t.durationDays || 1, 1)
+      taskStart.set(t.id, iso(tCursor))
+      const sCursor = new Date(tCursor)
+      for (const s of tasks.filter(s => s.parentId === t.id)) {
+        const sDays = Math.max(s.durationDays || 1, 1)
+        taskStart.set(s.id, iso(sCursor))
+        sCursor.setDate(sCursor.getDate() + sDays)
+      }
+      tCursor.setDate(tCursor.getDate() + tDays)
+    }
+    msCursor = new Date(msStart)
+    msCursor.setDate(msCursor.getDate() + msDays)
+    return { ...m, startDate: iso(msStart) }
+  })
+  const seededTasks = tasks.map((t) => taskStart.has(t.id) ? { ...t, startDate: taskStart.get(t.id) } : t)
+  return { milestones: seededMs, tasks: seededTasks }
 }
 
 // ─── Auto-resize milestones to contain all tasks ─────────────
@@ -313,8 +304,9 @@ export function dbToTimelineState(
       name: ms.name,
       durationDays,
       manualDates: ms.manualDates ?? false,
-      // Carry the explicit startDate so overlapping is preserved
-      ...(ms.startDate ? { startDate: new Date(ms.startDate).toISOString().split('T')[0] } : {}),
+      // ADR-01 absolute mode: every milestone carries a concrete startDate (its own,
+      // or legacy-inferred) so it never re-sequences off siblings on edit.
+      startDate: msStart.toISOString().split('T')[0],
     }
   })
 

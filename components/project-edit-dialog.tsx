@@ -1024,170 +1024,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     newTasks: typeof tlTasks,
     directEditId?: string,
   ) => {
-    const start = form.startDate || project.startDate
-
-    // Pass 1: compute dates with current milestones + new tasks
-    const msComputed = calculateMilestoneDates(tlMilestones, start, newTasks)
-    const dates = calculateTaskDates(newTasks, msComputed)
-
-    // Pass 2: 方案 A — sync each parent task's durationDays to its
-    // subtasks' envelope span. The computed dates (td) already hold the
-    // envelope (earliest subtask start ～ latest subtask end), so the span
-    // is simply daysBetween(start, end) + 1.
-    const parentIds = new Set(newTasks.filter(t => t.parentId).map(t => t.parentId!))
-    let tasksChanged = false
-    let finalTasks = newTasks
-
-    if (parentIds.size > 0) {
-      finalTasks = newTasks.map(t => {
-        // Skip manual (unlocked) parents — they keep their own widened range.
-        if (!parentIds.has(t.id) || t.id === directEditId || t.manualDates) return t
-        const td = dates.get(t.id)
-        if (!td) return t
-        const span = daysBetween(td.startDate, td.endDate) + 1
-        if (span > 0 && span !== t.durationDays) {
-          tasksChanged = true
-          return { ...t, durationDays: span }
-        }
-        return t
-      })
-    }
-
-    // Pass 3: recompute dates if tasks changed, then bubble task → milestone
-    const msComputed2 = tasksChanged ? calculateMilestoneDates(tlMilestones, start, finalTasks) : msComputed
-    const dates2 = tasksChanged ? calculateTaskDates(finalTasks, msComputed2) : dates
-
-    let msChanged = false
-    const newMilestones = tlMilestones.map((ms, idx) => {
-      // Skip manual (unlocked) milestones — they keep their own widened range.
-      if (ms.manualDates) return ms
-      const msData = msComputed2[idx]
-      if (!msData?.startDate) return ms
-      const msTasks = finalTasks.filter(t => t.milestoneId === ms.id)
-      if (msTasks.length === 0) return ms
-      const maxEnd = Math.max(...msTasks.map(t => {
-        const td = dates2.get(t.id)
-        return td ? new Date(td.endDate).getTime() : 0
-      }))
-      if (maxEnd <= 0) return ms
-      const needed = Math.ceil((maxEnd - new Date(msData.startDate).getTime()) / 86400000) + 1
-      if (needed > 0 && needed !== ms.durationDays) {
-        msChanged = true
-        return { ...ms, durationDays: needed }
-      }
-      return ms
-    })
-
-    // ── Phase 2: 改子層後，手動父層的「自動 envelope」≠「手動值」→ 提示自動貼齊 ──
-    // 只在「該父層的子層 envelope 因這次編輯而改變」且「仍與手動值不同」時才提示，
-    // 避免每次無關編輯都跳窗，也不會重複提示既有的不一致。
-    const envFrom = (ids: string[], dm: Map<string, { startDate: string; endDate: string }>) => {
-      let s: string | undefined
-      let e: string | undefined
-      for (const id of ids) {
-        const d = dm.get(id)
-        if (!d) continue
-        if (!s || d.startDate < s) s = d.startDate
-        if (!e || d.endDate > e) e = d.endDate
-      }
-      return { s, e }
-    }
-    const candidates: SnapTarget[] = []
-    const extendedNames: string[] = []  // 手動父層因子層超出而被自動延伸 → 通知
-    for (const t of finalTasks) {
-      if (!t.manualDates) continue
-      const kidIds = finalTasks.filter(c => c.parentId === t.id).map(c => c.id)
-      if (kidIds.length === 0) continue
-      const own = dates2.get(t.id)
-      const ownOld = tlTaskDates.get(t.id)
-      if (!own) continue
-      // (1) 自動延伸：父層自己被撐大(變寬) 且不是使用者在改父層 → 子層超出、父層自動包住
-      if (t.id !== directEditId && ownOld &&
-          (own.startDate < ownOld.startDate || own.endDate > ownOld.endDate)) {
-        extendedNames.push(`任務「${t.title}」`)
-      }
-      // (2) 自動貼齊提醒：只有「父層自己沒被改(=改的是子層)」且仍與手動值不同才提醒
-      if (snapDismissedIds.has(t.id)) continue
-      const envNew = envFrom(kidIds, dates2)
-      const envOld = envFrom(kidIds, tlTaskDates)
-      if (!envNew.s || !envNew.e) continue
-      const parentUnchanged = !!ownOld && own.startDate === ownOld.startDate && own.endDate === ownOld.endDate
-      if (parentUnchanged &&
-          (envNew.s !== envOld.s || envNew.e !== envOld.e) &&
-          (envNew.s !== own.startDate || envNew.e !== own.endDate)) {
-        candidates.push({ kind: 'task', id: t.id, name: t.title, childStart: envNew.s, childEnd: envNew.e, manualStart: own.startDate, manualEnd: own.endDate })
-      }
-    }
-    newMilestones.forEach((m, idx) => {
-      if (!m.manualDates) return
-      const own = msComputed2[idx]
-      const ownOld = recalcMilestones[idx]
-      if (!own?.startDate || !own?.endDate) return
-      const kidIds = finalTasks.filter(t => t.milestoneId === m.id && !t.parentId).map(t => t.id)
-      if (kidIds.length === 0) return
-      // (1) 自動延伸（里程碑由別處編輯，故只要被撐大就通知）
-      if (ownOld?.startDate && ownOld?.endDate &&
-          (own.startDate < ownOld.startDate || own.endDate > ownOld.endDate)) {
-        extendedNames.push(`里程碑「${m.name}」`)
-      }
-      // (2) 自動貼齊提醒
-      if (snapDismissedIds.has(m.id)) return
-      const envNew = envFrom(kidIds, dates2)
-      if (!envNew.s || !envNew.e) return
-      const envOld = envFrom(kidIds, tlTaskDates)
-      if ((envNew.s !== envOld.s || envNew.e !== envOld.e) &&
-          (envNew.s !== own.startDate || envNew.e !== own.endDate)) {
-        candidates.push({ kind: 'milestone', id: m.id, name: m.name, childStart: envNew.s, childEnd: envNew.e, manualStart: own.startDate, manualEnd: own.endDate })
-      }
-    })
-
-    // ── 方案 A 延後順延：某里程碑因任務變動而「結束日往後」(延後) →
-    //    把它後面的里程碑 + 其任務/子任務整塊往後同樣天數（保留彼此相對關係）。
-    //    提前(往前)不動下游；只在該里程碑的任務這次真的有動時才觸發。 ──
-    const shiftStr = (s: string, n: number) => {
-      const d = new Date(s)
-      d.setDate(d.getDate() + n)
-      return d.toISOString().split('T')[0]
-    }
-    let outTasks = finalTasks
-    let outMilestones = newMilestones
-    const newMsComputed = calculateMilestoneDates(newMilestones, start, finalTasks)
-    for (let i = 0; i < tlMilestones.length; i++) {
-      const oldEnd = recalcMilestones[i]?.endDate
-      const newEnd = newMsComputed[i]?.endDate
-      if (!oldEnd || !newEnd) continue
-      const delta = daysBetween(oldEnd, newEnd)
-      if (delta <= 0) continue // 只順延，不處理提前
-      const msId = tlMilestones[i].id
-      const tasksMoved = finalTasks.some(t => {
-        if (t.milestoneId !== msId) return false
-        const a = dates2.get(t.id)
-        const b = tlTaskDates.get(t.id)
-        return !!a && !!b && (a.startDate !== b.startDate || a.endDate !== b.endDate)
-      })
-      if (!tasksMoved) continue // 避免無關里程碑（如 overflow 自動修正）誤觸發順延
-      const downstreamIds = new Set(tlMilestones.slice(i + 1).map(m => m.id))
-      if (downstreamIds.size === 0) break
-      outMilestones = newMilestones.map((m, j) => (j > i && m.startDate)
-        ? { ...m, startDate: shiftStr(m.startDate, delta) } : m)
-      outTasks = finalTasks.map(t => (downstreamIds.has(t.milestoneId) && t.startDate)
-        ? { ...t, startDate: shiftStr(t.startDate, delta) } : t)
-      msChanged = true
-      break
-    }
-
-    setTlTasks(outTasks)
-    if (msChanged) setTlMilestones(outMilestones)
-    if (extendedNames.length > 0) {
-      toast.info('父層已自動延伸涵蓋子層', {
-        description: `${extendedNames.join('、')}不能小於其子項，已自動延伸範圍以包住子層。`,
-      })
-    }
-    if (candidates.length > 0) {
-      setSnapTargets(candidates)
-      setSnapDialogOpen(true)
-    }
-  }, [tlMilestones, tlTaskDates, recalcMilestones, form.startDate, project.startDate, snapDismissedIds])
+    // ADR-01 (絕對日期模型): 里程碑/任務/子任務各自獨立，編輯一列不連動其他列。
+    // 移除「子撐父 / 任務撐里程碑」的 envelope 冒泡，以及「下游里程碑整塊順延」的
+    // 依序級聯。連動只保留在延期/提前申請流程（delay-requests），不在此編輯流程。
+    setTlTasks(newTasks)
+  }, [])
 
   const handleTlTaskAdd = useCallback((task: { id: string; milestoneId: string; title: string; assignee: string; priority: 'low' | 'medium' | 'high'; durationDays: number; parentId?: string }) => {
     applyTaskChangeWithBubbleUp([...tlTasks, task])
@@ -1865,6 +1706,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onItemMove={handleItemMove}
               onIndent={handleIndent}
               onOutdent={handleOutdent}
+              storageKey={project.id}
             />
 
             {workItemError && (

@@ -102,6 +102,9 @@ export interface TimelineTableProps {
   // One-click nesting: indent a top-level task under the row above; outdent a subtask to a task
   onIndent?: (taskId: string) => void
   onOutdent?: (taskId: string) => void
+  // Namespaces the collapse-state memory (localStorage). Pass the project id when
+  // editing; a stable string (e.g. 'new-manual') for the create wizard.
+  storageKey?: string
 }
 
 export type DropMode = 'inside' | 'before' | 'after'
@@ -283,49 +286,38 @@ const MilestoneRow = memo(function MilestoneRow({
         )}
       </div>
 
-      {/* Duration */}
+      {/* Duration — ADR-01: milestone is independent (always editable) */}
       <div className="flex justify-center">
-        {hasTasks ? (
-          <span className="h-8 w-14 flex items-center justify-center text-sm text-muted-foreground" title="由任務日期自動計算（最早開始～最晚結束）">
-            {derivedDuration}
-          </span>
-        ) : (
-          <Input
-            type="number"
-            min={0}
-            value={milestone.durationDays || ''}
-            onChange={(e) => onUpdate(index, 'durationDays', Number(e.target.value) || 0)}
-            className="h-8 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
-          />
-        )}
+        <Input
+          type="number"
+          min={0}
+          value={milestone.durationDays || ''}
+          onChange={(e) => onUpdate(index, 'durationDays', Number(e.target.value) || 0)}
+          className="h-8 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
+        />
       </div>
 
-      {/* Start date — locked(read-only envelope) / manual(editable, 不可晚於最早任務) / 無任務(自由) */}
+      {/* Start date — ADR-01: always editable (absolute date), no envelope constraint */}
       <div className="flex justify-center">
-        {isAutoLocked ? (
-          <span className="text-sm text-muted-foreground" title="由任務自動計算">{milestone.startDate || '—'}</span>
-        ) : (isManual || !hasTasks) && onDateChange ? (
+        {onDateChange ? (
           <DateInput
             value={milestone.startDate || ''}
-            max={isManual ? (envelopeStart || undefined) : undefined}
             onCommit={(v) => onDateChange(index, 'startDate', v)}
-            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", isManual && "text-amber-700")}
+            className="h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
           <span className="text-sm text-muted-foreground">{milestone.startDate || '—'}</span>
         )}
       </div>
 
-      {/* End date — locked / manual(不可早於最晚任務) / 無任務(自由) */}
+      {/* End date — ADR-01: always editable; only guard end ≥ start */}
       <div className="flex justify-center items-center gap-0.5">
-        {isAutoLocked ? (
-          <span className="text-sm text-muted-foreground">{milestone.endDate || '—'}</span>
-        ) : (isManual || !hasTasks) && onDateChange ? (
+        {onDateChange ? (
           <DateInput
             value={milestone.endDate || ''}
-            min={isManual ? (envelopeEnd || undefined) : (milestone.startDate || undefined)}
+            min={milestone.startDate || undefined}
             onCommit={(v) => onDateChange(index, 'endDate', v)}
-            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", (overflowInfo || isManual) && "text-amber-700")}
+            className={cn("h-8 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
           />
         ) : (
           <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{milestone.endDate || '—'}</span>
@@ -534,49 +526,38 @@ const TaskRow = memo(function TaskRow({
         </Button>
       </div>
 
-      {/* Duration (auto-calculated when parent has subtasks) */}
+      {/* Duration — ADR-01: task is independent of subtasks (always editable) */}
       <div className="flex justify-center">
-        {hasSubtasks ? (
-          <span className="h-7 w-12 flex items-center justify-center text-sm text-muted-foreground" title="由子任務日期自動計算（最早開始～最晚結束）">
-            {derivedDuration}
-          </span>
-        ) : (
-          <Input
-            type="number"
-            min={1}
-            value={task.durationDays || ''}
-            onChange={(e) => onUpdate(task.id, 'durationDays', Number(e.target.value) || 0)}
-            className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
-          />
-        )}
+        <Input
+          type="number"
+          min={1}
+          value={task.durationDays || ''}
+          onChange={(e) => onUpdate(task.id, 'durationDays', Number(e.target.value) || 0)}
+          className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
+        />
       </div>
 
-      {/* Start date — locked(read-only) / manual(可加寬,不可晚於最早子任務) / 葉節點(自由) */}
+      {/* Start date — ADR-01: always editable (absolute date) */}
       <div className="flex justify-center">
-        {isAutoLocked ? (
-          <span className="text-sm text-muted-foreground" title="由子任務自動計算">{startDate || '—'}</span>
-        ) : (isManual || !hasSubtasks) && onDateChange ? (
+        {onDateChange ? (
           <DateInput
             value={startDate || ''}
-            max={isManual ? (envelopeStart || undefined) : undefined}
             onCommit={(v) => onDateChange(task.id, 'startDate', v)}
-            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", isManual && "text-amber-700")}
+            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
           />
         ) : (
           <span className="text-sm text-muted-foreground">{startDate || '—'}</span>
         )}
       </div>
 
-      {/* End date — locked / manual(不可早於最晚子任務) / 葉節點(自由) */}
+      {/* End date — ADR-01: always editable; only guard end ≥ start */}
       <div className="flex justify-center items-center gap-0.5">
-        {isAutoLocked ? (
-          <span className="text-sm text-muted-foreground" title="由子任務自動計算">{endDate || '—'}</span>
-        ) : (isManual || !hasSubtasks) && onDateChange ? (
+        {onDateChange ? (
           <DateInput
             value={endDate || ''}
-            min={isManual ? (envelopeEnd || undefined) : (startDate || undefined)}
+            min={startDate || undefined}
             onCommit={(v) => onDateChange(task.id, 'endDate', v)}
-            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", (overflowInfo || isManual) && "text-amber-700")}
+            className={cn("h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1", overflowInfo && "text-amber-700")}
           />
         ) : (
           <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{endDate || '—'}</span>
@@ -1154,8 +1135,37 @@ export function TimelineTable({
   onItemMove,
   onIndent,
   onOutdent,
+  storageKey,
 }: TimelineTableProps) {
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  const collapseStoreKey = storageKey ? `tl-collapse:${storageKey}` : null
+  // Default = all milestones collapsed; a saved per-project state (localStorage)
+  // overrides it. Seeded lazily so a stored state survives refresh.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
+    if (collapseStoreKey && typeof window !== 'undefined') {
+      try {
+        const saved = window.localStorage.getItem(collapseStoreKey)
+        if (saved) return new Set<string>(JSON.parse(saved) as string[])
+      } catch { /* ignore malformed */ }
+    }
+    return new Set<string>()
+  })
+  const didInitCollapse = useRef(false)
+
+  // On first load with no saved state, default to all-collapsed (once milestones exist).
+  useEffect(() => {
+    if (didInitCollapse.current) return
+    if (milestones.length === 0) return
+    const hasSaved = collapseStoreKey && typeof window !== 'undefined'
+      && window.localStorage.getItem(collapseStoreKey) !== null
+    if (!hasSaved) setCollapsedIds(new Set(milestones.map((m) => m.id)))
+    didInitCollapse.current = true
+  }, [milestones, collapseStoreKey])
+
+  // Persist collapse state per project after init.
+  useEffect(() => {
+    if (!didInitCollapse.current || !collapseStoreKey || typeof window === 'undefined') return
+    try { window.localStorage.setItem(collapseStoreKey, JSON.stringify([...collapsedIds])) } catch { /* quota */ }
+  }, [collapsedIds, collapseStoreKey])
   const [addingSubtaskForId, setAddingSubtaskForId] = useState<string | null>(null)
   const [dropHint, setDropHint] = useState<{ overId: string; mode: DropMode; activeIsMs: boolean } | null>(null)
   // Mirror of the last-shown drop hint — drop applies exactly what the badge showed (WYSIWYG)

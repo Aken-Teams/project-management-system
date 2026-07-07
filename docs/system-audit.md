@@ -213,6 +213,8 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 | 2026-07-07 | 第一層純 bug 止血：進度加權統一、同步順序、今天定義、除以零、manualDates 窄修、批次存檔報錯 | lib/date-utils.ts（新）、lib/sync-milestone-status.ts、lib/project-transformer.ts、lib/task-utils.ts、app/api/projects/[id]/route.ts、app/api/my-tasks/route.ts、app/api/projects/[id]/tasks/[taskId]/route.ts、components/project-edit-dialog.tsx | #2 #7 #8 #9 #10 #11 | `tsc --noEmit`：改動檔案零型別錯；待手動 UI 測試 |
 | 2026-07-07 | 手動測試場景 2.9 發現：里程碑無任務時甘特圖畫不出色條 + tooltip 位置/計畫日期 | components/gantt-chart.tsx、app/projects/new/page.tsx | #13 | tsc 零新錯；待 UI 複驗 |
 | 2026-07-07 | 手動測試場景 4 發現：manual 草稿未存/未還原團隊成員與設備清單 | app/projects/new/page.tsx | #14 | tsc 零新錯；需存**新**草稿複驗（舊草稿無資料救不回） |
+| 2026-07-07 | 設計變更 ADR-01 需求A：里程碑/子任務預設全收合 + 展開狀態依專案 id 記憶（localStorage）| components/timeline-table.tsx、app/projects/new/page.tsx、components/project-edit-dialog.tsx | ADR-01(A) | tsc 零新錯；待 UI 複驗 |
+| 2026-07-07 | 設計變更 ADR-01 需求B：拔除編輯流程的依序/瀑布/envelope；改絕對日期（只留 start+天數→end）；里程碑完全手動、日期永遠可編輯；範本套用時 seed 一次 | lib/timeline-utils.ts、app/projects/new/page.tsx、components/project-edit-dialog.tsx、components/timeline-table.tsx | ADR-01(B) | tsc 零新錯；待 UI 重點測「改一列不動別列」 |
 
 ### 已修正 Bug（從第五章移入）
 
@@ -269,5 +271,36 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 1. 認同病根是 derived-date 嗎？還是只修 Bug #7 止血就好？
 2. 「連動改顯性按鈕」user 買單嗎？還是只有延期送審才准動日期？
 3. 一步到位換絕對日期模型（根治、改動大），還是先止血觀察反應？
+
+### ✅ 決策確定（2026-07-07，已與 client 達成共識）
+> 本 ADR 從「討論中」→「已核准設計變更」。範圍如下：
+
+**編輯/新增專案（timeline-table 手動編輯）— 拔除依序相依**
+- 里程碑/任務/子任務各自存**絕對日期**（own start/end），互不連動。
+- **唯一保留的自動**：`結束 = 開始 + 天數 - 1`（反向：填結束→天數自動反算）。
+- **移除**：依序 seeding（任務不再自動接在前一個後面）、跨列連動（改上面不動下面）、里程碑=任務 envelope 綁定。
+- **里程碑也完全手動**（decoupled from tasks，可直接編日期；不一致只給警告不強制）。
+- 範本套用時**只 seed 一次**當初始值，之後凍結為各自的絕對日期。
+
+**延期/提前申請流程 — 保留依序相依**
+- A 延期/提前 → 受影響的下游項目一起級聯變動（既有 affectedMilestones + 核准級聯）。
+- 即「連動」從編輯時的沉默副作用，搬到延期送審這個**明確動作**。
+
+**收合行為（需求 A）**
+- 里程碑/子任務**預設全部收合**；展開/收合狀態**依專案 id 記在 localStorage**，刷新維持。新增專案無 id → 預設收合 + 本次 session 記憶。
+
+**影響檔案**：`lib/timeline-utils.ts`、`app/projects/new/page.tsx`、`components/project-edit-dialog.tsx`、`components/timeline-table.tsx`。**不動**：延期審核（`delay-requests/**`）的級聯邏輯。
+
+### ✅ 已實作（2026-07-07）
+- **timeline-utils**：`calculateMilestoneDates`/`calculateTaskDates` 改絕對模式（own start → end，無依序/無 envelope）；新增 `seedSequentialDates`（一次性初始排列）；`dbToTimelineState` 每個里程碑帶絕對 startDate。
+- **建案頁**：範本套用 seed 一次；移除 `autoExpandMilestones` 兩個 effect。日期/天數 handler 本就局部。
+- **編輯彈窗**：`applyTaskChangeWithBubbleUp` 移除 envelope 冒泡 + 下游順延，改成純 `setTlTasks`。
+- **timeline-table**：里程碑/父任務的天數、開始、結束**永遠可編輯**（拿掉 isAutoLocked/isManual/hasSubtasks gating）。
+
+### 🔍 待 UI 複驗 / 待確認的行為
+1. **改一列不動別列**（核心）：改任務/里程碑的天數或日期，其他列都不動。
+2. **里程碑完全手動**：有任務的里程碑也能直接改日期；里程碑與任務日期可不一致（只給 ⚠ 警告不強制）。
+3. **改「專案開始日」不再自動移動里程碑**（絕對模式）→ 若覺得建案時不便，可再加「依專案起始日整體平移」或「重新排列」按鈕（待 user 決定）。
+4. **自動/手動 🔒 鎖 badge 已失效**（日期恆可編輯）→ 建議後續移除該 UI（vestigial）。
 
 > 📌 **這是「需求變更」不是純 bug**：user 從「瀑布」改成「重疊」是需求方向改變，屬變更；其中僅 server 無視 manualDates（Bug #7）是純 bug。此案例是「bug vs 需求變更」的典型，處理原則見 `docs/collaboration-and-change-management.md`。

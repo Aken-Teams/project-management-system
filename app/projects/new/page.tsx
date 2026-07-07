@@ -62,7 +62,7 @@ import {
   BarChart3,
 } from 'lucide-react'
 import { arrayMove } from '@dnd-kit/sortable'
-import { calculateMilestoneDates, calculateTaskDates, autoExpandMilestones, daysBetween } from '@/lib/timeline-utils'
+import { calculateMilestoneDates, calculateTaskDates, seedSequentialDates, daysBetween } from '@/lib/timeline-utils'
 import { GanttChart } from '@/components/gantt-chart'
 
 interface ManualMilestone {
@@ -753,8 +753,11 @@ export default function NewProjectPage() {
           })
         })
       })
-      setManualMilestones(newMilestones)
-      setManualTasks(newTasks)
+      // ADR-01: seed absolute dates ONCE (sequential initial layout); afterwards
+      // dates are edited locally and never auto-re-sequenced.
+      const seeded = seedSequentialDates(newMilestones, newTasks, manualData.startDate)
+      setManualMilestones(seeded.milestones)
+      setManualTasks(seeded.tasks)
     } else {
       const newMilestones = templates.map((t, i) => ({
         id: `ai-ms-${now}-${i}`,
@@ -787,8 +790,9 @@ export default function NewProjectPage() {
           })
         })
       })
-      setAiMilestones(newMilestones)
-      setAiTasks(newTasks)
+      const seeded = seedSequentialDates(newMilestones, newTasks, aiEditableData.startDate)
+      setAiMilestones(seeded.milestones)
+      setAiTasks(seeded.tasks)
     }
   }
 
@@ -809,11 +813,7 @@ export default function NewProjectPage() {
 
   const manualTaskDates = calculateTaskDates(manualTasks, recalculatedMilestones)
 
-  // Auto-expand milestone duration when tasks exceed it
-  useEffect(() => {
-    const { milestones: updated, changed } = autoExpandMilestones(manualMilestones, manualTasks, manualData.startDate)
-    if (changed) setManualMilestones(updated)
-  }, [manualTasks]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ADR-01: milestones are independent of tasks (no auto-expand to fit tasks).
 
   // Track the last milestone's end date (only changes when milestones actually change)
   const lastMilestoneEndDate = useMemo(() => {
@@ -879,11 +879,7 @@ export default function NewProjectPage() {
 
   const aiTaskDates = calculateTaskDates(aiTasks, recalculatedAiMilestones)
 
-  // Auto-expand AI milestone duration when tasks exceed it
-  useEffect(() => {
-    const { milestones: updated, changed } = autoExpandMilestones(aiMilestones, aiTasks, aiEditableData.startDate)
-    if (changed) setAiMilestones(updated)
-  }, [aiTasks]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ADR-01: milestones are independent of tasks (no auto-expand to fit tasks).
 
   // Track AI last milestone end date
   const aiLastMilestoneEndDate = useMemo(() => {
@@ -2116,6 +2112,7 @@ export default function NewProjectPage() {
                     onTaskReorder={(oldIdx, newIdx) => setAiTasks(arrayMove(aiTasks, oldIdx, newIdx))}
                     onTaskDateChange={handleAiTaskDateChange}
                     onGanttPreview={() => { setGanttPreviewMode('ai'); setGanttPreviewOpen(true) }}
+                    storageKey="new-ai"
                   />
                 </CardContent>
               </Card>
@@ -2665,6 +2662,7 @@ export default function NewProjectPage() {
                     onTaskReorder={(oldIdx, newIdx) => setManualTasks(arrayMove(manualTasks, oldIdx, newIdx))}
                     onTaskDateChange={handleManualTaskDateChange}
                     onGanttPreview={() => { setGanttPreviewMode('manual'); setGanttPreviewOpen(true) }}
+                    storageKey="new-manual"
                   />
                 </CardContent>
               </Card>
