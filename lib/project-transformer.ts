@@ -3,6 +3,7 @@ import {
   projectTierToFe,
   demandSourceToFe,
 } from '@/lib/enum-mappers'
+import { todayUtcStr, toUtcDateStr } from '@/lib/date-utils'
 // ─── Auto-compute project status & progress from tasks ─────
 
 interface FeTask {
@@ -23,7 +24,7 @@ function computeProjectStatus(
 ): 'green' | 'yellow' | 'red' {
   if (tasks.length === 0) return 'green'
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayUtcStr()
   const overdueTasks = tasks.filter(t => t.status !== 'done' && t.endDate < today)
   const blockedTasks = tasks.filter(t => t.status === 'blocked')
   const doneTasks = tasks.filter(t => t.status === 'done')
@@ -35,7 +36,7 @@ function computeProjectStatus(
   const blockedRatio = blockedTasks.length / tasks.length
 
   // Red: >30% overdue or >20% blocked, or project end date passed
-  const projectEnd = projectEndDate.toISOString().split('T')[0]
+  const projectEnd = toUtcDateStr(projectEndDate)
   if (overdueRatio > 0.3 || blockedRatio > 0.2 || (projectEnd < today && doneTasks.length < tasks.length)) {
     return 'red'
   }

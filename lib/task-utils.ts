@@ -1,4 +1,5 @@
 import { type Task, type TaskLog } from './mock-data'
+import { toUtcDateStr } from './date-utils'
 
 export type ComputedTaskStatus = 'completed' | 'on-track' | 'at-risk' | 'overdue' | 'overdue-not-started' | 'not-started'
 
@@ -15,7 +16,10 @@ export function computeTaskStatus(
   const endDate = new Date(task.endDate)
   const startDate = new Date(task.startDate)
 
-  if (referenceDate > endDate) return 'overdue'
+  // Overdue only once the calendar day has fully passed — consistent with the
+  // project-status engine (due-today is NOT yet overdue). Compare UTC calendar
+  // dates so all screens agree on "today". (Bug #9)
+  if (toUtcDateStr(referenceDate) > toUtcDateStr(endDate)) return 'overdue'
 
   const taskSpecificLogs = taskLogs.filter(l => l.taskId === task.id)
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus } from '@/lib/sync-milestone-status'
+import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import { notifyProjectOverdueIfNeeded } from '@/lib/notifications'
 import {
@@ -28,18 +28,20 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
+    // ── Compute task progress from task-log coverage FIRST ──
+    // (must precede autoProgressTasks, which reads fresh progress to decide
+    //  todo→in_progress vs blocked — Bug #10)
+    await syncTaskProgressFromLogs(project.tasks, project.taskLogs)
+
     // ── Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo ──
     await autoProgressTasks(project.tasks, project.taskLogs)
-
-    // ── Compute task progress from task-log coverage ──
-    await syncTaskProgressFromLogs(project.tasks, project.taskLogs)
 
     // ── Auto-sync milestone statuses (now includes blocked) ──
     for (const ms of project.milestones) {
       const msTasks = project.tasks.filter(t => t.milestoneId === ms.id && !t.parentId)
       if (msTasks.length === 0) continue
       const correctStatus = computeMilestoneStatus(msTasks)
-      const correctProgress = Math.round(msTasks.reduce((s, t) => s + t.progress, 0) / msTasks.length)
+      const correctProgress = computeWeightedProgress(msTasks)
       if (ms.status !== correctStatus || ms.progress !== correctProgress) {
         await prisma.milestone.update({
           where: { id: ms.id },
@@ -222,7 +224,7 @@ export async function DELETE(
 async function repairTaskDates(project: {
   startDate: Date
   milestones: { id: string; dueDate: Date; sortOrder: number }[]
-  tasks: { id: string; milestoneId: string; durationDays: number; startDate: Date; endDate: Date; sortOrder: number; parentId: string | null; originalStartDate: Date | null; originalEndDate: Date | null }[]
+  tasks: { id: string; milestoneId: string; durationDays: number; startDate: Date; endDate: Date; sortOrder: number; parentId: string | null; originalStartDate: Date | null; originalEndDate: Date | null; manualDates: boolean }[]
 }) {
   const sortedMs = [...project.milestones].sort((a, b) => a.sortOrder - b.sortOrder)
   let msCurrentStart = new Date(project.startDate)
@@ -265,8 +267,11 @@ async function repairTaskDates(project: {
     let taskCurrent = new Date(msStart)
     for (const task of parentTasks) {
       const days = Math.max(task.durationDays || 1, 1)
-      const taskStart = needsRepair ? new Date(taskCurrent) : new Date(task.startDate)
-      const taskEnd = needsRepair ? addDay(taskCurrent, days - 1) : new Date(task.endDate)
+      // Respect manual dates: a user-overridden task keeps its own dates unless
+      // it is itself broken. Only re-sequence auto (non-manual) tasks. (Bug #7)
+      const taskManualKeep = task.manualDates && !isBroken(task.startDate, task.endDate)
+      const taskStart = (needsRepair && !taskManualKeep) ? new Date(taskCurrent) : new Date(task.startDate)
+      const taskEnd = (needsRepair && !taskManualKeep) ? addDay(taskCurrent, days - 1) : new Date(task.endDate)
 
       if (needsRepair && (task.startDate.getTime() !== taskStart.getTime() ||
           task.endDate.getTime() !== taskEnd.getTime())) {
@@ -293,10 +298,12 @@ async function repairTaskDates(project: {
         let subCurrent = new Date(taskStart)
         for (const sub of subtasks) {
           const subDays = Math.max(sub.durationDays || 1, 1)
-          const subStart = new Date(subCurrent)
-          const subEnd = addDay(subCurrent, subDays - 1)
-          if (sub.startDate.getTime() !== subStart.getTime() ||
-              sub.endDate.getTime() !== subEnd.getTime()) {
+          // Respect manual dates on subtasks too (Bug #7)
+          const subManualKeep = sub.manualDates && !isBroken(sub.startDate, sub.endDate)
+          const subStart = subManualKeep ? new Date(sub.startDate) : new Date(subCurrent)
+          const subEnd = subManualKeep ? new Date(sub.endDate) : addDay(subCurrent, subDays - 1)
+          if (!subManualKeep && (sub.startDate.getTime() !== subStart.getTime() ||
+              sub.endDate.getTime() !== subEnd.getTime())) {
             await prisma.task.update({
               where: { id: sub.id },
               data: {

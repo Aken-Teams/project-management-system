@@ -378,6 +378,17 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   type WorkItemsDiff = ReturnType<typeof computeWorkItemsDiff>
 
   const executeBatchSave = async (diff: WorkItemsDiff) => {
+    // Any non-OK response aborts the whole batch and bubbles up to handleSave's
+    // catch (which shows an error) — otherwise a mid-batch failure would silently
+    // leave a half-saved tree while telling the user it saved. (Bug #8)
+    const ensureOk = async (res: Response, what: string) => {
+      if (!res.ok) {
+        let detail = ''
+        try { detail = (await res.json())?.error ?? '' } catch { /* ignore */ }
+        throw new Error(`${what}失敗（${res.status}）${detail ? '：' + detail : ''}`)
+      }
+      return res
+    }
     // Order matters for the drag-move feature: a milestone/parent-task delete
     // CASCADES to its children. So we create + update everything first (which
     // reparents any children OFF a milestone/task that is about to be deleted),
@@ -385,24 +396,22 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     // 1. Create new milestones → collect real IDs
     const newMsIdMap = new Map<string, string>()
     for (const ms of diff.milestonesToAdd) {
-      const res = await fetch(`/api/projects/${project.id}/milestones`, {
+      const res = await ensureOk(await fetch(`/api/projects/${project.id}/milestones`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ms),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
-        if (draftMs) newMsIdMap.set(draftMs.id, created.id)
-      }
+      }), '新增里程碑')
+      const created = await res.json()
+      const draftMs = tlMilestones.find(m => m.name === ms.name && !origMilestones.some(o => o.id === m.id))
+      if (draftMs) newMsIdMap.set(draftMs.id, created.id)
     }
     // 2. Update existing milestones
     for (const ms of diff.milestonesToUpdate) {
-      await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
+      await ensureOk(await fetch(`/api/projects/${project.id}/milestones/${ms.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ms),
-      })
+      }), '更新里程碑')
     }
     // 3. Create new tasks (resolve draft milestone/parent IDs)
     const newTaskIdMap = new Map<string, string>()
@@ -411,41 +420,39 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       const resolvedParentId = task.parentId
         ? (newTaskIdMap.get(task.parentId) || task.parentId)
         : undefined
-      const res = await fetch(`/api/projects/${project.id}/tasks`, {
+      const res = await ensureOk(await fetch(`/api/projects/${project.id}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...task, milestoneId: resolvedMsId, parentId: resolvedParentId }),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        newTaskIdMap.set(task.tempId, created.id)
-      }
+      }), '新增任務')
+      const created = await res.json()
+      newTaskIdMap.set(task.tempId, created.id)
     }
     // 4. Update existing tasks (resolve draft milestone/parent IDs from this session)
     for (const task of diff.tasksToUpdate) {
       const resolved: typeof task = { ...task }
       if (task.milestoneId) resolved.milestoneId = newMsIdMap.get(task.milestoneId) || task.milestoneId
       if (task.parentId) resolved.parentId = newTaskIdMap.get(task.parentId) || task.parentId
-      await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+      await ensureOk(await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(resolved),
-      })
+      }), '更新任務')
     }
     // 5. Delete tasks (children already reparented away above; safe now)
     for (const taskId of diff.tasksToDelete) {
-      await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' })
+      await ensureOk(await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'DELETE' }), '刪除任務')
     }
     // 6. Delete milestones (their tasks already moved/deleted; now empty)
     for (const msId of diff.milestonesToDelete) {
-      await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' })
+      await ensureOk(await fetch(`/api/projects/${project.id}/milestones/${msId}`, { method: 'DELETE' }), '刪除里程碑')
     }
     // 7. Rebuild sequential task dependencies on ANY work item change
     const hasAnyWorkItemChange =
       diff.tasksToAdd.length > 0 || diff.tasksToDelete.length > 0 || diff.tasksToUpdate.length > 0 ||
       diff.milestonesToAdd.length > 0 || diff.milestonesToDelete.length > 0 || diff.milestonesToUpdate.length > 0
     if (hasAnyWorkItemChange) {
-      await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' })
+      await ensureOk(await fetch(`/api/projects/${project.id}/rebuild-dependencies`, { method: 'POST' }), '重建相依關係')
     }
     return newMsIdMap
   }

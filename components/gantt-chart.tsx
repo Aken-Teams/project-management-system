@@ -221,7 +221,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
 
   // Helper: compute milestone bar span (planned)
   const getMilestoneBarRange = (ms: Milestone, msTasks: Task[]) => {
-    if (msTasks.length === 0) return { start: ms.dueDate, end: ms.dueDate }
+    // No tasks yet: draw the milestone's OWN range (start～due) so a milestone-only
+    // row (e.g. straight from a template) still shows a bar instead of a zero-width
+    // sliver. Falls back to a single day only when it truly has no start date.
+    if (msTasks.length === 0) return { start: ms.startDate || ms.dueDate, end: ms.dueDate }
     // 方案 A：里程碑長條 = 它任務(含子任務)的 envelope（最早開始 ～ 最晚結束），
     // 與編輯表同一套；不依賴可能不同步的 dueDate。
     let start = msTasks[0].startDate
@@ -664,7 +667,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         </span>
                       </>
                       )
-                    })() : null}
+                    })() : (() => {
+                      // No tasks yet: still draw the milestone's own span (start～due) as a
+                      // simple plan bar so a milestone-only row (e.g. straight from a template)
+                      // is visible instead of an empty row. (Bug #13)
+                      if (!msBar.start || !msEnd) return null
+                      return (
+                        <div
+                          className="absolute h-5 rounded-sm overflow-hidden"
+                          style={{
+                            ...barStyle(msBar.start, msEnd),
+                            top: 10,
+                            backgroundColor: PLAN_COLOR.bg,
+                            border: `1px solid ${PLAN_COLOR.border}80`,
+                          }}
+                        >
+                          <div className="h-full rounded-sm" style={{ width: `${milestone.progress}%`, backgroundColor: colors.bg }} />
+                        </div>
+                      )
+                    })()}
                     <TodayLine />
                   </div>
                 </div>

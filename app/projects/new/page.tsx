@@ -2882,7 +2882,9 @@ export default function NewProjectPage() {
               const endDate = lastMs?.endDate || (isAi ? aiEditableData.endDate : manualData.endDate) || startDate
 
               const previewMilestones = milestones.map(m => ({
-                id: m.id, name: m.name, dueDate: m.endDate || '',
+                id: m.id, name: m.name,
+                startDate: m.startDate || undefined,
+                dueDate: m.endDate || '',
                 status: 'todo' as const, progress: 0,
               }))
               const previewTasks = tasks.map(t => {

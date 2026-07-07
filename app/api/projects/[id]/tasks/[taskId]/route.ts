@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
+import { syncMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
 import { notifyTaskAssigned } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
@@ -134,10 +134,12 @@ export async function PUT(
     if (task.parentId && (data.status !== undefined || data.progress !== undefined)) {
       const siblings = await prisma.task.findMany({
         where: { parentId: task.parentId },
-        select: { status: true, progress: true },
+        select: { status: true, progress: true, durationDays: true },
       })
-      const avgProgress = Math.round(siblings.reduce((s, t) => s + t.progress, 0) / siblings.length)
-      const allDone = siblings.every(t => t.status === 'done')
+      // Weighted by durationDays (consistent with milestone progress) + guards
+      // against divide-by-zero when the last child was removed concurrently (Bug #2/#11)
+      const avgProgress = computeWeightedProgress(siblings)
+      const allDone = siblings.length > 0 && siblings.every(t => t.status === 'done')
 
       const parentUpdate: Record<string, unknown> = { progress: avgProgress }
       if (allDone) {

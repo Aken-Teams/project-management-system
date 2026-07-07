@@ -1,4 +1,22 @@
 import { prisma } from '@/lib/db'
+import { todayUtc } from '@/lib/date-utils'
+
+/**
+ * Weighted progress by durationDays (e.g. A=10d@100% + B=20d@0% → 33%).
+ * Single source of truth so milestone/parent progress can't flip-flop between
+ * weighted and plain-average across different endpoints. (Bug #2)
+ * Empty list or zero total days → 0 (also guards divide-by-zero, Bug #11).
+ */
+export function computeWeightedProgress(
+  items: { progress: number; durationDays?: number | null }[],
+): number {
+  if (items.length === 0) return 0
+  const totalDays = items.reduce((sum, t) => sum + (t.durationDays || 1), 0)
+  if (totalDays <= 0) return 0
+  return Math.round(
+    items.reduce((sum, t) => sum + t.progress * (t.durationDays || 1), 0) / totalDays,
+  )
+}
 
 /**
  * Recalculate and update a milestone's status & progress based on its tasks.
@@ -18,12 +36,7 @@ export async function syncMilestoneStatus(milestoneId: string, projectId: string
   if (tasks.length === 0) return
 
   const status = computeMilestoneStatus(tasks)
-
-  // Weighted average by durationDays (e.g. A=10d@100% + B=20d@0% → 33%)
-  const totalDays = tasks.reduce((sum, t) => sum + (t.durationDays || 1), 0)
-  const progress = totalDays > 0
-    ? Math.round(tasks.reduce((sum, t) => sum + t.progress * (t.durationDays || 1), 0) / totalDays)
-    : 0
+  const progress = computeWeightedProgress(tasks)
 
   await prisma.milestone.update({
     where: { id: milestoneId },
@@ -71,8 +84,8 @@ export async function autoProgressTasks(
   }[],
   taskLogs?: { taskId: string }[],
 ): Promise<string[]> {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // UTC-midnight today, matching DB-stored calendar dates (Bug #9)
+  const today = todayUtc()
 
   const updatedIds: string[] = []
   const doneTaskIds = new Set(tasks.filter(t => t.status === 'done').map(t => t.id))
@@ -210,10 +223,7 @@ export async function syncTaskProgressFromLogs(
       target = 100
     } else if (subtasks && subtasks.length > 0) {
       // Parent task: weighted average of subtask progress by durationDays
-      const totalDays = subtasks.reduce((sum, s) => sum + (s.durationDays || 1), 0)
-      target = totalDays > 0
-        ? Math.round(subtasks.reduce((sum, s) => sum + s.progress * (s.durationDays || 1), 0) / totalDays)
-        : 0
+      target = computeWeightedProgress(subtasks)
     } else {
       // Leaf task: time-position based progress
       // IMPORTANT: Only completedAt grants 100%. Auto-calc caps at 99%.
