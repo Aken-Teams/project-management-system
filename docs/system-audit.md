@@ -176,6 +176,30 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 
 ---
 
+## 5.5 重構後殘留清理清單（ADR-01/02 之後，2026-07-07 審查）
+
+> 皆為**低風險、不影響功能**的清理與小改善；記錄避免日後困惑。功能面的真問題已於上方修正。
+
+**🧹 死碼 → ✅ 已清除（2026-07-07，約 560 行）**
+- `components/project-edit-dialog.tsx`：已刪整套舊拖曳機制 `computeMove`/`runMove`/`applyMove`、`pendingMove` + 「壓平子任務確認」AlertDialog、整套 snap 子系統（`snapTargets`/`snapDialogOpen`/`snapDismissedIds`/`applySnapToAuto` + 「自動貼齊?」Dialog）、鎖切換 handler（`handleTlMilestoneToggleLock`/`handleTlTaskToggleLock`/`envelopeOfChildren`）+ 傳遞。
+- `components/timeline-table.tsx`：已刪 `SubtaskRow`（~173 行）、`isManual`/`isAutoLocked`/`derivedDuration`/`inconsistent`/`envelopeStart/End`/`envelopeOf`/`msEnvelope`/`onToggleLock`（props/型別/memo/傳遞）、`Lock`/`LockOpen` import。
+- 剩餘極小 no-op：`applyTaskChangeWithBubbleUp` 的 `directEditId` 參數 + 呼叫端 `isParent ? taskId : undefined`（無害，動到多處呼叫點才能清，暫留）。
+- tsc：兩檔零錯，全專案總錯誤數未增（22 個皆既有）。
+
+**⚠️ 小問題（待評估，非阻斷）**
+- **深度上限拒絕無提示**：`moveTreeItem` 超過 6 層時 `return null`，拖曳只是彈回、無說明 → 可加 toast「無法移動（超過 6 層）」。
+- **`overflowMap` 僅一層**：`project-edit-dialog.tsx` 的 overflow 偵測只比一層，深層（第 3 層以下）超出里程碑偵測不到；且 ADR-01 後父子日期本可不同，overflow 是否仍要「擋存檔」值得討論。
+- **存後重建只同步 timeline**：`reinitTimelineFromServer` 不重抓 form/budget，`form` 保留存前本地值（risk/team 因即時寫入自癒）→ 低風險。
+- **demote/promote 用確定性 id**（`demoted-${id}`/`ms-from-${id}`）：同一次編輯未存前重複 demote/promote 同一項會 id 撞 → 極低機率邊緣。
+- **甘特里程碑 % 仍重算一層**：`msAggregatedProgress` 只平均直接子項；但 DB 已遞迴滾好、stored 進度正確，屬冗餘重算（顯示可能略不同）→ 低。
+
+**✅ 已確認正確（深層下無誤，不用改）**
+- 專案層級進度/燈號（`project-transformer.ts`：只計頂層任務、里程碑平均，不重複計）。
+- DB 端遞迴進度滾動（`sync-milestone-status.ts` bottom-up、task PUT route 往上滾所有祖先）。
+- Task 自我參照 cascade 刪除（schema `onDelete: Cascade`）→ 刪父自動刪整棵子樹。
+
+---
+
 ## 六、測試清單（回歸測試用）
 
 > 每次改動後跑這份清單。自動測試 = 我用腳本/API 呼叫驗證；手動測試 = 你在 UI 操作驗證。
@@ -220,6 +244,9 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 | 2026-07-07 | ADR-02 Stage 1/2/5：3 層→6 層。遞迴渲染（TaskRow depth 化，棄用 SubtaskRow）；moveTreeItem/promoteTaskToMilestone/indent/outdent 改深度感知（上限 5，超過拒絕）；編輯彈窗改用 moveTreeItem（棄用舊 computeMove）；存檔支援深層（建案 POST 多趟解析、編輯 diff 依深度排序、visualSortMap 遞迴 DFS）| lib/timeline-tree.ts、components/timeline-table.tsx、app/projects/new/page.tsx、components/project-edit-dialog.tsx、lib/timeline-utils.ts、app/api/projects/route.ts | ADR-02 | tsc 零新錯；**待 UI 測建立/移動/存深層樹** |
 | 2026-07-07 | ADR-02 Stage 3 遞迴進度 + 移除殘留的「手動/自動」鎖按鈕（ADR-01 後全手動已無意義）| lib/sync-milestone-status.ts（bottom-up 深層優先）、app/api/projects/[id]/tasks/[taskId]/route.ts（往上滾過所有祖先）、components/timeline-table.tsx（移除鎖鈕）| ADR-02、ADR-01 | tsc 零新錯 |
 | 2026-07-07 | ADR-02 Stage 4 甘特圖深層遞迴：抽 `renderGanttSub(sub, depth)` 遞迴渲染第 3~6 層（展開/收合 + 深度縮排 + 用自身 stored 進度），棄用寫死的 2 層子任務區塊 | components/gantt-chart.tsx | ADR-02 | tsc 零新錯（僅剩既有 setExpandedTasks prev 問題）。**ADR-02 全 5 stage 完成** |
+| 2026-07-07 | 甘特預設全展開；AI 輔助建立隱藏（`SHOW_AI_TAB` 旗標，可復原）；編輯彈窗甘特預覽補傳里程碑 startDate（#13 漏網）；任務 tooltip 也 portal 到 body（貼游標）；編輯「儲存變更」改為跳提示不關閉 + 存後重抓重建狀態（防重複建立）| components/gantt-chart.tsx、app/projects/new/page.tsx、components/project-edit-dialog.tsx | — | tsc 零新錯 |
+| 2026-07-07 | **重構後審查修正**：(1) 深層存檔刪除防 404（刪父 DB cascade 掉子項→子項刪回 404 原本會中斷整批）→ `ensureOk` 容忍 DELETE 404；(2) 甘特里程碑長條改用里程碑自身絕對日期（原本用任務 envelope，與表格不一致且蓋不到深層）；(3) 移除 ADR-01 後失義的 ⚠「理想應與子任務一致」警告（只留 overflow 警告）| components/project-edit-dialog.tsx、components/gantt-chart.tsx、components/timeline-table.tsx | 見 5.5 殘留清單 | tsc 零新錯 |
+| 2026-07-07 | **死碼清除**（約 560 行）：編輯彈窗舊拖曳機制 computeMove/runMove/applyMove + snap 子系統 + 壓平確認框 + 鎖切換 handler；timeline-table 的 SubtaskRow + lock/envelope/inconsistent vars/props/memo + Lock imports | components/project-edit-dialog.tsx、components/timeline-table.tsx | 見 5.5 | 兩檔零錯；全專案總錯誤數 22（皆既有）未增 |
 
 ### 已修正 Bug（從第五章移入）
 

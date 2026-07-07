@@ -187,25 +187,12 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   // Week grid count
   const weekCount = Math.ceil(totalDays / 7)
 
-  // Helper: compute milestone bar span (planned)
-  const getMilestoneBarRange = (ms: Milestone, msTasks: Task[]) => {
-    // No tasks yet: draw the milestone's OWN range (start～due) so a milestone-only
-    // row (e.g. straight from a template) still shows a bar instead of a zero-width
-    // sliver. Falls back to a single day only when it truly has no start date.
-    if (msTasks.length === 0) return { start: ms.startDate || ms.dueDate, end: ms.dueDate }
-    // 方案 A：里程碑長條 = 它任務(含子任務)的 envelope（最早開始 ～ 最晚結束），
-    // 與編輯表同一套；不依賴可能不同步的 dueDate。
-    let start = msTasks[0].startDate
-    let end = msTasks[0].endDate
-    for (const t of msTasks) {
-      if (t.startDate < start) start = t.startDate
-      if (t.endDate > end) end = t.endDate
-      for (const s of tasks.filter(st => st.parentId === t.id)) {
-        if (s.startDate < start) start = s.startDate
-        if (s.endDate > end) end = s.endDate
-      }
-    }
-    return { start, end }
+  // Helper: compute milestone bar span (planned).
+  // ADR-01/02: the milestone owns its OWN absolute start/due (shown in the edit table),
+  // independent of its tasks. Draw the bar from that range so the Gantt matches the
+  // table and covers deep descendants regardless of nesting depth.
+  const getMilestoneBarRange = (ms: Milestone, _msTasks: Task[]) => {
+    return { start: ms.startDate || ms.dueDate, end: ms.dueDate }
   }
 
   // Helper: get actual start for a single task (earliest log date, or completedAt as fallback)

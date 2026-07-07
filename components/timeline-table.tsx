@@ -33,7 +33,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle, Lock, LockOpen, IndentIncrease, IndentDecrease } from 'lucide-react'
+import { GripVertical, Plus, Trash2, X, ChevronRight, ChevronDown, ChevronsUpDown, BarChart3, Milestone as MilestoneIcon, AlertTriangle, IndentIncrease, IndentDecrease } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -90,13 +90,11 @@ export interface TimelineTableProps {
   onMilestoneAdd: () => void
   onMilestoneReorder: (oldIndex: number, newIndex: number) => void
   onMilestoneDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
-  onMilestoneToggleLock?: (index: number) => void
   onTaskAdd: (task: TimelineTask) => void
   onTaskRemove: (taskId: string) => void
   onTaskUpdate: (taskId: string, field: keyof TimelineTask, value: string | number) => void
   onTaskReorder: (oldIndex: number, newIndex: number) => void
   onTaskDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
-  onTaskToggleLock?: (taskId: string) => void
   onGanttPreview?: () => void
   // Tree drag-move: reparent / convert between subtask · task · milestone (dates preserved)
   onItemMove?: (activeId: string, overId: string, mode: DropMode) => void
@@ -177,13 +175,10 @@ const MilestoneRow = memo(function MilestoneRow({
   collapsed,
   taskCount,
   overflowInfo,
-  envelopeStart,
-  envelopeEnd,
   onUpdate,
   onRemove,
   onToggleCollapse,
   onDateChange,
-  onToggleLock,
   onDemote,
   dropHint,
   dropBadge,
@@ -194,13 +189,10 @@ const MilestoneRow = memo(function MilestoneRow({
   collapsed: boolean
   taskCount: number
   overflowInfo?: OverflowInfo
-  envelopeStart?: string
-  envelopeEnd?: string
   onUpdate: (index: number, field: 'name' | 'durationDays', value: string | number) => void
   onRemove: (index: number) => void
   onToggleCollapse: () => void
   onDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
-  onToggleLock?: (index: number) => void
   onDemote?: (milestoneId: string) => void
   dropHint?: DropMode
   dropBadge?: DropMode
@@ -213,20 +205,6 @@ const MilestoneRow = memo(function MilestoneRow({
     transition,
     opacity: isDragging ? 0.5 : 1,
   }
-
-  // 方案 A：有任務的里程碑，起訖 = 任務最早開始～最晚結束（envelope）。
-  // 預設鎖定（唯讀 envelope）；解鎖（manualDates）後可手動加寬，但卡死不可低於子層。
-  const hasTasks = taskCount > 0
-  const isManual = hasTasks && !!milestone.manualDates
-  const isAutoLocked = hasTasks && !isManual
-  // 手動值與子層 envelope 不一致（父層大於子層）→ ⚠ 提醒
-  const inconsistent = !!isManual && (
-    (!!envelopeStart && !!milestone.startDate && milestone.startDate !== envelopeStart) ||
-    (!!envelopeEnd && !!milestone.endDate && milestone.endDate !== envelopeEnd)
-  )
-  const derivedDuration = hasTasks && milestone.startDate && milestone.endDate
-    ? Math.round((new Date(milestone.endDate).getTime() - new Date(milestone.startDate).getTime()) / 86400000) + 1
-    : (milestone.durationDays || 0)
 
   return (
     <div
@@ -322,12 +300,10 @@ const MilestoneRow = memo(function MilestoneRow({
         ) : (
           <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{milestone.endDate || '—'}</span>
         )}
-        {(overflowInfo || inconsistent) && (
+        {overflowInfo && (
           <span
             className="shrink-0 cursor-help"
-            title={overflowInfo
-              ? `任務結束日（${overflowInfo.childEnd}）超出里程碑結束日（${milestone.endDate}）${overflowInfo.overflowDays} 天`
-              : `手動加寬中：里程碑範圍大於任務（任務 ${envelopeStart ?? ''}～${envelopeEnd ?? ''}）。理想應與任務一致`}
+            title={`任務結束日（${overflowInfo.childEnd}）超出里程碑結束日（${milestone.endDate}）${overflowInfo.overflowDays} 天`}
           >
             <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
           </span>
@@ -358,9 +334,8 @@ const MilestoneRow = memo(function MilestoneRow({
 }, (a, b) =>
   a.milestone === b.milestone && a.index === b.index && a.canRemove === b.canRemove &&
   a.collapsed === b.collapsed && a.taskCount === b.taskCount && a.overflowInfo === b.overflowInfo &&
-  a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
   a.onUpdate === b.onUpdate && a.onRemove === b.onRemove && a.onDateChange === b.onDateChange &&
-  a.onToggleLock === b.onToggleLock && a.onDemote === b.onDemote && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge)
+  a.onDemote === b.onDemote && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge)
 
 // ─── TaskRow ────────────────────────────────────────────────
 const TaskRow = memo(function TaskRow({
@@ -372,14 +347,11 @@ const TaskRow = memo(function TaskRow({
   collapsed,
   msIndex,
   overflowInfo,
-  envelopeStart,
-  envelopeEnd,
   onRemove,
   onUpdate,
   onToggleAddSubtask,
   onToggleCollapse,
   onDateChange,
-  onToggleLock,
   onIndent,
   onOutdent,
   depth,
@@ -393,14 +365,11 @@ const TaskRow = memo(function TaskRow({
   collapsed: boolean
   msIndex: number
   overflowInfo?: OverflowInfo
-  envelopeStart?: string
-  envelopeEnd?: string
   onRemove: (id: string) => void
   onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
   onToggleAddSubtask: () => void
   onToggleCollapse: () => void
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
-  onToggleLock?: (taskId: string) => void
   onIndent?: (taskId: string) => void
   onOutdent?: (taskId: string) => void
   depth: number
@@ -430,19 +399,6 @@ const TaskRow = memo(function TaskRow({
   }
 
   const p = priorityConfig[task.priority]
-
-  // 方案 A：有子任務的任務，日期 = 子任務最早開始～最晚結束（envelope）。
-  // 預設鎖定（唯讀 envelope）；解鎖（manualDates）後可手動加寬，但卡死不可低於子層。
-  const hasSubtasks = subtaskCount > 0
-  const isManual = hasSubtasks && !!task.manualDates
-  const isAutoLocked = hasSubtasks && !isManual
-  const inconsistent = !!isManual && (
-    (!!envelopeStart && !!startDate && startDate !== envelopeStart) ||
-    (!!envelopeEnd && !!endDate && endDate !== envelopeEnd)
-  )
-  const derivedDuration = hasSubtasks && startDate && endDate
-    ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1
-    : (task.durationDays || 0)
 
   return (
     <div
@@ -566,12 +522,10 @@ const TaskRow = memo(function TaskRow({
         ) : (
           <span className={cn("text-sm text-muted-foreground", overflowInfo && "text-amber-700")}>{endDate || '—'}</span>
         )}
-        {(overflowInfo || inconsistent) && (
+        {overflowInfo && (
           <span
             className="shrink-0 cursor-help"
-            title={overflowInfo
-              ? `子任務結束日（${overflowInfo.childEnd}）超出任務結束日（${endDate}）${overflowInfo.overflowDays} 天`
-              : `手動加寬中：任務範圍大於子任務（子任務 ${envelopeStart ?? ''}～${envelopeEnd ?? ''}）。理想應與子任務一致`}
+            title={`子任務結束日（${overflowInfo.childEnd}）超出任務結束日（${endDate}）${overflowInfo.overflowDays} 天`}
           >
             <AlertTriangle className="h-3 w-3 text-amber-500" />
           </span>
@@ -633,9 +587,8 @@ const TaskRow = memo(function TaskRow({
   a.task === b.task && a.startDate === b.startDate && a.endDate === b.endDate &&
   a.teamMembers === b.teamMembers && a.subtaskCount === b.subtaskCount && a.collapsed === b.collapsed &&
   a.msIndex === b.msIndex && a.overflowInfo === b.overflowInfo &&
-  a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
   a.onRemove === b.onRemove && a.onUpdate === b.onUpdate && a.onDateChange === b.onDateChange &&
-  a.onToggleLock === b.onToggleLock && a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.depth === b.depth && a.dropHint === b.dropHint)
+  a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.depth === b.depth && a.dropHint === b.dropHint)
 
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
@@ -781,180 +734,6 @@ function InlineTaskInput({
   )
 }
 
-// ─── SubtaskRow ─────────────────────────────────────────────
-const SubtaskRow = memo(function SubtaskRow({
-  task,
-  startDate,
-  endDate,
-  teamMembers,
-  msIndex,
-  onRemove,
-  onUpdate,
-  onDateChange,
-  onOutdent,
-  dropHint,
-}: {
-  task: TimelineTask
-  startDate?: string
-  endDate?: string
-  teamMembers: TimelineTeamMember[]
-  msIndex: number
-  onRemove: (id: string) => void
-  onUpdate: (id: string, field: keyof TimelineTask, value: string | number) => void
-  onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
-  onOutdent?: (taskId: string) => void
-  dropHint?: DropMode
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id })
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  }
-
-  const cyclePriority = () => {
-    const order: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high']
-    const idx = order.indexOf(task.priority)
-    onUpdate(task.id, 'priority', order[(idx + 1) % order.length])
-  }
-
-  const priorityConfig = {
-    high: { label: '高', className: 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200' },
-    medium: { label: '中', className: 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200' },
-    low: { label: '低', className: 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200' },
-  }
-
-  const p = priorityConfig[task.priority]
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(`${GRID_COLS} group relative px-2 py-0.5 hover:bg-muted/20 transition-colors text-sm border-l-[3px] ${
-        msIndex % 2 === 0 ? 'border-l-indigo-100 bg-indigo-50/10' : 'border-l-amber-200 bg-amber-50/10'
-      }`, dropRingClass(dropHint))}
-    >
-      <DropBadge mode={dropHint} inside="成為子任務" edge="成為子任務" />
-      {/* Drag */}
-      <div
-        {...attributes}
-        {...listeners}
-        className="flex items-center justify-center cursor-grab active:cursor-grabbing"
-      >
-        <GripVertical className="h-3 w-3 text-muted-foreground/30" />
-      </div>
-
-      {/* Name (deeper indent) */}
-      <div className="pl-10 flex items-center gap-1 min-w-0 pr-2">
-        <span className="text-muted-foreground/20 text-xs select-none">└</span>
-        <Input
-          value={task.title}
-          onChange={(e) => onUpdate(task.id, 'title', e.target.value)}
-          className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1 truncate"
-          placeholder="子任務名稱"
-        />
-        {onOutdent && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => onOutdent(task.id)}
-            className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-            title="升階成任務"
-          >
-            <IndentDecrease className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-
-      {/* Duration */}
-      <div className="flex justify-center">
-        <Input
-          type="number"
-          min={1}
-
-          value={task.durationDays || ''}
-          onChange={(e) => onUpdate(task.id, 'durationDays', Math.max(1, Number(e.target.value) || 1))}
-          className="h-7 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        />
-      </div>
-
-      {/* Start date */}
-      <div className="flex justify-center">
-        {onDateChange ? (
-          <DateInput
-            value={startDate || ''}
-            onCommit={(v) => onDateChange(task.id, 'startDate', v)}
-            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-          />
-        ) : (
-          <span className="text-sm text-muted-foreground">{startDate || ''}</span>
-        )}
-      </div>
-
-      {/* End date */}
-      <div className="flex justify-center">
-        {onDateChange ? (
-          <DateInput
-            value={endDate || ''}
-            min={startDate || undefined}
-            onCommit={(v) => onDateChange(task.id, 'endDate', v)}
-            className="h-7 w-full text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-1"
-          />
-        ) : (
-          <span className="text-sm text-muted-foreground">{endDate || ''}</span>
-        )}
-      </div>
-
-      {/* Assignee */}
-      <div>
-        <Select
-          value={task.assignee || ' '}
-          onValueChange={(v) => onUpdate(task.id, 'assignee', v)}
-        >
-          <SelectTrigger className="h-7 border-0 bg-transparent text-sm focus:ring-1 px-1.5">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent className="max-h-[200px]">
-            <SelectItem value=" ">未指派</SelectItem>
-            {teamMembers.filter(m => m.name.trim()).map((m) => (
-              <SelectItem key={m.id} value={m.name}>
-                {m.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Priority */}
-      <div className="flex justify-center">
-        <button type="button" onClick={cyclePriority} className="transition-opacity">
-          <Badge
-            variant="outline"
-            className={`text-[10px] px-1.5 py-0 cursor-pointer ${p.className}`}
-          >
-            {p.label}
-          </Badge>
-        </button>
-      </div>
-
-      {/* Remove */}
-      <div className="flex justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-          onClick={() => onRemove(task.id)}
-          title="刪除子任務"
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-    </div>
-  )
-})
 
 // ─── InlineSubtaskInput ─────────────────────────────────────
 function InlineSubtaskInput({
@@ -1128,13 +907,11 @@ export function TimelineTable({
   onMilestoneAdd,
   onMilestoneReorder,
   onMilestoneDateChange,
-  onMilestoneToggleLock,
   onTaskAdd,
   onTaskRemove,
   onTaskUpdate,
   onTaskReorder,
   onTaskDateChange,
-  onTaskToggleLock,
   onGanttPreview,
   onItemMove,
   onIndent,
@@ -1176,18 +953,6 @@ export function TimelineTable({
   // Mirror of the last-shown drop hint — drop applies exactly what the badge showed (WYSIWYG)
   const dropHintRef = useRef<{ overId: string; mode: DropMode } | null>(null)
 
-  // Envelope (子層最早開始 ～ 最晚結束) of a parent's children, from computed dates.
-  const envelopeOf = (childIds: string[]): { start?: string; end?: string } => {
-    let start: string | undefined
-    let end: string | undefined
-    for (const id of childIds) {
-      const d = taskDates.get(id)
-      if (!d) continue
-      if (!start || d.startDate < start) start = d.startDate
-      if (!end || d.endDate > end) end = d.endDate
-    }
-    return { start, end }
-  }
 
   const toggleCollapse = (msId: string) => {
     setCollapsedIds((prev) => {
@@ -1327,7 +1092,6 @@ export function TimelineTable({
           onToggleAddSubtask={() => setAddingSubtaskForId((prev) => (prev === task.id ? null : task.id))}
           onToggleCollapse={() => toggleCollapse(task.id)}
           onDateChange={onTaskDateChange}
-          onToggleLock={onTaskToggleLock}
           onIndent={onIndent}
           onOutdent={onOutdent}
         />
@@ -1395,7 +1159,6 @@ export function TimelineTable({
           {milestones.map((milestone, msIndex) => {
             const msParentTasks = tasks.filter((t) => t.milestoneId === milestone.id && !t.parentId)
             const isCollapsed = collapsedIds.has(milestone.id)
-            const msEnvelope = envelopeOf(msParentTasks.map(t => t.id))
             return (
               <div key={milestone.id}>
                 <MilestoneRow
@@ -1405,15 +1168,12 @@ export function TimelineTable({
                   collapsed={isCollapsed}
                   taskCount={msParentTasks.length}
                   overflowInfo={overflows?.get(milestone.id)}
-                  envelopeStart={msEnvelope.start}
-                  envelopeEnd={msEnvelope.end}
                   dropHint={dropHint?.overId === milestone.id ? dropHint.mode : undefined}
                   dropBadge={dropHint?.overId === milestone.id && !(dropHint.activeIsMs && dropHint.mode !== 'inside') ? dropHint.mode : undefined}
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
                   onDateChange={onMilestoneDateChange}
-                  onToggleLock={onMilestoneToggleLock}
                   onDemote={onMilestoneDemote}
                 />
                 {!isCollapsed && (
