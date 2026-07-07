@@ -1225,7 +1225,8 @@ export function TimelineTable({
 
   // Determine drop position within the hovered row using the actual pointer
   // position (initial pointer + drag delta) — far more accurate than the dragged
-  // element's box. Middle 50% = inside (nest), top/bottom 25% = before/after.
+  // element's box. Middle 70% = inside (nest), top/bottom 15% = before/after.
+  // Wider "inside" band makes reparent-drag far easier to hit on short (~30px) rows.
   const computeMode = (event: DragEndEvent | DragOverEvent): DropMode => {
     const overRect = event.over?.rect
     if (!overRect || overRect.height === 0) return 'inside'
@@ -1238,7 +1239,11 @@ export function TimelineTable({
       pointerY = r ? r.top + r.height / 2 : overRect.top + overRect.height / 2
     }
     const rel = (pointerY - overRect.top) / overRect.height
-    return rel < 0.25 ? 'before' : rel > 0.75 ? 'after' : 'inside'
+    // Milestone drags favour reordering (wide before/after edges); task drags favour
+    // nesting (wide middle "inside" band). Keeps both operations easy to hit.
+    const activeIsMs = milestones.some((m) => m.id === String(event.active.id))
+    const [lo, hi] = activeIsMs ? [0.35, 0.65] : [0.15, 0.85]
+    return rel < lo ? 'before' : rel > hi ? 'after' : 'inside'
   }
 
   const handleDragOver = (event: DragOverEvent) => {

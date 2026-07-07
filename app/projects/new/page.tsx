@@ -63,6 +63,7 @@ import {
 } from 'lucide-react'
 import { arrayMove } from '@dnd-kit/sortable'
 import { calculateMilestoneDates, calculateTaskDates, seedSequentialDates, daysBetween } from '@/lib/timeline-utils'
+import { moveTreeItem, type TreeDropMode } from '@/lib/timeline-tree'
 import { GanttChart } from '@/components/gantt-chart'
 
 interface ManualMilestone {
@@ -243,6 +244,7 @@ interface ProjectDraft {
     manualProjectTier?: ProjectTier
     manualDemandSource?: DemandSource
     manualMilestones?: ManualMilestone[]
+    manualTasks?: MilestoneTaskDraft[]
     manualRisks?: ManualRisk[]
     manualTeamDetails?: TeamMemberDraft[]
     manualBudgetItems?: import('@/components/budget-list-editor').BudgetItem[]
@@ -572,6 +574,7 @@ export default function NewProjectPage() {
       manualProjectTier: activeTab === 'manual' ? manualProjectTier : undefined,
       manualDemandSource: activeTab === 'manual' ? manualDemandSource : undefined,
       manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
+      manualTasks: activeTab === 'manual' ? manualTasks : undefined,
       manualRisks: activeTab === 'manual' ? manualRisks : undefined,
       manualTeamDetails: activeTab === 'manual' ? manualTeamDetails : undefined,
       manualBudgetItems: activeTab === 'manual' ? manualBudgetItems : undefined,
@@ -643,6 +646,7 @@ export default function NewProjectPage() {
       if (draft.data.manualProjectTier) setManualProjectTier(draft.data.manualProjectTier)
       if (draft.data.manualDemandSource) setManualDemandSource(draft.data.manualDemandSource)
       if (draft.data.manualMilestones) setManualMilestones(draft.data.manualMilestones)
+      if (draft.data.manualTasks) setManualTasks(draft.data.manualTasks)
       if (draft.data.manualRisks) setManualRisks(draft.data.manualRisks)
       if (draft.data.manualTeamDetails) setManualTeamDetails(draft.data.manualTeamDetails)
       if (draft.data.manualBudgetItems) setManualBudgetItems(draft.data.manualBudgetItems)
@@ -815,6 +819,17 @@ export default function NewProjectPage() {
 
   // ADR-01: milestones are independent of tasks (no auto-expand to fit tasks).
 
+  // Seed absolute dates once the project start is known but milestones are still
+  // unseeded (template applied before start was set, or an old draft). Only fires
+  // when EVERY milestone lacks a startDate — never overwrites user-set dates.
+  useEffect(() => {
+    if (!manualData.startDate || manualMilestones.length === 0) return
+    if (!manualMilestones.every(m => !m.startDate)) return
+    const seeded = seedSequentialDates(manualMilestones, manualTasks, manualData.startDate)
+    setManualMilestones(seeded.milestones)
+    setManualTasks(seeded.tasks)
+  }, [manualData.startDate, manualMilestones, manualTasks])
+
   // Track the last milestone's end date (only changes when milestones actually change)
   const lastMilestoneEndDate = useMemo(() => {
     const endDates = recalculatedMilestones
@@ -880,6 +895,15 @@ export default function NewProjectPage() {
   const aiTaskDates = calculateTaskDates(aiTasks, recalculatedAiMilestones)
 
   // ADR-01: milestones are independent of tasks (no auto-expand to fit tasks).
+
+  // Seed absolute dates once the AI project start is known but milestones are unseeded.
+  useEffect(() => {
+    if (!aiEditableData.startDate || aiMilestones.length === 0) return
+    if (!aiMilestones.every(m => !m.startDate)) return
+    const seeded = seedSequentialDates(aiMilestones, aiTasks, aiEditableData.startDate)
+    setAiMilestones(seeded.milestones)
+    setAiTasks(seeded.tasks)
+  }, [aiEditableData.startDate, aiMilestones, aiTasks])
 
   // Track AI last milestone end date
   const aiLastMilestoneEndDate = useMemo(() => {
@@ -986,6 +1010,47 @@ export default function NewProjectPage() {
       const newDuration = daysBetween(value, currentEnd) + 1
       setAiTasks(prev => prev.map(t => t.id === taskId ? { ...t, startDate: value, durationDays: Math.max(newDuration, 1) } : t))
     }
+  }
+
+  // ─── Tree move (drag reparent) + indent/outdent buttons ─────
+  // Buttons are the reliable path for level changes; drag also works via moveTreeItem.
+  const manualItemMove = (activeId: string, overId: string, mode: TreeDropMode) => {
+    const r = moveTreeItem(manualTasks, manualMilestones, activeId, overId, mode)
+    if (!r) return
+    setManualTasks(r.tasks)
+    setManualMilestones(r.milestones)
+  }
+  const manualIndent = (taskId: string) => {
+    const t = manualTasks.find(x => x.id === taskId)
+    if (!t || t.parentId) return
+    const tops = manualTasks.filter(x => x.milestoneId === t.milestoneId && !x.parentId)
+    const idx = tops.findIndex(x => x.id === taskId)
+    if (idx <= 0) return
+    manualItemMove(taskId, tops[idx - 1].id, 'inside')
+  }
+  const manualOutdent = (taskId: string) => {
+    const t = manualTasks.find(x => x.id === taskId)
+    if (!t || !t.parentId) return
+    manualItemMove(taskId, t.parentId, 'after')
+  }
+  const aiItemMove = (activeId: string, overId: string, mode: TreeDropMode) => {
+    const r = moveTreeItem(aiTasks, aiMilestones, activeId, overId, mode)
+    if (!r) return
+    setAiTasks(r.tasks)
+    setAiMilestones(r.milestones)
+  }
+  const aiIndent = (taskId: string) => {
+    const t = aiTasks.find(x => x.id === taskId)
+    if (!t || t.parentId) return
+    const tops = aiTasks.filter(x => x.milestoneId === t.milestoneId && !x.parentId)
+    const idx = tops.findIndex(x => x.id === taskId)
+    if (idx <= 0) return
+    aiItemMove(taskId, tops[idx - 1].id, 'inside')
+  }
+  const aiOutdent = (taskId: string) => {
+    const t = aiTasks.find(x => x.id === taskId)
+    if (!t || !t.parentId) return
+    aiItemMove(taskId, t.parentId, 'after')
   }
 
   // Team member helpers
@@ -2111,6 +2176,9 @@ export default function NewProjectPage() {
                     onTaskUpdate={(id, field, value) => setAiTasks(aiTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
                     onTaskReorder={(oldIdx, newIdx) => setAiTasks(arrayMove(aiTasks, oldIdx, newIdx))}
                     onTaskDateChange={handleAiTaskDateChange}
+                    onItemMove={aiItemMove}
+                    onIndent={aiIndent}
+                    onOutdent={aiOutdent}
                     onGanttPreview={() => { setGanttPreviewMode('ai'); setGanttPreviewOpen(true) }}
                     storageKey="new-ai"
                   />
@@ -2661,6 +2729,9 @@ export default function NewProjectPage() {
                     onTaskUpdate={(id, field, value) => setManualTasks(manualTasks.map(t => t.id === id ? { ...t, [field]: value } : t))}
                     onTaskReorder={(oldIdx, newIdx) => setManualTasks(arrayMove(manualTasks, oldIdx, newIdx))}
                     onTaskDateChange={handleManualTaskDateChange}
+                    onItemMove={manualItemMove}
+                    onIndent={manualIndent}
+                    onOutdent={manualOutdent}
                     onGanttPreview={() => { setGanttPreviewMode('manual'); setGanttPreviewOpen(true) }}
                     storageKey="new-manual"
                   />

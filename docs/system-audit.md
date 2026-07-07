@@ -215,6 +215,8 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 | 2026-07-07 | 手動測試場景 4 發現：manual 草稿未存/未還原團隊成員與設備清單 | app/projects/new/page.tsx | #14 | tsc 零新錯；需存**新**草稿複驗（舊草稿無資料救不回） |
 | 2026-07-07 | 設計變更 ADR-01 需求A：里程碑/子任務預設全收合 + 展開狀態依專案 id 記憶（localStorage）| components/timeline-table.tsx、app/projects/new/page.tsx、components/project-edit-dialog.tsx | ADR-01(A) | tsc 零新錯；待 UI 複驗 |
 | 2026-07-07 | 設計變更 ADR-01 需求B：拔除編輯流程的依序/瀑布/envelope；改絕對日期（只留 start+天數→end）；里程碑完全手動、日期永遠可編輯；範本套用時 seed 一次 | lib/timeline-utils.ts、app/projects/new/page.tsx、components/project-edit-dialog.tsx、components/timeline-table.tsx | ADR-01(B) | tsc 零新錯；待 UI 重點測「改一列不動別列」 |
+| 2026-07-07 | ADR-01(B) 後續：草稿補存 manualTasks（任務/子任務原本遺失）；加 seed effect（起始日已知但里程碑未 seed 時補排，修「里程碑全擠在專案起始日」+ 救舊草稿）| app/projects/new/page.tsx | #14b、ADR-01(B) | tsc 零新錯；需存**新**草稿複驗 |
+| 2026-07-07 | 拖曳優化（新增+編輯）：放大拖曳「放入」判定區（中間 70%）；建案模式補接 onItemMove/onIndent/onOutdent（原本完全沒接，無法 reparent）；抽共用 `lib/timeline-tree.ts` moveTreeItem | components/timeline-table.tsx、app/projects/new/page.tsx、lib/timeline-tree.ts（新）| #15 拖曳 | tsc 零新錯；待 UI 測跨層/跨里程碑拖曳 + 縮排/升階按鈕 |
 
 ### 已修正 Bug（從第五章移入）
 
