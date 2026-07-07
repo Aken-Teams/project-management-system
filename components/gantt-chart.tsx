@@ -58,25 +58,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
   const [taskTooltip, setTaskTooltip] = useState<{ x: number; y: number; task: Task } | null>(null)
   const [msTooltip, setMsTooltip] = useState<{ x: number; y: number; milestone: Milestone; msTasks: Task[] } | null>(null)
-  // Auto-expand: first incomplete milestone + any overdue-not-started milestones
-  const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(() => {
-    const set = new Set<string>()
-    const today = new Date().toISOString().split('T')[0]
-    let foundFirstIncomplete = false
-    for (const m of milestones) {
-      if (m.status === 'done' || m.progress >= 100) continue
-      const msTasks = tasks.filter(t => t.milestoneId === m.id && !t.parentId)
-      if (msTasks.length === 0) continue
-      if (!foundFirstIncomplete) {
-        set.add(m.id)
-        foundFirstIncomplete = true
-      } else {
-        const msStart = msTasks.reduce((min, t) => t.startDate < min ? t.startDate : min, msTasks[0].startDate)
-        if (msStart <= today) set.add(m.id)
-      }
-    }
-    return set
-  })
+  // Default: expand ALL milestones (ADR-02 — deep trees are easier to read fully open).
+  const [internalExpandedMs, setInternalExpandedMs] = useState<Set<string>>(() =>
+    new Set(milestones.map(m => m.id)),
+  )
   const expandedMs = expandedMilestoneIds ?? internalExpandedMs
   const setExpandedMs = onExpandedMilestoneIdsChange ?? setInternalExpandedMs
 
@@ -87,28 +72,10 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     setExpandedMs(next)
   }, [expandedMs, setExpandedMs])
 
-  // Auto-expand tasks: first incomplete task per expanded milestone (sequential logic)
-  const [internalExpandedTasks, setInternalExpandedTasks] = useState<Set<string>>(() => {
-    const set = new Set<string>()
-    const today = new Date().toISOString().split('T')[0]
-    for (const msId of internalExpandedMs) {
-      const msTasks = tasks.filter(t => t.milestoneId === msId && !t.parentId)
-      let foundFirst = false
-      for (const t of msTasks) {
-        if (t.status === 'done') continue
-        const hasSubtasks = tasks.some(st => st.parentId === t.id)
-        if (!hasSubtasks) continue
-        if (!foundFirst) {
-          set.add(t.id)
-          foundFirst = true
-        } else if (t.startDate <= today) {
-          // Later tasks — only expand if should have started (overdue)
-          set.add(t.id)
-        }
-      }
-    }
-    return set
-  })
+  // Default: expand ALL tasks that have children, at any depth (ADR-02).
+  const [internalExpandedTasks, setInternalExpandedTasks] = useState<Set<string>>(() =>
+    new Set(tasks.filter(t => tasks.some(c => c.parentId === t.id)).map(t => t.id)),
+  )
   const expandedTasks = expandedTaskIds ?? internalExpandedTasks
   const setExpandedTasks = onExpandedTaskIdsChange ?? setInternalExpandedTasks
 
@@ -367,6 +334,101 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   const TodayLine = () => showToday ? (
     <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" style={{ left: `${todayPct}%` }} />
   ) : null
+
+  // ADR-02: render a task at depth ≥ 3 (below a top-level task) and its descendants
+  // recursively, so the Gantt shows all 6 levels. Uses each item's own stored dates
+  // & progress (kept correct by the recursive progress sync).
+  const renderGanttSub = (sub: Task, depth: number): React.ReactNode => {
+    const subChildren = tasks.filter(t => t.parentId === sub.id)
+    const subHasChildren = subChildren.length > 0
+    const subExpanded = expandedTasks.has(sub.id)
+    const subDisplayStatus = overdueNotStartedTaskIds?.has(sub.id) ? 'overdue-not-started' : effectiveStatus(sub)
+    const subColors = STATUS_COLORS[subDisplayStatus] || STATUS_COLORS.todo
+    return (
+      <div key={sub.id}>
+        <div
+          data-task-id={sub.id}
+          className={cn(
+            'flex items-center border-b transition-colors bg-muted/5',
+            selectedTaskId === sub.id && 'bg-amber-50/60 dark:bg-amber-950/20',
+          )}
+        >
+          <div
+            className={cn(
+              'w-[320px] shrink-0 px-3 py-1 border-r sticky left-0 z-10',
+              subHasChildren && 'cursor-pointer hover:bg-accent',
+              selectedTaskId === sub.id ? 'bg-amber-50 dark:bg-amber-950' : 'bg-card',
+            )}
+            style={{ paddingLeft: `${depth * 16 + 8}px` }}
+            onClick={() => {
+              if (subHasChildren) {
+                const n = new Set(expandedTasks)
+                if (n.has(sub.id)) n.delete(sub.id); else n.add(sub.id)
+                setExpandedTasks(n)
+              }
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              {subHasChildren ? (
+                <span className="shrink-0">
+                  {subExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                </span>
+              ) : (
+                <span className="text-muted-foreground/30 text-xs select-none">└</span>
+              )}
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: subColors.bg }} />
+              <span className={cn('text-sm truncate', effectiveStatus(sub) === 'done' && 'text-muted-foreground')}>{sub.title}</span>
+              {subHasChildren && (
+                <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                  {subChildren.filter(c => c.progress >= 100 || c.status === 'done').length}/{subChildren.length}
+                </span>
+              )}
+            </div>
+            {sub.assignee && <span className="text-xs text-muted-foreground ml-6">{sub.assignee}</span>}
+          </div>
+          <div
+            className={cn('flex-1 relative cursor-pointer hover:bg-accent/50 transition-colors', showBaseline ? 'h-14' : 'h-10')}
+            data-timeline-area
+            onClick={(e) => handleTaskClick(sub, e)}
+            onMouseMove={(e) => setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task: sub })}
+            onMouseLeave={() => setTaskTooltip(null)}
+          >
+            <WeekGrid />
+            {showBaseline ? (() => {
+              const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt, sub.status)
+              const subIsDone = effectiveStatus(sub) === 'done'
+              return (
+                <>
+                  <div className="absolute h-3 rounded-sm" style={{ ...barStyle(sub.startDate, sub.endDate), top: 5, backgroundColor: subPlanColors.bg, border: subIsDone ? `1px dashed ${subPlanColors.border}` : `1px solid ${subPlanColors.border}` }} />
+                  {subIsDone && sub.completedAt ? (
+                    <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt), top: 24, backgroundColor: subColors.bg }} />
+                  ) : sub.progress > 0 ? (
+                    <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), todayStr), top: 24, backgroundColor: subColors.bg }} />
+                  ) : null}
+                  <span className="absolute text-[10px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 5 }}>
+                    <span className="text-muted-foreground">{sub.progress}%</span>
+                    {(() => { const diff = getTimeDiffLabel(sub); return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null })()}
+                  </span>
+                </>
+              )
+            })() : (
+              <>
+                <div className="absolute h-5 rounded-sm overflow-hidden" style={{ ...barStyle(sub.startDate, sub.endDate), top: 10, backgroundColor: PLAN_COLOR.bg, border: `1px solid ${PLAN_COLOR.border}80` }}>
+                  <div className="h-full rounded-sm" style={{ width: `${Math.min(sub.progress, 100)}%`, backgroundColor: subColors.bg }} />
+                </div>
+                <span className="absolute text-[10px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 13 }}>
+                  <span className="text-muted-foreground">{sub.progress}%</span>
+                  {(() => { const diff = getTimeDiffLabel(sub); return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null })()}
+                </span>
+              </>
+            )}
+            <TodayLine />
+          </div>
+        </div>
+        {subHasChildren && subExpanded && subChildren.map(c => renderGanttSub(c, depth + 1))}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3">
@@ -931,135 +993,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         <TodayLine />
                       </div>
                     </div>
-                    {/* Subtask rows — deeper indent, collapsible */}
-                    {expandedTasks.has(task.id) && subtasks.map(sub => {
-                      const subDisplayStatus = overdueNotStartedTaskIds?.has(sub.id) ? 'overdue-not-started' : effectiveStatus(sub)
-                      const subColors = STATUS_COLORS[subDisplayStatus] || STATUS_COLORS.todo
-                      return (
-                        <div
-                          key={sub.id}
-                          data-task-id={sub.id}
-                          className={cn(
-                            'flex items-center border-b transition-colors bg-muted/5',
-                            selectedTaskId === sub.id && 'bg-amber-50/60 dark:bg-amber-950/20',
-                          )}
-                        >
-                          <div className={cn(
-                            'w-[320px] shrink-0 px-3 py-1 border-r pl-14 sticky left-0 z-10',
-                            selectedTaskId === sub.id ? 'bg-amber-50 dark:bg-amber-950' : 'bg-card',
-                          )}>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-muted-foreground/30 text-xs select-none">└</span>
-                              <div
-                                className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ backgroundColor: subColors.bg }}
-                              />
-                              <span className={cn(
-                                'text-sm truncate',
-                                effectiveStatus(sub) === 'done' && 'text-muted-foreground',
-                              )}>{sub.title}</span>
-                            </div>
-                            {sub.assignee && (
-                              <span className="text-xs text-muted-foreground ml-6">{sub.assignee}</span>
-                            )}
-                          </div>
-                          <div
-                            className={cn('flex-1 relative cursor-pointer hover:bg-accent/50 transition-colors', showBaseline ? 'h-14' : 'h-10')}
-                            data-timeline-area
-                            onClick={(e) => handleTaskClick(sub, e)}
-                            onMouseMove={(e) => {
-                              setTaskTooltip({ x: e.clientX, y: e.clientY - 12, task: sub })
-                            }}
-                            onMouseLeave={() => setTaskTooltip(null)}
-                          >
-                            <WeekGrid />
-                            {showBaseline ? (() => {
-                              const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt, sub.status)
-                              const subIsDone = effectiveStatus(sub) === 'done'
-                              return (
-                              <>
-                                {/* Plan bar (upper — colored by timing status) */}
-                                <div
-                                  className="absolute h-3 rounded-sm"
-                                  style={{
-                                    ...barStyle(sub.startDate, sub.endDate),
-                                    top: 5,
-                                    backgroundColor: subPlanColors.bg,
-                                    border: subIsDone
-                                      ? `1px dashed ${subPlanColors.border}`
-                                      : `1px solid ${subPlanColors.border}`,
-                                  }}
-                                />
-                                {/* Actual bar (lower — uses actual start date from earliest log) */}
-                                {subIsDone && sub.completedAt ? (
-                                  <div
-                                    className="absolute h-3 rounded-sm"
-                                    style={{
-                                      ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt),
-                                      top: 24,
-                                      backgroundColor: subColors.bg,
-                                    }}
-                                  />
-                                ) : sub.progress > 0 ? (
-                                  <div
-                                    className="absolute h-3 rounded-sm"
-                                    style={{
-                                      ...barStyle(getActualStart(sub.id, sub.startDate), todayStr),
-                                      top: 24,
-                                      backgroundColor: subColors.bg,
-                                    }}
-                                  />
-                                ) : null}
-                                {/* Percentage + time diff label */}
-                                <span
-                                  className="absolute text-[10px] font-medium whitespace-nowrap"
-                                  style={{
-                                    left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
-                                    top: 5,
-                                  }}
-                                >
-                                  <span className="text-muted-foreground">{sub.progress}%</span>
-                                  {(() => {
-                                    const diff = getTimeDiffLabel(sub)
-                                    return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
-                                  })()}
-                                </span>
-                              </>
-                              )
-                            })() : (
-                              /* Non-baseline subtask: single merged bar — plan outline with progress fill */
-                              <>
-                                <div
-                                  className="absolute h-5 rounded-sm overflow-hidden"
-                                  style={{
-                                    ...barStyle(sub.startDate, sub.endDate),
-                                    top: 10,
-                                    backgroundColor: PLAN_COLOR.bg,
-                                    border: `1px solid ${PLAN_COLOR.border}80`,
-                                  }}
-                                >
-                                  <div className="h-full rounded-sm" style={{ width: `${Math.min(sub.progress, 100)}%`, backgroundColor: subColors.bg }} />
-                                </div>
-                                <span
-                                  className="absolute text-[10px] font-medium whitespace-nowrap"
-                                  style={{
-                                    left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`,
-                                    top: 13,
-                                  }}
-                                >
-                                  <span className="text-muted-foreground">{sub.progress}%</span>
-                                  {(() => {
-                                    const diff = getTimeDiffLabel(sub)
-                                    return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null
-                                  })()}
-                                </span>
-                              </>
-                            )}
-                            <TodayLine />
-                          </div>
-                        </div>
-                      )
-                    })}
+                    {/* Subtask rows — recursive, any depth up to level 6 (ADR-02) */}
+                    {expandedTasks.has(task.id) && subtasks.map(sub => renderGanttSub(sub, 3))}
                     </div>
                   )
                 })}

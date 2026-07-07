@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import { cn } from '@/lib/utils'
+import { MAX_TASK_DEPTH } from '@/lib/timeline-tree'
 import {
   DndContext,
   closestCenter,
@@ -283,22 +284,6 @@ const MilestoneRow = memo(function MilestoneRow({
             {taskCount} 任務
           </span>
         )}
-        {hasTasks && onToggleLock && (
-          <button
-            type="button"
-            onClick={() => onToggleLock(index)}
-            className={cn(
-              'shrink-0 inline-flex items-center gap-1 h-6 px-1.5 rounded-md border text-[11px] font-medium transition-colors',
-              isManual
-                ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700',
-            )}
-            title={isManual ? '手動模式：日期可加寬（不可低於子層）。點擊改回自動貼齊' : '自動貼齊任務（鎖定）。點擊解鎖以手動加寬'}
-          >
-            {isManual ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-            <span>{isManual ? '手動' : '自動'}</span>
-          </button>
-        )}
       </div>
 
       {/* Duration — ADR-01: milestone is independent (always editable) */}
@@ -397,6 +382,7 @@ const TaskRow = memo(function TaskRow({
   onToggleLock,
   onIndent,
   onOutdent,
+  depth,
   dropHint,
 }: {
   task: TimelineTask
@@ -417,8 +403,11 @@ const TaskRow = memo(function TaskRow({
   onToggleLock?: (taskId: string) => void
   onIndent?: (taskId: string) => void
   onOutdent?: (taskId: string) => void
+  depth: number
   dropHint?: DropMode
 }) {
+  // ADR-02: task-depth 1 = top-level task; children go deeper up to MAX_TASK_DEPTH.
+  const canNestDeeper = depth < MAX_TASK_DEPTH
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
 
@@ -475,8 +464,8 @@ const TaskRow = memo(function TaskRow({
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40" />
       </div>
 
-      {/* Name (indented) */}
-      <div className="pl-4 flex items-center gap-1 min-w-0 pr-2">
+      {/* Name (indented by depth) */}
+      <div className="flex items-center gap-1 min-w-0 pr-2" style={{ paddingLeft: `${depth * 14}px` }}>
         {subtaskCount > 0 ? (
           <button
             type="button"
@@ -503,30 +492,14 @@ const TaskRow = memo(function TaskRow({
             {subtaskCount} 子任務
           </span>
         )}
-        {hasSubtasks && onToggleLock && (
-          <button
-            type="button"
-            onClick={() => onToggleLock(task.id)}
-            className={cn(
-              'shrink-0 inline-flex items-center gap-1 h-6 px-1.5 rounded-md border text-[11px] font-medium transition-colors',
-              isManual
-                ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700',
-            )}
-            title={isManual ? '手動模式：日期可加寬（不可低於子任務）。點擊改回自動貼齊' : '自動貼齊子任務（鎖定）。點擊解鎖以手動加寬'}
-          >
-            {isManual ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-            <span>{isManual ? '手動' : '自動'}</span>
-          </button>
-        )}
-        {onIndent && (
+        {onIndent && canNestDeeper && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
             onClick={() => onIndent(task.id)}
             className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-            title="縮排成上一列任務的子任務"
+            title="縮排成上一列任務的子項"
           >
             <IndentIncrease className="h-3.5 w-3.5" />
           </Button>
@@ -538,21 +511,23 @@ const TaskRow = memo(function TaskRow({
             size="icon"
             onClick={() => onOutdent(task.id)}
             className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-            title="升階為里程碑"
+            title={depth <= 1 ? '升階為里程碑' : '升階為上一層任務'}
           >
             <IndentDecrease className="h-3.5 w-3.5" />
           </Button>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onToggleAddSubtask}
-          className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-          title="新增子任務"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
+        {canNestDeeper && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onToggleAddSubtask}
+            className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
+            title="新增子項"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* Duration — ADR-01: task is independent of subtasks (always editable) */}
@@ -660,7 +635,7 @@ const TaskRow = memo(function TaskRow({
   a.msIndex === b.msIndex && a.overflowInfo === b.overflowInfo &&
   a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
   a.onRemove === b.onRemove && a.onUpdate === b.onUpdate && a.onDateChange === b.onDateChange &&
-  a.onToggleLock === b.onToggleLock && a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.dropHint === b.dropHint)
+  a.onToggleLock === b.onToggleLock && a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.depth === b.depth && a.dropHint === b.dropHint)
 
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
@@ -1330,6 +1305,50 @@ export function TimelineTable({
     }
   }
 
+  // ADR-02: recursively render a task and its descendants (up to MAX_TASK_DEPTH).
+  const renderTaskTree = (task: TimelineTask, msIndex: number, depth: number) => {
+    const children = tasks.filter((t) => t.parentId === task.id)
+    const isCollapsed = collapsedIds.has(task.id)
+    return (
+      <div key={task.id}>
+        <TaskRow
+          task={task}
+          depth={depth}
+          startDate={taskDates.get(task.id)?.startDate}
+          endDate={taskDates.get(task.id)?.endDate}
+          teamMembers={teamMembers}
+          subtaskCount={children.length}
+          collapsed={isCollapsed}
+          msIndex={msIndex}
+          overflowInfo={overflows?.get(task.id)}
+          dropHint={dropHint?.overId === task.id ? dropHint.mode : undefined}
+          onRemove={onTaskRemove}
+          onUpdate={onTaskUpdate}
+          onToggleAddSubtask={() => setAddingSubtaskForId((prev) => (prev === task.id ? null : task.id))}
+          onToggleCollapse={() => toggleCollapse(task.id)}
+          onDateChange={onTaskDateChange}
+          onToggleLock={onTaskToggleLock}
+          onIndent={onIndent}
+          onOutdent={onOutdent}
+        />
+        {!isCollapsed && (
+          <>
+            {children.map((c) => renderTaskTree(c, msIndex, depth + 1))}
+            {addingSubtaskForId === task.id && (
+              <InlineSubtaskInput
+                parentTask={task}
+                teamMembers={teamMembers}
+                msIndex={msIndex}
+                onAdd={(subtask) => onTaskAdd(subtask)}
+                onCancel={() => setAddingSubtaskForId(null)}
+              />
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-lg border overflow-hidden">
       {/* Toolbar: preview + expand/collapse all */}
@@ -1399,64 +1418,7 @@ export function TimelineTable({
                 />
                 {!isCollapsed && (
                   <>
-                    {msParentTasks.map((task) => {
-                      const subtasks = tasks.filter((st) => st.parentId === task.id)
-                      const subtasksCollapsed = collapsedIds.has(task.id)
-                      const taskEnvelope = envelopeOf(subtasks.map(st => st.id))
-                      return (
-                        <div key={task.id}>
-                          <TaskRow
-                            task={task}
-                            startDate={taskDates.get(task.id)?.startDate}
-                            endDate={taskDates.get(task.id)?.endDate}
-                            teamMembers={teamMembers}
-                            subtaskCount={subtasks.length}
-                            collapsed={subtasksCollapsed}
-                            msIndex={msIndex}
-                            overflowInfo={overflows?.get(task.id)}
-                            envelopeStart={taskEnvelope.start}
-                            envelopeEnd={taskEnvelope.end}
-                            dropHint={dropHint?.overId === task.id ? dropHint.mode : undefined}
-                            onRemove={onTaskRemove}
-                            onUpdate={onTaskUpdate}
-                            onToggleAddSubtask={() =>
-                              setAddingSubtaskForId(prev => prev === task.id ? null : task.id)
-                            }
-                            onToggleCollapse={() => toggleCollapse(task.id)}
-                            onDateChange={onTaskDateChange}
-                            onToggleLock={onTaskToggleLock}
-                            onIndent={onIndent}
-                            onOutdent={onOutdent}
-                          />
-                          {!subtasksCollapsed && subtasks.map((st) => (
-                            <SubtaskRow
-                              key={st.id}
-                              task={st}
-                              startDate={taskDates.get(st.id)?.startDate}
-                              endDate={taskDates.get(st.id)?.endDate}
-                              teamMembers={teamMembers}
-                              msIndex={msIndex}
-                              dropHint={dropHint?.overId === st.id ? dropHint.mode : undefined}
-                              onRemove={onTaskRemove}
-                              onUpdate={onTaskUpdate}
-                              onDateChange={onTaskDateChange}
-                              onOutdent={onOutdent}
-                            />
-                          ))}
-                          {!subtasksCollapsed && addingSubtaskForId === task.id && (
-                            <InlineSubtaskInput
-                              parentTask={task}
-                              teamMembers={teamMembers}
-                              msIndex={msIndex}
-                              onAdd={(subtask) => {
-                                onTaskAdd(subtask)
-                              }}
-                              onCancel={() => setAddingSubtaskForId(null)}
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
+                    {msParentTasks.map((task) => renderTaskTree(task, msIndex, 1))}
                     <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} msIndex={msIndex} onAdd={onTaskAdd} />
                   </>
                 )}

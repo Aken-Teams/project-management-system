@@ -1,4 +1,5 @@
 import type { TimelineMilestone, TimelineTask } from '@/components/timeline-table'
+import { taskDepth } from '@/lib/timeline-tree'
 
 // ─── Minimal input shapes (accepts any object with required fields) ──
 
@@ -420,24 +421,27 @@ export function computeWorkItemsDiff(
   // Dense per-milestone sortOrder in visual order (each top-level task immediately
   // followed by its subtasks). Both the Gantt and the table sort each sibling group
   // by sortOrder, so keeping it dense & consistent makes saved order == on-screen order.
+  // ADR-02: dense sortOrder in full DFS visual order (recursive, any depth).
   const visualSortMap = (list: Array<{ id: string; milestoneId: string; parentId?: string | null }>): Map<string, number> => {
     const map = new Map<string, number>()
     for (const msId of [...new Set(list.map(t => t.milestoneId))]) {
       let idx = 0
-      for (const top of list.filter(t => t.milestoneId === msId && !t.parentId)) {
-        map.set(top.id, idx++)
-        for (const sub of list.filter(s => s.parentId === top.id)) map.set(sub.id, idx++)
+      const walk = (t: { id: string }) => {
+        map.set(t.id, idx++)
+        for (const c of list.filter(x => x.parentId === t.id)) walk(c)
       }
+      for (const top of list.filter(t => t.milestoneId === msId && !t.parentId)) walk(top)
     }
     return map
   }
   const currentSortMap = visualSortMap(currentTasks)
   const origSortMap = visualSortMap(origTasks)
 
-  // Tasks to add (parent tasks first, then subtasks — so parent IDs resolve correctly)
-  const newParentTasks = currentTasks.filter(t => !origTaskIds.has(t.id) && !t.parentId)
-  const newSubtasks = currentTasks.filter(t => !origTaskIds.has(t.id) && t.parentId)
-  const tasksToAdd = [...newParentTasks, ...newSubtasks]
+  // Tasks to add — ordered by depth so a new parent is created before its new child
+  // (its temp id must resolve first). Works for any nesting depth. (ADR-02)
+  const tasksToAdd = currentTasks
+    .filter(t => !origTaskIds.has(t.id))
+    .sort((a, b) => taskDepth(a.id, currentTasks) - taskDepth(b.id, currentTasks))
     .map(t => {
       const dates = taskDates.get(t.id)
       return {

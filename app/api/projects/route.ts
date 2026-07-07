@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
       // 4. Create tasks (parent tasks first, then subtasks)
       //    Track tempId → realId for resolving subtask parentId
       const taskTempIdMap = new Map<string, string>()
+      const taskMsMap = new Map<string, string>() // created task id → its milestoneId (any depth)
       const tasks = []
       if (body.tasks?.length) {
         // Separate parent tasks and subtasks; create parents first
@@ -286,37 +287,47 @@ export async function POST(request: NextRequest) {
             },
           })
           if (t.tempId) taskTempIdMap.set(t.tempId, task.id)
+          taskMsMap.set(task.id, dbMilestoneId)
           tasks.push(task)
         }
 
-        // Create subtasks with resolved parentId
-        for (const t of subtaskInputs) {
-          const resolvedParentId = t.parentTempId
-            ? taskTempIdMap.get(t.parentTempId as string)
-            : (t.parentId as string)
-          if (!resolvedParentId) continue
+        // Create subtasks with resolved parentId — multi-pass so ANY nesting depth
+        // works regardless of input order (a child is always created after its
+        // parent, whose real id must be resolved first). (ADR-02)
+        let remaining = subtaskInputs
+        let guard = 0
+        while (remaining.length && guard++ < 20) {
+          const pending: typeof remaining = []
+          for (const t of remaining) {
+            const resolvedParentId = t.parentTempId
+              ? taskTempIdMap.get(t.parentTempId as string)
+              : (t.parentId as string)
+            if (!resolvedParentId) { pending.push(t); continue }
 
-          // Inherit milestoneId from parent
-          const parent = tasks.find(p => p.id === resolvedParentId)
-          const dbMilestoneId = parent?.milestoneId || milestoneIdMap.get(t.milestoneId)
-          if (!dbMilestoneId) continue
+            // Inherit milestoneId from the (already-created) parent, any depth.
+            const dbMilestoneId = taskMsMap.get(resolvedParentId) || milestoneIdMap.get(t.milestoneId as string)
+            if (!dbMilestoneId) { pending.push(t); continue }
 
-          const task = await tx.task.create({
-            data: {
-              projectId: proj.id,
-              milestoneId: dbMilestoneId,
-              parentId: resolvedParentId,
-              title: t.title,
-              description: t.description || '',
-              assignee: t.assignee || '未指派',
-              priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
-              durationDays: t.durationDays || 0,
-              startDate: new Date(t.startDate),
-              endDate: new Date(t.endDate),
-              sortOrder: sortIdx++,
-            },
-          })
-          if (t.tempId) taskTempIdMap.set(t.tempId, task.id)
+            const task = await tx.task.create({
+              data: {
+                projectId: proj.id,
+                milestoneId: dbMilestoneId,
+                parentId: resolvedParentId,
+                title: t.title,
+                description: t.description || '',
+                assignee: t.assignee || '未指派',
+                priority: (t.priority as 'low' | 'medium' | 'high') || 'medium',
+                durationDays: t.durationDays || 0,
+                startDate: new Date(t.startDate),
+                endDate: new Date(t.endDate),
+                sortOrder: sortIdx++,
+              },
+            })
+            if (t.tempId) taskTempIdMap.set(t.tempId as string, task.id)
+            taskMsMap.set(task.id, dbMilestoneId) // so deeper children resolve their milestone
+          }
+          if (pending.length === remaining.length) break // no progress → unresolvable
+          remaining = pending
         }
       }
 

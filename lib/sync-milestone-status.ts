@@ -215,7 +215,19 @@ export async function syncTaskProgressFromLogs(
     }
   }
 
-  for (const task of tasks) {
+  // ADR-02: process bottom-up (deepest first) so a parent aggregates its children's
+  // ALREADY-updated progress — rolls up correctly through any nesting depth.
+  const byId = new Map(tasks.map(t => [t.id, t]))
+  const depthOf = (t: typeof tasks[number]) => {
+    let d = 0
+    let cur: typeof tasks[number] | undefined = t
+    const seen = new Set<string>()
+    while (cur?.parentId && !seen.has(cur.id)) { seen.add(cur.id); d++; cur = byId.get(cur.parentId) }
+    return d
+  }
+  const ordered = [...tasks].sort((a, b) => depthOf(b) - depthOf(a))
+
+  for (const task of ordered) {
     const subtasks = subtasksByParent.get(task.id)
 
     let target: number

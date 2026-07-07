@@ -1022,11 +1022,12 @@ export default function NewProjectPage() {
   }
   const manualIndent = (taskId: string) => {
     const t = manualTasks.find(x => x.id === taskId)
-    if (!t || t.parentId) return
-    const tops = manualTasks.filter(x => x.milestoneId === t.milestoneId && !x.parentId)
-    const idx = tops.findIndex(x => x.id === taskId)
+    if (!t) return
+    // Indent under the previous SIBLING at the same level (any depth).
+    const siblings = manualTasks.filter(x => x.milestoneId === t.milestoneId && (x.parentId ?? null) === (t.parentId ?? null))
+    const idx = siblings.findIndex(x => x.id === taskId)
     if (idx <= 0) return
-    manualItemMove(taskId, tops[idx - 1].id, 'inside')
+    manualItemMove(taskId, siblings[idx - 1].id, 'inside')
   }
   const manualOutdent = (taskId: string) => {
     const t = manualTasks.find(x => x.id === taskId)
@@ -1046,11 +1047,11 @@ export default function NewProjectPage() {
   }
   const aiIndent = (taskId: string) => {
     const t = aiTasks.find(x => x.id === taskId)
-    if (!t || t.parentId) return
-    const tops = aiTasks.filter(x => x.milestoneId === t.milestoneId && !x.parentId)
-    const idx = tops.findIndex(x => x.id === taskId)
+    if (!t) return
+    const siblings = aiTasks.filter(x => x.milestoneId === t.milestoneId && (x.parentId ?? null) === (t.parentId ?? null))
+    const idx = siblings.findIndex(x => x.id === taskId)
     if (idx <= 0) return
-    aiItemMove(taskId, tops[idx - 1].id, 'inside')
+    aiItemMove(taskId, siblings[idx - 1].id, 'inside')
   }
   const aiOutdent = (taskId: string) => {
     const t = aiTasks.find(x => x.id === taskId)

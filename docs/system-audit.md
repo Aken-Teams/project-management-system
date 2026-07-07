@@ -217,6 +217,9 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 | 2026-07-07 | 設計變更 ADR-01 需求B：拔除編輯流程的依序/瀑布/envelope；改絕對日期（只留 start+天數→end）；里程碑完全手動、日期永遠可編輯；範本套用時 seed 一次 | lib/timeline-utils.ts、app/projects/new/page.tsx、components/project-edit-dialog.tsx、components/timeline-table.tsx | ADR-01(B) | tsc 零新錯；待 UI 重點測「改一列不動別列」 |
 | 2026-07-07 | ADR-01(B) 後續：草稿補存 manualTasks（任務/子任務原本遺失）；加 seed effect（起始日已知但里程碑未 seed 時補排，修「里程碑全擠在專案起始日」+ 救舊草稿）| app/projects/new/page.tsx | #14b、ADR-01(B) | tsc 零新錯；需存**新**草稿複驗 |
 | 2026-07-07 | 拖曳優化（新增+編輯）：放大拖曳「放入」判定區（中間 70%）；建案模式補接 onItemMove/onIndent/onOutdent（原本完全沒接，無法 reparent）；抽共用 `lib/timeline-tree.ts` moveTreeItem | components/timeline-table.tsx、app/projects/new/page.tsx、lib/timeline-tree.ts（新）| #15 拖曳 | tsc 零新錯；待 UI 測跨層/跨里程碑拖曳 + 縮排/升階按鈕 |
+| 2026-07-07 | ADR-02 Stage 1/2/5：3 層→6 層。遞迴渲染（TaskRow depth 化，棄用 SubtaskRow）；moveTreeItem/promoteTaskToMilestone/indent/outdent 改深度感知（上限 5，超過拒絕）；編輯彈窗改用 moveTreeItem（棄用舊 computeMove）；存檔支援深層（建案 POST 多趟解析、編輯 diff 依深度排序、visualSortMap 遞迴 DFS）| lib/timeline-tree.ts、components/timeline-table.tsx、app/projects/new/page.tsx、components/project-edit-dialog.tsx、lib/timeline-utils.ts、app/api/projects/route.ts | ADR-02 | tsc 零新錯；**待 UI 測建立/移動/存深層樹** |
+| 2026-07-07 | ADR-02 Stage 3 遞迴進度 + 移除殘留的「手動/自動」鎖按鈕（ADR-01 後全手動已無意義）| lib/sync-milestone-status.ts（bottom-up 深層優先）、app/api/projects/[id]/tasks/[taskId]/route.ts（往上滾過所有祖先）、components/timeline-table.tsx（移除鎖鈕）| ADR-02、ADR-01 | tsc 零新錯 |
+| 2026-07-07 | ADR-02 Stage 4 甘特圖深層遞迴：抽 `renderGanttSub(sub, depth)` 遞迴渲染第 3~6 層（展開/收合 + 深度縮排 + 用自身 stored 進度），棄用寫死的 2 層子任務區塊 | components/gantt-chart.tsx | ADR-02 | tsc 零新錯（僅剩既有 setExpandedTasks prev 問題）。**ADR-02 全 5 stage 完成** |
 
 ### 已修正 Bug（從第五章移入）
 
@@ -230,6 +233,27 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
   > 🔍 **待複驗**：「改日期→預覽沒即時更新」無法從程式碼重現（`recalculatedMilestones` 每次 render 重算、預覽每次開啟讀最新值）。疑似當時 Dialog 開著時熱重載造成。請關閉預覽→改日期→重開預覽確認。
 - ✅ **#14 manual 草稿遺失團隊成員與設備清單** — 手動測試場景 4 發現。存草稿 `draftData` 與 `loadDraft` 的 manual 分支都漏了 `manualTeamDetails`、`manualBudgetItems`。三處補齊（interface 欄位、存、載）。⚠️ 修正前存的舊草稿無此資料、無法回填。
 - 🔸 **#7 manualDates（窄修完成，根治待 PRD 變更）** — `repairTaskDates` 重排時尊重 `manualDates`：手動且未壞的里程碑/任務/子任務保留自身日期，只重排 auto 或真正壞掉的。**完整「編輯體驗」根治（絕對日期模型）仍為 ADR-01，需走 PRD 變更。**
+
+---
+
+## 九、架構決策紀錄 ADR-02：里程碑/任務層級 3 層 → 6 層
+
+> **狀態**：已核准設計變更（2026-07-07，client 需求）｜**範圍**：新增 + 編輯專案。
+
+**需求**：里程碑當第 1 層，底下任務可巢狀往下到第 6 層（= 里程碑 + 5 層任務）。`MAX_TASK_DEPTH = 5`。
+
+**現況**：DB 的 `Task.parentId` 自我參照，**已支援任意深度、無需 migration**。但**應用層到處寫死 2 層**（`parentId` 有/無 = 子任務/任務；拖曳會 flatten 超過 2 層；甘特、進度、渲染都假設 2 層）。
+
+**改動分階段**（每階段 tsc + UI 驗證）：
+1. **遞迴渲染**：`timeline-table` 的 MilestoneRow→TaskRow→SubtaskRow 三段寫死，改成 depth 化遞迴元件（縮排依 depth）。
+2. **深度感知樹邏輯**：`moveTreeItem`/`computeMove`/indent/outdent/新增子項改成允許到 depth 5，只 flatten 超過 6 的部分（原本 flatten 超過 2）。
+3. **遞迴進度聚合**：`sync-milestone-status`、`tasks/[taskId]` API、顯示，父項進度遞迴算。
+4. **甘特圖遞迴渲染**。
+5. **批次存檔 visual order 遞迴**（`computeWorkItemsDiff` 的 sortOrder）。
+
+**UI 取捨**：6 層縮排會擠 → 每層縮排小幅（~14px）+ 名稱欄必要時可捲動。
+
+**不動**：延期審核級聯。
 
 ---
 

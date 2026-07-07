@@ -130,37 +130,40 @@ export async function PUT(
       }
     }
 
-    // ── Auto-sync parent task progress from children ──
+    // ── Auto-sync ancestor progress from children (ADR-02: roll up through ALL
+    //    ancestors, not just the direct parent, so deep trees aggregate correctly) ──
     if (task.parentId && (data.status !== undefined || data.progress !== undefined)) {
-      const siblings = await prisma.task.findMany({
-        where: { parentId: task.parentId },
-        select: { status: true, progress: true, durationDays: true },
-      })
-      // Weighted by durationDays (consistent with milestone progress) + guards
-      // against divide-by-zero when the last child was removed concurrently (Bug #2/#11)
-      const avgProgress = computeWeightedProgress(siblings)
-      const allDone = siblings.length > 0 && siblings.every(t => t.status === 'done')
-
-      const parentUpdate: Record<string, unknown> = { progress: avgProgress }
-      if (allDone) {
-        parentUpdate.status = 'done'
-        parentUpdate.completedAt = new Date()
-        parentUpdate.completedBy = 'system'
-        parentUpdate.progress = 100
-      } else {
-        // If parent was auto-completed but children are no longer all done, revert
-        const parent = await prisma.task.findUnique({ where: { id: task.parentId }, select: { status: true } })
-        if (parent?.status === 'done') {
-          parentUpdate.status = 'in_progress'
-          parentUpdate.completedAt = null
-          parentUpdate.completedBy = null
+      let directParent: { progress: number; status: string } | null = null
+      let ancestorId: string | null = task.parentId
+      const walked = new Set<string>()
+      while (ancestorId && !walked.has(ancestorId)) {
+        const curId: string = ancestorId
+        walked.add(curId)
+        const children = await prisma.task.findMany({
+          where: { parentId: curId },
+          select: { status: true, progress: true, durationDays: true },
+        })
+        // Weighted by durationDays + guards divide-by-zero (Bug #2/#11)
+        const avgProgress = computeWeightedProgress(children)
+        const allDone = children.length > 0 && children.every(t => t.status === 'done')
+        const parentUpdate: Record<string, unknown> = { progress: allDone ? 100 : avgProgress }
+        if (allDone) {
+          parentUpdate.status = 'done'
+          parentUpdate.completedAt = new Date()
+          parentUpdate.completedBy = 'system'
+        } else {
+          const anc = await prisma.task.findUnique({ where: { id: curId }, select: { status: true } })
+          if (anc?.status === 'done') {
+            parentUpdate.status = 'in_progress'
+            parentUpdate.completedAt = null
+            parentUpdate.completedBy = null
+          }
         }
+        const updatedAnc = await prisma.task.update({ where: { id: curId }, data: parentUpdate })
+        if (curId === task.parentId) directParent = { progress: updatedAnc.progress, status: updatedAnc.status }
+        ancestorId = updatedAnc.parentId
       }
-
-      const updatedParent = await prisma.task.update({
-        where: { id: task.parentId },
-        data: parentUpdate,
-      })
+      const updatedParent = directParent ?? { progress: 0, status: 'todo' }
       await syncMilestoneStatus(milestoneId, id)
 
       return NextResponse.json({

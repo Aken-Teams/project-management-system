@@ -36,7 +36,7 @@ import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/compon
 import { GanttChart } from '@/components/gantt-chart'
 import { TimelineTable, type TimelineTeamMember, type OverflowInfo, type DropMode } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, dbToTimelineState, computeWorkItemsDiff, daysBetween } from '@/lib/timeline-utils'
-import { promoteTaskToMilestone } from '@/lib/timeline-tree'
+import { promoteTaskToMilestone, moveTreeItem } from '@/lib/timeline-tree'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
   type Project,
@@ -997,28 +997,36 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     else applyMove(r)
   }
 
-  const handleItemMove = (activeId: string, overId: string, mode: DropMode) => {
-    runMove(computeMove(activeId, overId, mode))
+  // ADR-02: use the shared depth-aware moveTreeItem (up to 6 levels) instead of the
+  // old 2-level computeMove. Absolute dates mean no re-anchoring is needed.
+  const applyTreeMove = (r: { tasks: typeof tlTasks; milestones: typeof tlMilestones } | null) => {
+    if (!r) return
+    setTlTasks(r.tasks)
+    setTlMilestones(r.milestones)
   }
 
-  // One-click indent: make a top-level task a subtask of the task directly above it.
+  const handleItemMove = (activeId: string, overId: string, mode: DropMode) => {
+    applyTreeMove(moveTreeItem(tlTasks, tlMilestones, activeId, overId, mode))
+  }
+
+  // Indent under the previous SIBLING at the same level (any depth).
   const handleIndent = (taskId: string) => {
     const t = tlTasks.find(x => x.id === taskId)
-    if (!t || t.parentId) return
-    const tops = tlTasks.filter(x => x.milestoneId === t.milestoneId && !x.parentId)
-    const idx = tops.findIndex(x => x.id === taskId)
-    if (idx <= 0) { toast.info('上方沒有可作為父層的任務'); return }
-    runMove(computeMove(taskId, tops[idx - 1].id, 'inside'))
+    if (!t) return
+    const siblings = tlTasks.filter(x => x.milestoneId === t.milestoneId && (x.parentId ?? null) === (t.parentId ?? null))
+    const idx = siblings.findIndex(x => x.id === taskId)
+    if (idx <= 0) { toast.info('上方沒有可作為父層的項目'); return }
+    applyTreeMove(moveTreeItem(tlTasks, tlMilestones, taskId, siblings[idx - 1].id, 'inside'))
   }
 
   // One-click outdent: promote a subtask back to a task, placed right after its old parent.
   const handleOutdent = (taskId: string) => {
     const t = tlTasks.find(x => x.id === taskId)
     if (!t) return
-    if (t.parentId) { runMove(computeMove(taskId, t.parentId, 'after')); return }
+    // subtask → become sibling of its parent (one level shallower, any depth)
+    if (t.parentId) { applyTreeMove(moveTreeItem(tlTasks, tlMilestones, taskId, t.parentId, 'after')); return }
     // top-level task → promote to a milestone
-    const r = promoteTaskToMilestone(tlTasks, tlMilestones, taskId)
-    if (r) { setTlTasks(r.tasks); setTlMilestones(r.milestones) }
+    applyTreeMove(promoteTaskToMilestone(tlTasks, tlMilestones, taskId))
   }
 
   // Demote a milestone → a task inside an adjacent milestone (previous, or next if
@@ -1027,7 +1035,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     const idx = tlMilestones.findIndex(m => m.id === msId)
     if (idx < 0) return
     const target = idx > 0 ? tlMilestones[idx - 1] : tlMilestones[idx + 1]
-    if (target) runMove(computeMove(msId, target.id, 'inside'))
+    if (target) applyTreeMove(moveTreeItem(tlTasks, tlMilestones, msId, target.id, 'inside'))
   }
 
   // ─── Bubble-up: child changes → auto-adjust parent duration ───

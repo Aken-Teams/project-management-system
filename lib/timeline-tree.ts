@@ -1,10 +1,13 @@
 // ─── Tree move (reorder / reparent) for the timeline table ───
 // Self-contained, absolute-date friendly (each item keeps its own dates; only
-// parentId / milestoneId / order change). Used by the create wizard so it has the
-// same drag-reparent + indent/outdent capability as the edit dialog.
+// parentId / milestoneId / order change). Used by both create wizard and edit.
 //
-// Enforces a 2-level tree (里程碑 ▸ 任務 ▸ 子任務): if a task that HAS children is
-// nested under another task, its children flatten up to become siblings.
+// ADR-02: supports a milestone + up to MAX_TASK_DEPTH nested task levels (6 total).
+// A move that would exceed the depth cap is rejected (returns null) rather than
+// silently flattening — the UI hides the actions that would over-nest.
+
+// Milestone = level 1; a top-level task = task-depth 1; its child = 2; … up to 5.
+export const MAX_TASK_DEPTH = 5
 
 interface TreeTask {
   id: string
@@ -21,6 +24,31 @@ interface TreeMs {
   startDate?: string
 }
 export type TreeDropMode = 'inside' | 'before' | 'after'
+
+// Task-depth (1 = top-level task). Milestone level is not counted here.
+export function taskDepth(taskId: string, tasks: { id: string; parentId?: string | null }[]): number {
+  const byId = new Map(tasks.map(t => [t.id, t]))
+  let d = 1
+  let cur = byId.get(taskId)
+  const seen = new Set<string>()
+  while (cur?.parentId && !seen.has(cur.id)) { seen.add(cur.id); d++; cur = byId.get(cur.parentId) }
+  return d
+}
+
+// All descendant ids of a task (not incl. the task itself).
+function descendantIds(rootId: string, tasks: { id: string; parentId?: string | null }[]): Set<string> {
+  const out = new Set<string>()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const t of tasks) {
+      if (t.parentId && (t.parentId === rootId || out.has(t.parentId)) && !out.has(t.id)) {
+        out.add(t.id); changed = true
+      }
+    }
+  }
+  return out
+}
 
 export function moveTreeItem<
   T extends TreeTask,
@@ -51,83 +79,82 @@ export function moveTreeItem<
       ms.splice(to, 0, moved)
       return { tasks, milestones: ms }
     }
-    // Otherwise DEMOTE into a destination milestone (dropped inside a milestone, OR
-    // onto any task that belongs to another milestone): milestone A becomes a
-    // top-level task there; A's tasks become subtasks; A's subtasks flatten up.
+    // Otherwise DEMOTE into a destination milestone: milestone A becomes a top-level
+    // task there; A's own top-level tasks become its children; deeper levels keep
+    // their relative structure (shift one level deeper). Rejected if too deep.
     const destMsId = overMs ? overMs.id : overTask ? overTask.milestoneId : null
     if (!destMsId || destMsId === activeId) return null
+    const aTasks = tasks.filter(t => t.milestoneId === activeId)
+    let aMaxDepth = 0
+    for (const t of aTasks) aMaxDepth = Math.max(aMaxDepth, taskDepth(t.id, aTasks))
+    if (1 + aMaxDepth > MAX_TASK_DEPTH) return null
     const newTaskId = `demoted-${activeId}`
     const newTask = {
       id: newTaskId, milestoneId: destMsId, parentId: null,
       title: activeMs.name || '新任務', assignee: '', priority: 'medium',
       durationDays: activeMs.durationDays || 1, startDate: activeMs.startDate,
     } as unknown as T
-    const aTasks = tasks.filter(t => t.milestoneId === activeId)
-    const movedSubs = aTasks.map(t => ({ ...t, milestoneId: destMsId, parentId: newTaskId }) as T)
+    const movedSubs = aTasks.map(t => t.parentId
+      ? ({ ...t, milestoneId: destMsId }) as T                       // keep relative parent
+      : ({ ...t, milestoneId: destMsId, parentId: newTaskId }) as T) // A's top-level → child of newTask
     const rest = tasks.filter(t => t.milestoneId !== activeId)
-    let i = -1
-    rest.forEach((t, k) => { if (t.milestoneId === destMsId) i = k })
-    const newTasks = [...rest]
-    newTasks.splice(i + 1, 0, newTask, ...movedSubs)
-    return { tasks: newTasks, milestones: milestones.filter(m => m.id !== activeId) }
+    let di = -1
+    rest.forEach((t, k) => { if (t.milestoneId === destMsId) di = k })
+    const demoted = [...rest]
+    demoted.splice(di + 1, 0, newTask, ...movedSubs)
+    return { tasks: demoted, milestones: milestones.filter(m => m.id !== activeId) }
   }
 
-  // Beyond milestone reorder we only move tasks/subtasks.
+  // ── Task / subtask dragged ──
   if (!activeTask) return null
 
-  // Can't drop an item into itself or its own subtree.
-  const childIds = tasks.filter(t => t.parentId === activeId).map(t => t.id)
-  const subtree = new Set<string>([activeId, ...childIds])
-  if (subtree.has(overId)) return null
+  const subtreeIds = new Set<string>([activeId, ...descendantIds(activeId, tasks)])
+  if (subtreeIds.has(overId)) return null // can't drop into itself / its own subtree
 
-  // ── Resolve destination: target milestone + parent ──
+  // Resolve destination milestone + parent
   let targetMs: string
   let targetParentId: string | null
   if (overMs) {
-    // Dropped on a milestone (any edge) → become a top-level task in it.
     targetMs = overMs.id
-    targetParentId = null
+    targetParentId = null // dropped on a milestone → top-level task
   } else if (overTask) {
     targetMs = overTask.milestoneId
-    if (mode === 'inside' && !overTask.parentId) {
-      targetParentId = overTask.id            // nest under a top-level task
-    } else if (overTask.parentId) {
-      targetParentId = overTask.parentId      // become sibling of a subtask
-    } else {
-      targetParentId = null                   // before/after a top-level task
-    }
+    targetParentId = mode === 'inside' ? overTask.id : (overTask.parentId ?? null)
   } else {
     return null
   }
 
-  const rootBecomesSubtask = targetParentId !== null
-  const root = { ...activeTask, milestoneId: targetMs, parentId: targetParentId } as T
-  // Children follow: stay under root when root is top-level; flatten to root's new
-  // parent when root itself becomes a subtask (keeps the 2-level invariant).
-  const movedChildren = tasks
-    .filter(t => t.parentId === activeId)
-    .map(c => ({ ...c, milestoneId: targetMs, parentId: rootBecomesSubtask ? targetParentId : activeId }) as T)
-  const moved: T[] = [root, ...movedChildren]
+  // Depth guard: reject a move that would push the subtree past the cap.
+  const oldRootDepth = taskDepth(activeId, tasks)
+  let subtreeRel = 0
+  for (const id of subtreeIds) subtreeRel = Math.max(subtreeRel, taskDepth(id, tasks) - oldRootDepth)
+  const newRootDepth = targetParentId ? taskDepth(targetParentId, tasks) + 1 : 1
+  if (newRootDepth + subtreeRel > MAX_TASK_DEPTH) return null
 
-  const rest = tasks.filter(t => !subtree.has(t.id))
+  // Move the WHOLE subtree (visual order preserved): root re-parents; descendants keep
+  // their relative parentId and just follow into the new milestone.
+  const moved = tasks.filter(t => subtreeIds.has(t.id)).map(t =>
+    t.id === activeId
+      ? ({ ...t, milestoneId: targetMs, parentId: targetParentId }) as T
+      : ({ ...t, milestoneId: targetMs }) as T)
+  const rest = tasks.filter(t => !subtreeIds.has(t.id))
 
-  // Insertion index — keep visual block order (a task's subtasks immediately follow it).
-  const blockEnd = (id: string) => {
+  // Insertion index — keep the subtree a contiguous block placed at the target.
+  const subtreeEnd = (id: string) => {
+    const sub = new Set<string>([id, ...descendantIds(id, rest)])
     let i = -1
-    rest.forEach((t, k) => { if (t.id === id || t.parentId === id) i = k })
+    rest.forEach((t, k) => { if (sub.has(t.id)) i = k })
     return i
   }
   let at: number
   if (overMs) {
     let i = -1
     rest.forEach((t, k) => { if (t.milestoneId === overMs.id) i = k })
-    at = i + 1 // after the milestone's last task (0 if it has none — renders under it anyway)
+    at = i + 1
   } else {
     const ot = overTask!
     const overIdx = rest.findIndex(t => t.id === ot.id)
-    if (mode === 'inside' && !ot.parentId) at = blockEnd(ot.id) + 1
-    else if (ot.parentId) at = mode === 'before' ? overIdx : overIdx + 1
-    else at = mode === 'before' ? overIdx : blockEnd(ot.id) + 1
+    at = mode === 'before' ? overIdx : subtreeEnd(ot.id) + 1
   }
 
   const newTasks = [...rest]
@@ -158,11 +185,17 @@ export function promoteTaskToMilestone<
     startDate: task.startDate,
   } as unknown as M
 
+  const subtree = descendantIds(taskId, tasks)
   const newTasks = tasks
     .filter(t => t.id !== taskId) // the task itself becomes the milestone
-    .map(t => t.parentId === taskId
-      ? ({ ...t, milestoneId: newMsId, parentId: null }) as T // its subtasks → top-level tasks
-      : t)
+    .map(t => {
+      if (!subtree.has(t.id)) return t
+      // whole subtree moves into the new milestone; direct children become its
+      // top-level tasks, deeper levels keep their relative structure.
+      return t.parentId === taskId
+        ? ({ ...t, milestoneId: newMsId, parentId: null }) as T
+        : ({ ...t, milestoneId: newMsId }) as T
+    })
 
   const oldMsIdx = milestones.findIndex(m => m.id === task.milestoneId)
   const ms = [...milestones]
