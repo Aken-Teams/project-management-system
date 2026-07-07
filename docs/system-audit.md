@@ -211,7 +211,8 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 |------|--------------|---------|---------|---------|
 | 2026-07-07 | 建立本體檢文件（基準線） | docs/system-audit.md | — | — |
 | 2026-07-07 | 第一層純 bug 止血：進度加權統一、同步順序、今天定義、除以零、manualDates 窄修、批次存檔報錯 | lib/date-utils.ts（新）、lib/sync-milestone-status.ts、lib/project-transformer.ts、lib/task-utils.ts、app/api/projects/[id]/route.ts、app/api/my-tasks/route.ts、app/api/projects/[id]/tasks/[taskId]/route.ts、components/project-edit-dialog.tsx | #2 #7 #8 #9 #10 #11 | `tsc --noEmit`：改動檔案零型別錯；待手動 UI 測試 |
-| 2026-07-07 | 手動測試場景 2.9 發現：里程碑無任務時甘特圖畫不出色條 | components/gantt-chart.tsx、app/projects/new/page.tsx | #13 | tsc 零新錯；待 UI 複驗 |
+| 2026-07-07 | 手動測試場景 2.9 發現：里程碑無任務時甘特圖畫不出色條 + tooltip 位置/計畫日期 | components/gantt-chart.tsx、app/projects/new/page.tsx | #13 | tsc 零新錯；待 UI 複驗 |
+| 2026-07-07 | 手動測試場景 4 發現：manual 草稿未存/未還原團隊成員與設備清單 | app/projects/new/page.tsx | #14 | tsc 零新錯；需存**新**草稿複驗（舊草稿無資料救不回） |
 
 ### 已修正 Bug（從第五章移入）
 
@@ -221,7 +222,9 @@ PRD（`docs/prd.md` v3.0）以三色標記記錄演進：
 - ✅ **#10 autoProgress 讀 stale progress** — `projects/[id]/route.ts` 與 `my-tasks/route.ts` 調換順序：先 `syncTaskProgressFromLogs`（算進度）再 `autoProgressTasks`（用新進度判狀態）。
 - ✅ **#11 父任務進度除以零** — `computeWeightedProgress` 內建空陣列/零總天數 → 回 0；`allDone` 加 `siblings.length > 0` 保護。
 - ✅ **#8 批次存檔靜默失敗** — `executeBatchSave` 新增 `ensureOk()`，任一 fetch 非 2xx 即 throw，冒泡到 `handleSave` 的 catch 顯示錯誤，不再半存檔還回報成功。
-- ✅ **#13 里程碑無任務時甘特圖無色條** — 手動測試 2.9 發現。`getMilestoneBarRange` 在無任務時把長條壓成 `start=end=dueDate`（寬度 0）；且建案預覽未傳里程碑 `startDate`。改為無任務時用里程碑自身範圍（start～due）畫條，並在預覽補傳 `startDate`。里程碑-only 列（如剛套範本）現在也會顯示色條。
+- ✅ **#13 里程碑無任務時甘特圖無色條 + tooltip 問題** — 手動測試 2.9 發現。(a) 渲染 gate `msTasks.length>0 ? ... : null` 讓無任務里程碑完全不畫條 → 補「無任務也畫計畫條」分支；`getMilestoneBarRange` 無任務時改用里程碑自身範圍；預覽補傳 `startDate`。(b) tooltip 的「規劃期間」被「有任務」擋住 → 無任務時用里程碑自身日期顯示。(c) tooltip 用 `createPortal` 掛到 body，修正在 transform 過的 Dialog 內 `position:fixed` 座標跑掉、離游標很遠的問題。
+  > 🔍 **待複驗**：「改日期→預覽沒即時更新」無法從程式碼重現（`recalculatedMilestones` 每次 render 重算、預覽每次開啟讀最新值）。疑似當時 Dialog 開著時熱重載造成。請關閉預覽→改日期→重開預覽確認。
+- ✅ **#14 manual 草稿遺失團隊成員與設備清單** — 手動測試場景 4 發現。存草稿 `draftData` 與 `loadDraft` 的 manual 分支都漏了 `manualTeamDetails`、`manualBudgetItems`。三處補齊（interface 欄位、存、載）。⚠️ 修正前存的舊草稿無此資料、無法回填。
 - 🔸 **#7 manualDates（窄修完成，根治待 PRD 變更）** — `repairTaskDates` 重排時尊重 `manualDates`：手動且未壞的里程碑/任務/子任務保留自身日期，只重排 auto 或真正壞掉的。**完整「編輯體驗」根治（絕對日期模型）仍為 ADR-01，需走 PRD 變更。**
 
 ---

@@ -244,6 +244,8 @@ interface ProjectDraft {
     manualDemandSource?: DemandSource
     manualMilestones?: ManualMilestone[]
     manualRisks?: ManualRisk[]
+    manualTeamDetails?: TeamMemberDraft[]
+    manualBudgetItems?: import('@/components/budget-list-editor').BudgetItem[]
     currentStep?: number
     // AI mode — input fields
     aiProjectType?: ProjectType
@@ -571,6 +573,8 @@ export default function NewProjectPage() {
       manualDemandSource: activeTab === 'manual' ? manualDemandSource : undefined,
       manualMilestones: activeTab === 'manual' ? manualMilestones : undefined,
       manualRisks: activeTab === 'manual' ? manualRisks : undefined,
+      manualTeamDetails: activeTab === 'manual' ? manualTeamDetails : undefined,
+      manualBudgetItems: activeTab === 'manual' ? manualBudgetItems : undefined,
       currentStep: activeTab === 'manual' ? currentStep : undefined,
       // AI mode data — input fields
       aiProjectType: activeTab === 'ai' ? aiProjectType : undefined,
@@ -640,6 +644,8 @@ export default function NewProjectPage() {
       if (draft.data.manualDemandSource) setManualDemandSource(draft.data.manualDemandSource)
       if (draft.data.manualMilestones) setManualMilestones(draft.data.manualMilestones)
       if (draft.data.manualRisks) setManualRisks(draft.data.manualRisks)
+      if (draft.data.manualTeamDetails) setManualTeamDetails(draft.data.manualTeamDetails)
+      if (draft.data.manualBudgetItems) setManualBudgetItems(draft.data.manualBudgetItems)
       if (draft.data.currentStep !== undefined) setCurrentStep(draft.data.currentStep)
     } else if (draft.mode === 'ai') {
       // Restore input fields

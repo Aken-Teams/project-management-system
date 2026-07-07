@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { type Task, type Milestone, type TaskLog } from '@/lib/mock-data'
@@ -1162,13 +1163,18 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             ? Math.round((plannedEnd.getTime() - latestCompletion.getTime()) / (1000 * 60 * 60 * 24))
             : null
           const fmtDate = (d: Date) => d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
-          // Earliest planned start among tasks
+          // Earliest planned start — tasks' envelope, or the milestone's own start
+          // when it has no tasks yet (so the plan dates always show). (Bug #13)
           const earliestPlanned = msTks.length > 0
             ? new Date(msTks.reduce((min, t) => new Date(t.startDate).getTime() < new Date(min).getTime() ? t.startDate : min, msTks[0].startDate))
-            : null
-          return (
+            : (ms.startDate ? new Date(ms.startDate) : null)
+          if (typeof document === 'undefined') return null
+          // Portal to <body>: the Gantt can live inside a transformed dialog (Radix
+          // centering uses transform), which would re-anchor position:fixed to the
+          // dialog instead of the viewport and throw the tooltip far from the cursor.
+          return createPortal(
             <div
-              className="fixed pointer-events-none z-50 bg-popover border rounded-lg shadow-lg px-3.5 py-2.5 text-sm min-w-[220px]"
+              className="fixed pointer-events-none z-[100] bg-popover border rounded-lg shadow-lg px-3.5 py-2.5 text-sm min-w-[220px]"
               style={{
                 left: msTooltip.x,
                 top: msTooltip.y,
@@ -1206,7 +1212,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   </>
                 )}
               </div>
-            </div>
+            </div>,
+            document.body,
           )
         })()}
 
