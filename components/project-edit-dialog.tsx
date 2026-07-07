@@ -36,6 +36,7 @@ import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/compon
 import { GanttChart } from '@/components/gantt-chart'
 import { TimelineTable, type TimelineTeamMember, type OverflowInfo, type DropMode } from '@/components/timeline-table'
 import { calculateMilestoneDates, calculateTaskDates, dbToTimelineState, computeWorkItemsDiff, daysBetween } from '@/lib/timeline-utils'
+import { promoteTaskToMilestone } from '@/lib/timeline-tree'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
   type Project,
@@ -1013,8 +1014,20 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // One-click outdent: promote a subtask back to a task, placed right after its old parent.
   const handleOutdent = (taskId: string) => {
     const t = tlTasks.find(x => x.id === taskId)
-    if (!t || !t.parentId) return
-    runMove(computeMove(taskId, t.parentId, 'after'))
+    if (!t) return
+    if (t.parentId) { runMove(computeMove(taskId, t.parentId, 'after')); return }
+    // top-level task → promote to a milestone
+    const r = promoteTaskToMilestone(tlTasks, tlMilestones, taskId)
+    if (r) { setTlTasks(r.tasks); setTlMilestones(r.milestones) }
+  }
+
+  // Demote a milestone → a task inside an adjacent milestone (previous, or next if
+  // it's the first). Button parity with drag; works for any milestone incl. the first.
+  const handleMilestoneDemote = (msId: string) => {
+    const idx = tlMilestones.findIndex(m => m.id === msId)
+    if (idx < 0) return
+    const target = idx > 0 ? tlMilestones[idx - 1] : tlMilestones[idx + 1]
+    if (target) runMove(computeMove(msId, target.id, 'inside'))
   }
 
   // ─── Bubble-up: child changes → auto-adjust parent duration ───
@@ -1706,6 +1719,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onItemMove={handleItemMove}
               onIndent={handleIndent}
               onOutdent={handleOutdent}
+              onMilestoneDemote={handleMilestoneDemote}
               storageKey={project.id}
             />
 

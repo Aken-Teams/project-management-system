@@ -63,7 +63,7 @@ import {
 } from 'lucide-react'
 import { arrayMove } from '@dnd-kit/sortable'
 import { calculateMilestoneDates, calculateTaskDates, seedSequentialDates, daysBetween } from '@/lib/timeline-utils'
-import { moveTreeItem, type TreeDropMode } from '@/lib/timeline-tree'
+import { moveTreeItem, promoteTaskToMilestone, type TreeDropMode } from '@/lib/timeline-tree'
 import { GanttChart } from '@/components/gantt-chart'
 
 interface ManualMilestone {
@@ -1030,8 +1030,13 @@ export default function NewProjectPage() {
   }
   const manualOutdent = (taskId: string) => {
     const t = manualTasks.find(x => x.id === taskId)
-    if (!t || !t.parentId) return
-    manualItemMove(taskId, t.parentId, 'after')
+    if (!t) return
+    if (t.parentId) { manualItemMove(taskId, t.parentId, 'after'); return }
+    // top-level task → promote to a milestone
+    const r = promoteTaskToMilestone(manualTasks, manualMilestones, taskId)
+    if (!r) return
+    setManualTasks(r.tasks)
+    setManualMilestones(r.milestones)
   }
   const aiItemMove = (activeId: string, overId: string, mode: TreeDropMode) => {
     const r = moveTreeItem(aiTasks, aiMilestones, activeId, overId, mode)
@@ -1049,8 +1054,26 @@ export default function NewProjectPage() {
   }
   const aiOutdent = (taskId: string) => {
     const t = aiTasks.find(x => x.id === taskId)
-    if (!t || !t.parentId) return
-    aiItemMove(taskId, t.parentId, 'after')
+    if (!t) return
+    if (t.parentId) { aiItemMove(taskId, t.parentId, 'after'); return }
+    const r = promoteTaskToMilestone(aiTasks, aiMilestones, taskId)
+    if (!r) return
+    setAiTasks(r.tasks)
+    setAiMilestones(r.milestones)
+  }
+  // Demote a milestone → a task inside an adjacent milestone (previous, or next if
+  // it's the first). Button parity with drag; works for any milestone incl. the first.
+  const manualMsDemote = (msId: string) => {
+    const idx = manualMilestones.findIndex(m => m.id === msId)
+    if (idx < 0) return
+    const target = idx > 0 ? manualMilestones[idx - 1] : manualMilestones[idx + 1]
+    if (target) manualItemMove(msId, target.id, 'inside')
+  }
+  const aiMsDemote = (msId: string) => {
+    const idx = aiMilestones.findIndex(m => m.id === msId)
+    if (idx < 0) return
+    const target = idx > 0 ? aiMilestones[idx - 1] : aiMilestones[idx + 1]
+    if (target) aiItemMove(msId, target.id, 'inside')
   }
 
   // Team member helpers
@@ -2179,6 +2202,7 @@ export default function NewProjectPage() {
                     onItemMove={aiItemMove}
                     onIndent={aiIndent}
                     onOutdent={aiOutdent}
+                    onMilestoneDemote={aiMsDemote}
                     onGanttPreview={() => { setGanttPreviewMode('ai'); setGanttPreviewOpen(true) }}
                     storageKey="new-ai"
                   />
@@ -2732,6 +2756,7 @@ export default function NewProjectPage() {
                     onItemMove={manualItemMove}
                     onIndent={manualIndent}
                     onOutdent={manualOutdent}
+                    onMilestoneDemote={manualMsDemote}
                     onGanttPreview={() => { setGanttPreviewMode('manual'); setGanttPreviewOpen(true) }}
                     storageKey="new-manual"
                   />

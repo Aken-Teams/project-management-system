@@ -10,6 +10,9 @@ interface TreeTask {
   id: string
   milestoneId: string
   parentId?: string | null
+  title?: string
+  durationDays?: number
+  startDate?: string
 }
 interface TreeMs {
   id: string
@@ -36,10 +39,10 @@ export function moveTreeItem<
   const overTask = tasks.find(t => t.id === overId)
   const overMs = milestones.find(m => m.id === overId)
 
-  // ── Milestone dragged onto another milestone ──
-  if (activeMs && overMs) {
-    if (mode !== 'inside') {
-      // edge → reorder milestones
+  // ── Milestone dragged ──
+  if (activeMs) {
+    // Dropped on another milestone's EDGE → reorder milestones.
+    if (overMs && mode !== 'inside') {
       const from = milestones.findIndex(m => m.id === activeId)
       const to = milestones.findIndex(m => m.id === overId)
       if (from < 0 || to < 0) return null
@@ -48,19 +51,22 @@ export function moveTreeItem<
       ms.splice(to, 0, moved)
       return { tasks, milestones: ms }
     }
-    // inside → demote milestone A into milestone B as a top-level task; A's tasks
-    // become subtasks; A's subtasks flatten up (2-level max). A is removed.
+    // Otherwise DEMOTE into a destination milestone (dropped inside a milestone, OR
+    // onto any task that belongs to another milestone): milestone A becomes a
+    // top-level task there; A's tasks become subtasks; A's subtasks flatten up.
+    const destMsId = overMs ? overMs.id : overTask ? overTask.milestoneId : null
+    if (!destMsId || destMsId === activeId) return null
     const newTaskId = `demoted-${activeId}`
     const newTask = {
-      id: newTaskId, milestoneId: overMs.id, parentId: null,
+      id: newTaskId, milestoneId: destMsId, parentId: null,
       title: activeMs.name || '新任務', assignee: '', priority: 'medium',
       durationDays: activeMs.durationDays || 1, startDate: activeMs.startDate,
     } as unknown as T
     const aTasks = tasks.filter(t => t.milestoneId === activeId)
-    const movedSubs = aTasks.map(t => ({ ...t, milestoneId: overMs.id, parentId: newTaskId }) as T)
+    const movedSubs = aTasks.map(t => ({ ...t, milestoneId: destMsId, parentId: newTaskId }) as T)
     const rest = tasks.filter(t => t.milestoneId !== activeId)
     let i = -1
-    rest.forEach((t, k) => { if (t.milestoneId === overMs.id) i = k })
+    rest.forEach((t, k) => { if (t.milestoneId === destMsId) i = k })
     const newTasks = [...rest]
     newTasks.splice(i + 1, 0, newTask, ...movedSubs)
     return { tasks: newTasks, milestones: milestones.filter(m => m.id !== activeId) }
@@ -127,4 +133,39 @@ export function moveTreeItem<
   const newTasks = [...rest]
   newTasks.splice(at < 0 ? newTasks.length : at, 0, ...moved)
   return { tasks: newTasks, milestones }
+}
+
+// ─── Promote a top-level task up to a milestone ──────────────
+// The task becomes a new milestone (placed right after its current milestone);
+// its subtasks become that milestone's top-level tasks. Mirrors the "升階" ladder:
+// 子任務 → 任務 → 里程碑.
+export function promoteTaskToMilestone<
+  T extends TreeTask,
+  M extends TreeMs,
+>(
+  tasks: T[],
+  milestones: M[],
+  taskId: string,
+): { tasks: T[]; milestones: M[] } | null {
+  const task = tasks.find(t => t.id === taskId)
+  if (!task || task.parentId) return null // only top-level tasks can become milestones
+
+  const newMsId = `ms-from-${taskId}`
+  const newMs = {
+    id: newMsId,
+    name: task.title || '新里程碑',
+    durationDays: task.durationDays || 1,
+    startDate: task.startDate,
+  } as unknown as M
+
+  const newTasks = tasks
+    .filter(t => t.id !== taskId) // the task itself becomes the milestone
+    .map(t => t.parentId === taskId
+      ? ({ ...t, milestoneId: newMsId, parentId: null }) as T // its subtasks → top-level tasks
+      : t)
+
+  const oldMsIdx = milestones.findIndex(m => m.id === task.milestoneId)
+  const ms = [...milestones]
+  ms.splice(oldMsIdx < 0 ? ms.length : oldMsIdx + 1, 0, newMs)
+  return { tasks: newTasks, milestones: ms }
 }

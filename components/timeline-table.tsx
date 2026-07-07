@@ -102,6 +102,7 @@ export interface TimelineTableProps {
   // One-click nesting: indent a top-level task under the row above; outdent a subtask to a task
   onIndent?: (taskId: string) => void
   onOutdent?: (taskId: string) => void
+  onMilestoneDemote?: (milestoneId: string) => void
   // Namespaces the collapse-state memory (localStorage). Pass the project id when
   // editing; a stable string (e.g. 'new-manual') for the create wizard.
   storageKey?: string
@@ -182,6 +183,7 @@ const MilestoneRow = memo(function MilestoneRow({
   onToggleCollapse,
   onDateChange,
   onToggleLock,
+  onDemote,
   dropHint,
   dropBadge,
 }: {
@@ -198,6 +200,7 @@ const MilestoneRow = memo(function MilestoneRow({
   onToggleCollapse: () => void
   onDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
   onToggleLock?: (index: number) => void
+  onDemote?: (milestoneId: string) => void
   dropHint?: DropMode
   dropBadge?: DropMode
 }) {
@@ -263,6 +266,18 @@ const MilestoneRow = memo(function MilestoneRow({
           placeholder="里程碑名稱"
           className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
         />
+        {onDemote && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onDemote(milestone.id)}
+            className="shrink-0 h-6 w-6 text-muted-foreground/60 hover:text-primary hover:bg-primary/10"
+            title="降為任務（併入相鄰的里程碑）"
+          >
+            <IndentIncrease className="h-3.5 w-3.5" />
+          </Button>
+        )}
         {collapsed && taskCount > 0 && (
           <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
             {taskCount} 任務
@@ -360,7 +375,7 @@ const MilestoneRow = memo(function MilestoneRow({
   a.collapsed === b.collapsed && a.taskCount === b.taskCount && a.overflowInfo === b.overflowInfo &&
   a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
   a.onUpdate === b.onUpdate && a.onRemove === b.onRemove && a.onDateChange === b.onDateChange &&
-  a.onToggleLock === b.onToggleLock && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge)
+  a.onToggleLock === b.onToggleLock && a.onDemote === b.onDemote && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge)
 
 // ─── TaskRow ────────────────────────────────────────────────
 const TaskRow = memo(function TaskRow({
@@ -381,6 +396,7 @@ const TaskRow = memo(function TaskRow({
   onDateChange,
   onToggleLock,
   onIndent,
+  onOutdent,
   dropHint,
 }: {
   task: TimelineTask
@@ -400,6 +416,7 @@ const TaskRow = memo(function TaskRow({
   onDateChange?: (taskId: string, field: 'startDate' | 'endDate', value: string) => void
   onToggleLock?: (taskId: string) => void
   onIndent?: (taskId: string) => void
+  onOutdent?: (taskId: string) => void
   dropHint?: DropMode
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -512,6 +529,18 @@ const TaskRow = memo(function TaskRow({
             title="縮排成上一列任務的子任務"
           >
             <IndentIncrease className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        {onOutdent && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onOutdent(task.id)}
+            className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
+            title="升階為里程碑"
+          >
+            <IndentDecrease className="h-3.5 w-3.5" />
           </Button>
         )}
         <Button
@@ -631,7 +660,7 @@ const TaskRow = memo(function TaskRow({
   a.msIndex === b.msIndex && a.overflowInfo === b.overflowInfo &&
   a.envelopeStart === b.envelopeStart && a.envelopeEnd === b.envelopeEnd &&
   a.onRemove === b.onRemove && a.onUpdate === b.onUpdate && a.onDateChange === b.onDateChange &&
-  a.onToggleLock === b.onToggleLock && a.onIndent === b.onIndent && a.dropHint === b.dropHint)
+  a.onToggleLock === b.onToggleLock && a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.dropHint === b.dropHint)
 
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
@@ -1135,6 +1164,7 @@ export function TimelineTable({
   onItemMove,
   onIndent,
   onOutdent,
+  onMilestoneDemote,
   storageKey,
 }: TimelineTableProps) {
   const collapseStoreKey = storageKey ? `tl-collapse:${storageKey}` : null
@@ -1365,6 +1395,7 @@ export function TimelineTable({
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
                   onDateChange={onMilestoneDateChange}
                   onToggleLock={onMilestoneToggleLock}
+                  onDemote={onMilestoneDemote}
                 />
                 {!isCollapsed && (
                   <>
@@ -1395,6 +1426,7 @@ export function TimelineTable({
                             onDateChange={onTaskDateChange}
                             onToggleLock={onTaskToggleLock}
                             onIndent={onIndent}
+                            onOutdent={onOutdent}
                           />
                           {!subtasksCollapsed && subtasks.map((st) => (
                             <SubtaskRow
