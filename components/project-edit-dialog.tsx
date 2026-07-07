@@ -265,17 +265,20 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // Snapshot of original data for diff on save.
   // Use calculated endDates (not raw DB dueDate) so that stale DB values
   // (e.g. after a project startDate change was approved) don't cause false positives.
-  const [origMilestones] = useState(() => {
-    const initRecalc = calculateMilestoneDates(tlInit.milestones, project.startDate, tlInit.tasks)
+  const computeOrigMilestones = (initMs: typeof tlInit.milestones, initTasks: typeof tlInit.tasks, startDate: string) => {
+    const initRecalc = calculateMilestoneDates(initMs, startDate, initTasks)
     return initRecalc.map((ms, i) => ({
       id: ms.id, name: ms.name, dueDate: ms.endDate || '', startDate: ms.startDate,
       // raw stored startDate — used to detect drift between the milestone's saved
       // start and its task envelope, so we can re-sync it on save.
-      rawStartDate: tlInit.milestones[i]?.startDate,
+      rawStartDate: initMs[i]?.startDate,
       manualDates: ms.manualDates ?? false,
     }))
-  })
-  const [origTasks] = useState(() =>
+  }
+  const [origMilestones, setOrigMilestones] = useState(() =>
+    computeOrigMilestones(tlInit.milestones, tlInit.tasks, project.startDate)
+  )
+  const [origTasks, setOrigTasks] = useState(() =>
     (project.tasks ?? []).map(t => ({
       id: t.id, milestoneId: t.milestoneId, title: t.title,
       assignee: t.assignee, priority: t.priority,
@@ -623,13 +626,37 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     return true
   }
 
+  // After a save, re-sync the dialog's timeline state from the freshly-saved project
+  // (real ids, server-normalised dates) so it can stay open without a second save
+  // re-creating the just-added items.
+  const reinitTimelineFromServer = async () => {
+    try {
+      const res = await fetch(`/api/projects/${project.id}`)
+      if (!res.ok) return
+      const fresh = await res.json()
+      const init = dbToTimelineState(fresh.milestones ?? [], fresh.tasks ?? [], fresh.startDate)
+      setTlMilestones(init.milestones)
+      setTlTasks(init.tasks)
+      setOrigMilestones(computeOrigMilestones(init.milestones, init.tasks, fresh.startDate))
+      setOrigTasks((fresh.tasks ?? []).map((t: { id: string; milestoneId: string; title: string; assignee: string; priority: string; durationDays: number; startDate: string; endDate: string; parentId?: string | null; manualDates?: boolean }) => ({
+        id: t.id, milestoneId: t.milestoneId, title: t.title,
+        assignee: t.assignee, priority: t.priority,
+        durationDays: t.durationDays, startDate: t.startDate, endDate: t.endDate,
+        parentId: t.parentId ?? undefined,
+        manualDates: t.manualDates ?? false,
+      })))
+    } catch { /* keep current state on failure */ }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
       if (await validateAndSaveAll()) {
         await onWorkItemsChange?.()
         await onSaved?.()
-        onOpenChange(false)
+        // 需求：儲存後不關閉編輯視窗，改跳完成提示並讓使用者繼續編輯。
+        await reinitTimelineFromServer()
+        toast.success('儲存變更完成')
       }
     } catch {
       setError('儲存失敗，請稍後再試')
