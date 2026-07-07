@@ -441,7 +441,9 @@ export default function NewProjectPage() {
     }
   }, [user, router])
   const [isCreating, setIsCreating] = useState(false)
-  const [activeTab, setActiveTab] = useState<'manual' | 'ai'>('ai')
+  // 暫時隱藏「AI 輔助建立」（user 需求反覆期間較少用）。改回 true 即可恢復。
+  const SHOW_AI_TAB = false
+  const [activeTab, setActiveTab] = useState<'manual' | 'ai'>(SHOW_AI_TAB ? 'ai' : 'manual')
   const [showDraftsDialog, setShowDraftsDialog] = useState(false)
   const [showSaveDraftDialog, setShowSaveDraftDialog] = useState(false)
   const [draftNameInput, setDraftNameInput] = useState('')
@@ -1623,16 +1625,18 @@ export default function NewProjectPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'manual' | 'ai')}>
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="ai" className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              AI 輔助建立
-            </TabsTrigger>
-            <TabsTrigger value="manual" className="gap-2">
-              <FileText className="h-4 w-4" />
-              手動建立
-            </TabsTrigger>
-          </TabsList>
+          {SHOW_AI_TAB && (
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="ai" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                AI 輔助建立
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="gap-2">
+                <FileText className="h-4 w-4" />
+                手動建立
+              </TabsTrigger>
+            </TabsList>
+          )}
 
           {/* AI Mode */}
           <TabsContent value="ai" className="space-y-6 mt-6">
