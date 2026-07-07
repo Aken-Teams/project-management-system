@@ -2070,6 +2070,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               const previewMilestones = recalcMilestones.map(m => ({
                 id: m.id,
                 name: m.name,
+                startDate: m.startDate || undefined,
                 dueDate: m.endDate || '',
                 status: 'todo' as const,
                 progress: 0,

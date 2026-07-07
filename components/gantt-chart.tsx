@@ -1027,9 +1027,12 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             : null
           const fmtDate = (d: Date) => d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
           const node = nodeMap?.get(t.id)
-          return (
+          if (typeof document === 'undefined') return null
+          // Portal to <body>: escapes the transformed preview dialog so position:fixed
+          // anchors to the viewport (tooltip stays on the cursor). (same as msTooltip)
+          return createPortal(
             <div
-              className="fixed pointer-events-none z-50 bg-popover border rounded-lg shadow-lg px-3.5 py-2.5 text-sm min-w-[220px]"
+              className="fixed pointer-events-none z-[100] bg-popover border rounded-lg shadow-lg px-3.5 py-2.5 text-sm min-w-[220px]"
               style={{
                 left: taskTooltip.x,
                 top: taskTooltip.y,
@@ -1075,7 +1078,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   )}
                 </div>
               )}
-            </div>
+            </div>,
+            document.body,
           )
         })()}
 
