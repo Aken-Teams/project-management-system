@@ -230,6 +230,9 @@ export default function MyTasksPage() {
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
   // 取消回報前的確認視窗（A 正在確認中，避免任務跳來跳去讓 A 困惑）
   const [rConfirmCancel, setRConfirmCancel] = useState<Task | null>(null)
+  // 週報有填但尚未提交 → 關閉前提醒（避免使用者關掉後資料消失又怪系統）
+  const [rDirty, setRDirty] = useState(false)
+  const [rConfirmClose, setRConfirmClose] = useState(false)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -762,7 +765,17 @@ export default function MyTasksPage() {
     setRLogRows([{ date: '', content: '' }])
     setRLogNextWeekPlan('')
     setRDialogTab('active')
+    setRDirty(false)
     setRReportDialogOpen(true)
+  }
+
+  // 實際關閉週報彈窗（清狀態）— 由 onOpenChange 或關閉確認視窗呼叫
+  const closeRReportDialog = () => {
+    setRReportDialogOpen(false)
+    setRReportDialogProject(null)
+    setRSelectedTaskId(null)
+    setRDirty(false)
+    setRConfirmClose(false)
   }
 
   // Get user's assigned tasks for R dialog, grouped by their FULL path.
@@ -879,8 +892,9 @@ export default function MyTasksPage() {
 
   // Prefill R log rows when task or week changes
   useEffect(() => {
-    // 換任務／換週別時，過去週報回到「唯讀」預設
+    // 換任務／換週別時，過去週報回到「唯讀」預設、清除未提交旗標（重新載入既有紀錄）
     setREditPastUnlocked(false)
+    setRDirty(false)
     if (!rSelectedTaskId || !rReportDialogProject) return
     const [y, m, d] = rReportWeekOf.split('-').map(Number)
     const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -931,6 +945,7 @@ export default function MyTasksPage() {
         setRLogRows(prev => prev.map((r, i) =>
           i === idx ? { ...r, attachments: [...(r.attachments || []), ...uploaded] } : r
         ))
+        setRDirty(true)
       }
     } catch { /* ignore */ } finally {
       setRUploadingRowIdx(null)
@@ -1029,6 +1044,7 @@ export default function MyTasksPage() {
         }),
       })
       if (!res.ok) throw new Error()
+      setRDirty(false) // 已提交 → 清除未提交旗標
       // Refresh task data
       const refreshRes = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
       if (refreshRes.ok) {
@@ -2560,8 +2576,10 @@ export default function MyTasksPage() {
 
       {/* ── R Tab: Weekly Report Dialog (Task-based, matching Gantt chart design) ── */}
       <Dialog open={rReportDialogOpen} onOpenChange={(open) => {
+        // 關閉時若有填寫但未提交 → 先跳確認，避免資料消失
+        if (!open && rDirty) { setRConfirmClose(true); return }
+        if (!open) { closeRReportDialog(); return }
         setRReportDialogOpen(open)
-        if (!open) { setRReportDialogProject(null); setRSelectedTaskId(null) }
       }}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
@@ -2774,6 +2792,7 @@ export default function MyTasksPage() {
                                                     const updated = [...rLogRows]
                                                     updated[idx] = { ...updated[idx], date: e.target.value }
                                                     setRLogRows(updated)
+                                                    setRDirty(true)
                                                   }}
                                                   className="w-full text-xs border rounded-md h-[34px] px-1.5 bg-background disabled:opacity-60 disabled:cursor-not-allowed"
                                                 />
@@ -2835,6 +2854,7 @@ export default function MyTasksPage() {
                                                     const updated = [...rLogRows]
                                                     updated[idx] = { ...updated[idx], content: e.target.value }
                                                     setRLogRows(updated)
+                                                    setRDirty(true)
                                                     e.target.style.height = '34px'
                                                     e.target.style.height = Math.min(e.target.scrollHeight, 240) + 'px'
                                                     e.target.style.overflowY = e.target.scrollHeight > 240 ? 'auto' : 'hidden'
@@ -2895,7 +2915,7 @@ export default function MyTasksPage() {
                                       <button
                                         type="button"
                                         className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2 border-t border-dashed border-primary/20"
-                                        onClick={() => setRLogRows([...rLogRows, { date: '', content: '' }])}
+                                        onClick={() => { setRLogRows([...rLogRows, { date: '', content: '' }]); setRDirty(true) }}
                                       >
                                         + 新增一列
                                       </button>
@@ -2917,7 +2937,7 @@ export default function MyTasksPage() {
                                     placeholder="預計下周要做什麼..."
                                     value={rLogNextWeekPlan}
                                     readOnly={rReadonly}
-                                    onChange={e => setRLogNextWeekPlan(e.target.value)}
+                                    onChange={e => { setRLogNextWeekPlan(e.target.value); setRDirty(true) }}
                                     rows={2}
                                     className="min-h-[60px] text-sm resize-y"
                                   />
@@ -3172,6 +3192,29 @@ export default function MyTasksPage() {
               onClick={() => { const t = rConfirmCancel; setRConfirmCancel(null); if (t) handleToggleReportedDone(t.id, false) }}
             >
               確定取消回報
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 未提交就關閉的提醒（避免使用者關掉後資料消失又怪系統） */}
+      <AlertDialog open={rConfirmClose} onOpenChange={(open) => { if (!open) setRConfirmClose(false) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>尚未提交，確定關閉？</AlertDialogTitle>
+            <AlertDialogDescription>
+              你已填寫內容但<span className="text-destructive font-medium">尚未按「提交週報」或「回報完成」</span>。
+              <br />
+              直接關閉的話，這次填的內容<span className="text-destructive font-medium">不會保存</span>。系統不會自動暫存，請先提交再關閉。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>返回繼續填寫</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90 focus:ring-destructive"
+              onClick={() => closeRReportDialog()}
+            >
+              仍要關閉（不保存）
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
