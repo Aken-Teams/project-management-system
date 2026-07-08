@@ -737,27 +737,49 @@ export default function MyTasksPage() {
     setRReportDialogOpen(true)
   }
 
-  // Get user's assigned tasks for R dialog, grouped by milestone
-  const rDialogTasksByMilestone = useMemo(() => {
+  // Get user's assigned tasks for R dialog, grouped by their FULL path.
+  // ADR-02: drill through the whole task tree (1~6 層) — a task assigned to me at
+  // ANY depth must appear. The group header carries the full breadcrumb
+  // 里程碑 › 父任務 › …，so每列只需顯示最底層任務名，用戶就知道它在哪一層底下。
+  const rDialogTaskGroups = useMemo(() => {
     if (!rReportDialogProject || !user) return []
-    const result: { milestone: { id: string; name: string; dueDate: string; status: string }; tasks: Task[] }[] = []
-    for (const ms of rReportDialogProject.milestones) {
-      if (ms.status === 'done') continue
-      // All tasks assigned to the user under this milestone (top-level + subtasks)
-      const assignedTasks = rReportDialogProject.tasks.filter(
-        t => t.milestoneId === ms.id && t.assignee === user.name && !t.parentId
-      )
-      // Also include subtasks assigned to the user
-      const parentIds = rReportDialogProject.tasks.filter(t => t.milestoneId === ms.id && !t.parentId).map(t => t.id)
-      const assignedSubtasks = rReportDialogProject.tasks.filter(
-        t => t.parentId && parentIds.includes(t.parentId) && t.assignee === user.name
-      )
-      const all = [...assignedTasks, ...assignedSubtasks]
-      if (all.length > 0) {
-        result.push({ milestone: ms, tasks: all })
+    const allTasks = rReportDialogProject.tasks
+    const byId = new Map(allTasks.map(t => [t.id, t]))
+    const childrenOf = new Map<string, Task[]>()
+    for (const t of allTasks) {
+      if (t.parentId) {
+        const arr = childrenOf.get(t.parentId)
+        if (arr) arr.push(t)
+        else childrenOf.set(t.parentId, [t])
       }
     }
-    return result
+    const ancestorsOf = (t: Task): string[] => {
+      const chain: string[] = []
+      let cur = t.parentId ? byId.get(t.parentId) : undefined
+      while (cur) { chain.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
+      return chain
+    }
+    const groups: { key: string; pathLabel: string; dueDate: string; tasks: Task[] }[] = []
+    const groupIndex = new Map<string, number>()
+    for (const ms of rReportDialogProject.milestones) {
+      if (ms.status === 'done') continue
+      const walk = (t: Task) => {
+        if (t.assignee === user.name) {
+          const pathLabel = [ms.name, ...ancestorsOf(t)].join(' › ')
+          const key = `${ms.id}::${pathLabel}`
+          let idx = groupIndex.get(key)
+          if (idx === undefined) {
+            idx = groups.length
+            groupIndex.set(key, idx)
+            groups.push({ key, pathLabel, dueDate: ms.dueDate, tasks: [] })
+          }
+          groups[idx].tasks.push(t)
+        }
+        for (const c of childrenOf.get(t.id) || []) walk(c)
+      }
+      for (const top of allTasks.filter(t => t.milestoneId === ms.id && !t.parentId)) walk(top)
+    }
+    return groups
   }, [rReportDialogProject, user])
 
   // Check which tasks have logs in the selected week
@@ -768,7 +790,7 @@ export default function MyTasksPage() {
     const endDate = new Date(y, m - 1, d + 6)
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
     const map = new Map<string, boolean>()
-    for (const group of rDialogTasksByMilestone) {
+    for (const group of rDialogTaskGroups) {
       for (const task of group.tasks) {
         const hasLogs = rReportDialogProject.taskLogs.some(
           l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd
@@ -777,7 +799,7 @@ export default function MyTasksPage() {
       }
     }
     return map
-  }, [rReportDialogProject, rReportWeekOf, rDialogTasksByMilestone])
+  }, [rReportDialogProject, rReportWeekOf, rDialogTaskGroups])
 
   // Prefill R log rows when task or week changes
   useEffect(() => {
@@ -2429,25 +2451,33 @@ export default function MyTasksPage() {
                   })()}
                 </div>
 
-                {rDialogTasksByMilestone.length === 0 ? (
+                {/* 任務清單專屬捲動區：任務/群組再多也不會把整個彈窗撐長 */}
+                <div className="max-h-[48vh] overflow-y-auto pr-1">
+                {/* 單一欄位標題：開始/截止（sticky 於捲動區內，與任務列同寬，對齊不跑版） */}
+                {rDialogTaskGroups.length > 0 && (
+                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
+                    <span className="flex-1" />
+                    <span className="w-14 text-center shrink-0">開始</span>
+                    <span className="w-14 text-center shrink-0">截止</span>
+                    <span className="w-16 shrink-0" />
+                  </div>
+                )}
+                {rDialogTaskGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">本週沒有指派給你的進行中任務</p>
                 ) : (
-                  rDialogTasksByMilestone.map(group => (
-                    <div key={group.milestone.id} className="space-y-1">
-                      {/* Milestone header */}
+                  rDialogTaskGroups.map((group, gIdx) => (
+                    <div key={group.key} className={cn('space-y-1', gIdx > 0 && 'mt-3 pt-3 border-t border-border/40')}>
+                      {/* 群組標頭：完整層級麵包屑 里程碑 › 父任務 › …（截止已改由各任務列呈現） */}
                       <div className="flex items-center gap-2 px-1">
-                        <span className="text-xs font-medium text-muted-foreground">{group.milestone.name}</span>
-                        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                          截止 {new Date(group.milestone.dueDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                        </Badge>
+                        <span className="text-xs font-medium text-muted-foreground truncate">{group.pathLabel}</span>
                       </div>
 
-                      {/* Task items */}
+                      {/* Task items — 只顯示最底層任務名，層級已由標頭麵包屑表達 */}
                       {group.tasks.map(task => {
                         const isSelected = rSelectedTaskId === task.id
                         const hasLogs = rTaskWeekStatus.get(task.id) || false
                         const taskStatus = computeTaskStatus(task, rReportDialogProject!.taskLogs)
-                        const isSubtask = !!task.parentId
+                        const fmtMD = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 
                         return (
                           <div key={task.id} className="space-y-0">
@@ -2457,7 +2487,6 @@ export default function MyTasksPage() {
                               onClick={() => handleRSelectTask(task.id)}
                               className={cn(
                                 'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left transition-all',
-                                isSubtask && 'ml-4',
                                 isSelected
                                   ? 'border-primary bg-primary/5 shadow-sm'
                                   : 'border-border hover:bg-muted/50 hover:border-muted-foreground/20',
@@ -2467,24 +2496,32 @@ export default function MyTasksPage() {
                               <span className={cn('text-sm flex-1 truncate', isSelected && 'font-medium')}>
                                 {task.title}
                               </span>
-                              {hasLogs ? (
-                                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
-                                  <Check className="h-2.5 w-2.5 mr-0.5" />已填
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0">
-                                  未填
-                                </Badge>
-                              )}
-                              <ChevronDown className={cn(
-                                'h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform',
-                                isSelected && 'rotate-180',
-                              )} />
+                              <span className="w-14 text-center text-xs tabular-nums text-muted-foreground shrink-0">
+                                {fmtMD(task.startDate)}
+                              </span>
+                              <span className="w-14 text-center text-xs tabular-nums text-muted-foreground shrink-0">
+                                {fmtMD(task.endDate)}
+                              </span>
+                              <span className="w-16 flex items-center justify-end gap-1 shrink-0">
+                                {hasLogs ? (
+                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />已填
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0">
+                                    未填
+                                  </Badge>
+                                )}
+                                <ChevronDown className={cn(
+                                  'h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform',
+                                  isSelected && 'rotate-180',
+                                )} />
+                              </span>
                             </button>
 
                             {/* Expanded: log entry form (matching Gantt chart design) */}
                             {isSelected && (
-                              <div className={cn('border border-t-0 rounded-b-lg px-4 py-4 space-y-4 bg-background', isSubtask && 'ml-4')}>
+                              <div className="border border-t-0 rounded-b-lg px-4 py-4 space-y-4 bg-background">
                                 {/* Log entry table */}
                                 <div className="space-y-1.5">
                                   <div className="flex items-center gap-1.5">
@@ -2677,6 +2714,7 @@ export default function MyTasksPage() {
                     </div>
                   ))
                 )}
+                </div>
               </div>
             </div>
           )}
