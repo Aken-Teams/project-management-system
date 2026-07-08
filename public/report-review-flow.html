@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>週報回報流程・建議</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:#1e293b;
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px;}
+  h1{font-size:24px;margin:0 0 4px;}
+  .sub{color:#64748b;margin:0 0 22px;font-size:14px;}
+  h2{font-size:18px;margin:30px 0 12px;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:760px){.grid{grid-template-columns:1fr;}}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .card .cap{font-weight:700;font-size:15px;margin-bottom:6px;}
+  .bad .cap{color:#dc2626;} .good .cap{color:#059669;}
+  .card .desc{color:#64748b;font-size:13.5px;margin-top:8px;line-height:1.6;}
+  .mermaid{display:flex;justify-content:center;}
+
+  .rec{background:#ecfdf5;border:1px solid #6ee7b7;border-radius:14px;padding:16px 20px;}
+  .rec h3{margin:0 0 8px;color:#047857;font-size:16px;}
+  .rec p{margin:6px 0;font-size:14.5px;line-height:1.7;}
+  .rec b{color:#047857;}
+  .q{background:#fffbeb;border:1px dashed #fcd34d;border-radius:14px;padding:14px 20px;margin-top:14px;}
+  .q b{color:#b45309;}
+
+  /* 畫面示意 mockup */
+  .mock{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.10);overflow:hidden;max-width:560px;margin:6px auto;}
+  .mock .hd{padding:14px 18px;border-bottom:1px solid #eef2f7;}
+  .mock .hd .t{font-weight:700;font-size:15px;}
+  .mock .hd .s{color:#94a3b8;font-size:12px;margin-top:2px;}
+  .tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid #eef2f7;}
+  .tab{padding:9px 12px;font-size:13.5px;color:#64748b;border-bottom:2px solid transparent;}
+  .tab.on{color:#7c3aed;border-color:#7c3aed;font-weight:700;}
+  .tab.new{position:relative;color:#0369a1;background:#f0f9ff;border-radius:8px 8px 0 0;border-bottom:2px solid #0ea5e9;font-weight:700;}
+  .tab.new::after{content:"新增";position:absolute;top:-8px;right:-6px;background:#0ea5e9;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;}
+  .mbody{padding:14px 16px;}
+  .erow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e8edf3;border-radius:10px;margin-bottom:8px;}
+  .ava{width:28px;height:28px;border-radius:50%;background:#0ea5e9;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;}
+  .erow .info{flex:1;min-width:0;}
+  .erow .nm{font-size:14px;font-weight:600;}
+  .erow .tk{font-size:12px;color:#64748b;}
+  .erow .ct{font-size:12.5px;color:#334155;margin-top:2px;}
+  .btn{flex:none;font-size:12.5px;border:1px solid #6ee7b7;background:#ecfdf5;color:#047857;border-radius:8px;padding:5px 10px;font-weight:600;}
+  .btn.g{border-color:#cbd5e1;background:#f8fafc;color:#475569;}
+  .hint{font-size:12px;color:#94a3b8;margin-top:6px;text-align:center;}
+  .foot{margin-top:36px;color:#94a3b8;font-size:12.5px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>週報回報流程・建議</h1>
+  <p class="sub">子層工程師 → 父層主管 → 當責 A（三層彙整）</p>
+
+  <div class="grid">
+    <div class="card bad">
+      <div class="cap">❌ 現況</div>
+      <div class="mermaid">
+flowchart TD
+  E1["工程師A"] --> A["當責 A"]
+  E2["工程師B"] --> A
+  E3["工程師C"] --> A
+  S["負責主管"] --> A
+  classDef eng fill:#e0f2fe,stroke:#7dd3fc,color:#0369a1;
+  classDef sup fill:#ede9fe,stroke:#c4b5fd,color:#6d28d9;
+  classDef acc fill:#fef3c7,stroke:#fcd34d,color:#b45309;
+  class E1,E2,E3 eng; class S sup; class A acc;
+      </div>
+      <div class="desc">所有人（含主管）各自把報告送給 A。主管<b>看不到</b>工程師報告，要了解狀況<b>只能用口頭問</b>。</div>
+    </div>
+
+    <div class="card good">
+      <div class="cap">✅ 建議</div>
+      <div class="mermaid">
+flowchart TD
+  E1["工程師A"] --> S["負責主管"]
+  E2["工程師B"] --> S
+  E3["工程師C"] --> S
+  S --> A["當責 A"]
+  A --> P["官方更新紀錄+進度"]
+  classDef eng fill:#e0f2fe,stroke:#7dd3fc,color:#0369a1;
+  classDef sup fill:#ede9fe,stroke:#c4b5fd,color:#6d28d9;
+  classDef acc fill:#fef3c7,stroke:#fcd34d,color:#b45309;
+  classDef pub fill:#d1fae5,stroke:#6ee7b7,color:#047857;
+  class E1,E2,E3 eng; class S sup; class A acc; class P pub;
+      </div>
+      <div class="desc">工程師先送<b>主管</b> → 主管看過、彙整後送 <b>A</b> → <b>A 送出才正式發布</b>。主管<b>看得到</b>工程師報告。</div>
+    </div>
+  </div>
+
+  <h2>審核流程（一筆報告的生命週期）</h2>
+  <div class="card">
+    <div class="mermaid">
+flowchart TD
+  W["📝 待完成<br/>填寫工作紀錄"]
+  P["⏳ 待確認<br/>已回報完成・等待審核"]
+  D["✅ 完成區<br/>審核通過・結案"]
+  W -->|回報完成（無後續）| P
+  P -->|上層：確認完成| D
+  P -->|上層：退回・需重做| W
+  P -->|本人：取消回報| W
+  classDef todo fill:#e0f2fe,stroke:#7dd3fc,color:#0369a1;
+  classDef pend fill:#fef3c7,stroke:#fcd34d,color:#b45309;
+  classDef done fill:#d1fae5,stroke:#6ee7b7,color:#047857;
+  class W todo; class P pend; class D done;
+    </div>
+    <div class="desc" style="text-align:center">
+      對應彈窗分頁：<b>待完成 → 待確認 → 完成區</b>。每一步（回報／取消／確認／退回）都寫入
+      <b>🕘 審視歷程</b>全程留痕，資料不會消失、有爭議可追。
+    </div>
+  </div>
+
+  <h2>建議做法</h2>
+  <div class="rec">
+    <h3>主管應該要能看到工程師的報告</h3>
+    <p>從客戶需求推導：小任務由各站工程師做，但要回報的是負責主管。<b>主管若看不到工程師報告，就只能用問的</b> —— 這不合理。</p>
+    <p>👉 具體做法：在<b>主管的「填寫週報」彈窗多一個「工程師報告」分頁</b>，讓主管直接看底下工程師的紀錄，並<b>評估要不要納入自己的報告</b>（做法與 A 相同）。</p>
+  </div>
+  <div class="q">
+    <b>待客戶確認：</b>主管看工程師報告後，只是「參考納入」就好，還是也要能「退回」給工程師重做？（我方建議先做<b>參考納入</b>，較單純。）
+  </div>
+
+  <h2>未來畫面示意（主管的填寫週報）</h2>
+  <div class="mock">
+    <div class="hd">
+      <div class="t">填寫週報（負責主管）</div>
+      <div class="s">外觀刮傷對策 — 檢視工程師紀錄並彙整</div>
+    </div>
+    <div class="tabs">
+      <div class="tab on">我的待完成</div>
+      <div class="tab">待確認</div>
+      <div class="tab">完成區</div>
+      <div class="tab new">工程師報告</div>
+    </div>
+    <div class="mbody">
+      <div class="erow">
+        <div class="ava">A</div>
+        <div class="info">
+          <div class="nm">A 站工程師</div>
+          <div class="tk">子任務・治具內襯保護墊　🖇 2</div>
+          <div class="ct">已完成內襯更換，附前後照片…</div>
+        </div>
+        <div class="btn">納入我的報告</div>
+      </div>
+      <div class="erow">
+        <div class="ava" style="background:#8b5cf6">B</div>
+        <div class="info">
+          <div class="nm">B 站工程師</div>
+          <div class="tk">子任務・作業手套更換　🖇 1</div>
+          <div class="ct">手套已全數更換為防滑款…</div>
+        </div>
+        <div class="btn">納入我的報告</div>
+      </div>
+      <div class="erow" style="opacity:.6">
+        <div class="ava" style="background:#94a3b8">C</div>
+        <div class="info">
+          <div class="nm">C 站工程師</div>
+          <div class="tk">子任務・流程動線優化</div>
+          <div class="ct" style="color:#94a3b8">尚未回報</div>
+        </div>
+        <div class="btn g">—</div>
+      </div>
+      <div class="hint">主管在此看到底下工程師的報告 → 點「納入我的報告」帶入 → 彙整後送給 A</div>
+    </div>
+  </div>
+
+  <p class="foot">強茂 專案管理系統 ｜ 週報回報流程建議 ｜ 2026-07-08（草案，待客戶確認父層是否需退回）</p>
+</div>
+<script>
+  mermaid.initialize({ startOnLoad:true, theme:'base', flowchart:{ curve:'basis' },
+    themeVariables:{ fontSize:'15px', fontFamily:'"PingFang TC","Microsoft JhengHei",sans-serif' } });
+</script>
+</body>
+</html>

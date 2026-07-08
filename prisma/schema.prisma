@@ -329,6 +329,9 @@ model TaskLog {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   lastEditedBy String? @map("last_edited_by")          // 最後編輯者姓名（建立者見 author）
+  // 由當責 A 審核後「發布」到官方更新紀錄的時間；null = R 尚未經 A 發布（不進更新紀錄）
+  publishedAt DateTime? @map("published_at")
+  publishedBy String?   @map("published_by")
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -346,6 +349,7 @@ model TaskReviewEvent {
   projectId String   @map("project_id")
   type      String   // reported(R回報) | cancelled(R取消) | confirmed(A確認完成) | rejected(A退回)
   actor     String   @default("")
+  note      String?  @db.VarChar(500)   // 駁回原因等備註
   createdAt DateTime @default(now()) @map("created_at")
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)

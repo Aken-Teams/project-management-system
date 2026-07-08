@@ -201,6 +201,7 @@ export function dbProjectToFrontend(
       nextPlans: string | null
       attachments: string | null
       createdAt: Date
+      publishedAt?: Date | null
     }[]
   },
 ) {
@@ -344,6 +345,7 @@ export function dbProjectToFrontend(
     ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
     ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
     createdAt: tl.createdAt.toISOString(),
+    publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
   }))
 
   // Find the Accountable (A) member from team, fallback to project owner

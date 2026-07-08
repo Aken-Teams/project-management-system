@@ -88,12 +88,14 @@ export function ProjectReportSummary({
     const end = new Date(project.endDate)
     const remainingDays = Math.ceil((end.getTime() - today.getTime()) / 86400000)
 
+    // 更新紀錄只放「A 已發布」的紀錄（publishedAt 有值）；R 未經 A 審核發布的不進更新紀錄
+    const publishedLogs = project.taskLogs.filter(l => l.publishedAt)
     // available weeks = current week ∪ weeks with logs ∪ weeks with completions
     const weekSet = new Set<string>([currentWeek])
-    for (const l of project.taskLogs) weekSet.add(weekStartOf(l.logDate))
+    for (const l of publishedLogs) weekSet.add(weekStartOf(l.logDate))
     for (const t of leaf) if (t.completedAt) weekSet.add(weekStartOf(t.completedAt.slice(0, 10)))
     const logCountByWeek = new Map<string, number>()
-    for (const l of project.taskLogs) {
+    for (const l of publishedLogs) {
       const w = weekStartOf(l.logDate)
       logCountByWeek.set(w, (logCountByWeek.get(w) || 0) + 1)
     }
@@ -124,7 +126,7 @@ export function ProjectReportSummary({
     const completed = base.leaf.filter(
       t => t.completedAt && t.completedAt.slice(0, 10) >= start && t.completedAt.slice(0, 10) <= endStr
     )
-    const logs = project.taskLogs.filter(l => l.logDate >= start && l.logDate <= endStr)
+    const logs = project.taskLogs.filter(l => l.publishedAt && l.logDate >= start && l.logDate <= endStr)
 
     // group logs by author → entries
     const byAuthor = new Map<string, { task: ReturnType<typeof base.taskMap.get>; log: (typeof logs)[number] }[]>()

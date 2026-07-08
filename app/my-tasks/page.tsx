@@ -139,7 +139,10 @@ interface MyTasksProject {
 }
 
 // 任務審視歷程事件
-type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; createdAt: string }
+type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; note?: string | null; createdAt: string }
+
+// 審核中心：一筆待審項目
+type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logs: TaskLog[]; files: TaskLogAttachment[] }
 
 // 審視事件顯示樣式（不綁角色，操作者由「操作人」欄呈現）
 const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
@@ -233,6 +236,13 @@ export default function MyTasksPage() {
   // 週報有填但尚未提交 → 關閉前提醒（避免使用者關掉後資料消失又怪系統）
   const [rDirty, setRDirty] = useState(false)
   const [rConfirmClose, setRConfirmClose] = useState(false)
+  // ── 審核中心（當責 A）──
+  const [reviewCenterOpen, setReviewCenterOpen] = useState(false)
+  const [reviewTab, setReviewTab] = useState<'pending' | 'history'>('pending')
+  const [reviewProcessing, setReviewProcessing] = useState<string | null>(null)
+  const [reviewExpanded, setReviewExpanded] = useState<Set<string>>(new Set())
+  const [reviewRejectItem, setReviewRejectItem] = useState<{ projectId: string; taskId: string; title: string } | null>(null)
+  const [reviewRejectReason, setReviewRejectReason] = useState('')
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -859,6 +869,83 @@ export default function MyTasksPage() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [rReportDialogProject, user])
 
+  // ── 審核中心資料（只看「當責 A」的專案）──
+  const reviewIsAccountable = useMemo(() => apiProjects.some(p => p.userRole === 'A'), [apiProjects])
+
+  const reviewPendingItems = useMemo<ReviewItem[]>(() => {
+    if (!user) return []
+    const out: ReviewItem[] = []
+    for (const p of apiProjects) {
+      if (p.userRole !== 'A') continue
+      const byId = new Map(p.tasks.map(t => [t.id, t]))
+      const childrenOf = new Map<string, Task[]>()
+      for (const t of p.tasks) if (t.parentId) { const a = childrenOf.get(t.parentId); if (a) a.push(t); else childrenOf.set(t.parentId, [t]) }
+      for (const t of p.tasks) {
+        if (!t.reportedDoneAt || t.completedAt) continue
+        const ms = p.milestones.find(m => m.id === t.milestoneId)
+        const anc: string[] = []
+        let cur = t.parentId ? byId.get(t.parentId) : undefined
+        while (cur) { anc.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
+        const path = [ms?.name, ...anc].filter(Boolean).join(' › ')
+        // 檔案繼承：此任務 + 所有子孫任務的附件全帶上
+        const descIds = new Set<string>([t.id])
+        const stack = [...(childrenOf.get(t.id) || [])]
+        while (stack.length) { const c = stack.pop()!; descIds.add(c.id); const k = childrenOf.get(c.id); if (k) stack.push(...k) }
+        const logs = p.taskLogs.filter(l => l.taskId === t.id).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+        const files = p.taskLogs.filter(l => descIds.has(l.taskId)).flatMap(l => l.attachments || [])
+        out.push({ projectId: p.id, projectName: p.name, task: t, path, reporter: t.reportedDoneBy || '', reportedAt: t.reportedDoneAt, logs, files })
+      }
+    }
+    return out.sort((a, b) => a.reportedAt.localeCompare(b.reportedAt))
+  }, [apiProjects, user])
+
+  const reviewHistory = useMemo<RReviewEvent[]>(() => {
+    const out: RReviewEvent[] = []
+    for (const p of apiProjects) {
+      if (p.userRole !== 'A') continue
+      for (const e of (p.reviewEvents || [])) out.push(e)
+    }
+    return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }, [apiProjects])
+
+  const refreshMyTasks = useCallback(async () => {
+    if (!user) return
+    const res = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+    if (res.ok) { const data = await res.json(); setApiProjects(data.projects ?? []) }
+  }, [user])
+
+  // A 確認完成（並發布紀錄到更新紀錄）
+  const reviewConfirm = async (item: ReviewItem) => {
+    if (!user) return
+    setReviewProcessing(item.task.id)
+    try {
+      const res = await fetch(`/api/projects/${item.projectId}/tasks/${item.task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done', progress: 100, completedBy: user.name, reviewEvent: 'confirmed', reviewActor: user.name }),
+      })
+      if (!res.ok) throw new Error()
+      await refreshMyTasks()
+    } catch { setRErrorMsg('確認失敗，請稍後再試') } finally { setReviewProcessing(null) }
+  }
+
+  // A 駁回（退回給執行者重做，附原因）
+  const reviewDoReject = async () => {
+    if (!user || !reviewRejectItem) return
+    const it = reviewRejectItem
+    setReviewProcessing(it.taskId)
+    try {
+      const res = await fetch(`/api/projects/${it.projectId}/tasks/${it.taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportedDone: false, reviewEvent: 'rejected', reviewActor: user.name, reviewNote: reviewRejectReason.trim() || undefined }),
+      })
+      if (!res.ok) throw new Error()
+      setReviewRejectItem(null); setReviewRejectReason('')
+      await refreshMyTasks()
+    } catch { setRErrorMsg('駁回失敗，請稍後再試') } finally { setReviewProcessing(null) }
+  }
+
   // 本週（週一）字串，用來判斷選到的週別是否為當週（過去/未來週預設唯讀）
   const rCurrentMonday = useMemo(() => {
     const now = new Date()
@@ -1393,15 +1480,26 @@ export default function MyTasksPage() {
       <div className="space-y-4">
         {/* Page Header */}
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
-            <button
-              onClick={() => setHelpOpen(true)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              title="我的任務說明"
-            >
-              <HelpCircle className="h-5 w-5" />
-            </button>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
+              <button
+                onClick={() => setHelpOpen(true)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="我的任務說明"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            </div>
+            {reviewIsAccountable && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setReviewTab('pending'); setReviewCenterOpen(true) }}>
+                <ClipboardList className="h-4 w-4" />
+                審核中心
+                {reviewPendingItems.length > 0 && (
+                  <Badge className="h-5 min-w-5 px-1 rounded-full bg-amber-500 text-white text-[11px]">{reviewPendingItems.length}</Badge>
+                )}
+              </Button>
+            )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">{user.name} 的工作總覽</p>
         </div>
@@ -3422,6 +3520,148 @@ export default function MyTasksPage() {
           }}
         />
       )}
+
+      {/* ── 審核中心（當責 A）── */}
+      <Dialog open={reviewCenterOpen} onOpenChange={setReviewCenterOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-5 pb-3 border-b">
+            <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4" />審核中心</DialogTitle>
+            <DialogDescription className="text-sm">審核執行者回報的完成 — 確認即發布到「更新紀錄」，或駁回退回重做。只列出需要你決定的項目。</DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pt-3">
+            <div className="flex items-center gap-1 border-b">
+              <button type="button" onClick={() => setReviewTab('pending')}
+                className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
+                  reviewTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                待你確認
+                {reviewPendingItems.length > 0 && <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewPendingItems.length}</span>}
+              </button>
+              <button type="button" onClick={() => setReviewTab('history')}
+                className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
+                  reviewTab === 'history' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                已處理履歷
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {reviewTab === 'pending' ? (
+              reviewPendingItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">目前沒有待你確認的項目 🎉</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {reviewPendingItems.map(item => {
+                    const expanded = reviewExpanded.has(item.task.id)
+                    const busy = reviewProcessing === item.task.id
+                    return (
+                      <div key={item.task.id} className="border rounded-lg overflow-hidden">
+                        <div className="px-3 py-2.5 bg-muted/20">
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] text-muted-foreground truncate">{item.projectName} · {item.path}</div>
+                              <div className="text-sm font-medium truncate">{item.task.title}</div>
+                              <div className="text-[11px] text-muted-foreground mt-0.5">
+                                {item.reporter || '執行者'} 回報完成 · {new Date(item.reportedAt).toLocaleDateString('zh-TW')}
+                                {item.files.length > 0 && <> · 🖇 {item.files.length}</>}
+                              </div>
+                            </div>
+                            <button onClick={() => setReviewExpanded(prev => { const n = new Set(prev); if (n.has(item.task.id)) n.delete(item.task.id); else n.add(item.task.id); return n })}
+                              className="text-xs text-primary hover:underline shrink-0 flex items-center gap-0.5">
+                              看紀錄<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-end gap-2 mt-2">
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+                              disabled={busy} onClick={() => { setReviewRejectReason(''); setReviewRejectItem({ projectId: item.projectId, taskId: item.task.id, title: item.task.title }) }}>
+                              <Undo2 className="h-3.5 w-3.5" />駁回
+                            </Button>
+                            <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                              disabled={busy} onClick={() => reviewConfirm(item)}>
+                              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}確認完成
+                            </Button>
+                          </div>
+                        </div>
+                        {expanded && (
+                          <div className="px-3 py-2.5 border-t bg-background space-y-2">
+                            {item.logs.length === 0 ? (
+                              <p className="text-xs text-muted-foreground/60">此任務尚無工作紀錄</p>
+                            ) : item.logs.map(l => (
+                              <div key={l.id} className="text-xs">
+                                <div className="flex items-center gap-1.5 text-muted-foreground/70">
+                                  <span className="tabular-nums">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
+                                  <span>·</span><span>{l.author}</span>
+                                </div>
+                                <div className="text-foreground/85 whitespace-pre-wrap">{l.content}</div>
+                              </div>
+                            ))}
+                            {item.files.length > 0 && (
+                              <div className="pt-1 border-t border-dashed">
+                                <div className="text-[11px] text-muted-foreground mb-1">附件（含子任務，共 {item.files.length}）</div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {item.files.map((att, ai) => (
+                                    <a key={ai} href={att.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border bg-muted/30 hover:bg-muted/60">
+                                      <Paperclip className="h-3 w-3" /><span className="truncate max-w-[140px]">{att.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            ) : (
+              reviewHistory.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">尚無處理履歷</p>
+              ) : (
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-xs border-collapse">
+                    <thead className="bg-muted/60"><tr className="text-muted-foreground">
+                      <th className="text-left font-medium px-2 py-1.5 w-[96px] border-b">時間</th>
+                      <th className="text-left font-medium px-2 py-1.5 border-b">任務</th>
+                      <th className="text-left font-medium px-2 py-1.5 w-[84px] border-b">事件</th>
+                      <th className="text-left font-medium px-2 py-1.5 w-[72px] border-b">操作人</th>
+                    </tr></thead>
+                    <tbody>
+                      {reviewHistory.map(ev => {
+                        const meta = REVIEW_EVENT_META[ev.type] || { label: ev.type, cls: 'bg-muted text-muted-foreground border-border' }
+                        const d = new Date(ev.createdAt)
+                        return (
+                          <tr key={ev.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                            <td className="px-2 py-1.5 text-muted-foreground/80 whitespace-nowrap tabular-nums">{d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</td>
+                            <td className="px-2 py-1.5 text-foreground/85 break-words">{ev.taskTitle}{ev.note ? <span className="block text-[10px] text-muted-foreground">原因：{ev.note}</span> : null}</td>
+                            <td className="px-2 py-1.5"><Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', meta.cls)}>{meta.label}</Badge></td>
+                            <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 駁回原因 */}
+      <AlertDialog open={!!reviewRejectItem} onOpenChange={(open) => { if (!open) { setReviewRejectItem(null); setReviewRejectReason('') } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>駁回並退回重做？</AlertDialogTitle>
+            <AlertDialogDescription>
+              任務「{reviewRejectItem?.title}」會退回給執行者的「待完成」，請填寫駁回原因讓對方知道要改什麼。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea value={reviewRejectReason} onChange={e => setReviewRejectReason(e.target.value)} rows={3} placeholder="駁回原因（會記錄在審視歷程）…" className="text-sm" />
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 focus:ring-red-600" onClick={(e) => { e.preventDefault(); reviewDoReject() }}>確定駁回</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Help Dialog ── */}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>

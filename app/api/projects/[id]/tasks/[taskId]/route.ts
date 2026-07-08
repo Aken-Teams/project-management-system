@@ -30,6 +30,8 @@ interface UpdateTaskBody {
   // 審視歷程事件：reported(R回報) | cancelled(R取消) | confirmed(A確認) | rejected(A退回)
   reviewEvent?: 'reported' | 'cancelled' | 'confirmed' | 'rejected'
   reviewActor?: string
+  reviewNote?: string      // 駁回原因等備註
+  publishLogs?: boolean    // A 發布此任務紀錄到官方更新紀錄
 }
 
 export async function PUT(
@@ -130,7 +132,15 @@ export async function PUT(
     // 審視歷程：記錄 R 回報/取消、A 確認/退回，供追蹤
     if (body.reviewEvent) {
       await prisma.taskReviewEvent.create({
-        data: { taskId, projectId: id, type: body.reviewEvent, actor: body.reviewActor || '' },
+        data: { taskId, projectId: id, type: body.reviewEvent, actor: body.reviewActor || '', note: body.reviewNote || null },
+      })
+    }
+
+    // A 發布：確認完成或明確發布時，把此任務尚未發布的紀錄「發布」到官方更新紀錄
+    if (body.reviewEvent === 'confirmed' || body.publishLogs) {
+      await prisma.taskLog.updateMany({
+        where: { taskId, publishedAt: null },
+        data: { publishedAt: new Date(), publishedBy: body.reviewActor || '' },
       })
     }
 

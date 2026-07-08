@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
             },
             reviewEvents: {
               orderBy: { createdAt: 'desc' },
-              select: { id: true, type: true, actor: true, createdAt: true },
+              select: { id: true, type: true, actor: true, note: true, createdAt: true },
             },
           },
           orderBy: { sortOrder: 'asc' },
@@ -171,17 +171,19 @@ export async function GET(request: NextRequest) {
           createdAt: tl.createdAt.toISOString(),
           updatedAt: tl.updatedAt.toISOString(),
           lastEditedBy: tl.lastEditedBy || null,
+          publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
           ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
           ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
         })),
         reviewEvents: p.tasks.flatMap(t =>
-          ((t as Record<string, unknown>).reviewEvents as Array<{ id: string; type: string; actor: string; createdAt: Date }> || []).map(e => ({
+          ((t as Record<string, unknown>).reviewEvents as Array<{ id: string; type: string; actor: string; note: string | null; createdAt: Date }> || []).map(e => ({
             id: e.id,
             taskId: t.id,
             taskTitle: t.title,
             assignee: t.assignee,
             type: e.type,
             actor: e.actor,
+            note: e.note || null,
             createdAt: e.createdAt.toISOString(),
           }))
         ),

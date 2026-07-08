@@ -177,6 +177,7 @@ export interface TaskLog {
   createdAt: string
   updatedAt?: string
   lastEditedBy?: string | null
+  publishedAt?: string | null
 }
 
 export interface Risk {

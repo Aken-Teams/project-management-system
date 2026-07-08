@@ -127,7 +127,8 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     }
   })
 
-  project.taskLogs.forEach(log => {
+  // 更新紀錄只放 A 已發布的紀錄
+  project.taskLogs.filter(l => l.publishedAt).forEach(log => {
     const monday = getWeekMonday(log.logDate)
     const task = project.tasks.find(t => t.id === log.taskId)
     const milestone = task ? project.milestones.find(m => m.id === task.milestoneId) : null
@@ -287,7 +288,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     const recentLogAuthors = new Set<string>()
-    project.taskLogs.forEach(log => {
+    project.taskLogs.filter(l => l.publishedAt).forEach(log => {
       if (new Date(log.logDate) >= sevenDaysAgo) {
         const task = project.tasks.find(t => t.id === log.taskId)
         recentLogAuthors.add(task?.assignee || log.author)
