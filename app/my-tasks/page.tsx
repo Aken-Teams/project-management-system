@@ -208,7 +208,7 @@ export default function MyTasksPage() {
     return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
   })
   const [rSelectedTaskId, setRSelectedTaskId] = useState<string | null>(null)
-  interface RLogRow { date: string; content: string; existingLogId?: string; attachments?: TaskLogAttachment[] }
+  interface RLogRow { date: string; content: string; existingLogId?: string; attachments?: TaskLogAttachment[]; updatedAt?: string; lastEditedBy?: string | null }
   const [rLogRows, setRLogRows] = useState<RLogRow[]>([{ date: '', content: '' }])
   const [rLogNextWeekPlan, setRLogNextWeekPlan] = useState('')
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
@@ -218,6 +218,10 @@ export default function MyTasksPage() {
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
+  // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
+  const [rEditPastUnlocked, setREditPastUnlocked] = useState(false)
+  // 完成區展開查看紀錄的任務
+  const [rDoneExpanded, setRDoneExpanded] = useState<Set<string>>(new Set())
   const [rUploadingRowIdx, setRUploadingRowIdx] = useState<number | null>(null)
   const rRowFileInputRef = useRef<HTMLInputElement>(null)
   // A-tab: R member report dialog
@@ -803,6 +807,18 @@ export default function MyTasksPage() {
 
   const rDoneCount = useMemo(() => rDoneGroups.reduce((n, g) => n + g.tasks.length, 0), [rDoneGroups])
 
+  // 本週（週一）字串，用來判斷選到的週別是否為當週（過去/未來週預設唯讀）
+  const rCurrentMonday = useMemo(() => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+    const monday = new Date(now)
+    monday.setDate(diff)
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+  }, [])
+  const rIsCurrentWeek = rReportWeekOf === rCurrentMonday
+  const rReadonly = !rIsCurrentWeek && !rEditPastUnlocked
+
   // Check which tasks have logs in the selected week (只看待完成任務)
   const rTaskWeekStatus = useMemo(() => {
     if (!rReportDialogProject) return new Map<string, boolean>()
@@ -824,6 +840,8 @@ export default function MyTasksPage() {
 
   // Prefill R log rows when task or week changes
   useEffect(() => {
+    // 換任務／換週別時，過去週報回到「唯讀」預設
+    setREditPastUnlocked(false)
     if (!rSelectedTaskId || !rReportDialogProject) return
     const [y, m, d] = rReportWeekOf.split('-').map(Number)
     const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -839,6 +857,8 @@ export default function MyTasksPage() {
         content: l.content,
         existingLogId: l.id,
         attachments: l.attachments?.length ? [...l.attachments] : undefined,
+        updatedAt: l.updatedAt,
+        lastEditedBy: l.lastEditedBy,
       })))
       const latestWithPlans = [...logs].reverse().find(l => l.nextPlans?.length)
       setRLogNextWeekPlan(latestWithPlans?.nextPlans?.map(p => p.content).join('\n') || '')
@@ -1193,6 +1213,27 @@ export default function MyTasksPage() {
                   : t
               ),
             }
+          : p
+      ))
+    } catch {
+      // ignore
+    }
+  }
+
+  // A 退回 R 的完成回報：清除 reportedDoneAt，任務回到待完成，R 可再處理
+  const handleRejectReportedDone = async () => {
+    if (!dialogTask) return
+    const { project, task } = dialogTask
+    try {
+      const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportedDone: false }),
+      })
+      if (!res.ok) throw new Error()
+      setApiProjects(prev => prev.map(p =>
+        p.id === project.id
+          ? { ...p, tasks: p.tasks.map(t => t.id === task.id ? { ...t, reportedDoneAt: null, reportedDoneBy: null } : t) }
           : p
       ))
     } catch {
@@ -1881,13 +1922,25 @@ export default function MyTasksPage() {
                             <span>紀錄已提交，請選擇下一步操作</span>
                           </div>
 
-                          {/* R 已回報完成、待 A 確認的提示（A 據此決定是否按下正式「標記完成」） */}
+                          {/* R 已回報完成、待 A 審視（A 可「標記完成」正式結案，或「退回」讓 R 再處理） */}
                           {task.reportedDoneAt && !isCompleted && (
-                            <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
-                              <UserCheck className="h-4 w-4 shrink-0 mt-0.5" />
-                              <div className="text-xs leading-relaxed">
-                                <span className="font-medium">{task.reportedDoneBy || '執行者'} 回報此任務已完成／無後續</span>
-                                （{new Date(task.reportedDoneAt).toLocaleDateString('zh-TW')}）。請確認是否按下「標記完成」正式結案。
+                            <div className="p-2.5 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 space-y-2">
+                              <div className="flex items-start gap-2">
+                                <UserCheck className="h-4 w-4 shrink-0 mt-0.5" />
+                                <div className="text-xs leading-relaxed">
+                                  <span className="font-medium">{task.reportedDoneBy || '執行者'} 回報此任務已完成／無後續</span>
+                                  （{new Date(task.reportedDoneAt).toLocaleDateString('zh-TW')}）。請「標記完成」正式結案，或「退回」讓對方再處理。
+                                </div>
+                              </div>
+                              <div className="flex justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 border-amber-400 text-amber-800 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900"
+                                  onClick={handleRejectReportedDone}
+                                >
+                                  <Undo2 className="h-3 w-3" />退回（重新處理）
+                                </Button>
                               </div>
                             </div>
                           )}
@@ -2581,11 +2634,11 @@ export default function MyTasksPage() {
                               </span>
                               <span className="w-16 flex items-center justify-end gap-1 shrink-0">
                                 {task.reportedDoneAt ? (
-                                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，待 A 確認">
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，待 A 審視">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已回報
                                   </Badge>
                                 ) : hasLogs ? (
-                                  <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
+                                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已填
                                   </Badge>
                                 ) : (
@@ -2603,6 +2656,20 @@ export default function MyTasksPage() {
                             {/* Expanded: log entry form (matching Gantt chart design) */}
                             {isSelected && (
                               <div className="border border-t-0 rounded-b-lg px-4 py-4 space-y-4 bg-background">
+                                {/* 過去週別唯讀提示（避免誤改過去報告） */}
+                                {!rIsCurrentWeek && (
+                                  <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border bg-muted/40">
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                      <Info className="h-3.5 w-3.5 shrink-0" />
+                                      {rEditPastUnlocked ? '編輯過去週報中，請謹慎修改' : '此為非當週週報，預設唯讀以免誤改'}
+                                    </span>
+                                    {!rEditPastUnlocked && (
+                                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setREditPastUnlocked(true)}>
+                                        <Pencil className="h-3 w-3" />編輯
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
                                 {/* Log entry table */}
                                 <div className="space-y-1.5">
                                   <div className="flex items-center gap-1.5">
@@ -2629,15 +2696,21 @@ export default function MyTasksPage() {
                                                 <input
                                                   type="date"
                                                   value={row.date}
+                                                  disabled={rReadonly}
                                                   onChange={e => {
                                                     const updated = [...rLogRows]
                                                     updated[idx] = { ...updated[idx], date: e.target.value }
                                                     setRLogRows(updated)
                                                   }}
-                                                  className="w-full text-xs border rounded-md h-[34px] px-1.5 bg-background"
+                                                  className="w-full text-xs border rounded-md h-[34px] px-1.5 bg-background disabled:opacity-60 disabled:cursor-not-allowed"
                                                 />
                                                 {row.existingLogId && (
                                                   <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
+                                                )}
+                                                {row.lastEditedBy && (
+                                                  <span className="text-[10px] text-muted-foreground/70 block mt-0.5 px-0.5" title={row.updatedAt ? new Date(row.updatedAt).toLocaleString('zh-TW') : undefined}>
+                                                    最後編輯：{row.lastEditedBy}
+                                                  </span>
                                                 )}
                                                 {attCount > 0 && (
                                                   <div className="flex flex-wrap gap-1 mt-1">
@@ -2684,6 +2757,7 @@ export default function MyTasksPage() {
                                                   }}
                                                   placeholder="工作內容..."
                                                   value={row.content}
+                                                  readOnly={rReadonly}
                                                   onChange={e => {
                                                     const updated = [...rLogRows]
                                                     updated[idx] = { ...updated[idx], content: e.target.value }
@@ -2699,12 +2773,13 @@ export default function MyTasksPage() {
                                               <td className="px-0.5 py-1.5 align-top text-center">
                                                 <button
                                                   type="button"
+                                                  disabled={rReadonly}
                                                   onClick={() => {
                                                     setRUploadingRowIdx(idx)
                                                     rRowFileInputRef.current?.click()
                                                   }}
                                                   className={cn(
-                                                    'inline-flex items-center justify-center w-[34px] h-[34px] border rounded-md bg-background hover:bg-muted transition-colors',
+                                                    'inline-flex items-center justify-center w-[34px] h-[34px] border rounded-md bg-background hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
                                                     attCount > 0 ? 'text-primary border-primary/30' : 'text-muted-foreground/40',
                                                   )}
                                                   title="上傳附件"
@@ -2716,7 +2791,7 @@ export default function MyTasksPage() {
                                                 </button>
                                               </td>
                                               <td className="px-0 py-1.5 align-top text-center">
-                                                {(row.existingLogId || rLogRows.length > 1) ? (
+                                                {(row.existingLogId || rLogRows.length > 1) && !rReadonly ? (
                                                   <button
                                                     type="button"
                                                     onClick={() => setRPendingDelete({ kind: 'row', idx })}
@@ -2743,13 +2818,15 @@ export default function MyTasksPage() {
                                       onChange={handleRRowFileSelect}
                                     />
 
-                                    <button
-                                      type="button"
-                                      className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2 border-t border-dashed border-primary/20"
-                                      onClick={() => setRLogRows([...rLogRows, { date: '', content: '' }])}
-                                    >
-                                      + 新增一列
-                                    </button>
+                                    {!rReadonly && (
+                                      <button
+                                        type="button"
+                                        className="w-full text-xs text-primary hover:bg-primary/5 transition-colors py-2 border-t border-dashed border-primary/20"
+                                        onClick={() => setRLogRows([...rLogRows, { date: '', content: '' }])}
+                                      >
+                                        + 新增一列
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
 
@@ -2766,6 +2843,7 @@ export default function MyTasksPage() {
                                   <Textarea
                                     placeholder="預計下周要做什麼..."
                                     value={rLogNextWeekPlan}
+                                    readOnly={rReadonly}
                                     onChange={e => setRLogNextWeekPlan(e.target.value)}
                                     rows={2}
                                     className="min-h-[60px] text-sm resize-y"
@@ -2788,7 +2866,7 @@ export default function MyTasksPage() {
                                   <Button
                                     size="sm"
                                     className="gap-1.5 rounded-lg shadow-sm text-sm"
-                                    disabled={!rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
+                                    disabled={rReadonly || !rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
                                     onClick={handleRBatchSubmitLogs}
                                   >
                                     {rSubmittingBatch ? (
@@ -2818,32 +2896,67 @@ export default function MyTasksPage() {
                       {group.tasks.map(task => {
                         const fmtMD = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
                         const aDone = !!task.completedAt
+                        const expanded = rDoneExpanded.has(task.id)
+                        const logs = (rReportDialogProject?.taskLogs || [])
+                          .filter(l => l.taskId === task.id)
+                          .sort((a, b) => a.logDate.localeCompare(b.logDate))
                         return (
-                          <div key={task.id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-muted/20">
-                            <span className={cn('h-2 w-2 rounded-full shrink-0', aDone ? 'bg-green-500' : 'bg-amber-500')} />
-                            <span className="text-sm flex-1 truncate text-muted-foreground">{task.title}</span>
-                            <span className="text-xs tabular-nums text-muted-foreground/70 shrink-0">{fmtMD(task.startDate)} → {fmtMD(task.endDate)}</span>
-                            {aDone ? (
-                              <Badge className="bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 標記完成` : undefined}>
-                                <Check className="h-2.5 w-2.5 mr-0.5" />A 已完成
-                              </Badge>
-                            ) : (
-                              <span className="flex items-center gap-1 shrink-0">
-                                <Badge className="bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="R 回報完成，待 A 確認">
-                                  <Check className="h-2.5 w-2.5 mr-0.5" />R 回報完成
+                          <div key={task.id}>
+                            <div
+                              onClick={() => setRDoneExpanded(prev => {
+                                const n = new Set(prev)
+                                if (n.has(task.id)) n.delete(task.id); else n.add(task.id)
+                                return n
+                              })}
+                              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+                            >
+                              <span className={cn('h-2 w-2 rounded-full shrink-0', aDone ? 'bg-green-500' : 'bg-amber-500')} />
+                              <span className="text-sm flex-1 truncate text-muted-foreground">{task.title}</span>
+                              <span className="text-xs tabular-nums text-muted-foreground/70 shrink-0">{fmtMD(task.startDate)} → {fmtMD(task.endDate)}</span>
+                              {aDone ? (
+                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 標記完成` : undefined}>
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />A 已完成
                                 </Badge>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-6 px-1.5 text-[11px] text-muted-foreground gap-1"
-                                  disabled={rTogglingDone === task.id}
-                                  onClick={() => handleToggleReportedDone(task.id, false)}
-                                  title="取消回報，任務回到待完成"
-                                >
-                                  {rTogglingDone === task.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
-                                  取消回報
-                                </Button>
-                              </span>
+                              ) : (
+                                <span className="flex items-center gap-1 shrink-0">
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="R 回報完成，待 A 審視">
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />待 A 審視
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-1.5 text-[11px] text-muted-foreground gap-1"
+                                    disabled={rTogglingDone === task.id}
+                                    onClick={(e) => { e.stopPropagation(); handleToggleReportedDone(task.id, false) }}
+                                    title="取消回報，任務回到待完成"
+                                  >
+                                    {rTogglingDone === task.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                                    取消回報
+                                  </Button>
+                                </span>
+                              )}
+                              <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform', expanded && 'rotate-180')} />
+                            </div>
+                            {expanded && (
+                              <div className="mt-1 ml-4 border-l-2 border-border/40 pl-3 space-y-2 py-1.5">
+                                {logs.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground/60">尚無工作紀錄</p>
+                                ) : logs.map(l => (
+                                  <div key={l.id} className="text-xs">
+                                    <div className="flex items-center gap-1.5 text-muted-foreground/70 flex-wrap">
+                                      <span className="tabular-nums">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
+                                      <span>·</span>
+                                      <span>{l.author}</span>
+                                      {l.lastEditedBy && (
+                                        <span className="text-[10px] text-muted-foreground/60" title={l.updatedAt ? new Date(l.updatedAt).toLocaleString('zh-TW') : undefined}>
+                                          （最後編輯：{l.lastEditedBy}）
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-foreground/80 whitespace-pre-wrap">{l.content}</div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                         )

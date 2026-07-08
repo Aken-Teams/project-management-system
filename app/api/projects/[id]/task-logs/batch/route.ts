@@ -68,6 +68,7 @@ export async function POST(
             data: {
               content: entry.content.trim(),
               logDate: new Date(entry.logDate),
+              lastEditedBy: user.name,
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
             },
           })
@@ -87,6 +88,7 @@ export async function POST(
               where: { id: existing.id },
               data: {
                 content: entry.content.trim(),
+                lastEditedBy: user.name,
                 ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               },
             })

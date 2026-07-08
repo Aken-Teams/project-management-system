@@ -164,6 +164,8 @@ export async function GET(request: NextRequest) {
           logDate: tl.logDate.toISOString().split('T')[0],
           content: tl.content,
           createdAt: tl.createdAt.toISOString(),
+          updatedAt: tl.updatedAt.toISOString(),
+          lastEditedBy: tl.lastEditedBy || null,
           ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
           ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
         })),

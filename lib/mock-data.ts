@@ -173,6 +173,8 @@ export interface TaskLog {
   nextPlans?: NextPlanItem[]
   attachments?: TaskLogAttachment[]
   createdAt: string
+  updatedAt?: string
+  lastEditedBy?: string | null
 }
 
 export interface Risk {
