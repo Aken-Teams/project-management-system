@@ -84,12 +84,24 @@ export async function POST(
           })
 
           if (existing) {
+            // 同一天同作者視為同一筆：附件用「合併」(舊 ∪ 新，以 url 去重)，
+            // 避免使用者同一天開兩列時，後寫的那列把前一列附件蓋掉。
+            let mergedAttachmentsJson = attachmentsJson
+            if (entry.attachments?.length) {
+              type Att = { name: string; url: string; type: 'image' | 'file' }
+              const oldAtts: Att[] = existing.attachments ? JSON.parse(existing.attachments) : []
+              const merged: Att[] = [...oldAtts]
+              for (const a of entry.attachments) {
+                if (!merged.some(o => o.url === a.url)) merged.push(a)
+              }
+              mergedAttachmentsJson = JSON.stringify(merged)
+            }
             await tx.taskLog.update({
               where: { id: existing.id },
               data: {
                 content: entry.content.trim(),
                 lastEditedBy: user.name,
-                ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
+                ...(mergedAttachmentsJson !== undefined ? { attachments: mergedAttachmentsJson } : {}),
               },
             })
             updated.push(existing.id)

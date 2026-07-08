@@ -141,12 +141,12 @@ interface MyTasksProject {
 // 任務審視歷程事件
 type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; createdAt: string }
 
-// 審視事件顯示樣式
+// 審視事件顯示樣式（不綁角色，操作者由「操作人」欄呈現）
 const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
-  reported: { label: 'R 回報完成', cls: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400' },
-  cancelled: { label: 'R 取消回報', cls: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400' },
-  confirmed: { label: 'A 確認完成', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
-  rejected: { label: 'A 退回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
+  reported: { label: '回報完成', cls: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400' },
+  cancelled: { label: '取消回報', cls: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400' },
+  confirmed: { label: '確認完成', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
+  rejected: { label: '退回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
 }
 
 export default function MyTasksPage() {
@@ -829,6 +829,13 @@ export default function MyTasksPage() {
 
   const rPendingCount = useMemo(() => rPendingGroups.reduce((n, g) => n + g.tasks.length, 0), [rPendingGroups])
   const rDoneCount = useMemo(() => rDoneGroups.reduce((n, g) => n + g.tasks.length, 0), [rDoneGroups])
+
+  // 同一天重複的日期（同日同作者後端只算一筆 → 開兩列會打架，需防呆）
+  const rDuplicateDates = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of rLogRows) { if (r.date) counts.set(r.date, (counts.get(r.date) || 0) + 1) }
+    return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([d]) => d))
+  }, [rLogRows])
 
   // 審視歷程：本專案中指派給我的任務之回報/確認事件，新到舊
   const rReviewEvents = useMemo(() => {
@@ -2609,9 +2616,9 @@ export default function MyTasksPage() {
                     onClick={() => { setRDialogTab('pending'); setRSelectedTaskId(null) }}
                     className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                       rDialogTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
-                    title="你已回報完成、等待當責 A 確認的任務"
+                    title="已回報完成、等待確認的任務"
                   >
-                    A 確認中
+                    待確認
                     {rPendingCount > 0 && (
                       <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{rPendingCount}</span>
                     )}
@@ -2692,7 +2699,7 @@ export default function MyTasksPage() {
                               </span>
                               <span className="w-16 flex items-center justify-end gap-1 shrink-0">
                                 {task.reportedDoneAt ? (
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，待 A 審視">
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，等待確認">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已回報
                                   </Badge>
                                 ) : hasLogs ? (
@@ -2735,6 +2742,14 @@ export default function MyTasksPage() {
                                     <span className="text-xs font-medium text-muted-foreground">本周工作紀錄</span>
                                     <span className="text-[10px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
                                   </div>
+                                  {rDuplicateDates.size > 0 && (
+                                    <div className="flex items-start gap-1.5 text-[11px] text-destructive bg-destructive/5 border border-destructive/30 rounded-md px-2.5 py-1.5">
+                                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                      <span>
+                                        有多列填了同一天（{[...rDuplicateDates].map(d => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })).join('、')}）。同一天視為同一筆，請把附件／內容併到同一列後再提交，以免互相覆蓋。
+                                      </span>
+                                    </div>
+                                  )}
                                   <div className="rounded-lg border overflow-hidden">
                                     <table className="w-full border-collapse">
                                       <thead>
@@ -2765,9 +2780,9 @@ export default function MyTasksPage() {
                                                 {row.existingLogId && (
                                                   <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
                                                 )}
-                                                {row.lastEditedBy && (
-                                                  <span className="text-[10px] text-muted-foreground/70 block mt-0.5 px-0.5" title={row.updatedAt ? new Date(row.updatedAt).toLocaleString('zh-TW') : undefined}>
-                                                    最後編輯：{row.lastEditedBy}
+                                                {row.updatedAt && (
+                                                  <span className="text-[10px] text-muted-foreground/70 block mt-0.5 px-0.5" title={row.lastEditedBy ? `編輯者：${row.lastEditedBy}` : undefined}>
+                                                    最後編輯：{new Date(row.updatedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {new Date(row.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                                                   </span>
                                                 )}
                                                 {attCount > 0 && (
@@ -2917,7 +2932,7 @@ export default function MyTasksPage() {
                                       className="h-8 gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
                                       disabled={rTogglingDone === task.id}
                                       onClick={() => setRConfirmDone(task)}
-                                      title="告訴 A：此任務我已完成、之後不會再有進度，由 A 決定是否正式標記完成"
+                                      title="回報此任務已完成、之後不會再有進度，交由審核方確認是否正式結案"
                                     >
                                       <CircleCheck className="h-3.5 w-3.5" />
                                       回報完成（無後續）
@@ -2925,8 +2940,9 @@ export default function MyTasksPage() {
                                     <Button
                                       size="sm"
                                       className="gap-1.5 rounded-lg shadow-sm text-sm"
-                                      disabled={!rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
+                                      disabled={rDuplicateDates.size > 0 || !rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
                                       onClick={handleRBatchSubmitLogs}
+                                      title={rDuplicateDates.size > 0 ? '有重複日期的列，請先合併到同一列再提交' : undefined}
                                     >
                                       {rSubmittingBatch ? (
                                         <><Loader2 className="h-3.5 w-3.5 animate-spin" />儲存中...</>
@@ -2970,7 +2986,7 @@ export default function MyTasksPage() {
                                   </td>
                                   <td className="px-2 py-1.5 text-foreground/85 break-words">{ev.taskTitle}</td>
                                   <td className="px-2 py-1.5">
-                                    <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', meta.cls)}>{meta.label}</Badge>
+                                    <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5', meta.cls)}>{meta.label}</Badge>
                                   </td>
                                   <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
                                 </tr>
@@ -2984,7 +3000,7 @@ export default function MyTasksPage() {
                 ) : (
                   (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      {rDialogTab === 'pending' ? '目前沒有等待 A 確認的任務' : '目前沒有 A 已確認完成的任務'}
+                      {rDialogTab === 'pending' ? '目前沒有等待確認的任務' : '目前沒有已完成的任務'}
                     </p>
                   ) : (
                   (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).map((group, gIdx) => (
@@ -3013,13 +3029,13 @@ export default function MyTasksPage() {
                               <span className="text-sm flex-1 truncate text-muted-foreground">{task.title}</span>
                               <span className="text-xs tabular-nums text-muted-foreground/70 shrink-0">{fmtMD(task.startDate)} → {fmtMD(task.endDate)}</span>
                               {aDone ? (
-                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 標記完成` : undefined}>
-                                  <Check className="h-2.5 w-2.5 mr-0.5" />A 已完成
+                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 確認完成` : undefined}>
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />已完成
                                 </Badge>
                               ) : (
                                 <span className="flex items-center gap-1 shrink-0">
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="R 回報完成，待 A 審視">
-                                    <Check className="h-2.5 w-2.5 mr-0.5" />待 A 審視
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="已回報完成，等待確認">
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />待確認
                                   </Badge>
                                   <Button
                                     size="sm"
@@ -3086,8 +3102,10 @@ export default function MyTasksPage() {
                                                 </Popover>
                                               ) : <span className="text-muted-foreground/30">—</span>}
                                             </td>
-                                            <td className="px-2 py-1.5 text-[10px] text-muted-foreground/70 whitespace-nowrap" title={l.updatedAt ? new Date(l.updatedAt).toLocaleString('zh-TW') : undefined}>
-                                              {l.lastEditedBy || '—'}
+                                            <td className="px-2 py-1.5 text-[10px] text-muted-foreground/70 whitespace-nowrap tabular-nums" title={l.lastEditedBy ? `編輯者：${l.lastEditedBy}` : undefined}>
+                                              {l.updatedAt
+                                                ? `${new Date(l.updatedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} ${new Date(l.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`
+                                                : '—'}
                                             </td>
                                           </tr>
                                         ))}
@@ -3117,7 +3135,7 @@ export default function MyTasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>回報此任務已完成、無後續？</AlertDialogTitle>
             <AlertDialogDescription>
-              任務「{rConfirmDone?.title}」將移到「完成區」，並通知 A 確認。
+              任務「{rConfirmDone?.title}」將移到「待確認」，送出等待審核確認。
               <br />
               <span className="text-amber-600 dark:text-amber-400 font-medium">回報後你將無法再編輯此任務的週報</span>
               （如需修改可在完成區按「取消回報」還原）。
@@ -3141,10 +3159,10 @@ export default function MyTasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>取消回報、把任務收回？</AlertDialogTitle>
             <AlertDialogDescription>
-              任務「{rConfirmCancel?.title}」目前正等待 A 確認。取消後它會退出「A 確認中」、回到你的「待完成」，
+              任務「{rConfirmCancel?.title}」目前正等待確認。取消後它會退出「待確認」、回到你的「待完成」，
               <br />
-              <span className="text-amber-600 dark:text-amber-400 font-medium">A 那邊就不會再看到這筆待確認</span>
-              。若 A 可能正在審視，建議先與 A 溝通再取消，以免對方困惑。
+              <span className="text-amber-600 dark:text-amber-400 font-medium">審核方就不會再看到這筆待確認</span>
+              。若對方可能正在審視，建議先溝通再取消，以免造成困惑。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
