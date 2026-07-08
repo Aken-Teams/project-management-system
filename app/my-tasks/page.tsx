@@ -5,6 +5,7 @@ import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -139,10 +140,19 @@ interface MyTasksProject {
 }
 
 // 任務審視歷程事件
-type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; note?: string | null; createdAt: string }
+type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; note?: string | null; createdAt: string; projectId?: string }
 
-// 審核中心：一筆待審項目
-type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logs: TaskLog[]; files: TaskLogAttachment[] }
+// 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
+type ReviewLogRow = { log: TaskLog; srcTitle?: string }
+type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logRows: ReviewLogRow[]; fileCount: number }
+
+// 依姓名決定頭像底色（穩定、無隨機）
+const REVIEW_AVATAR_COLORS = ['bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 'bg-amber-600', 'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-orange-600']
+function avatarColorFor(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return REVIEW_AVATAR_COLORS[h % REVIEW_AVATAR_COLORS.length]
+}
 
 // 審視事件顯示樣式（不綁角色，操作者由「操作人」欄呈現）
 const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
@@ -243,6 +253,8 @@ export default function MyTasksPage() {
   const [reviewExpanded, setReviewExpanded] = useState<Set<string>>(new Set())
   const [reviewRejectItem, setReviewRejectItem] = useState<{ projectId: string; taskId: string; title: string } | null>(null)
   const [reviewRejectReason, setReviewRejectReason] = useState('')
+  const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
+  const [reviewHistoryPage, setReviewHistoryPage] = useState(0)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -891,9 +903,15 @@ export default function MyTasksPage() {
         const descIds = new Set<string>([t.id])
         const stack = [...(childrenOf.get(t.id) || [])]
         while (stack.length) { const c = stack.pop()!; descIds.add(c.id); const k = childrenOf.get(c.id); if (k) stack.push(...k) }
-        const logs = p.taskLogs.filter(l => l.taskId === t.id).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
-        const files = p.taskLogs.filter(l => descIds.has(l.taskId)).flatMap(l => l.attachments || [])
-        out.push({ projectId: p.id, projectName: p.name, task: t, path, reporter: t.reportedDoneBy || '', reportedAt: t.reportedDoneAt, logs, files })
+        // 紀錄含此任務 + 所有子任務；附件掛在各列（呈現在細項上）
+        const logRows: ReviewLogRow[] = []
+        for (const l of p.taskLogs) {
+          if (!descIds.has(l.taskId)) continue
+          logRows.push({ log: l, srcTitle: l.taskId === t.id ? undefined : byId.get(l.taskId)?.title })
+        }
+        logRows.sort((a, b) => a.log.logDate.localeCompare(b.log.logDate))
+        const fileCount = logRows.reduce((n, r) => n + (r.log.attachments?.length || 0), 0)
+        out.push({ projectId: p.id, projectName: p.name, task: t, path, reporter: t.reportedDoneBy || '', reportedAt: t.reportedDoneAt, logRows, fileCount })
       }
     }
     return out.sort((a, b) => a.reportedAt.localeCompare(b.reportedAt))
@@ -903,10 +921,40 @@ export default function MyTasksPage() {
     const out: RReviewEvent[] = []
     for (const p of apiProjects) {
       if (p.userRole !== 'A') continue
-      for (const e of (p.reviewEvents || [])) out.push(e)
+      for (const e of (p.reviewEvents || [])) out.push({ ...e, projectId: p.id })
     }
     return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [apiProjects])
+
+  // 開啟某專案的週報審核
+  const openReviewForProject = (projectId: string) => {
+    setReviewProjectId(projectId)
+    setReviewTab('pending')
+    setReviewExpanded(new Set())
+    setReviewHistoryPage(0)
+    setReviewCenterOpen(true)
+  }
+  // 依所選專案過濾（從專案列開啟時只看該專案）
+  const reviewShownItems = useMemo(
+    () => reviewProjectId ? reviewPendingItems.filter(i => i.projectId === reviewProjectId) : reviewPendingItems,
+    [reviewPendingItems, reviewProjectId],
+  )
+  const reviewShownHistory = useMemo(
+    () => reviewProjectId ? reviewHistory.filter(e => e.projectId === reviewProjectId) : reviewHistory,
+    [reviewHistory, reviewProjectId],
+  )
+  const reviewShownName = useMemo(
+    () => reviewProjectId ? apiProjects.find(p => p.id === reviewProjectId)?.name : undefined,
+    [apiProjects, reviewProjectId],
+  )
+  // 履歷分頁（一頁 10 筆）
+  const REVIEW_HISTORY_PAGE_SIZE = 10
+  const reviewHistoryPageCount = Math.max(1, Math.ceil(reviewShownHistory.length / REVIEW_HISTORY_PAGE_SIZE))
+  const reviewHistoryClampedPage = Math.min(reviewHistoryPage, reviewHistoryPageCount - 1)
+  const reviewHistoryPageItems = reviewShownHistory.slice(
+    reviewHistoryClampedPage * REVIEW_HISTORY_PAGE_SIZE,
+    (reviewHistoryClampedPage + 1) * REVIEW_HISTORY_PAGE_SIZE,
+  )
 
   const refreshMyTasks = useCallback(async () => {
     if (!user) return
@@ -1480,26 +1528,15 @@ export default function MyTasksPage() {
       <div className="space-y-4">
         {/* Page Header */}
         <div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
-              <button
-                onClick={() => setHelpOpen(true)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                title="我的任務說明"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </button>
-            </div>
-            {reviewIsAccountable && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setReviewTab('pending'); setReviewCenterOpen(true) }}>
-                <ClipboardList className="h-4 w-4" />
-                審核中心
-                {reviewPendingItems.length > 0 && (
-                  <Badge className="h-5 min-w-5 px-1 rounded-full bg-amber-500 text-white text-[11px]">{reviewPendingItems.length}</Badge>
-                )}
-              </Button>
-            )}
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">我的任務</h1>
+            <button
+              onClick={() => setHelpOpen(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="我的任務說明"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
           </div>
           <p className="text-sm text-muted-foreground mt-1">{user.name} 的工作總覽</p>
         </div>
@@ -1741,9 +1778,15 @@ export default function MyTasksPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => openARReportDialog(project)}>
-                            <ClipboardList className="h-3 w-3" />查看 R 週報
-                          </Button>
+                          {(() => {
+                            const pendN = reviewPendingItems.filter(i => i.projectId === project.id).length
+                            return (
+                              <Button size="sm" variant={pendN > 0 ? 'outline' : 'ghost'} className={cn('h-7 text-xs gap-1', pendN > 0 && 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400')} onClick={() => openReviewForProject(project.id)}>
+                                <ClipboardList className="h-3 w-3" />審核 R 週報
+                                {pendN > 0 && <Badge className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[10px] ml-0.5">{pendN}</Badge>}
+                              </Button>
+                            )
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" asChild>
@@ -3102,7 +3145,10 @@ export default function MyTasksPage() {
                                   <td className="px-2 py-1.5 text-muted-foreground/80 whitespace-nowrap tabular-nums">
                                     {d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                                   </td>
-                                  <td className="px-2 py-1.5 text-foreground/85 break-words">{ev.taskTitle}</td>
+                                  <td className="px-2 py-1.5 text-foreground/85 break-words">
+                                    {ev.taskTitle}
+                                    {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">退回原因：{ev.note}</span> : null}
+                                  </td>
                                   <td className="px-2 py-1.5">
                                     <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5', meta.cls)}>{meta.label}</Badge>
                                   </td>
@@ -3525,7 +3571,7 @@ export default function MyTasksPage() {
       <Dialog open={reviewCenterOpen} onOpenChange={setReviewCenterOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
-            <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4" />審核中心</DialogTitle>
+            <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4" />週報審核{reviewShownName ? ` — ${reviewShownName}` : ''}</DialogTitle>
             <DialogDescription className="text-sm">審核執行者回報的完成 — 確認即發布到「更新紀錄」，或駁回退回重做。只列出需要你決定的項目。</DialogDescription>
           </DialogHeader>
           <div className="px-6 pt-3">
@@ -3534,7 +3580,7 @@ export default function MyTasksPage() {
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                   reviewTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                 待你確認
-                {reviewPendingItems.length > 0 && <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewPendingItems.length}</span>}
+                {reviewShownItems.length > 0 && <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewShownItems.length}</span>}
               </button>
               <button type="button" onClick={() => setReviewTab('history')}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
@@ -3545,29 +3591,40 @@ export default function MyTasksPage() {
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {reviewTab === 'pending' ? (
-              reviewPendingItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">目前沒有待你確認的項目 🎉</p>
+              reviewShownItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">目前沒有待你確認的項目</p>
               ) : (
                 <div className="space-y-2.5">
-                  {reviewPendingItems.map(item => {
+                  {reviewShownItems.map(item => {
                     const expanded = reviewExpanded.has(item.task.id)
                     const busy = reviewProcessing === item.task.id
                     return (
                       <div key={item.task.id} className="border rounded-lg overflow-hidden">
                         <div className="px-3 py-2.5 bg-muted/20">
-                          <div className="flex items-start gap-2">
+                          {!reviewProjectId && <div className="text-[11px] text-muted-foreground/70 truncate">{item.projectName}</div>}
+                          <div className="text-[11px] text-muted-foreground truncate">{item.path}</div>
+                          <div className="flex items-start gap-2 mt-0.5">
                             <div className="flex-1 min-w-0">
-                              <div className="text-[11px] text-muted-foreground truncate">{item.projectName} · {item.path}</div>
-                              <div className="text-sm font-medium truncate">{item.task.title}</div>
-                              <div className="text-[11px] text-muted-foreground mt-0.5">
-                                {item.reporter || '執行者'} 回報完成 · {new Date(item.reportedAt).toLocaleDateString('zh-TW')}
-                                {item.files.length > 0 && <> · 🖇 {item.files.length}</>}
+                              <div className="text-sm font-semibold truncate">{item.task.title}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                <span className="inline-flex items-center gap-1">
+                                  <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[9px] text-white', avatarColorFor(item.reporter || '?'))}>{(item.reporter || '?').split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                                  <span className="text-xs text-foreground/80">{item.reporter || '執行者'}</span>
+                                </span>
+                                <Badge variant="outline" className="text-[11px] px-1.5 py-0 gap-1 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700">
+                                  <Check className="h-3 w-3" />回報完成 {new Date(item.reportedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                </Badge>
+                                {item.fileCount > 0 && (
+                                  <Badge variant="outline" className="text-[11px] px-1.5 py-0 gap-1 text-muted-foreground">
+                                    <Paperclip className="h-3 w-3" />{item.fileCount} 個附件
+                                  </Badge>
+                                )}
                               </div>
                             </div>
-                            <button onClick={() => setReviewExpanded(prev => { const n = new Set(prev); if (n.has(item.task.id)) n.delete(item.task.id); else n.add(item.task.id); return n })}
-                              className="text-xs text-primary hover:underline shrink-0 flex items-center gap-0.5">
-                              看紀錄<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
-                            </button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 shrink-0"
+                              onClick={() => setReviewExpanded(prev => { const n = new Set(prev); if (n.has(item.task.id)) n.delete(item.task.id); else n.add(item.task.id); return n })}>
+                              <FileText className="h-3.5 w-3.5" />看紀錄<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
+                            </Button>
                           </div>
                           <div className="flex items-center justify-end gap-2 mt-2">
                             <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
@@ -3581,28 +3638,50 @@ export default function MyTasksPage() {
                           </div>
                         </div>
                         {expanded && (
-                          <div className="px-3 py-2.5 border-t bg-background space-y-2">
-                            {item.logs.length === 0 ? (
-                              <p className="text-xs text-muted-foreground/60">此任務尚無工作紀錄</p>
-                            ) : item.logs.map(l => (
-                              <div key={l.id} className="text-xs">
-                                <div className="flex items-center gap-1.5 text-muted-foreground/70">
-                                  <span className="tabular-nums">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                                  <span>·</span><span>{l.author}</span>
-                                </div>
-                                <div className="text-foreground/85 whitespace-pre-wrap">{l.content}</div>
-                              </div>
-                            ))}
-                            {item.files.length > 0 && (
-                              <div className="pt-1 border-t border-dashed">
-                                <div className="text-[11px] text-muted-foreground mb-1">附件（含子任務，共 {item.files.length}）</div>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {item.files.map((att, ai) => (
-                                    <a key={ai} href={att.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border bg-muted/30 hover:bg-muted/60">
-                                      <Paperclip className="h-3 w-3" /><span className="truncate max-w-[140px]">{att.name}</span>
-                                    </a>
-                                  ))}
-                                </div>
+                          <div className="border-t bg-background">
+                            {item.logRows.length === 0 ? (
+                              <p className="text-xs text-muted-foreground/60 px-3 py-3 text-center">此任務尚無工作紀錄</p>
+                            ) : (
+                              <div className="max-h-[240px] overflow-y-auto">
+                                <table className="w-full text-xs border-collapse">
+                                  <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur"><tr className="text-muted-foreground">
+                                    <th className="text-left font-medium px-2 py-1.5 w-[56px] border-b">日期</th>
+                                    <th className="text-left font-medium px-2 py-1.5 w-[76px] border-b">填寫人</th>
+                                    <th className="text-left font-medium px-2 py-1.5 border-b">工作內容</th>
+                                    <th className="text-center font-medium px-2 py-1.5 w-[44px] border-b">附件</th>
+                                  </tr></thead>
+                                  <tbody>
+                                    {item.logRows.map(({ log: l, srcTitle }) => (
+                                      <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                                        <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
+                                        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.author}</td>
+                                        <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">
+                                          {srcTitle && <Badge variant="outline" className="text-[9px] px-1 py-0 mr-1 align-middle text-amber-600 border-amber-300">子：{srcTitle}</Badge>}
+                                          {l.content}
+                                        </td>
+                                        <td className="px-2 py-1.5 text-center">
+                                          {l.attachments && l.attachments.length > 0 ? (
+                                            <Popover>
+                                              <PopoverTrigger asChild>
+                                                <button className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:bg-primary/10 rounded px-1.5 py-0.5"><Paperclip className="h-3 w-3" />{l.attachments.length}</button>
+                                              </PopoverTrigger>
+                                              <PopoverContent align="end" className="w-60 p-2">
+                                                <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                                                  {l.attachments.map((att, ai) => (
+                                                    <a key={ai} href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                                                      {att.type === 'image' ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" /> : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
+                                                      <span className="truncate flex-1">{att.name}</span>
+                                                    </a>
+                                                  ))}
+                                                </div>
+                                              </PopoverContent>
+                                            </Popover>
+                                          ) : <span className="text-muted-foreground/30">—</span>}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             )}
                           </div>
@@ -3613,32 +3692,48 @@ export default function MyTasksPage() {
                 </div>
               )
             ) : (
-              reviewHistory.length === 0 ? (
+              reviewShownHistory.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">尚無處理履歷</p>
               ) : (
-                <div className="rounded-lg border overflow-hidden">
-                  <table className="w-full text-xs border-collapse">
-                    <thead className="bg-muted/60"><tr className="text-muted-foreground">
-                      <th className="text-left font-medium px-2 py-1.5 w-[96px] border-b">時間</th>
-                      <th className="text-left font-medium px-2 py-1.5 border-b">任務</th>
-                      <th className="text-left font-medium px-2 py-1.5 w-[84px] border-b">事件</th>
-                      <th className="text-left font-medium px-2 py-1.5 w-[72px] border-b">操作人</th>
-                    </tr></thead>
-                    <tbody>
-                      {reviewHistory.map(ev => {
-                        const meta = REVIEW_EVENT_META[ev.type] || { label: ev.type, cls: 'bg-muted text-muted-foreground border-border' }
-                        const d = new Date(ev.createdAt)
-                        return (
-                          <tr key={ev.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
-                            <td className="px-2 py-1.5 text-muted-foreground/80 whitespace-nowrap tabular-nums">{d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</td>
-                            <td className="px-2 py-1.5 text-foreground/85 break-words">{ev.taskTitle}{ev.note ? <span className="block text-[10px] text-muted-foreground">原因：{ev.note}</span> : null}</td>
-                            <td className="px-2 py-1.5"><Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', meta.cls)}>{meta.label}</Badge></td>
-                            <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                <div className="space-y-2">
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-xs border-collapse">
+                      <thead className="bg-muted/60"><tr className="text-muted-foreground">
+                        <th className="text-left font-medium px-2 py-1.5 w-[96px] border-b">時間</th>
+                        <th className="text-left font-medium px-2 py-1.5 border-b">任務</th>
+                        <th className="text-left font-medium px-2 py-1.5 w-[84px] border-b">事件</th>
+                        <th className="text-left font-medium px-2 py-1.5 w-[72px] border-b">操作人</th>
+                      </tr></thead>
+                      <tbody>
+                        {reviewHistoryPageItems.map(ev => {
+                          const meta = REVIEW_EVENT_META[ev.type] || { label: ev.type, cls: 'bg-muted text-muted-foreground border-border' }
+                          const d = new Date(ev.createdAt)
+                          return (
+                            <tr key={ev.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                              <td className="px-2 py-1.5 text-muted-foreground/80 whitespace-nowrap tabular-nums">{d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</td>
+                              <td className="px-2 py-1.5 text-foreground/85 break-words">
+                                {ev.taskTitle}
+                                {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">駁回原因：{ev.note}</span> : null}
+                              </td>
+                              <td className="px-2 py-1.5"><Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', meta.cls)}>{meta.label}</Badge></td>
+                              <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {reviewHistoryPageCount > 1 && (
+                    <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+                      <Button variant="ghost" size="sm" className="h-7 px-2 gap-1" disabled={reviewHistoryClampedPage === 0} onClick={() => setReviewHistoryPage(p => Math.max(0, p - 1))}>
+                        <ArrowLeft className="h-3.5 w-3.5" />上一頁
+                      </Button>
+                      <span className="tabular-nums">第 {reviewHistoryClampedPage + 1} / {reviewHistoryPageCount} 頁（共 {reviewShownHistory.length} 筆）</span>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 gap-1" disabled={reviewHistoryClampedPage >= reviewHistoryPageCount - 1} onClick={() => setReviewHistoryPage(p => Math.min(reviewHistoryPageCount - 1, p + 1))}>
+                        下一頁<ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )
             )}
@@ -3655,10 +3750,20 @@ export default function MyTasksPage() {
               任務「{reviewRejectItem?.title}」會退回給執行者的「待完成」，請填寫駁回原因讓對方知道要改什麼。
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <Textarea value={reviewRejectReason} onChange={e => setReviewRejectReason(e.target.value)} rows={3} placeholder="駁回原因（會記錄在審視歷程）…" className="text-sm" />
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium flex items-center gap-1">
+              駁回原因 <span className="text-destructive">*</span>
+              {!reviewRejectReason.trim() && <span className="text-[11px] text-destructive font-normal">（必填）</span>}
+            </label>
+            <Textarea value={reviewRejectReason} onChange={e => setReviewRejectReason(e.target.value)} rows={3} placeholder="會記錄在審視歷程，並讓對方知道要改什麼…" className="text-sm" autoFocus />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700 focus:ring-red-600" onClick={(e) => { e.preventDefault(); reviewDoReject() }}>確定駁回</AlertDialogAction>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600 disabled:opacity-50 disabled:pointer-events-none"
+              disabled={!reviewRejectReason.trim() || reviewProcessing === reviewRejectItem?.taskId}
+              onClick={(e) => { e.preventDefault(); reviewDoReject() }}
+            >確定駁回</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
