@@ -879,7 +879,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   // ADR-02: use the shared depth-aware moveTreeItem (up to 6 levels) instead of the
   // old 2-level computeMove. Absolute dates mean no re-anchoring is needed.
   const applyTreeMove = (r: { tasks: typeof tlTasks; milestones: typeof tlMilestones } | null) => {
-    if (!r) return
+    if (!r) { toast.info('沒辦法移到這裡', { description: '層級到底了（里程碑 + 最多 5 層任務 = 6 層），沒辦法再往下放。' }); return }
     setTlTasks(r.tasks)
     setTlMilestones(r.milestones)
   }
@@ -894,7 +894,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     if (!t) return
     const siblings = tlTasks.filter(x => x.milestoneId === t.milestoneId && (x.parentId ?? null) === (t.parentId ?? null))
     const idx = siblings.findIndex(x => x.id === taskId)
-    if (idx <= 0) { toast.info('上方沒有可作為父層的項目'); return }
+    if (idx <= 0) { toast.info('沒辦法再縮排', { description: '它已經是這一層的第一項，上面沒有可以縮排進去的項目。先在它上面加一個項目再試。' }); return }
     applyTreeMove(moveTreeItem(tlTasks, tlMilestones, taskId, siblings[idx - 1].id, 'inside'))
   }
 

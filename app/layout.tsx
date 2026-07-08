@@ -6,6 +6,7 @@ import { AuthProvider } from '@/lib/auth-context'
 import { ProjectStoreProvider } from '@/lib/project-store'
 import { NotificationStoreProvider } from '@/lib/notification-store'
 import { Toaster } from '@/components/ui/sonner'
+import { Toaster as ShadToaster } from '@/components/ui/toaster'
 
 import './globals.css'
 
@@ -66,6 +67,8 @@ export default function RootLayout({
             </ProjectStoreProvider>
           </AuthProvider>
           <Toaster />
+          {/* shadcn useToast() Toaster — needed for pages using useToast (e.g. 建立專案) */}
+          <ShadToaster />
 
         </ThemeProvider>
       </body>

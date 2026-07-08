@@ -41,44 +41,13 @@ interface MilestoneTaskViewProps {
 export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: MilestoneTaskViewProps) {
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
-  const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(() => {
-    const set = new Set<string>()
-    const today = new Date().toISOString().split('T')[0]
-    let foundFirstIncomplete = false
-    for (const m of project.milestones) {
-      if (m.status === 'done' || m.progress >= 100) continue
-      const msTasks = project.tasks.filter(t => t.milestoneId === m.id && !t.parentId)
-      if (msTasks.length === 0) continue
-      if (!foundFirstIncomplete) {
-        set.add(m.id)
-        foundFirstIncomplete = true
-      } else {
-        const msStart = msTasks.reduce((min, t) => t.startDate < min ? t.startDate : min, msTasks[0].startDate)
-        if (msStart <= today) set.add(m.id)
-      }
-    }
-    return set
-  })
-  const [ganttExpandedTasks, setGanttExpandedTasks] = useState<Set<string>>(() => {
-    const set = new Set<string>()
-    const today = new Date().toISOString().split('T')[0]
-    for (const msId of ganttExpandedMs) {
-      const msTasks = project.tasks.filter(t => t.milestoneId === msId && !t.parentId)
-      let foundFirst = false
-      for (const t of msTasks) {
-        if (t.status === 'done') continue
-        const hasSubtasks = project.tasks.some(st => st.parentId === t.id)
-        if (!hasSubtasks) continue
-        if (!foundFirst) {
-          set.add(t.id)
-          foundFirst = true
-        } else if (t.startDate <= today) {
-          set.add(t.id)
-        }
-      }
-    }
-    return set
-  })
+  // ADR-02: 甘特圖預設全展開（所有里程碑 + 所有有子項的任務，任意深度）。
+  const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(() =>
+    new Set(project.milestones.map(m => m.id))
+  )
+  const [ganttExpandedTasks, setGanttExpandedTasks] = useState<Set<string>>(() =>
+    new Set(project.tasks.filter(t => project.tasks.some(c => c.parentId === t.id)).map(t => t.id))
+  )
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null)

@@ -64,6 +64,10 @@ import {
 import { arrayMove } from '@dnd-kit/sortable'
 import { calculateMilestoneDates, calculateTaskDates, seedSequentialDates, daysBetween } from '@/lib/timeline-utils'
 import { moveTreeItem, promoteTaskToMilestone, type TreeDropMode } from '@/lib/timeline-tree'
+
+// 白話提示：階層動作被擋住時給使用者的說明
+const NO_PARENT_HINT = '它已經是這一層的第一項，上面沒有可以縮排進去的項目。想讓它變成子項，先在它上面加一個項目。'
+const TOO_DEEP_HINT = '層級到底了（里程碑 + 最多 5 層任務 = 6 層），沒辦法再往下放。'
 import { GanttChart } from '@/components/gantt-chart'
 
 interface ManualMilestone {
@@ -1018,7 +1022,7 @@ export default function NewProjectPage() {
   // Buttons are the reliable path for level changes; drag also works via moveTreeItem.
   const manualItemMove = (activeId: string, overId: string, mode: TreeDropMode) => {
     const r = moveTreeItem(manualTasks, manualMilestones, activeId, overId, mode)
-    if (!r) return
+    if (!r) { toast({ title: '沒辦法移到這裡', description: TOO_DEEP_HINT }); return }
     setManualTasks(r.tasks)
     setManualMilestones(r.milestones)
   }
@@ -1028,7 +1032,7 @@ export default function NewProjectPage() {
     // Indent under the previous SIBLING at the same level (any depth).
     const siblings = manualTasks.filter(x => x.milestoneId === t.milestoneId && (x.parentId ?? null) === (t.parentId ?? null))
     const idx = siblings.findIndex(x => x.id === taskId)
-    if (idx <= 0) return
+    if (idx <= 0) { toast({ title: '沒辦法再縮排', description: NO_PARENT_HINT }); return }
     manualItemMove(taskId, siblings[idx - 1].id, 'inside')
   }
   const manualOutdent = (taskId: string) => {
@@ -1043,7 +1047,7 @@ export default function NewProjectPage() {
   }
   const aiItemMove = (activeId: string, overId: string, mode: TreeDropMode) => {
     const r = moveTreeItem(aiTasks, aiMilestones, activeId, overId, mode)
-    if (!r) return
+    if (!r) { toast({ title: '沒辦法移到這裡', description: TOO_DEEP_HINT }); return }
     setAiTasks(r.tasks)
     setAiMilestones(r.milestones)
   }
@@ -1052,7 +1056,7 @@ export default function NewProjectPage() {
     if (!t) return
     const siblings = aiTasks.filter(x => x.milestoneId === t.milestoneId && (x.parentId ?? null) === (t.parentId ?? null))
     const idx = siblings.findIndex(x => x.id === taskId)
-    if (idx <= 0) return
+    if (idx <= 0) { toast({ title: '沒辦法再縮排', description: NO_PARENT_HINT }); return }
     aiItemMove(taskId, siblings[idx - 1].id, 'inside')
   }
   const aiOutdent = (taskId: string) => {

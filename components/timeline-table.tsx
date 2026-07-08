@@ -252,7 +252,7 @@ const MilestoneRow = memo(function MilestoneRow({
             size="icon"
             onClick={() => onDemote(milestone.id)}
             className="shrink-0 h-6 w-6 text-muted-foreground/60 hover:text-primary hover:bg-primary/10"
-            title="降為任務（併入相鄰的里程碑）"
+            title="降階：把這個里程碑變成相鄰里程碑底下的任務"
           >
             <IndentIncrease className="h-3.5 w-3.5" />
           </Button>
@@ -455,7 +455,7 @@ const TaskRow = memo(function TaskRow({
             size="icon"
             onClick={() => onIndent(task.id)}
             className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-            title="縮排成上一列任務的子項"
+            title="縮排：變成上一列項目的子項（往下一層）"
           >
             <IndentIncrease className="h-3.5 w-3.5" />
           </Button>
@@ -467,7 +467,7 @@ const TaskRow = memo(function TaskRow({
             size="icon"
             onClick={() => onOutdent(task.id)}
             className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-            title={depth <= 1 ? '升階為里程碑' : '升階為上一層任務'}
+            title={depth <= 1 ? '升階：把這個任務變成里程碑' : '升階：往上移一層（變成上層項目的同層）'}
           >
             <IndentDecrease className="h-3.5 w-3.5" />
           </Button>
@@ -479,7 +479,7 @@ const TaskRow = memo(function TaskRow({
             size="icon"
             onClick={onToggleAddSubtask}
             className="shrink-0 h-6 w-6 text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-primary hover:bg-primary/10 transition-opacity"
-            title="新增子項"
+            title="在這底下新增一個子項（多一層）"
           >
             <Plus className="h-3.5 w-3.5" />
           </Button>
