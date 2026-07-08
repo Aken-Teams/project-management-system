@@ -279,6 +279,9 @@ model Task {
   // R 按下後不再被催填週報；A 端會看到「R 回報完成待確認」提示，由 A 決定是否按下正式完成。
   reportedDoneAt DateTime? @map("reported_done_at")
   reportedDoneBy String?   @map("reported_done_by")
+  // A 審核通過 R 的回報（認可內容、發布紀錄），但「不代表任務 100% 完成」— 完成與否另由 A 決定。
+  reviewedAt  DateTime?  @map("reviewed_at")
+  reviewedBy  String?    @map("reviewed_by")
   originalStartDate DateTime? @map("original_start_date")
   originalEndDate   DateTime? @map("original_end_date")
   parentId    String?    @map("parent_id")

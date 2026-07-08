@@ -145,6 +145,8 @@ type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: s
 // 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
 type ReviewLogRow = { log: TaskLog; srcTitle?: string }
 type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logRows: ReviewLogRow[]; fileCount: number }
+// 依任務樹狀節點
+type ReviewTaskNode = { taskId: string; title: string; assignee: string; depth: number; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; children: ReviewTaskNode[] }
 
 // 依姓名決定頭像底色（穩定、無隨機）
 const REVIEW_AVATAR_COLORS = ['bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 'bg-amber-600', 'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-orange-600']
@@ -158,7 +160,7 @@ function avatarColorFor(name: string) {
 const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
   reported: { label: '回報完成', cls: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400' },
   cancelled: { label: '取消回報', cls: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400' },
-  confirmed: { label: '確認完成', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
+  confirmed: { label: '審核通過', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
   rejected: { label: '退回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
 }
 
@@ -248,13 +250,20 @@ export default function MyTasksPage() {
   const [rConfirmClose, setRConfirmClose] = useState(false)
   // ── 審核中心（當責 A）──
   const [reviewCenterOpen, setReviewCenterOpen] = useState(false)
-  const [reviewTab, setReviewTab] = useState<'pending' | 'history'>('pending')
+  const [reviewTab, setReviewTab] = useState<'pending' | 'members' | 'history'>('pending')
   const [reviewProcessing, setReviewProcessing] = useState<string | null>(null)
   const [reviewExpanded, setReviewExpanded] = useState<Set<string>>(new Set())
   const [reviewRejectItem, setReviewRejectItem] = useState<{ projectId: string; taskId: string; title: string } | null>(null)
   const [reviewRejectReason, setReviewRejectReason] = useState('')
   const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
   const [reviewHistoryPage, setReviewHistoryPage] = useState(0)
+  const [reviewReportWeek, setReviewReportWeek] = useState(() => {
+    const now = new Date(); const day = now.getDay(); const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+    const monday = new Date(now); monday.setDate(diff)
+    return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+  })
+  const [reviewMemberExpanded, setReviewMemberExpanded] = useState<Set<string>>(new Set())
+  const [reviewMemberView, setReviewMemberView] = useState<'member' | 'task'>('member')
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -893,7 +902,7 @@ export default function MyTasksPage() {
       const childrenOf = new Map<string, Task[]>()
       for (const t of p.tasks) if (t.parentId) { const a = childrenOf.get(t.parentId); if (a) a.push(t); else childrenOf.set(t.parentId, [t]) }
       for (const t of p.tasks) {
-        if (!t.reportedDoneAt || t.completedAt) continue
+        if (!t.reportedDoneAt || t.completedAt || t.reviewedAt) continue // 已審核通過的離開待審佇列
         const ms = p.milestones.find(m => m.id === t.milestoneId)
         const anc: string[] = []
         let cur = t.parentId ? byId.get(t.parentId) : undefined
@@ -931,7 +940,9 @@ export default function MyTasksPage() {
     setReviewProjectId(projectId)
     setReviewTab('pending')
     setReviewExpanded(new Set())
+    setReviewMemberExpanded(new Set())
     setReviewHistoryPage(0)
+    setReviewReportWeek(rCurrentMonday)
     setReviewCenterOpen(true)
   }
   // 依所選專案過濾（從專案列開啟時只看該專案）
@@ -947,6 +958,96 @@ export default function MyTasksPage() {
     () => reviewProjectId ? apiProjects.find(p => p.id === reviewProjectId)?.name : undefined,
     [apiProjects, reviewProjectId],
   )
+  // 成員週報（依所選週別）：同時算出「依成員」與「依任務」兩種視圖。
+  // 「本週該做」= 任務有指派、且起訖與本週重疊（未開始/已結束的不算，避免誤判「未填」）。
+  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[] }
+  const reviewWeekReport = useMemo(() => {
+    const empty = {
+      memberRows: [] as { name: string; expectedCount: number; filledCount: number; missing: boolean; tasks: ReviewWeekTask[] }[],
+      taskTree: [] as { msId: string; msName: string; nodes: ReviewTaskNode[] }[],
+      missingMembers: 0, missingTasks: 0,
+    }
+    if (!reviewProjectId) return empty
+    const p = apiProjects.find(pp => pp.id === reviewProjectId)
+    if (!p) return empty
+    const [y, m, d] = reviewReportWeek.split('-').map(Number)
+    const weekStart = reviewReportWeek
+    const endDate = new Date(y, m - 1, d + 6)
+    const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+    const byId = new Map(p.tasks.map(t => [t.id, t]))
+    const ctxOf = (taskId: string) => {
+      const t = byId.get(taskId); if (!t) return ''
+      const ms = p.milestones.find(mm => mm.id === t.milestoneId)
+      const anc: string[] = []
+      let cur = t.parentId ? byId.get(t.parentId) : undefined
+      while (cur) { anc.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
+      return [ms?.name, ...anc].filter(Boolean).join(' › ')
+    }
+    const overlaps = (t: Task) => t.startDate <= weekEnd && t.endDate >= weekStart
+    const activeTasks = p.tasks.filter(t => t.assignee && overlaps(t))
+    const weekLogs = p.taskLogs.filter(l => l.logDate >= weekStart && l.logDate <= weekEnd)
+    const logsByTask = new Map<string, TaskLog[]>()
+    const logsByAuthorTask = new Map<string, TaskLog[]>()
+    for (const l of weekLogs) {
+      ;(logsByTask.get(l.taskId) || logsByTask.set(l.taskId, []).get(l.taskId)!).push(l)
+      const k = `${l.author}|${l.taskId}`
+      ;(logsByAuthorTask.get(k) || logsByAuthorTask.set(k, []).get(k)!).push(l)
+    }
+    const sortLogs = (a: TaskLog, b: TaskLog) => a.logDate.localeCompare(b.logDate)
+
+    // 依任務（樹狀）：顯示 active 任務 + 其祖先（結構用），依里程碑分組
+    const showIds = new Set<string>()
+    for (const t of activeTasks) {
+      showIds.add(t.id)
+      let cur = t.parentId ? byId.get(t.parentId) : undefined
+      while (cur) { showIds.add(cur.id); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
+    }
+    const childrenOf = new Map<string, Task[]>()
+    for (const t of p.tasks) {
+      if (!showIds.has(t.id) || !t.parentId || !showIds.has(t.parentId)) continue
+      const arr = childrenOf.get(t.parentId) || childrenOf.set(t.parentId, []).get(t.parentId)!
+      arr.push(t)
+    }
+    const buildNode = (t: Task, depth: number): ReviewTaskNode => {
+      const logs = (logsByTask.get(t.id) || []).slice().sort(sortLogs)
+      return {
+        taskId: t.id, title: t.title, assignee: t.assignee, depth,
+        active: !!t.assignee && overlaps(t), filled: logs.length > 0, reported: !!t.reportedDoneAt, reviewed: !!t.reviewedAt, logs,
+        children: (childrenOf.get(t.id) || []).map(c => buildNode(c, depth + 1)),
+      }
+    }
+    const taskTree = p.milestones.map(ms => {
+      const tops = p.tasks.filter(t => showIds.has(t.id) && t.milestoneId === ms.id && (!t.parentId || !showIds.has(t.parentId)))
+      return { msId: ms.id, msName: ms.name, nodes: tops.map(t => buildNode(t, 0)) }
+    }).filter(g => g.nodes.length > 0)
+    const missingTasks = activeTasks.filter(t => !(logsByTask.get(t.id)?.length)).length
+
+    // 依成員：每人本週「該做的任務」(active) ∪「本週有寫的任務」，逐一標已填/未填
+    const memberNames = new Set<string>()
+    for (const t of activeTasks) memberNames.add(t.assignee)
+    for (const l of weekLogs) memberNames.add(l.author)
+    const memberRows = [...memberNames].sort().map(name => {
+      const taskIds = new Set<string>()
+      for (const t of activeTasks) if (t.assignee === name) taskIds.add(t.id)
+      for (const l of weekLogs) if (l.author === name) taskIds.add(l.taskId)
+      const tasks: ReviewWeekTask[] = [...taskIds].map(tid => {
+        const t = byId.get(tid)
+        const logs = (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs)
+        return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs }
+      }).sort((a, b) => {
+        const rank = (x: ReviewWeekTask) => (x.active && !x.filled ? 0 : x.filled ? 1 : 2)
+        return rank(a) - rank(b)
+      })
+      const expectedCount = tasks.filter(ti => ti.active).length
+      const filledCount = tasks.filter(ti => ti.active && ti.filled).length
+      return { name, expectedCount, filledCount, missing: expectedCount > 0 && filledCount === 0, tasks }
+    }).sort((a, b) => (a.missing === b.missing ? 0 : a.missing ? -1 : 1))
+    const missingMembers = memberRows.filter(r => r.missing).length
+
+    return { memberRows, taskTree, missingMembers, missingTasks }
+  }, [apiProjects, reviewProjectId, reviewReportWeek])
+  const reviewMissingCount = reviewMemberView === 'task' ? reviewWeekReport.missingTasks : reviewWeekReport.missingMembers
+
   // 履歷分頁（一頁 10 筆）
   const REVIEW_HISTORY_PAGE_SIZE = 10
   const reviewHistoryPageCount = Math.max(1, Math.ceil(reviewShownHistory.length / REVIEW_HISTORY_PAGE_SIZE))
@@ -962,7 +1063,7 @@ export default function MyTasksPage() {
     if (res.ok) { const data = await res.json(); setApiProjects(data.projects ?? []) }
   }, [user])
 
-  // A 確認完成（並發布紀錄到更新紀錄）
+  // A 審核通過：認可 R 的報告 + 發布紀錄到更新紀錄。**不動進度/完成度**（避免甘特被誤設 100%）。
   const reviewConfirm = async (item: ReviewItem) => {
     if (!user) return
     setReviewProcessing(item.task.id)
@@ -970,11 +1071,11 @@ export default function MyTasksPage() {
       const res = await fetch(`/api/projects/${item.projectId}/tasks/${item.task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'done', progress: 100, completedBy: user.name, reviewEvent: 'confirmed', reviewActor: user.name }),
+        body: JSON.stringify({ reviewedDone: true, reviewEvent: 'confirmed', reviewActor: user.name }),
       })
       if (!res.ok) throw new Error()
       await refreshMyTasks()
-    } catch { setRErrorMsg('確認失敗，請稍後再試') } finally { setReviewProcessing(null) }
+    } catch { setRErrorMsg('審核失敗，請稍後再試') } finally { setReviewProcessing(null) }
   }
 
   // A 駁回（退回給執行者重做，附原因）
@@ -992,6 +1093,82 @@ export default function MyTasksPage() {
       setReviewRejectItem(null); setReviewRejectReason('')
       await refreshMyTasks()
     } catch { setRErrorMsg('駁回失敗，請稍後再試') } finally { setReviewProcessing(null) }
+  }
+
+  // 回報狀態徽章：區分「已回報完成（送 A 審核）」與「只是填了工作紀錄、還沒回報」
+  const renderReviewStatus = (reported: boolean, reviewed: boolean): React.ReactNode => {
+    if (reviewed) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已審核</Badge>
+    if (reported) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 shrink-0">已回報待審</Badge>
+    return <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/70 shrink-0">未回報</Badge>
+  }
+
+  // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）
+  const renderReviewLogs = (logs: TaskLog[]) => (
+    <div className="max-h-[200px] overflow-y-auto border-t bg-background">
+      <table className="w-full text-xs border-collapse">
+        <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur"><tr className="text-muted-foreground">
+          <th className="text-left font-medium px-2 py-1.5 w-[52px] border-b">日期</th>
+          <th className="text-left font-medium px-2 py-1.5 border-b">工作內容</th>
+          <th className="text-center font-medium px-2 py-1.5 w-[44px] border-b">附件</th>
+        </tr></thead>
+        <tbody>
+          {logs.map(l => (
+            <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+              <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
+              <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
+              <td className="px-2 py-1.5 text-center">
+                {l.attachments && l.attachments.length > 0 ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:bg-primary/10 rounded px-1.5 py-0.5"><Paperclip className="h-3 w-3" />{l.attachments.length}</button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-60 p-2">
+                      <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                        {l.attachments.map((att, ai) => (
+                          <a key={ai} href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                            {att.type === 'image' ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" /> : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
+                            <span className="truncate flex-1">{att.name}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : <span className="text-muted-foreground/30">—</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  // 依任務樹狀節點（遞迴，縮排呈現階層）
+  const renderReviewTaskNode = (node: ReviewTaskNode): React.ReactNode => {
+    const expanded = reviewMemberExpanded.has('task:' + node.taskId)
+    return (
+      <div key={node.taskId}>
+        <div className="flex items-center gap-2 py-2 pr-3 border-b border-border/40 hover:bg-muted/20" style={{ paddingLeft: 12 + node.depth * 18 }}>
+          {node.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0">└</span>}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm truncate">{node.title}</div>
+            <div className="text-[11px] text-muted-foreground">負責人：{node.assignee || '未指派'}</div>
+          </div>
+          {renderReviewStatus(node.reported, node.reviewed)}
+          {node.active ? (
+            node.filled
+              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {node.logs.length}</Badge>
+              : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">本週未填</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0">非本週</Badge>
+          )}
+          {node.logs.length > 0
+            ? <button onClick={() => setReviewMemberExpanded(prev => { const k = 'task:' + node.taskId; const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })} className="shrink-0"><ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></button>
+            : <span className="w-4 shrink-0" />}
+        </div>
+        {expanded && node.logs.length > 0 && renderReviewLogs(node.logs)}
+        {node.children.map(renderReviewTaskNode)}
+      </div>
+    )
   }
 
   // 本週（週一）字串，用來判斷選到的週別是否為當週（過去/未來週預設唯讀）
@@ -1219,6 +1396,20 @@ export default function MyTasksPage() {
     } finally {
       setRTogglingDone(null)
     }
+  }
+
+  // 目前展開的任務是否有「已填但尚未提交」的工作內容
+  const rConfirmHasUnsaved = !!rConfirmDone && rSelectedTaskId === rConfirmDone.id && rLogRows.some(r => r.content.trim() && r.date)
+
+  // 回報完成：若有未提交的內容，先自動提交再回報（避免使用者忘記按提交週報而遺失內容）
+  const handleConfirmReportDone = async () => {
+    const t = rConfirmDone
+    setRConfirmDone(null)
+    if (!t) return
+    if (rSelectedTaskId === t.id && rLogRows.some(r => r.content.trim() && r.date)) {
+      await handleRBatchSubmitLogs() // 先提交這次填寫的工作內容
+    }
+    await handleToggleReportedDone(t.id, true)
   }
 
   // Open A-tab R member report dialog
@@ -3196,6 +3387,10 @@ export default function MyTasksPage() {
                                 <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 確認完成` : undefined}>
                                   <Check className="h-2.5 w-2.5 mr-0.5" />已完成
                                 </Badge>
+                              ) : task.reviewedAt ? (
+                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title="當責已審核通過你的回報（是否算完成由當責在報告中決定）">
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />已審核通過
+                                </Badge>
                               ) : (
                                 <span className="flex items-center gap-1 shrink-0">
                                   <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="已回報完成，等待確認">
@@ -3298,20 +3493,32 @@ export default function MyTasksPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>回報此任務已完成、無後續？</AlertDialogTitle>
-            <AlertDialogDescription>
-              任務「{rConfirmDone?.title}」將移到「待確認」，送出等待審核確認。
-              <br />
-              <span className="text-amber-600 dark:text-amber-400 font-medium">回報後你將無法再編輯此任務的週報</span>
-              （如需修改可在完成區按「取消回報」還原）。
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  任務「{rConfirmDone?.title}」將移到「待確認」等待審核。
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">回報後無法再編輯此任務週報</span>
+                  （可在待確認按「取消回報」還原）。
+                </div>
+                {rConfirmHasUnsaved ? (
+                  <div className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
+                    <Check className="h-3.5 w-3.5 shrink-0" />已填內容會一併提交，不會遺失。
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3.5 w-3.5 shrink-0" />尚未偵測到已填內容。
+                  </div>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-amber-600 hover:bg-amber-700 focus:ring-amber-600"
-              onClick={() => { const t = rConfirmDone; setRConfirmDone(null); if (t) handleToggleReportedDone(t.id, true) }}
+              onClick={handleConfirmReportDone}
             >
-              確定回報完成
+              {rConfirmHasUnsaved ? '提交並回報完成' : '確定回報完成'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3572,7 +3779,7 @@ export default function MyTasksPage() {
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4" />週報審核{reviewShownName ? ` — ${reviewShownName}` : ''}</DialogTitle>
-            <DialogDescription className="text-sm">審核執行者回報的完成 — 確認即發布到「更新紀錄」，或駁回退回重做。只列出需要你決定的項目。</DialogDescription>
+            <DialogDescription className="text-sm">審核執行者的回報：<b>審核通過</b>＝認可內容並把紀錄發布到「更新紀錄」（<b>不代表任務 100% 完成</b>，完成與否由你在報告中決定）；或駁回退回重做。</DialogDescription>
           </DialogHeader>
           <div className="px-6 pt-3">
             <div className="flex items-center gap-1 border-b">
@@ -3581,6 +3788,13 @@ export default function MyTasksPage() {
                   reviewTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                 待你確認
                 {reviewShownItems.length > 0 && <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewShownItems.length}</span>}
+              </button>
+              <button type="button" onClick={() => setReviewTab('members')}
+                className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
+                  reviewTab === 'members' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                title="依週別查看所有人的週報，並看出誰沒送出">
+                成員週報
+                {reviewMissingCount > 0 && <span className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{reviewMissingCount}</span>}
               </button>
               <button type="button" onClick={() => setReviewTab('history')}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
@@ -3633,7 +3847,7 @@ export default function MyTasksPage() {
                             </Button>
                             <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
                               disabled={busy} onClick={() => reviewConfirm(item)}>
-                              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}確認完成
+                              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}審核通過
                             </Button>
                           </div>
                         </div>
@@ -3691,6 +3905,96 @@ export default function MyTasksPage() {
                   })}
                 </div>
               )
+            ) : reviewTab === 'members' ? (
+              <div className="space-y-3">
+                <WeekPicker value={reviewReportWeek} onChange={setReviewReportWeek} />
+                {/* 依成員 / 依任務 切換 */}
+                <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit">
+                  {(['member', 'task'] as const).map(v => (
+                    <button key={v} type="button" onClick={() => setReviewMemberView(v)}
+                      className={cn('px-3 py-1 text-xs rounded-md transition-colors', reviewMemberView === v ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                      {v === 'member' ? '依成員' : '依任務'}
+                    </button>
+                  ))}
+                </div>
+                {reviewMissingCount > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-md px-2.5 py-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {reviewMemberView === 'task'
+                      ? `本週有 ${reviewMissingCount} 個任務尚無人回報（依起訖與本週重疊判定）`
+                      : `本週有 ${reviewMissingCount} 人應回報卻未送出週報`}
+                  </div>
+                )}
+
+                {reviewMemberView === 'member' ? (
+                  reviewWeekReport.memberRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">本週沒有應回報的成員</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {reviewWeekReport.memberRows.map(row => {
+                        const mExpanded = reviewMemberExpanded.has(row.name)
+                        return (
+                          <div key={row.name} className="border rounded-lg overflow-hidden">
+                            <div className={cn('px-3 py-2 flex items-center gap-2 cursor-pointer', row.missing ? 'bg-red-50 dark:bg-red-950/20' : 'bg-muted/20')}
+                              onClick={() => setReviewMemberExpanded(prev => { const n = new Set(prev); if (n.has(row.name)) n.delete(row.name); else n.add(row.name); return n })}>
+                              <Avatar className="h-6 w-6"><AvatarFallback className={cn('text-[10px] text-white', avatarColorFor(row.name))}>{row.name.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                              <span className="text-sm font-medium flex-1 truncate">{row.name}</span>
+                              {row.missing ? (
+                                <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400">未送出週報</Badge>
+                              ) : row.expectedCount === 0 ? (
+                                <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground" title="本週沒有指派給他、且起訖落在本週的任務">本週無應辦任務</Badge>
+                              ) : (
+                                <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5', row.filledCount < row.expectedCount ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400' : 'bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400')} title="分母＝本週應回報任務數（起訖與本週重疊），分子＝已填">
+                                  本週應辦 {row.filledCount}/{row.expectedCount} 已填
+                                </Badge>
+                              )}
+                              <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', mExpanded && 'rotate-180')} />
+                            </div>
+                            {mExpanded && (
+                              <div className="border-t divide-y">
+                                {row.tasks.map(ti => (
+                                  <div key={ti.taskId}>
+                                    <div className="px-3 py-2 flex items-start gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        {ti.ctx && <div className="text-[11px] text-muted-foreground/80 truncate">{ti.ctx}</div>}
+                                        <div className="text-sm">{ti.title}</div>
+                                      </div>
+                                      {renderReviewStatus(ti.reported, ti.reviewed)}
+                                      {ti.active ? (
+                                        ti.filled
+                                          ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
+                                          : <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
+                                          非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {ti.logs.length > 0 && renderReviewLogs(ti.logs)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                ) : (
+                  reviewWeekReport.taskTree.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">本週沒有進行中的任務</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {reviewWeekReport.taskTree.map(group => (
+                        <div key={group.msId} className="border rounded-lg overflow-hidden">
+                          <div className="px-3 py-2 bg-muted/30 text-xs font-semibold text-muted-foreground">{group.msName}</div>
+                          <div>{group.nodes.map(renderReviewTaskNode)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
+              </div>
             ) : (
               reviewShownHistory.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">尚無處理履歷</p>
@@ -3715,7 +4019,7 @@ export default function MyTasksPage() {
                                 {ev.taskTitle}
                                 {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">駁回原因：{ev.note}</span> : null}
                               </td>
-                              <td className="px-2 py-1.5"><Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', meta.cls)}>{meta.label}</Badge></td>
+                              <td className="px-2 py-1.5"><Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5', meta.cls)}>{meta.label}</Badge></td>
                               <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
                             </tr>
                           )

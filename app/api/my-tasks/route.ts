@@ -145,6 +145,8 @@ export async function GET(request: NextRequest) {
           assignedAt: t.assignedAt ? t.assignedAt.toISOString().split('T')[0] : null,
           reportedDoneAt: t.reportedDoneAt ? t.reportedDoneAt.toISOString().split('T')[0] : null,
           reportedDoneBy: t.reportedDoneBy || null,
+          reviewedAt: t.reviewedAt ? t.reviewedAt.toISOString().split('T')[0] : null,
+          reviewedBy: t.reviewedBy || null,
           subtasks: ((t as Record<string, unknown>).children as Array<Record<string, unknown>> || []).map((c: Record<string, unknown>) => ({
             id: c.id,
             title: c.title,

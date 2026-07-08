@@ -148,6 +148,9 @@ export interface Task {
   // R 自我回報「已完成/無後續」（≠ A 的 completedAt 正式完成）
   reportedDoneAt?: string | null
   reportedDoneBy?: string | null
+  // A 審核通過 R 的回報（認可內容，不代表 100% 完成）
+  reviewedAt?: string | null
+  reviewedBy?: string | null
   originalStartDate?: string
   originalEndDate?: string
   parentId?: string | null

@@ -32,6 +32,7 @@ interface UpdateTaskBody {
   reviewActor?: string
   reviewNote?: string      // 駁回原因等備註
   publishLogs?: boolean    // A 發布此任務紀錄到官方更新紀錄
+  reviewedDone?: boolean   // A 審核通過（設 reviewedAt；不動進度/完成度）
 }
 
 export async function PUT(
@@ -96,6 +97,18 @@ export async function PUT(
       } else {
         data.reportedDoneAt = null
         data.reportedDoneBy = null
+        data.reviewedAt = null // 取消/退回時一併清掉審核狀態
+        data.reviewedBy = null
+      }
+    }
+    // A 審核通過（認可 R 的報告）— 只設 reviewedAt，「不動 status/progress/completedAt」
+    if (body.reviewedDone !== undefined) {
+      if (body.reviewedDone) {
+        data.reviewedAt = new Date()
+        data.reviewedBy = body.reviewActor || null
+      } else {
+        data.reviewedAt = null
+        data.reviewedBy = null
       }
     }
 
