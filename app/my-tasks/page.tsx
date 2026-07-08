@@ -122,6 +122,9 @@ interface MilestoneTaskGroup {
   tasks: Task[]
 }
 
+// 填寫週報彈窗：依「里程碑 › 父任務 › …」完整路徑分組的任務群
+type RTaskGroup = { key: string; pathLabel: string; dueDate: string; tasks: Task[] }
+
 interface MyTasksProject {
   id: string
   name: string
@@ -209,6 +212,12 @@ export default function MyTasksPage() {
   const [rLogRows, setRLogRows] = useState<RLogRow[]>([{ date: '', content: '' }])
   const [rLogNextWeekPlan, setRLogNextWeekPlan] = useState('')
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
+  const [rTogglingDone, setRTogglingDone] = useState<string | null>(null)
+  const [rDialogTab, setRDialogTab] = useState<'active' | 'done'>('active')
+  // 回報完成前的確認視窗（按下後 R 不能再編輯此任務週報）
+  const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
+  // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
+  const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   const [rUploadingRowIdx, setRUploadingRowIdx] = useState<number | null>(null)
   const rRowFileInputRef = useRef<HTMLInputElement>(null)
   // A-tab: R member report dialog
@@ -734,6 +743,7 @@ export default function MyTasksPage() {
     setRSelectedTaskId(null)
     setRLogRows([{ date: '', content: '' }])
     setRLogNextWeekPlan('')
+    setRDialogTab('active')
     setRReportDialogOpen(true)
   }
 
@@ -741,8 +751,11 @@ export default function MyTasksPage() {
   // ADR-02: drill through the whole task tree (1~6 層) — a task assigned to me at
   // ANY depth must appear. The group header carries the full breadcrumb
   // 里程碑 › 父任務 › …，so每列只需顯示最底層任務名，用戶就知道它在哪一層底下。
-  const rDialogTaskGroups = useMemo(() => {
-    if (!rReportDialogProject || !user) return []
+  //  待完成(active)：未被 A 完成、也未被 R 回報完成 → 可填寫。
+  //  完成區(done)：A 已標記完成(completedAt) 或 R 已回報完成(reportedDoneAt) → 存查紀錄。
+  const { rActiveGroups, rDoneGroups } = useMemo(() => {
+    const empty = { rActiveGroups: [] as RTaskGroup[], rDoneGroups: [] as RTaskGroup[] }
+    if (!rReportDialogProject || !user) return empty
     const allTasks = rReportDialogProject.tasks
     const byId = new Map(allTasks.map(t => [t.id, t]))
     const childrenOf = new Map<string, Task[]>()
@@ -759,30 +772,38 @@ export default function MyTasksPage() {
       while (cur) { chain.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
       return chain
     }
-    const groups: { key: string; pathLabel: string; dueDate: string; tasks: Task[] }[] = []
-    const groupIndex = new Map<string, number>()
-    for (const ms of rReportDialogProject.milestones) {
-      if (ms.status === 'done') continue
-      const walk = (t: Task) => {
-        if (t.assignee === user.name) {
-          const pathLabel = [ms.name, ...ancestorsOf(t)].join(' › ')
-          const key = `${ms.id}::${pathLabel}`
-          let idx = groupIndex.get(key)
-          if (idx === undefined) {
-            idx = groups.length
-            groupIndex.set(key, idx)
-            groups.push({ key, pathLabel, dueDate: ms.dueDate, tasks: [] })
+    const build = (taskFilter: (t: Task) => boolean, includeDoneMs: boolean): RTaskGroup[] => {
+      const groups: RTaskGroup[] = []
+      const groupIndex = new Map<string, number>()
+      for (const ms of rReportDialogProject.milestones) {
+        if (!includeDoneMs && ms.status === 'done') continue
+        const walk = (t: Task) => {
+          if (t.assignee === user.name && taskFilter(t)) {
+            const pathLabel = [ms.name, ...ancestorsOf(t)].join(' › ')
+            const key = `${ms.id}::${pathLabel}`
+            let idx = groupIndex.get(key)
+            if (idx === undefined) {
+              idx = groups.length
+              groupIndex.set(key, idx)
+              groups.push({ key, pathLabel, dueDate: ms.dueDate, tasks: [] })
+            }
+            groups[idx].tasks.push(t)
           }
-          groups[idx].tasks.push(t)
+          for (const c of childrenOf.get(t.id) || []) walk(c)
         }
-        for (const c of childrenOf.get(t.id) || []) walk(c)
+        for (const top of allTasks.filter(t => t.milestoneId === ms.id && !t.parentId)) walk(top)
       }
-      for (const top of allTasks.filter(t => t.milestoneId === ms.id && !t.parentId)) walk(top)
+      return groups
     }
-    return groups
+    return {
+      rActiveGroups: build(t => !t.completedAt && !t.reportedDoneAt, false),
+      rDoneGroups: build(t => !!t.completedAt || !!t.reportedDoneAt, true),
+    }
   }, [rReportDialogProject, user])
 
-  // Check which tasks have logs in the selected week
+  const rDoneCount = useMemo(() => rDoneGroups.reduce((n, g) => n + g.tasks.length, 0), [rDoneGroups])
+
+  // Check which tasks have logs in the selected week (只看待完成任務)
   const rTaskWeekStatus = useMemo(() => {
     if (!rReportDialogProject) return new Map<string, boolean>()
     const [y, m, d] = rReportWeekOf.split('-').map(Number)
@@ -790,7 +811,7 @@ export default function MyTasksPage() {
     const endDate = new Date(y, m - 1, d + 6)
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
     const map = new Map<string, boolean>()
-    for (const group of rDialogTaskGroups) {
+    for (const group of rActiveGroups) {
       for (const task of group.tasks) {
         const hasLogs = rReportDialogProject.taskLogs.some(
           l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd
@@ -799,7 +820,7 @@ export default function MyTasksPage() {
       }
     }
     return map
-  }, [rReportDialogProject, rReportWeekOf, rDialogTaskGroups])
+  }, [rReportDialogProject, rReportWeekOf, rActiveGroups])
 
   // Prefill R log rows when task or week changes
   useEffect(() => {
@@ -959,9 +980,29 @@ export default function MyTasksPage() {
         if (updated) setRReportDialogProject(updated)
       }
     } catch {
-      alert('提交失敗，請稍後再試')
+      setRErrorMsg('提交失敗，請稍後再試')
     } finally {
       setRSubmittingBatch(false)
+    }
+  }
+
+  // R 回報「此任務已完成／無後續」或取消回報。不改 status/progress，只設 reportedDoneAt。
+  const handleToggleReportedDone = async (taskId: string, done: boolean) => {
+    if (!rReportDialogProject || !user) return
+    setRTogglingDone(taskId)
+    try {
+      const res = await fetch(`/api/projects/${rReportDialogProject.id}/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportedDone: done, reportedDoneBy: user.name }),
+      })
+      if (!res.ok) throw new Error()
+      if (done) setRSelectedTaskId(null)
+      await refreshRReportData()
+    } catch {
+      setRErrorMsg('操作失敗，請稍後再試。若剛更新過系統，請重新整理頁面後再試一次。')
+    } finally {
+      setRTogglingDone(null)
     }
   }
 
@@ -1305,9 +1346,10 @@ export default function MyTasksPage() {
                 </thead>
                 <tbody>
                   {myReportProjects.map(project => {
-                    // Count user's assigned tasks (non-done milestones)
+                    // Count user's assigned tasks (non-done milestones).
+                    // 排除 A 已完成(completedAt) 與 R 已回報完成(reportedDoneAt) 的任務，才不會催填已完成的。
                     const activeMsIds = new Set(project.milestones.filter(m => m.status !== 'done').map(m => m.id))
-                    const myTasks = project.tasks.filter(t => t.assignee === user!.name && activeMsIds.has(t.milestoneId))
+                    const myTasks = project.tasks.filter(t => t.assignee === user!.name && activeMsIds.has(t.milestoneId) && !t.completedAt && !t.reportedDoneAt)
                     // Count tasks with logs this week
                     const [wy, wm, wd] = rReportWeekOf.split('-').map(Number)
                     const wkStart = rReportWeekOf
@@ -1838,6 +1880,17 @@ export default function MyTasksPage() {
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>紀錄已提交，請選擇下一步操作</span>
                           </div>
+
+                          {/* R 已回報完成、待 A 確認的提示（A 據此決定是否按下正式「標記完成」） */}
+                          {task.reportedDoneAt && !isCompleted && (
+                            <div className="flex items-start gap-2 p-2.5 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
+                              <UserCheck className="h-4 w-4 shrink-0 mt-0.5" />
+                              <div className="text-xs leading-relaxed">
+                                <span className="font-medium">{task.reportedDoneBy || '執行者'} 回報此任務已完成／無後續</span>
+                                （{new Date(task.reportedDoneAt).toLocaleDateString('zh-TW')}）。請確認是否按下「標記完成」正式結案。
+                              </div>
+                            </div>
+                          )}
 
                           <div className="grid grid-cols-2 gap-2">
                             <button
@@ -2451,10 +2504,33 @@ export default function MyTasksPage() {
                   })()}
                 </div>
 
+                {/* 待完成 / 完成區 分頁 */}
+                <div className="flex items-center gap-1 border-b">
+                  <button
+                    type="button"
+                    onClick={() => { setRDialogTab('active'); setRSelectedTaskId(null) }}
+                    className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
+                      rDialogTab === 'active' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                  >
+                    待完成
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRDialogTab('done'); setRSelectedTaskId(null) }}
+                    className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
+                      rDialogTab === 'done' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                  >
+                    完成區
+                    {rDoneCount > 0 && (
+                      <span className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{rDoneCount}</span>
+                    )}
+                  </button>
+                </div>
+
                 {/* 任務清單專屬捲動區：任務/群組再多也不會把整個彈窗撐長 */}
                 <div className="max-h-[48vh] overflow-y-auto pr-1">
-                {/* 單一欄位標題：開始/截止（sticky 於捲動區內，與任務列同寬，對齊不跑版） */}
-                {rDialogTaskGroups.length > 0 && (
+                {/* 單一欄位標題：開始/截止（僅待完成分頁；sticky 對齊任務列） */}
+                {rDialogTab === 'active' && rActiveGroups.length > 0 && (
                   <div className="sticky top-0 z-10 bg-background flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
                     <span className="flex-1" />
                     <span className="w-14 text-center shrink-0">開始</span>
@@ -2462,10 +2538,11 @@ export default function MyTasksPage() {
                     <span className="w-16 shrink-0" />
                   </div>
                 )}
-                {rDialogTaskGroups.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">本週沒有指派給你的進行中任務</p>
-                ) : (
-                  rDialogTaskGroups.map((group, gIdx) => (
+                {rDialogTab === 'active' ? (
+                  rActiveGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">目前沒有待完成、需填寫的任務</p>
+                  ) : (
+                  rActiveGroups.map((group, gIdx) => (
                     <div key={group.key} className={cn('space-y-1', gIdx > 0 && 'mt-3 pt-3 border-t border-border/40')}>
                       {/* 群組標頭：完整層級麵包屑 里程碑 › 父任務 › …（截止已改由各任務列呈現） */}
                       <div className="flex items-center gap-2 px-1">
@@ -2503,7 +2580,11 @@ export default function MyTasksPage() {
                                 {fmtMD(task.endDate)}
                               </span>
                               <span className="w-16 flex items-center justify-end gap-1 shrink-0">
-                                {hasLogs ? (
+                                {task.reportedDoneAt ? (
+                                  <Badge className="bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，待 A 確認">
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />已回報
+                                  </Badge>
+                                ) : hasLogs ? (
                                   <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已填
                                   </Badge>
@@ -2691,8 +2772,19 @@ export default function MyTasksPage() {
                                   />
                                 </div>
 
-                                {/* Submit */}
-                                <div className="flex justify-end">
+                                {/* R 回報完成（開確認視窗）+ 提交 */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+                                    disabled={rTogglingDone === task.id}
+                                    onClick={() => setRConfirmDone(task)}
+                                    title="告訴 A：此任務我已完成、之後不會再有進度，由 A 決定是否正式標記完成"
+                                  >
+                                    <CircleCheck className="h-3.5 w-3.5" />
+                                    回報完成（無後續）
+                                  </Button>
                                   <Button
                                     size="sm"
                                     className="gap-1.5 rounded-lg shadow-sm text-sm"
@@ -2713,6 +2805,52 @@ export default function MyTasksPage() {
                       })}
                     </div>
                   ))
+                  )
+                ) : (
+                  rDoneGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">目前沒有已完成／已回報的任務</p>
+                  ) : (
+                  rDoneGroups.map((group, gIdx) => (
+                    <div key={group.key} className={cn('space-y-1', gIdx > 0 && 'mt-3 pt-3 border-t border-border/40')}>
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-xs font-medium text-muted-foreground truncate">{group.pathLabel}</span>
+                      </div>
+                      {group.tasks.map(task => {
+                        const fmtMD = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+                        const aDone = !!task.completedAt
+                        return (
+                          <div key={task.id} className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-muted/20">
+                            <span className={cn('h-2 w-2 rounded-full shrink-0', aDone ? 'bg-green-500' : 'bg-amber-500')} />
+                            <span className="text-sm flex-1 truncate text-muted-foreground">{task.title}</span>
+                            <span className="text-xs tabular-nums text-muted-foreground/70 shrink-0">{fmtMD(task.startDate)} → {fmtMD(task.endDate)}</span>
+                            {aDone ? (
+                              <Badge className="bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 標記完成` : undefined}>
+                                <Check className="h-2.5 w-2.5 mr-0.5" />A 已完成
+                              </Badge>
+                            ) : (
+                              <span className="flex items-center gap-1 shrink-0">
+                                <Badge className="bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="R 回報完成，待 A 確認">
+                                  <Check className="h-2.5 w-2.5 mr-0.5" />R 回報完成
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-1.5 text-[11px] text-muted-foreground gap-1"
+                                  disabled={rTogglingDone === task.id}
+                                  onClick={() => handleToggleReportedDone(task.id, false)}
+                                  title="取消回報，任務回到待完成"
+                                >
+                                  {rTogglingDone === task.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                                  取消回報
+                                </Button>
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))
+                  )
                 )}
                 </div>
               </div>
@@ -2720,6 +2858,43 @@ export default function MyTasksPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* R 回報完成 確認視窗 */}
+      <AlertDialog open={!!rConfirmDone} onOpenChange={(open) => { if (!open) setRConfirmDone(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>回報此任務已完成、無後續？</AlertDialogTitle>
+            <AlertDialogDescription>
+              任務「{rConfirmDone?.title}」將移到「完成區」，並通知 A 確認。
+              <br />
+              <span className="text-amber-600 dark:text-amber-400 font-medium">回報後你將無法再編輯此任務的週報</span>
+              （如需修改可在完成區按「取消回報」還原）。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 focus:ring-amber-600"
+              onClick={() => { const t = rConfirmDone; setRConfirmDone(null); if (t) handleToggleReportedDone(t.id, true) }}
+            >
+              確定回報完成
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 週報操作錯誤提示（取代 window.alert） */}
+      <AlertDialog open={!!rErrorMsg} onOpenChange={(open) => { if (!open) setRErrorMsg(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>操作未成功</AlertDialogTitle>
+            <AlertDialogDescription>{rErrorMsg}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setRErrorMsg(null)}>我知道了</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── A Tab: R Member Reports Dialog ── */}
       <Dialog open={aRReportDialogOpen} onOpenChange={(open) => {

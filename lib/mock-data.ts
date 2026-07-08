@@ -143,6 +143,9 @@ export interface Task {
   progress: number
   completedAt?: string
   completedBy?: string
+  // R 自我回報「已完成/無後續」（≠ A 的 completedAt 正式完成）
+  reportedDoneAt?: string | null
+  reportedDoneBy?: string | null
   originalStartDate?: string
   originalEndDate?: string
   parentId?: string | null

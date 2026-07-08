@@ -24,6 +24,9 @@ interface UpdateTaskBody {
   completedAt?: string
   completedBy?: string
   manualDates?: boolean
+  // R 自我回報「已完成/無後續」：true=設定、false=取消（與 completedAt 正式完成獨立）
+  reportedDone?: boolean
+  reportedDoneBy?: string
 }
 
 export async function PUT(
@@ -75,6 +78,16 @@ export async function PUT(
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
     if (body.durationDays !== undefined) data.durationDays = body.durationDays
     if (body.manualDates !== undefined) data.manualDates = body.manualDates
+    // R 自我回報完成/取消回報（不影響 status/progress，也不觸發里程碑同步）
+    if (body.reportedDone !== undefined) {
+      if (body.reportedDone) {
+        data.reportedDoneAt = new Date()
+        data.reportedDoneBy = body.reportedDoneBy || null
+      } else {
+        data.reportedDoneAt = null
+        data.reportedDoneBy = null
+      }
+    }
 
     // When dates or duration are manually changed, clear stale original dates
     // (set by delay approval) so the Gantt chart no longer shows phantom extensions
@@ -184,6 +197,8 @@ export async function PUT(
         parentStatus: updatedParent.status,
         ...(updated.completedAt ? { completedAt: updated.completedAt.toISOString().slice(0, 10) } : {}),
         ...(updated.completedBy ? { completedBy: updated.completedBy } : {}),
+        reportedDoneAt: updated.reportedDoneAt ? updated.reportedDoneAt.toISOString().slice(0, 10) : null,
+        reportedDoneBy: updated.reportedDoneBy || null,
       })
     }
 
@@ -203,6 +218,8 @@ export async function PUT(
       parentId: updated.parentId || null,
       ...(updated.completedAt ? { completedAt: updated.completedAt.toISOString().slice(0, 10) } : {}),
       ...(updated.completedBy ? { completedBy: updated.completedBy } : {}),
+      reportedDoneAt: updated.reportedDoneAt ? updated.reportedDoneAt.toISOString().slice(0, 10) : null,
+      reportedDoneBy: updated.reportedDoneBy || null,
     })
   } catch (error) {
     console.error('Failed to update task:', error)

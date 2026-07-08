@@ -138,6 +138,8 @@ export async function GET(request: NextRequest) {
           dependencies: (t.dependsOn || []).map(d => d.prerequisiteId),
           progress: t.progress,
           parentId: t.parentId || null,
+          reportedDoneAt: t.reportedDoneAt ? t.reportedDoneAt.toISOString().split('T')[0] : null,
+          reportedDoneBy: t.reportedDoneBy || null,
           subtasks: ((t as Record<string, unknown>).children as Array<Record<string, unknown>> || []).map((c: Record<string, unknown>) => ({
             id: c.id,
             title: c.title,
