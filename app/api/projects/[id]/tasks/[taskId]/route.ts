@@ -27,6 +27,9 @@ interface UpdateTaskBody {
   // R 自我回報「已完成/無後續」：true=設定、false=取消（與 completedAt 正式完成獨立）
   reportedDone?: boolean
   reportedDoneBy?: string
+  // 審視歷程事件：reported(R回報) | cancelled(R取消) | confirmed(A確認) | rejected(A退回)
+  reviewEvent?: 'reported' | 'cancelled' | 'confirmed' | 'rejected'
+  reviewActor?: string
 }
 
 export async function PUT(
@@ -123,6 +126,13 @@ export async function PUT(
       where: { id: taskId },
       data,
     })
+
+    // 審視歷程：記錄 R 回報/取消、A 確認/退回，供追蹤
+    if (body.reviewEvent) {
+      await prisma.taskReviewEvent.create({
+        data: { taskId, projectId: id, type: body.reviewEvent, actor: body.reviewActor || '' },
+      })
+    }
 
     // ── Notify new assignee when assignee changes ──
     const newAssignee = data.assignee as string | undefined

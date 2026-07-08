@@ -133,8 +133,20 @@ interface MyTasksProject {
   milestones: { id: string; name: string; dueDate: string; status: string; progress: number; sortOrder?: number }[]
   tasks: Task[]
   taskLogs: TaskLog[]
+  reviewEvents?: RReviewEvent[]
   pendingDelayMilestoneIds?: string[]
   pendingDelayProposedDates?: Record<string, string>
+}
+
+// 任務審視歷程事件
+type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; createdAt: string }
+
+// 審視事件顯示樣式
+const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
+  reported: { label: 'R 回報完成', cls: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400' },
+  cancelled: { label: 'R 取消回報', cls: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400' },
+  confirmed: { label: 'A 確認完成', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
+  rejected: { label: 'A 退回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
 }
 
 export default function MyTasksPage() {
@@ -213,9 +225,11 @@ export default function MyTasksPage() {
   const [rLogNextWeekPlan, setRLogNextWeekPlan] = useState('')
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
   const [rTogglingDone, setRTogglingDone] = useState<string | null>(null)
-  const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'done'>('active')
+  const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'done' | 'history'>('active')
   // 回報完成前的確認視窗（按下後 R 不能再編輯此任務週報）
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
+  // 取消回報前的確認視窗（A 正在確認中，避免任務跳來跳去讓 A 困惑）
+  const [rConfirmCancel, setRConfirmCancel] = useState<Task | null>(null)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -816,6 +830,15 @@ export default function MyTasksPage() {
   const rPendingCount = useMemo(() => rPendingGroups.reduce((n, g) => n + g.tasks.length, 0), [rPendingGroups])
   const rDoneCount = useMemo(() => rDoneGroups.reduce((n, g) => n + g.tasks.length, 0), [rDoneGroups])
 
+  // 審視歷程：本專案中指派給我的任務之回報/確認事件，新到舊
+  const rReviewEvents = useMemo(() => {
+    if (!rReportDialogProject || !user) return [] as RReviewEvent[]
+    return (rReportDialogProject.reviewEvents || [])
+      .filter(e => e.assignee === user.name)
+      .slice()
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }, [rReportDialogProject, user])
+
   // 本週（週一）字串，用來判斷選到的週別是否為當週（過去/未來週預設唯讀）
   const rCurrentMonday = useMemo(() => {
     const now = new Date()
@@ -1023,7 +1046,12 @@ export default function MyTasksPage() {
       const res = await fetch(`/api/projects/${rReportDialogProject.id}/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportedDone: done, reportedDoneBy: user.name }),
+        body: JSON.stringify({
+          reportedDone: done,
+          reportedDoneBy: user.name,
+          reviewEvent: done ? 'reported' : 'cancelled',
+          reviewActor: user.name,
+        }),
       })
       if (!res.ok) throw new Error()
       if (done) setRSelectedTaskId(null)
@@ -1180,7 +1208,7 @@ export default function MyTasksPage() {
       const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'done' as const, progress: 100, completedBy: user.name }),
+        body: JSON.stringify({ status: 'done' as const, progress: 100, completedBy: user.name, reviewEvent: 'confirmed', reviewActor: user.name }),
       })
       if (!res.ok) throw new Error()
       // Optimistic update
@@ -1237,7 +1265,7 @@ export default function MyTasksPage() {
       const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportedDone: false }),
+        body: JSON.stringify({ reportedDone: false, reviewEvent: 'rejected', reviewActor: user.name }),
       })
       if (!res.ok) throw new Error()
       setApiProjects(prev => prev.map(p =>
@@ -2599,6 +2627,15 @@ export default function MyTasksPage() {
                       <span className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{rDoneCount}</span>
                     )}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRDialogTab('history'); setRSelectedTaskId(null) }}
+                    className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
+                      rDialogTab === 'history' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                    title="任務回報／確認／退回的歷程紀錄"
+                  >
+                    審視歷程
+                  </button>
                 </div>
 
                 {/* 任務清單專屬捲動區：任務/群組再多也不會把整個彈窗撐長 */}
@@ -2907,6 +2944,43 @@ export default function MyTasksPage() {
                     </div>
                   ))
                   )
+                ) : rDialogTab === 'history' ? (
+                  rReviewEvents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">目前沒有審視歷程</p>
+                  ) : (
+                    <div className="rounded-lg border border-border/60 overflow-hidden">
+                      <div className="max-h-[300px] overflow-y-auto">
+                        <table className="w-full text-xs border-collapse">
+                          <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
+                            <tr className="text-muted-foreground">
+                              <th className="text-left font-medium px-2 py-1.5 w-[96px] border-b">時間</th>
+                              <th className="text-left font-medium px-2 py-1.5 border-b">任務</th>
+                              <th className="text-left font-medium px-2 py-1.5 w-[92px] border-b">事件</th>
+                              <th className="text-left font-medium px-2 py-1.5 w-[76px] border-b">操作人</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rReviewEvents.map(ev => {
+                              const meta = REVIEW_EVENT_META[ev.type] || { label: ev.type, cls: 'bg-muted text-muted-foreground border-border' }
+                              const d = new Date(ev.createdAt)
+                              return (
+                                <tr key={ev.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                                  <td className="px-2 py-1.5 text-muted-foreground/80 whitespace-nowrap tabular-nums">
+                                    {d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-foreground/85 break-words">{ev.taskTitle}</td>
+                                  <td className="px-2 py-1.5">
+                                    <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', meta.cls)}>{meta.label}</Badge>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
@@ -2952,7 +3026,7 @@ export default function MyTasksPage() {
                                     variant="ghost"
                                     className="h-6 px-1.5 text-[11px] text-muted-foreground gap-1"
                                     disabled={rTogglingDone === task.id}
-                                    onClick={(e) => { e.stopPropagation(); handleToggleReportedDone(task.id, false) }}
+                                    onClick={(e) => { e.stopPropagation(); setRConfirmCancel(task) }}
                                     title="取消回報，任務回到待完成"
                                   >
                                     {rTogglingDone === task.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
@@ -2963,24 +3037,64 @@ export default function MyTasksPage() {
                               <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform', expanded && 'rotate-180')} />
                             </div>
                             {expanded && (
-                              <div className="mt-1 ml-4 border-l-2 border-border/40 pl-3 space-y-2 py-1.5">
+                              <div className="mt-1.5 rounded-lg border border-border/60 overflow-hidden">
                                 {logs.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground/60">尚無工作紀錄</p>
-                                ) : logs.map(l => (
-                                  <div key={l.id} className="text-xs">
-                                    <div className="flex items-center gap-1.5 text-muted-foreground/70 flex-wrap">
-                                      <span className="tabular-nums">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                                      <span>·</span>
-                                      <span>{l.author}</span>
-                                      {l.lastEditedBy && (
-                                        <span className="text-[10px] text-muted-foreground/60" title={l.updatedAt ? new Date(l.updatedAt).toLocaleString('zh-TW') : undefined}>
-                                          （最後編輯：{l.lastEditedBy}）
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-foreground/80 whitespace-pre-wrap">{l.content}</div>
+                                  <p className="text-xs text-muted-foreground/60 px-3 py-3 text-center">尚無工作紀錄</p>
+                                ) : (
+                                  <div className="max-h-[220px] overflow-y-auto">
+                                    <table className="w-full text-xs border-collapse">
+                                      <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
+                                        <tr className="text-muted-foreground">
+                                          <th className="text-left font-medium px-2 py-1.5 w-[60px] border-b">日期</th>
+                                          <th className="text-left font-medium px-2 py-1.5 w-[80px] border-b">填寫人</th>
+                                          <th className="text-left font-medium px-2 py-1.5 border-b">工作內容</th>
+                                          <th className="text-center font-medium px-2 py-1.5 w-[48px] border-b">附件</th>
+                                          <th className="text-left font-medium px-2 py-1.5 w-[88px] border-b">最後編輯</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {logs.map(l => (
+                                          <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                                            <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
+                                            <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.author}</td>
+                                            <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
+                                            <td className="px-2 py-1.5 text-center">
+                                              {l.attachments && l.attachments.length > 0 ? (
+                                                <Popover>
+                                                  <PopoverTrigger asChild>
+                                                    <button
+                                                      onClick={(e) => e.stopPropagation()}
+                                                      className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:bg-primary/10 rounded px-1.5 py-0.5"
+                                                      title="查看附件"
+                                                    >
+                                                      <Paperclip className="h-3 w-3" />{l.attachments.length}
+                                                    </button>
+                                                  </PopoverTrigger>
+                                                  <PopoverContent align="end" className="w-64 p-2" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">附件（{l.attachments.length}）</div>
+                                                    <div className="space-y-0.5 max-h-[220px] overflow-y-auto">
+                                                      {l.attachments.map((att, ai) => (
+                                                        <a key={ai} href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                                                          {att.type === 'image'
+                                                            ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" />
+                                                            : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
+                                                          <span className="truncate flex-1">{att.name}</span>
+                                                        </a>
+                                                      ))}
+                                                    </div>
+                                                  </PopoverContent>
+                                                </Popover>
+                                              ) : <span className="text-muted-foreground/30">—</span>}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-[10px] text-muted-foreground/70 whitespace-nowrap" title={l.updatedAt ? new Date(l.updatedAt).toLocaleString('zh-TW') : undefined}>
+                                              {l.lastEditedBy || '—'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   </div>
-                                ))}
+                                )}
                               </div>
                             )}
                           </div>
@@ -3016,6 +3130,30 @@ export default function MyTasksPage() {
               onClick={() => { const t = rConfirmDone; setRConfirmDone(null); if (t) handleToggleReportedDone(t.id, true) }}
             >
               確定回報完成
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* R 取消回報 確認視窗（A 確認中，避免任務跳來跳去讓 A 困惑） */}
+      <AlertDialog open={!!rConfirmCancel} onOpenChange={(open) => { if (!open) setRConfirmCancel(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>取消回報、把任務收回？</AlertDialogTitle>
+            <AlertDialogDescription>
+              任務「{rConfirmCancel?.title}」目前正等待 A 確認。取消後它會退出「A 確認中」、回到你的「待完成」，
+              <br />
+              <span className="text-amber-600 dark:text-amber-400 font-medium">A 那邊就不會再看到這筆待確認</span>
+              。若 A 可能正在審視，建議先與 A 溝通再取消，以免對方困惑。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>先不要</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 focus:ring-amber-600"
+              onClick={() => { const t = rConfirmCancel; setRConfirmCancel(null); if (t) handleToggleReportedDone(t.id, false) }}
+            >
+              確定取消回報
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

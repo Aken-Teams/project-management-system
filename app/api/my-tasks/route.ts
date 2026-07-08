@@ -63,6 +63,10 @@ export async function GET(request: NextRequest) {
               select: { id: true, title: true, status: true, progress: true, assignee: true, startDate: true, endDate: true, priority: true, durationDays: true, completedAt: true, completedBy: true },
               orderBy: { sortOrder: 'asc' },
             },
+            reviewEvents: {
+              orderBy: { createdAt: 'desc' },
+              select: { id: true, type: true, actor: true, createdAt: true },
+            },
           },
           orderBy: { sortOrder: 'asc' },
         },
@@ -170,6 +174,17 @@ export async function GET(request: NextRequest) {
           ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
           ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
         })),
+        reviewEvents: p.tasks.flatMap(t =>
+          ((t as Record<string, unknown>).reviewEvents as Array<{ id: string; type: string; actor: string; createdAt: Date }> || []).map(e => ({
+            id: e.id,
+            taskId: t.id,
+            taskTitle: t.title,
+            assignee: t.assignee,
+            type: e.type,
+            actor: e.actor,
+            createdAt: e.createdAt.toISOString(),
+          }))
+        ),
         pendingDelayMilestoneIds: [
           ...new Set(
             p.delayRequests.flatMap(dr => dr.affectedMilestones.map(am => am.milestoneId))

@@ -296,6 +296,7 @@ model Task {
 
   taskLogs      TaskLog[]
   delayRequests DelayRequest[]
+  reviewEvents  TaskReviewEvent[]
 
   @@index([projectId, milestoneId, sortOrder])
   @@index([assignee])
@@ -336,6 +337,22 @@ model TaskLog {
   @@index([taskId])
   @@index([projectId])
   @@map("task_logs")
+}
+
+// 任務審視歷程（輕量軌跡）：R 回報/取消、A 確認/退回，讓 A 可追蹤狀態變化。
+model TaskReviewEvent {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  projectId String   @map("project_id")
+  type      String   // reported(R回報) | cancelled(R取消) | confirmed(A確認完成) | rejected(A退回)
+  actor     String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([projectId])
+  @@map("task_review_events")
 }
 
 model Risk {
