@@ -866,8 +866,10 @@ export default function MyTasksPage() {
       // 待完成：R 從「被指派那刻」起才看到 → 指派日 <= 該週結束日（與任務起訖無關）。
       // assignedAt 若缺（舊資料）則照舊顯示，不誤藏。
       rActiveGroups: build(t => !t.completedAt && !t.reportedDoneAt && (!t.assignedAt || t.assignedAt <= weekEnd), false),
-      rPendingGroups: build(t => !!t.reportedDoneAt && !t.completedAt, true),
-      rDoneGroups: build(t => !!t.completedAt, true),
+      // 待確認：已回報、A 還沒審（未審核、未完成）
+      rPendingGroups: build(t => !!t.reportedDoneAt && !t.completedAt && !t.reviewedAt, true),
+      // 完成區：A 已審核通過 或 A 已標記 100% 完成
+      rDoneGroups: build(t => !!t.completedAt || !!t.reviewedAt, true),
     }
   }, [rReportDialogProject, user, rReportWeekOf])
 
@@ -1097,9 +1099,9 @@ export default function MyTasksPage() {
 
   // 回報狀態徽章：區分「已回報完成（送 A 審核）」與「只是填了工作紀錄、還沒回報」
   const renderReviewStatus = (reported: boolean, reviewed: boolean): React.ReactNode => {
-    if (reviewed) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已審核</Badge>
-    if (reported) return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 shrink-0">已回報待審</Badge>
-    return <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/70 shrink-0">未回報</Badge>
+    if (reviewed) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已審核</Badge>
+    if (reported) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 shrink-0">已回報待審</Badge>
+    return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/70 shrink-0">未回報</Badge>
   }
 
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）
@@ -3380,21 +3382,21 @@ export default function MyTasksPage() {
                               })}
                               className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
                             >
-                              <span className={cn('h-2 w-2 rounded-full shrink-0', aDone ? 'bg-green-500' : 'bg-amber-500')} />
+                              <span className={cn('h-2 w-2 rounded-full shrink-0', (aDone || task.reviewedAt) ? 'bg-green-500' : 'bg-amber-500')} />
                               <span className="text-sm flex-1 truncate text-muted-foreground">{task.title}</span>
                               <span className="text-xs tabular-nums text-muted-foreground/70 shrink-0">{fmtMD(task.startDate)} → {fmtMD(task.endDate)}</span>
                               {aDone ? (
-                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 確認完成` : undefined}>
-                                  <Check className="h-2.5 w-2.5 mr-0.5" />已完成
+                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[11px] px-1.5 py-0.5 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 確認完成` : undefined}>
+                                  <Check className="h-3 w-3 mr-0.5" />已完成
                                 </Badge>
                               ) : task.reviewedAt ? (
-                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title="當責已審核通過你的回報（是否算完成由當責在報告中決定）">
-                                  <Check className="h-2.5 w-2.5 mr-0.5" />已審核通過
+                                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[11px] px-1.5 py-0.5 shrink-0" title="當責已審核通過你的回報（是否算完成由當責在報告中決定）">
+                                  <Check className="h-3 w-3 mr-0.5" />已審核通過
                                 </Badge>
                               ) : (
                                 <span className="flex items-center gap-1 shrink-0">
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0" title="已回報完成，等待確認">
-                                    <Check className="h-2.5 w-2.5 mr-0.5" />待確認
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[11px] px-1.5 py-0.5" title="已回報完成，等待確認">
+                                    <Check className="h-3 w-3 mr-0.5" />待確認
                                   </Badge>
                                   <Button
                                     size="sm"
@@ -3962,10 +3964,10 @@ export default function MyTasksPage() {
                                       {renderReviewStatus(ti.reported, ti.reviewed)}
                                       {ti.active ? (
                                         ti.filled
-                                          ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
-                                          : <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
+                                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
+                                          : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
                                       ) : (
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
+                                        <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
                                           非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
                                         </Badge>
                                       )}
