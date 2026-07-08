@@ -38,6 +38,9 @@ interface MilestoneTaskViewProps {
   readOnly?: boolean
 }
 
+// 暫時隱藏「列表檢視」，只留甘特圖。改回 true 即可恢復。
+const SHOW_LIST_VIEW = false
+
 export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: MilestoneTaskViewProps) {
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
@@ -107,23 +110,74 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
 
   const hasFilters = statusFilter.size > 0 || assigneeFilter.size > 0
 
-  // Filter tasks (exclude subtasks — they display under their parent)
-  const filteredTasks = useMemo(() => {
-    return project.tasks.filter(task => {
-      if (task.parentId) return false
-      const es = task.progress >= 100 ? 'done' : task.status
-      if (statusFilter.size > 0 && !statusFilter.has(es as TaskStatus)) return false
-      if (assigneeFilter.size > 0 && !assigneeFilter.has(task.assignee)) return false
-      return true
-    })
-  }, [project.tasks, statusFilter, assigneeFilter])
+  // Does a single task match the current status / assignee filters?
+  const taskMatchesFilter = (task: Task) => {
+    const es = task.progress >= 100 ? 'done' : task.status
+    if (statusFilter.size > 0 && !statusFilter.has(es as TaskStatus)) return false
+    if (assigneeFilter.size > 0 && !assigneeFilter.has(task.assignee)) return false
+    return true
+  }
 
-  // For Gantt chart: filtered parent tasks + their subtasks
+  // ADR-02: filtering must drill through all 6 levels.
+  // Keep a task if it matches, OR any of its descendants matches — so the
+  // whole ancestor path down to a deep match stays visible.
+  // Returns null when no filter is active (= keep everything).
+  const keptTaskIds = useMemo<Set<string> | null>(() => {
+    if (!hasFilters) return null
+    const childrenOf = new Map<string, Task[]>()
+    for (const t of project.tasks) {
+      if (t.parentId) {
+        const arr = childrenOf.get(t.parentId)
+        if (arr) arr.push(t)
+        else childrenOf.set(t.parentId, [t])
+      }
+    }
+    const kept = new Set<string>()
+    const visit = (task: Task): boolean => {
+      let anyChildKept = false
+      for (const c of childrenOf.get(task.id) || []) {
+        if (visit(c)) anyChildKept = true
+      }
+      if (taskMatchesFilter(task) || anyChildKept) {
+        kept.add(task.id)
+        return true
+      }
+      return false
+    }
+    for (const t of project.tasks) {
+      if (!t.parentId) visit(t)
+    }
+    return kept
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.tasks, statusFilter, assigneeFilter, hasFilters])
+
+  // Count of tasks (any level) that actually match — for the "X/Y 任務" label.
+  const matchedCount = useMemo(() => {
+    if (!hasFilters) return project.tasks.length
+    return project.tasks.filter(taskMatchesFilter).length
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.tasks, statusFilter, assigneeFilter, hasFilters])
+
+  // Top-level kept tasks (for list view + per-milestone grouping).
+  const filteredTasks = useMemo(() => {
+    return project.tasks.filter(t => !t.parentId && (!keptTaskIds || keptTaskIds.has(t.id)))
+  }, [project.tasks, keptTaskIds])
+
+  // For Gantt chart: every kept task at any depth (matches + their ancestors).
   const ganttFilteredTasks = useMemo(() => {
-    if (!hasFilters) return project.tasks
-    const parentIds = new Set(filteredTasks.map(t => t.id))
-    return project.tasks.filter(t => parentIds.has(t.id) || (t.parentId && parentIds.has(t.parentId)))
-  }, [project.tasks, filteredTasks, hasFilters])
+    if (!keptTaskIds) return project.tasks
+    return project.tasks.filter(t => keptTaskIds.has(t.id))
+  }, [project.tasks, keptTaskIds])
+
+  // For Gantt chart: only milestones that still contain a kept task.
+  const ganttFilteredMilestones = useMemo(() => {
+    if (!keptTaskIds) return project.milestones
+    const msWithKept = new Set<string>()
+    for (const t of project.tasks) {
+      if (keptTaskIds.has(t.id) && t.milestoneId) msWithKept.add(t.milestoneId)
+    }
+    return project.milestones.filter(m => msWithKept.has(m.id))
+  }, [project.milestones, project.tasks, keptTaskIds])
 
   const tasksByMilestone = useMemo(() => {
     const map = new Map<string, Task[]>()
@@ -265,32 +319,96 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
     { value: 'blocked', label: '受阻', color: 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' },
   ]
 
+  // ADR-02: recursively render a task and its descendants (up to 6 levels) in list view.
+  const listCols = readOnly
+    ? 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px]'
+    : 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px_60px]'
+  const renderListTask = (task: Task, depth: number): React.ReactNode => {
+    const overdue = isTaskOverdue(task)
+    const children = project.tasks.filter(t => t.parentId === task.id)
+    return (
+      <div key={task.id}>
+        <div
+          onClick={() => handleTaskClick(task)}
+          className={cn(`grid ${listCols} gap-3 items-center px-3 ${depth === 0 ? 'py-2.5' : 'py-2'} cursor-pointer hover:bg-muted/50 transition-colors rounded-sm`, overdue && 'bg-destructive/5')}
+        >
+          <div className="flex items-center gap-1.5 min-w-0" style={{ paddingLeft: `${depth * 20}px` }}>
+            {depth > 0 && <span className="text-muted-foreground/30 text-xs select-none">└</span>}
+            {overdue && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+            <span className={cn('text-sm truncate', effectiveStatus(task) === 'done' && 'text-muted-foreground')}>{task.title}</span>
+            {children.length > 0 && (
+              <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                {children.filter(s => s.progress >= 100 || s.status === 'done').length}/{children.length}
+              </span>
+            )}
+          </div>
+          <div>{getStatusBadge(displayStatus(task))}</div>
+          <div className="flex items-center gap-1.5">
+            <Progress value={task.progress} className="h-1.5 flex-1" />
+            <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{task.progress}%</span>
+          </div>
+          <div className="flex justify-center">{getPriorityBadge(task.priority)}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {task.assignee ? (
+              <>
+                <Avatar className="h-6 w-6 shrink-0">
+                  <AvatarFallback className={cn('text-[9px] text-white', getAvatarColor(task.assignee))}>
+                    {task.assignee.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm truncate text-muted-foreground">{task.assignee}</span>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground/50">—</span>
+            )}
+          </div>
+          <div className={cn('text-sm text-right', overdue ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+            {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
+          </div>
+          {!readOnly && (
+            <div className="flex justify-center">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleTaskClick(task) }}
+                className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+              >
+                詳細
+              </button>
+            </div>
+          )}
+        </div>
+        {children.map(c => renderListTask(c, depth + 1))}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* View toggle + Filters */}
       <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border bg-muted/30 px-4 py-3">
         <div className="flex items-center gap-3 flex-wrap">
-          {/* View toggle */}
-          <div className="flex items-center gap-1 rounded-lg border p-1">
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              className="gap-2 h-8"
-              onClick={() => setViewMode('list')}
-            >
-              <LayoutList className="h-4 w-4" />
-              列表檢視
-            </Button>
-            <Button
-              variant={viewMode === 'gantt' ? 'default' : 'ghost'}
-              size="sm"
-              className="gap-2 h-8"
-              onClick={() => setViewMode('gantt')}
-            >
-              <GanttIcon className="h-4 w-4" />
-              甘特圖
-            </Button>
-          </div>
+          {/* View toggle — 列表檢視暫時隱藏，只留甘特圖 */}
+          {SHOW_LIST_VIEW && (
+            <div className="flex items-center gap-1 rounded-lg border p-1">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                className="gap-2 h-8"
+                onClick={() => setViewMode('list')}
+              >
+                <LayoutList className="h-4 w-4" />
+                列表檢視
+              </Button>
+              <Button
+                variant={viewMode === 'gantt' ? 'default' : 'ghost'}
+                size="sm"
+                className="gap-2 h-8"
+                onClick={() => setViewMode('gantt')}
+              >
+                <GanttIcon className="h-4 w-4" />
+                甘特圖
+              </Button>
+            </div>
+          )}
 
           {/* Status filter */}
           <div className="flex items-center gap-1.5">
@@ -311,25 +429,23 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
             ))}
           </div>
 
-          {/* Assignee filter */}
+          {/* Assignee filter — same pill size as the status filters */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 className={cn(
-                  'h-7 text-sm gap-1.5',
-                  assigneeFilter.size > 0 && 'border-primary text-primary',
+                  'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-all',
+                  assigneeFilter.size > 0
+                    ? 'bg-primary/10 text-primary border-primary/40 ring-1 ring-offset-1 ring-primary/40 font-medium'
+                    : 'bg-background text-muted-foreground border-border hover:bg-muted',
                 )}
               >
-                <Users className="h-3.5 w-3.5" />
+                <Users className="h-3 w-3" />
                 負責人
                 {assigneeFilter.size > 0 && (
-                  <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-0.5">
-                    {assigneeFilter.size}
-                  </Badge>
+                  <span className="ml-0.5 tabular-nums">{assigneeFilter.size}</span>
                 )}
-              </Button>
+              </button>
             </PopoverTrigger>
             <PopoverContent className="w-48 p-2" align="start">
               <div className="space-y-1 max-h-[240px] overflow-y-auto">
@@ -366,7 +482,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {hasFilters && (
             <span className="text-sm">
-              {filteredTasks.length}/{project.tasks.length} 任務
+              {matchedCount}/{project.tasks.length} 任務
             </span>
           )}
           <span className="text-sm">
@@ -457,7 +573,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
       {viewMode === 'gantt' ? (
         <GanttChart
           tasks={ganttFilteredTasks}
-          milestones={project.milestones}
+          milestones={ganttFilteredMilestones}
           startDate={project.startDate}
           endDate={project.endDate}
           onTaskClick={handleTaskClick}
@@ -558,131 +674,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                               <span className="text-right">截止日</span>
                               {!readOnly && <span className="text-center">查看</span>}
                             </div>
-                            {tasks.map(task => {
-                              const overdue = isTaskOverdue(task)
-                              const subtasks = project.tasks.filter(t => t.parentId === task.id)
-                              return (
-                                <div key={task.id}>
-                                  <div
-                                    onClick={() => handleTaskClick(task)}
-                                    className={cn(
-                                      `grid ${readOnly ? 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px]' : 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px_60px]'} gap-3 items-center px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm`,
-                                      overdue && 'bg-destructive/5',
-                                    )}
-                                  >
-                                    {/* Title + overdue indicator */}
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      {overdue && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
-                                      <span className={cn(
-                                        'text-sm truncate',
-                                        effectiveStatus(task) === 'done' && 'text-muted-foreground',
-                                      )}>{task.title}</span>
-                                      {subtasks.length > 0 && (
-                                        <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
-                                          {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {/* Status */}
-                                    <div>{getStatusBadge(displayStatus(task))}</div>
-                                    {/* Progress */}
-                                    <div className="flex items-center gap-1.5">
-                                      <Progress value={task.progress} className="h-1.5 flex-1" />
-                                      <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{task.progress}%</span>
-                                    </div>
-                                    {/* Priority */}
-                                    <div className="flex justify-center">{getPriorityBadge(task.priority)}</div>
-                                    {/* Assignee */}
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <Avatar className="h-6 w-6 shrink-0">
-                                        <AvatarFallback className={cn('text-[9px] text-white', getAvatarColor(task.assignee))}>
-                                          {task.assignee.split(' ').map(n => n[0]).join('')}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <span className="text-sm truncate text-muted-foreground">{task.assignee}</span>
-                                    </div>
-                                    {/* Due date */}
-                                    <div className={cn(
-                                      'text-sm text-right',
-                                      overdue ? 'text-destructive font-medium' : 'text-muted-foreground',
-                                    )}>
-                                      {new Date(task.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
-                                    </div>
-                                    {/* View detail */}
-                                    {!readOnly && (
-                                    <div className="flex justify-center">
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); handleTaskClick(task) }}
-                                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
-                                      >
-                                        詳細
-                                      </button>
-                                    </div>
-                                    )}
-                                  </div>
-                                  {/* Subtask rows — indented */}
-                                  {subtasks.map(sub => {
-                                    const subOverdue = isTaskOverdue(sub)
-                                    return (
-                                      <div
-                                        key={sub.id}
-                                        onClick={() => handleTaskClick(sub)}
-                                        className={cn(
-                                          `grid ${readOnly ? 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px]' : 'grid-cols-[minmax(0,1fr)_80px_85px_52px_120px_90px_60px]'} gap-3 items-center px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-sm`,
-                                          subOverdue && 'bg-destructive/5',
-                                        )}
-                                      >
-                                        <div className="flex items-center gap-1.5 min-w-0 pl-5">
-                                          <span className="text-muted-foreground/30 text-xs select-none">└</span>
-                                          {subOverdue && <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
-                                          <span className={cn(
-                                            'text-sm truncate',
-                                            effectiveStatus(sub) === 'done' && 'text-muted-foreground',
-                                          )}>{sub.title}</span>
-                                        </div>
-                                        <div>{getStatusBadge(displayStatus(sub))}</div>
-                                        <div className="flex items-center gap-1.5">
-                                          <Progress value={sub.progress} className="h-1.5 flex-1" />
-                                          <span className="text-xs text-muted-foreground tabular-nums w-8 text-right">{sub.progress}%</span>
-                                        </div>
-                                        <div className="flex justify-center">{getPriorityBadge(sub.priority)}</div>
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          {sub.assignee ? (
-                                            <>
-                                              <Avatar className="h-5 w-5 shrink-0">
-                                                <AvatarFallback className={cn('text-[8px] text-white', getAvatarColor(sub.assignee))}>
-                                                  {sub.assignee.split(' ').map(n => n[0]).join('')}
-                                                </AvatarFallback>
-                                              </Avatar>
-                                              <span className="text-xs truncate text-muted-foreground">{sub.assignee}</span>
-                                            </>
-                                          ) : (
-                                            <span className="text-xs text-muted-foreground/50">—</span>
-                                          )}
-                                        </div>
-                                        <div className={cn(
-                                          'text-sm text-right',
-                                          subOverdue ? 'text-destructive font-medium' : 'text-muted-foreground',
-                                        )}>
-                                          {new Date(sub.endDate).toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })}
-                                        </div>
-                                        {/* View detail */}
-                                        {!readOnly && (
-                                        <div className="flex justify-center">
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); handleTaskClick(sub) }}
-                                            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
-                                          >
-                                            詳細
-                                          </button>
-                                        </div>
-                                        )}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )
-                            })}
+                            {tasks.map(task => renderListTask(task, 0))}
                           </div>
                         )}
                       </div>
