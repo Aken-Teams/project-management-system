@@ -270,6 +270,9 @@ model Task {
   durationDays   Int        @default(0) @map("duration_days")
   progress       Int        @default(0)
   sortOrder      Int        @default(0) @map("sort_order")
+  // 指派時刻：R 從「被 A 指派的那一刻」起才在週報看到此任務（與任務起訖無關）。
+  // 重新指派給別人時會更新為當下；預設 now() 讓新任務與現有任務都有值。
+  assignedAt  DateTime   @default(now()) @map("assigned_at")
   completedAt DateTime?  @map("completed_at")
   completedBy String?    @map("completed_by")
   // R（執行者）自我回報「此任務已完成／無後續進度」— 與 A 正式標記完成(completedAt)是不同定義。

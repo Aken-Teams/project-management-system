@@ -213,7 +213,7 @@ export default function MyTasksPage() {
   const [rLogNextWeekPlan, setRLogNextWeekPlan] = useState('')
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
   const [rTogglingDone, setRTogglingDone] = useState<string | null>(null)
-  const [rDialogTab, setRDialogTab] = useState<'active' | 'done'>('active')
+  const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'done'>('active')
   // 回報完成前的確認視窗（按下後 R 不能再編輯此任務週報）
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
@@ -755,10 +755,11 @@ export default function MyTasksPage() {
   // ADR-02: drill through the whole task tree (1~6 層) — a task assigned to me at
   // ANY depth must appear. The group header carries the full breadcrumb
   // 里程碑 › 父任務 › …，so每列只需顯示最底層任務名，用戶就知道它在哪一層底下。
-  //  待完成(active)：未被 A 完成、也未被 R 回報完成 → 可填寫。
-  //  完成區(done)：A 已標記完成(completedAt) 或 R 已回報完成(reportedDoneAt) → 存查紀錄。
-  const { rActiveGroups, rDoneGroups } = useMemo(() => {
-    const empty = { rActiveGroups: [] as RTaskGroup[], rDoneGroups: [] as RTaskGroup[] }
+  //  待完成(active)：未完成、未回報，且任務已在本週(含之前)開始 → 可填寫。
+  //  A 確認中(pending)：R 已回報、A 尚未確認 → 讓 R 知道不是按下就完成。
+  //  完成區(done)：A 已標記完成(completedAt) → 存查紀錄。
+  const { rActiveGroups, rPendingGroups, rDoneGroups } = useMemo(() => {
+    const empty = { rActiveGroups: [] as RTaskGroup[], rPendingGroups: [] as RTaskGroup[], rDoneGroups: [] as RTaskGroup[] }
     if (!rReportDialogProject || !user) return empty
     const allTasks = rReportDialogProject.tasks
     const byId = new Map(allTasks.map(t => [t.id, t]))
@@ -799,12 +800,20 @@ export default function MyTasksPage() {
       }
       return groups
     }
+    // 本週結束日（週日）字串，用來判斷任務是否在該週(含之前)已被指派
+    const [wy, wm, wd] = rReportWeekOf.split('-').map(Number)
+    const wEnd = new Date(wy, wm - 1, wd + 6)
+    const weekEnd = `${wEnd.getFullYear()}-${String(wEnd.getMonth() + 1).padStart(2, '0')}-${String(wEnd.getDate()).padStart(2, '0')}`
     return {
-      rActiveGroups: build(t => !t.completedAt && !t.reportedDoneAt, false),
-      rDoneGroups: build(t => !!t.completedAt || !!t.reportedDoneAt, true),
+      // 待完成：R 從「被指派那刻」起才看到 → 指派日 <= 該週結束日（與任務起訖無關）。
+      // assignedAt 若缺（舊資料）則照舊顯示，不誤藏。
+      rActiveGroups: build(t => !t.completedAt && !t.reportedDoneAt && (!t.assignedAt || t.assignedAt <= weekEnd), false),
+      rPendingGroups: build(t => !!t.reportedDoneAt && !t.completedAt, true),
+      rDoneGroups: build(t => !!t.completedAt, true),
     }
-  }, [rReportDialogProject, user])
+  }, [rReportDialogProject, user, rReportWeekOf])
 
+  const rPendingCount = useMemo(() => rPendingGroups.reduce((n, g) => n + g.tasks.length, 0), [rPendingGroups])
   const rDoneCount = useMemo(() => rDoneGroups.reduce((n, g) => n + g.tasks.length, 0), [rDoneGroups])
 
   // 本週（週一）字串，用來判斷選到的週別是否為當週（過去/未來週預設唯讀）
@@ -2557,7 +2566,7 @@ export default function MyTasksPage() {
                   })()}
                 </div>
 
-                {/* 待完成 / 完成區 分頁 */}
+                {/* 待完成 / A 確認中 / 完成區 分頁 */}
                 <div className="flex items-center gap-1 border-b">
                   <button
                     type="button"
@@ -2566,6 +2575,18 @@ export default function MyTasksPage() {
                       rDialogTab === 'active' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
                   >
                     待完成
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setRDialogTab('pending'); setRSelectedTaskId(null) }}
+                    className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
+                      rDialogTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                    title="你已回報完成、等待當責 A 確認的任務"
+                  >
+                    A 確認中
+                    {rPendingCount > 0 && (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{rPendingCount}</span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -2850,32 +2871,34 @@ export default function MyTasksPage() {
                                   />
                                 </div>
 
-                                {/* R 回報完成（開確認視窗）+ 提交 */}
-                                <div className="flex items-center justify-between gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
-                                    disabled={rTogglingDone === task.id}
-                                    onClick={() => setRConfirmDone(task)}
-                                    title="告訴 A：此任務我已完成、之後不會再有進度，由 A 決定是否正式標記完成"
-                                  >
-                                    <CircleCheck className="h-3.5 w-3.5" />
-                                    回報完成（無後續）
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    className="gap-1.5 rounded-lg shadow-sm text-sm"
-                                    disabled={rReadonly || !rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
-                                    onClick={handleRBatchSubmitLogs}
-                                  >
-                                    {rSubmittingBatch ? (
-                                      <><Loader2 className="h-3.5 w-3.5 animate-spin" />儲存中...</>
-                                    ) : (
-                                      <><Send className="h-3.5 w-3.5" />提交週報</>
-                                    )}
-                                  </Button>
-                                </div>
+                                {/* R 回報完成（開確認視窗）+ 提交 — 過去週別未按「編輯」時整排隱藏，避免誤導可編輯 */}
+                                {!rReadonly && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-8 gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
+                                      disabled={rTogglingDone === task.id}
+                                      onClick={() => setRConfirmDone(task)}
+                                      title="告訴 A：此任務我已完成、之後不會再有進度，由 A 決定是否正式標記完成"
+                                    >
+                                      <CircleCheck className="h-3.5 w-3.5" />
+                                      回報完成（無後續）
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="gap-1.5 rounded-lg shadow-sm text-sm"
+                                      disabled={!rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
+                                      onClick={handleRBatchSubmitLogs}
+                                    >
+                                      {rSubmittingBatch ? (
+                                        <><Loader2 className="h-3.5 w-3.5 animate-spin" />儲存中...</>
+                                      ) : (
+                                        <><Send className="h-3.5 w-3.5" />提交週報</>
+                                      )}
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2885,10 +2908,12 @@ export default function MyTasksPage() {
                   ))
                   )
                 ) : (
-                  rDoneGroups.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">目前沒有已完成／已回報的任務</p>
+                  (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {rDialogTab === 'pending' ? '目前沒有等待 A 確認的任務' : '目前沒有 A 已確認完成的任務'}
+                    </p>
                   ) : (
-                  rDoneGroups.map((group, gIdx) => (
+                  (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).map((group, gIdx) => (
                     <div key={group.key} className={cn('space-y-1', gIdx > 0 && 'mt-3 pt-3 border-t border-border/40')}>
                       <div className="flex items-center gap-2 px-1">
                         <span className="text-xs font-medium text-muted-foreground truncate">{group.pathLabel}</span>

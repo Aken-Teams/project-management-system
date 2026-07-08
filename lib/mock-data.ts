@@ -143,6 +143,8 @@ export interface Task {
   progress: number
   completedAt?: string
   completedBy?: string
+  // 指派時刻（R 從被指派那刻起才在週報看到此任務）
+  assignedAt?: string | null
   // R 自我回報「已完成/無後續」（≠ A 的 completedAt 正式完成）
   reportedDoneAt?: string | null
   reportedDoneBy?: string | null

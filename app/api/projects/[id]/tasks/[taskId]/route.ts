@@ -51,7 +51,12 @@ export async function PUT(
       data.title = title
     }
     if (body.description !== undefined) data.description = body.description.trim()
-    if (body.assignee !== undefined) data.assignee = body.assignee.trim()
+    if (body.assignee !== undefined) {
+      const newAssignee = body.assignee.trim()
+      data.assignee = newAssignee
+      // 指派對象改變 → 更新指派時刻（R 從這一刻起才在週報看到此任務）
+      if (newAssignee !== task.assignee) data.assignedAt = new Date()
+    }
     if (body.priority !== undefined) data.priority = body.priority as Priority
     if (body.status !== undefined) {
       data.status = body.status as TaskStatus
