@@ -290,9 +290,10 @@ export function AWeeklyReportComposer({
         return false
       }) : []
       const pendingTaskChanges = [
-        // 延期群組：X 到新截止日；祖先 endDate += N（只改 end → 紅色延長）
+        // 延期群組觸發本體：X 到新截止日（工期由核准端 step 3 延長）
         { taskId: selTask.id, taskTitle: selTask.title, endDate: delayDate },
-        ...chain.slice(1).map(a => ({ taskId: a.id, taskTitle: a.title, endDate: shiftYmd(dstr(a.endDate), N) })),
+        // 祖先：endDate += N「且」durationDays += N —— 否則核准端 step-4 會用舊工期把 aaa/a1 的日期改回去（紅段消失）
+        ...chain.slice(1).map(a => ({ taskId: a.id, taskTitle: a.title, endDate: shiftYmd(dstr(a.endDate), N), durationDays: (a.durationDays || 1) + N })),
         // 下游順延：整條 start/end += N（有 startDate → 琥珀順延）
         ...shiftTasks.map(t => ({ taskId: t.id, taskTitle: t.title, startDate: shiftYmd(dstr(t.startDate), N), endDate: shiftYmd(dstr(t.endDate), N) })),
       ]

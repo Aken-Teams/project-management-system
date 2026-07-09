@@ -125,7 +125,6 @@ export function DelayGanttPreviewButton({ delay }: { delay: DelayInfo }) {
                         <div className="flex items-center gap-2 px-3 py-2 bg-muted/30">
                           <div className="w-40 shrink-0 min-w-0 text-sm font-semibold truncate flex items-center gap-1.5">
                             <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${m.delayed ? 'bg-red-500' : 'bg-amber-500'}`} />{m.name}
-                            <span className={`text-[10px] font-normal shrink-0 ${m.delayed ? 'text-red-500' : 'text-amber-600'}`}>{m.delayed ? '延期' : '順延'}</span>
                           </div>
                           <div className="flex-1 relative h-5 min-w-0">
                             {/* 原定範圍（灰） */}
