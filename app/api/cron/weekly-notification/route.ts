@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendMail } from '@/lib/send-mail'
+import { isSameUser } from '@/lib/user-match'
 
 function replaceVars(template: string, vars: Record<string, string>): string {
   return template.replace(/{{(\w+)}}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -132,9 +133,14 @@ export async function POST(request: NextRequest) {
 
     const weekStart = getWeekStart()
     const weekOf = weekStart.toISOString().split('T')[0]
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 6)
+    weekEnd.setHours(23, 59, 59, 999)
 
     // ── Fetch all projects with team + projectTier ─────────────────────────────
+    //    只處理「已開案(active)」專案；草稿專案不催繳、不通知
     const projects = await prisma.project.findMany({
+      where: { phase: 'active' },
       select: {
         id: true,
         name: true,
@@ -204,33 +210,39 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Identify PM = first member with role 'A'
+      // Identify PM = first member with role 'A' (預覽/摘要用)
       const pmEntry = project.teamMembers.find(m => m.role === 'A')
       const pm = pmEntry?.user ?? null
 
-      // Check if any WeeklyUpdate was submitted this week
-      const updateCount = await prisma.weeklyUpdate.count({
-        where: { projectId: project.id, weekOf: { gte: weekStart } },
+      // ── 找出「本週該寫卻沒寫」的 R（提醒對象改為 R 本人，非全體） ──────────
+      //   該寫：有進行中任務（未完成、未回報無後續、且已開始）被指派給他
+      //   沒寫：本週在此專案沒有任何 TaskLog（作者為他）
+      const tasks = await prisma.task.findMany({
+        where: { projectId: project.id },
+        select: { assignee: true, startDate: true, completedAt: true, reportedDoneAt: true },
       })
+      const logs = await prisma.taskLog.findMany({
+        where: {
+          projectId: project.id,
+          OR: [{ weekOf }, { weekOf: null, logDate: { gte: weekStart, lte: weekEnd } }],
+        },
+        select: { authorId: true },
+      })
+      const writerSet = new Set(logs.map(l => l.authorId))
 
-      const vars = {
-        projectName: project.name,
-        weekOf,
-        pmName: pm?.name ?? '專案負責人',
+      const activeTasks = tasks.filter(
+        t => !t.completedAt && !t.reportedDoneAt && t.startDate <= weekEnd,
+      )
+      const owedNames = [...new Set(activeTasks.map(t => t.assignee).filter((n): n is string => !!n))]
+      // 姓名 → 專案成員 user（容錯比對）；沒寫的才要提醒
+      const owing: { id: string; name: string; email: string | null }[] = []
+      for (const name of owedNames) {
+        const m = project.teamMembers.find(tm => isSameUser(name, tm.user))
+        if (!m) continue // 無法對應到成員 → 跳過（避免發給錯的人）
+        if (!writerSet.has(m.user.id)) owing.push(m.user)
       }
 
-      // Collect all team member emails
-      const teamEmails = project.teamMembers
-        .map(m => m.user.email)
-        .filter((e): e is string => !!e)
-
-      if (updateCount === 0) {
-        // ── Missing: notify PM + all team members ──────────────────────────────
-        const title = replaceVars(profile.notifyTitle, vars)
-        const message = replaceVars(profile.notifyMessage, vars)
-        const emailSubject = replaceVars(profile.emailSubject, vars)
-        const emailBody = replaceVars(profile.emailBody, vars)
-
+      if (owing.length > 0) {
         if (isPreview) {
           previewResults.push({
             projectId: project.id,
@@ -238,41 +250,47 @@ export async function POST(request: NextRequest) {
             projectTier: tier,
             status: 'missing',
             pm: pm ? { name: pm.name, email: pm.email } : null,
-            teamEmails,
+            teamEmails: owing.map(u => u.email).filter((e): e is string => !!e),
             profile,
-            emailPreview: { subject: emailSubject, body: emailBody, to: teamEmails },
-            siteNotifications: project.teamMembers.map(m => ({
-              userId: m.user.id,
-              userName: m.user.name,
-              title,
-              message,
+            emailPreview: {
+              subject: replaceVars(profile.emailSubject, { projectName: project.name, weekOf, pmName: owing[0].name }),
+              body: replaceVars(profile.emailBody, { projectName: project.name, weekOf, pmName: owing[0].name }),
+              to: owing.map(u => u.email).filter((e): e is string => !!e),
+            },
+            siteNotifications: owing.map(u => ({
+              userId: u.id,
+              userName: u.name,
+              title: replaceVars(profile.notifyTitle, { projectName: project.name, weekOf, pmName: u.name }),
+              message: replaceVars(profile.notifyMessage, { projectName: project.name, weekOf, pmName: u.name }),
             })),
           })
         } else {
-          // Create in-app notification for every team member
-          for (const member of project.teamMembers) {
+          for (const u of owing) {
+            const vars = { projectName: project.name, weekOf, pmName: u.name }
             await prisma.notification.create({
               data: {
-                userId: member.user.id,
+                userId: u.id,
                 type: 'weekly_upload_missing',
-                title,
-                message,
+                title: replaceVars(profile.notifyTitle, vars),
+                message: replaceVars(profile.notifyMessage, vars),
                 projectId: project.id,
               },
             })
-          }
-
-          // Send email to all team members who have an email address
-          if (teamEmails.length > 0 && process.env.AD_URL && process.env.AD_API) {
-            try {
-              await sendMail({ to: teamEmails, subject: emailSubject, body: emailBody })
-            } catch (e) {
-              console.error(`Failed to send notification email for "${project.name}":`, e)
+            if (u.email && process.env.AD_URL && process.env.AD_API) {
+              try {
+                await sendMail({
+                  to: [u.email],
+                  subject: replaceVars(profile.emailSubject, vars),
+                  body: replaceVars(profile.emailBody, vars),
+                })
+              } catch (e) {
+                console.error(`Failed to send reminder email to ${u.email} for "${project.name}":`, e)
+              }
             }
           }
         }
 
-        affectedCount++
+        affectedCount += owing.length
         tierSummary[tierKey].notified++
         summaryParts.push(project.name)
       } else {
@@ -283,7 +301,7 @@ export async function POST(request: NextRequest) {
             projectTier: tier,
             status: 'uploaded',
             pm: pm ? { name: pm.name, email: pm.email } : null,
-            teamEmails,
+            teamEmails: [],
             profile,
           })
         }

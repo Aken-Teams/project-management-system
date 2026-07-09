@@ -407,7 +407,7 @@ export default function AdminNotificationsPage() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
                 <p className="text-xs text-blue-700">
-                  系統在設定時間檢查各專案：若 PM <strong>未上傳</strong>當週進度 → 發送站內通知 + Email 提醒；若 PM <strong>已上傳</strong> → 僅發送站內通知。
+                  系統在設定時間檢查各專案：找出本週<strong>有進行中任務卻尚未填寫工作紀錄</strong>的成員（R），<strong>逐一提醒該成員本人</strong>（站內通知 + Email）；已填寫者不再提醒。
                 </p>
               </div>
             </CardContent>

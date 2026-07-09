@@ -73,7 +73,9 @@ export async function POST(request: NextRequest) {
     const recipientsSetting  = settings['report.email.recipients']  ?? ''
 
     // ── Fetch all projects with their A-role (PM) team members ────────────────
+    //    只匯出「已開案(active)」專案；草稿不進報告
     const projects = await prisma.project.findMany({
+      where: { phase: 'active' },
       select: {
         id: true,
         name: true,

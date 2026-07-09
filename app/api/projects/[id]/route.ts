@@ -52,12 +52,14 @@ export async function GET(
       }
     }
 
-    // ── Overdue check: notify PM at most once per 7 days ──
-    await notifyProjectOverdueIfNeeded({
-      projectId: id,
-      projectName: project.name,
-      fallbackOwnerId: project.ownerId,
-    })
+    // ── Overdue check: notify PM at most once per 7 days（僅已開案專案）──
+    if ((project as { phase?: string }).phase === 'active') {
+      await notifyProjectOverdueIfNeeded({
+        projectId: id,
+        projectName: project.name,
+        fallbackOwnerId: project.ownerId,
+      })
+    }
 
     // ── Date consistency repair: fix tasks outside milestone range ──
     await repairTaskDates(project)
