@@ -217,9 +217,10 @@ export function WeekPicker({ value, onChange, warningLabel, className }: WeekPic
               <button
                 type="button"
                 onClick={() => { handleGoThisWeek(); setOpen(false) }}
-                className="text-xs text-primary hover:underline w-full text-center"
+                className="inline-flex items-center justify-center gap-1 text-xs text-primary hover:bg-primary/10 rounded-md w-full py-1 transition-colors"
               >
-                跳到本周 (W{String(getISOWeek(thisMonday)).padStart(2, '0')})
+                <CalendarCheck className="h-3 w-3" />
+                回到本週 (W{String(getISOWeek(thisMonday)).padStart(2, '0')})
               </button>
             </div>
           </PopoverContent>
