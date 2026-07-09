@@ -344,13 +344,14 @@ export function AWeeklyReportComposer({
   // A 自己上傳附件到指定列
   const pickFilesForRow = (ri: number) => { uploadTargetRow.current = ri; uploadRef.current?.click() }
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files; const ri = uploadTargetRow.current
+    const arr = e.target.files ? Array.from(e.target.files) : [] // 先快照，避免下一行 reset 清空 FileList
+    const ri = uploadTargetRow.current
     e.target.value = ''
-    if (!files?.length || ri === null || !selectedId) return
+    if (!arr.length || ri === null || !selectedId) return
     setUploadingRow(ri)
     try {
       const uploaded: TaskLogAttachment[] = []
-      for (const f of Array.from(files)) {
+      for (const f of arr) {
         const fd = new FormData(); fd.append('file', f)
         const r = await fetch('/api/upload', { method: 'POST', body: fd })
         if (r.ok) { const d = await r.json(); uploaded.push({ name: d.name || f.name, url: d.url, type: (d.type === 'image' || (f.type.startsWith('image/'))) ? 'image' : 'file' }) }
