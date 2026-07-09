@@ -149,8 +149,9 @@ export async function PUT(
       })
     }
 
-    // A 發布：確認完成或明確發布時，把此任務尚未發布的紀錄「發布」到官方更新紀錄
-    if (body.reviewEvent === 'confirmed' || body.publishLogs) {
+    // 發布到官方更新紀錄「只由 A 送出自己的週報時觸發」(publishLogs)。
+    // 「審核通過(reviewEvent=confirmed)」只是認可 R 的回報，不代表 A 的報告，故不發布。
+    if (body.publishLogs) {
       await prisma.taskLog.updateMany({
         where: { taskId, publishedAt: null },
         data: { publishedAt: new Date(), publishedBy: body.reviewActor || '' },

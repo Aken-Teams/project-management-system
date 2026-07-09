@@ -335,6 +335,8 @@ model TaskLog {
   // 由當責 A 審核後「發布」到官方更新紀錄的時間；null = R 尚未經 A 發布（不進更新紀錄）
   publishedAt DateTime? @map("published_at")
   publishedBy String?   @map("published_by")
+  // true = A 撰寫的「報告敘述」(進更新紀錄，但不驅動進度；進度由標記完成/延期決定)
+  reportOnly  Boolean   @default(false) @map("report_only")
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -360,6 +362,23 @@ model TaskReviewEvent {
   @@index([taskId])
   @@index([projectId])
   @@map("task_review_events")
+}
+
+// A（當責）撰寫的週報彙整說明：per 專案 + 週別 + 任務（taskId="" 代表專案層總彙整）。
+// 官方「更新紀錄」= A 送出的彙整說明 + 被 A 納入(發布)的 R 紀錄。
+model WeeklyReportNote {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  weekOf    String   @map("week_of")            // 週一 YYYY-MM-DD
+  taskId    String   @default("") @map("task_id") // "" = 專案層總彙整；否則為該任務(常為父任務)的彙整說明
+  content   String   @db.Text
+  author    String   @default("")
+  submittedAt DateTime? @map("submitted_at")     // A 送出時間；null = 尚未送出（草稿）
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([projectId, weekOf, taskId])
+  @@index([projectId, weekOf])
+  @@map("weekly_report_notes")
 }
 
 model Risk {

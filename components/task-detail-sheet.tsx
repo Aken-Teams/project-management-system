@@ -113,8 +113,16 @@ function getComputedStatusBadge(status: ComputedTaskStatus) {
   )
 }
 
-export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, onSelectTask, onTaskUpdate, readOnly }: TaskDetailSheetProps) {
+// 舊版：點甘特圖任務會在此面板直接填寫週報 / 標記完成 / 申請延期。
+// 現在正式流程改走甘特圖工具列「撰寫本週報告」，此面板一律唯讀（只看報告、進度）。
+// 若日後要恢復面板內直接編輯/操作，把此旗標改回 true 即可（其餘程式碼保留）。
+const ALLOW_TASK_EDITING = false
+
+export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, onSelectTask, onTaskUpdate, readOnly: readOnlyProp }: TaskDetailSheetProps) {
   const { user } = useAuth()
+
+  // 唯讀 = 呼叫端要求唯讀，或全域停用面板內編輯（ALLOW_TASK_EDITING=false）
+  const readOnly = readOnlyProp || !ALLOW_TASK_EDITING
 
   // Progress (for optimistic updates on complete/uncomplete)
   const [editProgress, setEditProgress] = useState<number>(0)

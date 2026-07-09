@@ -10,6 +10,9 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Checkbox } from '@/components/ui/checkbox'
 import { GanttChart } from '@/components/gantt-chart'
+import { AWeeklyReportComposer } from '@/components/a-weekly-report-composer'
+import { useAuth } from '@/lib/auth-context'
+import { PenLine } from 'lucide-react'
 import { TaskDetailSheet } from '@/components/task-detail-sheet'
 import { MilestoneDetailSheet } from '@/components/milestone-detail-sheet'
 import { buildDepGraph } from '@/lib/dependency-graph'
@@ -42,6 +45,8 @@ interface MilestoneTaskViewProps {
 const SHOW_LIST_VIEW = false
 
 export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: MilestoneTaskViewProps) {
+  const { user } = useAuth()
+  const [composerOpen, setComposerOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
   // ADR-02: 甘特圖預設全展開（所有里程碑 + 所有有子項的任務，任意深度）。
@@ -488,6 +493,11 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
           <span className="text-sm">
             {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
           </span>
+          {!readOnly && (
+            <Button size="sm" className="h-7 text-sm gap-1.5" onClick={() => setComposerOpen(true)}>
+              <PenLine className="h-3.5 w-3.5" />撰寫本週報告
+            </Button>
+          )}
           {viewMode === 'gantt' && (
             <Popover>
               <PopoverTrigger asChild>
@@ -716,6 +726,17 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
         readOnly={readOnly}
       />
 
+      {/* A 週報撰寫台（邊看甘特邊寫，自帶週別選擇） */}
+      {!readOnly && (
+        <AWeeklyReportComposer
+          project={project}
+          actor={user?.name || ''}
+          actorUserId={user?.id || ''}
+          open={composerOpen}
+          onOpenChange={setComposerOpen}
+          onSaved={() => { if (typeof window !== 'undefined') window.location.reload() }}
+        />
+      )}
     </div>
   )
 }

@@ -3,10 +3,12 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import type { Project, TaskStatus } from '@/lib/mock-data'
+import { useAuth } from '@/lib/auth-context'
+import { AWeeklyReportComposer } from '@/components/a-weekly-report-composer'
 import {
   CheckCircle2, Clock, AlertTriangle, ShieldAlert, CalendarClock,
   Flag, ArrowRight, ListChecks, Loader2, Ban, ChevronLeft, ChevronRight,
-  MessageSquare, Paperclip, Image as ImageIcon,
+  MessageSquare, Paperclip, Image as ImageIcon, PenLine,
 } from 'lucide-react'
 
 // ── helpers ──
@@ -113,9 +115,22 @@ export function ProjectReportSummary({
     }
   }, [project])
 
+  const { user } = useAuth()
   const [selectedWeek, setSelectedWeek] = useState(base.currentWeek)
   // keep selection valid if project changes
   useEffect(() => { setSelectedWeek(base.currentWeek) }, [base.currentWeek])
+
+  // A 週報撰寫台 + 本週專案彙整說明
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [weekNote, setWeekNote] = useState<string>('')
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/projects/${project.id}/weekly-report?weekOf=${selectedWeek}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (alive) setWeekNote((data?.notes || []).find((n: { taskId: string; content: string }) => n.taskId === '')?.content || '') })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [project.id, selectedWeek])
 
   // ── data for the selected week ──
   const wk = useMemo(() => {
@@ -231,6 +246,14 @@ export function ProjectReportSummary({
           </div>
           <button onClick={() => step(1)} disabled={selIdx >= base.weeks.length - 1} className="shrink-0 p-1.5 rounded hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent"><ChevronRight className="h-4 w-4" /></button>
         </div>
+
+        {/* A 本週專案彙整說明（更新紀錄開頭）*/}
+        {weekNote.trim() && (
+          <div className="px-5 py-3 border-b bg-primary/5">
+            <div className="text-xs font-semibold text-primary mb-1 flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" />當責彙整</div>
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{weekNote}</p>
+          </div>
+        )}
 
         {/* 雙欄:本期重點 / 工作週報內容 */}
         <div className="grid lg:grid-cols-2 gap-px bg-border">

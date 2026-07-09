@@ -193,13 +193,15 @@ export async function autoProgressTasks(
  */
 export async function syncTaskProgressFromLogs(
   tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; originalStartDate?: Date | null; progress: number; completedAt: Date | null }[],
-  taskLogs: { taskId: string; logDate: Date }[],
+  taskLogs: { taskId: string; logDate: Date; reportOnly?: boolean }[],
 ): Promise<void> {
   const msPerDay = 1000 * 60 * 60 * 24
 
-  // Group all log dates by taskId (we'll filter per-task by endDate later)
+  // Group all log dates by taskId (we'll filter per-task by endDate later).
+  // A 撰寫的「報告敘述」(reportOnly) 不驅動進度——進度由標記完成/延期決定。
   const logsByTask = new Map<string, Date[]>()
   for (const log of taskLogs) {
+    if (log.reportOnly) continue
     const list = logsByTask.get(log.taskId) || []
     list.push(log.logDate)
     logsByTask.set(log.taskId, list)

@@ -219,6 +219,27 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const [reportDownloaded, setReportDownloaded] = useState<string | null>(null)
   const [comingSoonOpen, setComingSoonOpen] = useState(false)
 
+  // 週報彙整說明（A 送出的父層/專案層敘述）— 依週顯示在更新紀錄
+  const [weekNotes, setWeekNotes] = useState<{ weekOf: string; taskId: string; content: string; author: string; submittedAt: string | null }[]>([])
+  useEffect(() => {
+    fetch(`/api/projects/${project.id}/weekly-report`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: { notes: { weekOf: string; taskId: string; content: string; author: string; submittedAt: string | null }[] }) => setWeekNotes(d.notes.filter(n => n.submittedAt && n.content.trim())))
+      .catch(() => setWeekNotes([]))
+  }, [project.id])
+  // weekMonday → 該週彙整（專案層 taskId='' 排最前，其餘為父層任務彙整）
+  const notesByWeek = useMemo(() => {
+    const map = new Map<string, { taskId: string; title: string; content: string; author: string }[]>()
+    for (const n of weekNotes) {
+      const title = n.taskId ? (project.tasks.find(t => t.id === n.taskId)?.title || '任務') : ''
+      const list = map.get(n.weekOf) || []
+      list.push({ taskId: n.taskId, title, content: n.content, author: n.author })
+      map.set(n.weekOf, list)
+    }
+    for (const list of map.values()) list.sort((a, b) => (a.taskId ? 1 : 0) - (b.taskId ? 1 : 0))
+    return map
+  }, [weekNotes, project.tasks])
+
   const allActiveMembers = useMemo(() => {
     const members = new Set<string>()
     allWeeks.forEach(w => w.activeMembers.forEach(m => members.add(m)))
@@ -1086,6 +1107,21 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                     {filteredLogs.length > 0 && `${filteredLogs.length} 筆紀錄`}
                   </span>
                 </div>
+
+                {isWeekCollapsed ? null : (() => {
+                  const wNotes = notesByWeek.get(week.weekMonday) || []
+                  if (wNotes.length === 0) return null
+                  return (
+                    <div className="px-4 py-3 border-b bg-primary/5 space-y-2">
+                      {wNotes.map((n, i) => (
+                        <div key={i}>
+                          <div className="text-[11px] font-semibold text-primary/80 mb-0.5">{n.taskId ? `【${n.title}】彙整` : '本週專案彙整'}{n.author && <span className="text-muted-foreground font-normal ml-1">· {n.author}</span>}</div>
+                          <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{n.content}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
 
                 {isWeekCollapsed ? null : isEmpty ? (
                   <p className="text-sm text-muted-foreground text-center py-4">此週無紀錄</p>
