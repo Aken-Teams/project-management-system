@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
+import { isSameUser } from '@/lib/user-match'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
@@ -336,7 +337,7 @@ export default function MyTasksPage() {
 
   // 「我的任務週報」：所有「有指派任務給我」的專案（不分 RACI 角色）
   const myReportProjects = useMemo(
-    () => apiProjects.filter(p => !!user && p.tasks.some(t => t.assignee === user.name)),
+    () => apiProjects.filter(p => !!user && p.tasks.some(t => isSameUser(t.assignee, user))),
     [apiProjects, user],
   )
 
@@ -409,10 +410,18 @@ export default function MyTasksPage() {
 
     roleFilteredProjects.forEach(p => {
       const isPM = p.userRole === 'A'
-      // PM sees all top-level tasks; members see only their assigned tasks
+      // 成員只看「指派給自己」的任務——含子任務（修正:之前 !t.parentId 只抓頂層，
+      // 導致別人父任務底下、指派給我的子任務看不到）。以「最高指派層級」呈現避免重複巢狀。
+      const assignedToMe = (t: Task) => isSameUser(t.assignee, user)
+      const ancestorAssignedToMe = (t: Task) => {
+        let cur = t.parentId ? p.tasks.find(x => x.id === t.parentId) : undefined
+        const seen = new Set<string>()
+        while (cur && !seen.has(cur.id)) { seen.add(cur.id); if (assignedToMe(cur)) return true; cur = cur.parentId ? p.tasks.find(x => x.id === cur!.parentId) : undefined }
+        return false
+      }
       const visibleTasks = isPM
         ? p.tasks.filter(t => !t.parentId)
-        : p.tasks.filter(t => t.assignee === user.name && !t.parentId)
+        : p.tasks.filter(t => assignedToMe(t) && !ancestorAssignedToMe(t))
       if (visibleTasks.length === 0 && !isPM) return
       // PM can see projects with milestones even if no tasks yet
       if (visibleTasks.length === 0 && isPM && p.milestones.length === 0) return
@@ -841,7 +850,7 @@ export default function MyTasksPage() {
       for (const ms of rReportDialogProject.milestones) {
         if (!includeDoneMs && ms.status === 'done') continue
         const walk = (t: Task) => {
-          if (t.assignee === user.name && taskFilter(t)) {
+          if (isSameUser(t.assignee, user) && taskFilter(t)) {
             const pathLabel = [ms.name, ...ancestorsOf(t)].join(' › ')
             const key = `${ms.id}::${pathLabel}`
             let idx = groupIndex.get(key)
@@ -887,7 +896,7 @@ export default function MyTasksPage() {
   const rReviewEvents = useMemo(() => {
     if (!rReportDialogProject || !user) return [] as RReviewEvent[]
     return (rReportDialogProject.reviewEvents || [])
-      .filter(e => e.assignee === user.name)
+      .filter(e => isSameUser(e.assignee, user))
       .slice()
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [rReportDialogProject, user])
@@ -1216,7 +1225,7 @@ export default function MyTasksPage() {
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
     // 只載「自己」填的紀錄；別人的不自動代入
     const logs = rReportDialogProject.taskLogs
-      .filter(l => l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd && l.author === user?.name)
+      .filter(l => l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd && isSameUser(l.author, user))
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
     if (logs.length > 0) {
       setRLogRows(logs.map(l => ({
@@ -1778,7 +1787,7 @@ export default function MyTasksPage() {
                     // Count user's assigned tasks (non-done milestones).
                     // 排除 A 已完成(completedAt) 與 R 已回報完成(reportedDoneAt) 的任務，才不會催填已完成的。
                     const activeMsIds = new Set(project.milestones.filter(m => m.status !== 'done').map(m => m.id))
-                    const myTasks = project.tasks.filter(t => t.assignee === user!.name && activeMsIds.has(t.milestoneId) && !t.completedAt && !t.reportedDoneAt)
+                    const myTasks = project.tasks.filter(t => isSameUser(t.assignee, user) && activeMsIds.has(t.milestoneId) && !t.completedAt && !t.reportedDoneAt)
                     // Count tasks with logs this week
                     const [wy, wm, wd] = rReportWeekOf.split('-').map(Number)
                     const wkStart = rReportWeekOf
@@ -2537,7 +2546,7 @@ export default function MyTasksPage() {
                                   </div>
                                   <span className="flex-1 text-sm font-medium">{log.author}</span>
                                   <div className="flex items-center gap-1 shrink-0">
-                                    {log.author === user.name && (
+                                    {isSameUser(log.author, user) && (
                                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <Button
                                           size="icon"

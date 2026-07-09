@@ -4,6 +4,7 @@
  */
 import { prisma } from '@/lib/db'
 import type { NotificationType } from '@prisma/client'
+import { isSameUser } from '@/lib/user-match'
 
 // ─── Core ──────────────────────────────────────────────────────────────────
 
@@ -31,13 +32,35 @@ export async function createNotification({
 
 // ─── Recipient helpers ──────────────────────────────────────────────────────
 
-/** Find a user by email (task assignees are stored as email strings) */
+/** Find a user by email */
 export async function getUserByEmail(email: string) {
   if (!email?.includes('@')) return null
   return prisma.user.findUnique({
     where: { email },
     select: { id: true, name: true },
   })
+}
+
+/** 依「指派值」解析使用者：容錯 email / 姓名 / AD 帳號前綴（見 lib/user-match）。 */
+export async function resolveAssignee(assignee: string | null | undefined) {
+  if (!assignee) return null
+  if (assignee.includes('@')) {
+    const byEmail = await prisma.user.findUnique({ where: { email: assignee }, select: { id: true, name: true, email: true } })
+    if (byEmail) return byEmail
+  }
+  const byName = await prisma.user.findFirst({ where: { name: assignee }, select: { id: true, name: true, email: true } })
+  if (byName) return byName
+  // 容錯 fallback：用首段 token 抓少量候選，再以 isSameUser 判定
+  const token = assignee.trim().split(/\s+/)[0]
+  if (token) {
+    const cands = await prisma.user.findMany({
+      where: { OR: [{ name: { contains: token } }, { email: { startsWith: token } }] },
+      select: { id: true, name: true, email: true },
+      take: 20,
+    })
+    return cands.find(u => isSameUser(assignee, u)) || null
+  }
+  return null
 }
 
 /** All active executives */
@@ -57,20 +80,80 @@ export async function getProjectReviewers(projectId: string) {
   return members.map(m => m.user)
 }
 
+// ─── 週報就緒 (weekly_report_ready) ─────────────────────────────────────────
+
+/** A 送出本週報告 → 通知「該專案所有團隊成員」（排除送出者自己），讓大家(含 R)都知道 A 寫了什麼 */
+export async function notifyWeeklyReportReady({
+  projectId,
+  projectName,
+  actorName,
+  actorUserId,
+  weekOf,
+}: {
+  projectId: string
+  projectName: string
+  actorName: string
+  actorUserId?: string
+  weekOf?: string
+}) {
+  const members = await prisma.projectTeamMember.findMany({ where: { projectId }, select: { userId: true } })
+  for (const m of members) {
+    if (actorUserId && m.userId === actorUserId) continue // 不通知送出者自己
+    await createNotification({
+      userId: m.userId,
+      type: 'weekly_report_ready',
+      title: '本週報告已送出',
+      message: `${actorName} 送出了「${projectName}」的本週報告${weekOf ? `（${weekOf}）` : ''}，可查看更新紀錄`,
+      projectId,
+    })
+  }
+}
+
+/** R 送出工作紀錄 → 通知任務的當責 A（依 assignee 姓名解析，A 為該任務所屬專案的 role='A' 成員） */
+export async function notifyRecordUploadedToAccountable({
+  projectId,
+  projectName,
+  uploaderName,
+}: {
+  projectId: string
+  projectName: string
+  uploaderName: string
+}) {
+  const accountables = await prisma.projectTeamMember.findMany({
+    where: { projectId, role: 'A' },
+    select: { user: { select: { id: true } } },
+  })
+  for (const a of accountables) {
+    // 去重：同一 A、同專案、同上傳者已有未讀通知就不再重複發（R 逐里程碑存檔不洗版）
+    const existing = await prisma.notification.findFirst({
+      where: { userId: a.user.id, projectId, type: 'weekly_report_ready', read: false, message: { contains: uploaderName } },
+      select: { id: true },
+    })
+    if (existing) continue
+    await createNotification({
+      userId: a.user.id,
+      type: 'weekly_report_ready',
+      title: '有新的工作紀錄',
+      message: `${uploaderName} 在「${projectName}」上傳了工作紀錄，可查看並彙整`,
+      projectId,
+    })
+  }
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({
-  assigneeEmail,
+  assignee,
   taskTitle,
   projectId,
   projectName,
 }: {
-  assigneeEmail: string
+  assignee: string            // 任務指派值（姓名，容錯 email）
   taskTitle: string
   projectId: string
   projectName: string
 }) {
-  const user = await getUserByEmail(assigneeEmail)
+  const user = await resolveAssignee(assignee)
   if (!user) return
   await createNotification({
     userId: user.id,

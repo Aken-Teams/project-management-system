@@ -160,11 +160,11 @@ export async function PUT(
 
     // ── Notify new assignee when assignee changes ──
     const newAssignee = data.assignee as string | undefined
-    if (newAssignee && newAssignee !== task.assignee && newAssignee.includes('@')) {
+    if (newAssignee && newAssignee !== task.assignee) {
       const project = await prisma.project.findUnique({ where: { id }, select: { name: true } })
       if (project) {
         notifyTaskAssigned({
-          assigneeEmail: newAssignee,
+          assignee: newAssignee,
           taskTitle: updated.title,
           projectId: id,
           projectName: project.name,

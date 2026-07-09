@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
+import { notifyWeeklyReportReady } from '@/lib/notifications'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -139,6 +140,18 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       await syncTaskProgressFromLogs(allTasks, allLogs)
       const affectedMs = new Set(allTasks.filter(t => touchedTaskIds.has(t.id)).map(t => t.milestoneId))
       for (const msId of affectedMs) await syncMilestoneStatus(msId, id)
+    }
+
+    // A 送出本週報告 → 通知該專案所有成員（含 R），讓大家知道 A 寫了什麼
+    if (body.submit) {
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyWeeklyReportReady({
+        projectId: id,
+        projectName: proj?.name || '專案',
+        actorName: body.actor || '當責',
+        actorUserId: body.authorId,
+        weekOf: body.weekOf,
+      })
     }
 
     return NextResponse.json({ success: true })

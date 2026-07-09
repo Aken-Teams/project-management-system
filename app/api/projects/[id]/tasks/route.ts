@@ -95,7 +95,7 @@ export async function POST(
     // Notify assignee (fire-and-forget)
     if (task.assignee) {
       notifyTaskAssigned({
-        assigneeEmail: task.assignee,
+        assignee: task.assignee,
         taskTitle: task.title,
         projectId: id,
         projectName: project.name,
