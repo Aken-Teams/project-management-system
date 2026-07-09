@@ -67,7 +67,15 @@ export async function GET(
     }
 
     // ── Date consistency repair: fix tasks outside milestone range ──
-    await repairTaskDates(project)
+    //   已核准延期的任務要「保護」原始日期不被清（供甘特畫紅段）
+    const delayedTaskIds = new Set<string>()
+    for (const dr of project.delayRequests) {
+      if (dr.status !== 'approved') continue
+      if (dr.taskId) delayedTaskIds.add(dr.taskId)
+      const ptc = dr.pendingTaskChanges as Array<{ taskId?: string }> | null
+      if (Array.isArray(ptc)) for (const tc of ptc) { if (tc.taskId) delayedTaskIds.add(tc.taskId) }
+    }
+    await repairTaskDates(project, delayedTaskIds)
 
     const feProject = dbProjectToFrontend(project as Parameters<typeof dbProjectToFrontend>[0])
 
@@ -232,7 +240,7 @@ async function repairTaskDates(project: {
   startDate: Date
   milestones: { id: string; dueDate: Date; sortOrder: number }[]
   tasks: { id: string; milestoneId: string; durationDays: number; startDate: Date; endDate: Date; sortOrder: number; parentId: string | null; originalStartDate: Date | null; originalEndDate: Date | null; manualDates: boolean }[]
-}) {
+}, protectedTaskIds: Set<string> = new Set()) {
   const sortedMs = [...project.milestones].sort((a, b) => a.sortOrder - b.sortOrder)
   let msCurrentStart = new Date(project.startDate)
 
@@ -339,6 +347,8 @@ async function repairTaskDates(project: {
   // Originals are stale when they don't overlap with current dates
   // (e.g., originals in April but task is now in December).
   for (const task of project.tasks) {
+    // 有已核准延期的任務 → 保留原始日期，供甘特畫延期紅段（否則非重疊會被誤清）
+    if (protectedTaskIds.has(task.id)) continue
     if (task.originalStartDate && task.originalEndDate) {
       // No overlap: original range is entirely before or after current range
       const stale =

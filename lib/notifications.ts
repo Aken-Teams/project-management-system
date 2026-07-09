@@ -234,7 +234,7 @@ export async function notifyDelayReviewed({
     title: approved ? '延期申請已核准' : '延期申請已駁回',
     message: approved
       ? `您的延期申請（專案：${projectName}）已通過審核${suffix}`
-      : `您的延期申請（專案：${projectName}）已被駁回${suffix}`,
+      : `您的延期申請（專案：${projectName}）已被駁回${suffix}。原時程未調整，請調整週報的工作日期或改用可達成的時程。`,
     projectId,
   })
 }

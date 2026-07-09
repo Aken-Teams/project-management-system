@@ -183,6 +183,17 @@ export async function PATCH(
           if (tc.startDate) data.startDate = new Date(tc.startDate)
           if (tc.endDate) data.endDate = new Date(tc.endDate)
           if (Object.keys(data).length > 0) {
+            // 保存原始日期（僅首次延期）→ 甘特能畫出「延期前 vs 延期後」的紅段
+            if (data.startDate || data.endDate) {
+              const cur = await tx.task.findUnique({
+                where: { id: tc.taskId },
+                select: { startDate: true, endDate: true, originalStartDate: true },
+              })
+              if (cur && cur.originalStartDate == null) {
+                data.originalStartDate = cur.startDate
+                data.originalEndDate = cur.endDate
+              }
+            }
             await tx.task.update({ where: { id: tc.taskId }, data })
           }
         }

@@ -94,7 +94,6 @@ export function AWeeklyReportComposer({
   const [completeDate, setCompleteDate] = useState('')
   const [delayRequestedTasks, setDelayRequestedTasks] = useState<Map<string, string>>(new Map()) // 本次已送出延期申請的任務 → 申請的新截止日
   const [ganttPreviewOpen, setGanttPreviewOpen] = useState(false)
-  const [overdueBlockOpen, setOverdueBlockOpen] = useState(false)
 
   const { weekStart, weekEnd } = useMemo(() => {
     const s = new Date(weekOf); const e = new Date(weekOf); e.setDate(e.getDate() + 6)
@@ -274,18 +273,50 @@ export function AWeeklyReportComposer({
     if (!delayReason.trim()) { alert('請填寫延期原因'); return }
     setDelaySubmitting(true)
     try {
+      // 把「下游相依任務 + 下游里程碑」整批往後移 extraDays，跟延期申請一起送 →
+      //   審核者(S)看得到完整影響範圍、核准時真的順延（與 A 預覽一致）
+      const shiftYmd = (d: string, n: number) => ymd(new Date(new Date(d).getTime() + n * 86400000))
+      const dstr = (d: string | Date) => (typeof d === 'string' ? d : ymd(new Date(d)))
+      const pendingTaskChanges = [
+        // 觸發任務本身：結束日延到新截止日。經 step 2c 保存 original → 甘特能畫紅段，
+        //   且不受核准端 step-4「只到深度 0~1」的限制（c1 這種深層觸發任務也涵蓋）。
+        { taskId: selTask.id, taskTitle: selTask.title, endDate: delayDate },
+        // 下游相依任務：整批往後移 extraDays
+        ...(delayImpact.extraDays > 0
+          ? delayDownstream.tasks.map(t => ({
+              taskId: t.id,
+              taskTitle: t.title,
+              startDate: shiftYmd(t.startDate, delayImpact.extraDays),
+              endDate: shiftYmd(t.endDate, delayImpact.extraDays),
+            }))
+          : []),
+      ]
+      // 直接里程碑放第一（review route 用 affectedMilestones[0] 算觸發任務延長），下游里程碑接在後面
+      const affectedMilestones = [
+        { milestoneId: ms.id, originalDate: ms.dueDate, proposedDate: delayImpact.proposedMilestoneDate },
+        ...(delayImpact.extraDays > 0
+          ? delayDownstream.milestones.map(dm => {
+              const od = dstr(dm.dueDate)
+              return { milestoneId: dm.id, originalDate: od, proposedDate: shiftYmd(od, delayImpact.extraDays) }
+            })
+          : []),
+      ]
       const res = await fetch('/api/delay-requests', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: project.id, requesterId: actorUserId, reason: delayReason.trim(),
           canCatchUp: false, supportNeeded: delaySupport.trim(), taskId: selTask.id,
-          affectedMilestones: [{ milestoneId: ms.id, originalDate: ms.dueDate, proposedDate: delayImpact.proposedMilestoneDate }],
+          affectedMilestones,
+          ...(pendingTaskChanges.length ? { pendingTaskChanges } : {}),
         }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || '送出失敗') }
       setDelayRequestedTasks(p => new Map(p).set(selTask.id, delayDate))
       setDelayDone(true)
-      setTimeout(() => { setDelayOpen(false); setDelayDone(false) }, 1400)
+      // 先保存目前報告草稿（避免重載遺失正在寫的內容），再刷新外層：
+      //   延遲紀錄 / 待審核橫幅 / 甘特會即時反映，不用手動重新整理
+      await saveDraft()
+      setTimeout(() => { setDelayOpen(false); setDelayDone(false); onSaved() }, 1200)
     } catch (e) { alert(e instanceof Error ? e.message : '送出延期申請失敗') } finally { setDelaySubmitting(false) }
   }
 
@@ -440,6 +471,16 @@ export function AWeeklyReportComposer({
   // 標記完成的日期是否已超過截止日（超過就必須先申請延期）
   const completeOverdue = !!(selTask && completeDate && new Date(completeDate).getTime() > new Date(selTask.endDate).getTime())
 
+  // 已送出延期申請的任務（本次 session ∪ DB 既有 pending）→ 提醒 badge / 下拉標示共用，
+  // 避免「已送過審核卻還叫我再申請一次」。
+  const pendingDelayTaskIds = useMemo(() => {
+    const s = new Set<string>(delayRequestedTasks.keys())
+    for (const dr of (project.delayRequests || [])) {
+      if (dr.status === 'pending' && dr.taskId) s.add(dr.taskId)
+    }
+    return s
+  }, [delayRequestedTasks, project.delayRequests])
+
   // 送出前檢查：填報日超過截止日、又還沒申請延期的任務（必須先處理才能送出）
   const overdueUnresolved = useMemo(() => {
     const out: { id: string; title: string; latest: string; end: string }[] = []
@@ -467,10 +508,10 @@ export function AWeeklyReportComposer({
     return out
   }, [rows, byId])
 
-  // 按「送出」：半填時按鈕已禁用（見 footer）；此處只需擋逾期未處理
+  // 按「送出」：半填時按鈕已禁用（見 footer）。逾期不再硬擋——改在確認框軟提醒，
+  // A 仍可送出（逾期紀錄不計進度），申請延期變成建議而非必要。
   const onClickSubmit = () => {
     if (incompleteRows.length > 0) return
-    if (overdueUnresolved.length > 0) { setOverdueBlockOpen(true); return }
     setConfirmOpen(true)
   }
 
@@ -546,6 +587,7 @@ export function AWeeklyReportComposer({
                                 className={cn('w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/60 text-left', n.id === selectedId && 'bg-primary/10')}
                                 style={{ paddingLeft: 12 + n.depth * 16 }}>
                                 <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[10px] text-violet-500 ml-1">(父)</span>}</span>
+                                {pendingDelayTaskIds.has(n.id) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-300 shrink-0">延期待審核</Badge>}
                                 {(rows[n.id] || []).some(r => r.content.trim() && r.date) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge>}
                                 {n.hasR ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 shrink-0">R已提交</Badge> : <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/50 shrink-0">未提交</Badge>}
                                 <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right shrink-0">{n.progress}%</span>
@@ -600,8 +642,8 @@ export function AWeeklyReportComposer({
                           <div className="font-medium">填報日期比規劃截止日晚了 {selOverdue.diffDays} 天</div>
                           <div className="mt-0.5">規劃截止 {new Date(selOverdue.end).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}，此任務已逾期。逾期紀錄不計入進度，請申請延期調整時程。</div>
                         </div>
-                        {delayRequestedTasks.has(selectedId)
-                          ? <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-orange-400 text-orange-700 dark:text-orange-300 shrink-0">已申請·待審核</Badge>
+                        {pendingDelayTaskIds.has(selectedId)
+                          ? <Badge variant="outline" className="text-xs px-2.5 py-1 font-medium border-orange-400 bg-orange-100/60 text-orange-700 dark:text-orange-300 shrink-0">已申請延期·待審核</Badge>
                           : <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 border-orange-400 text-orange-800 hover:bg-orange-100 dark:border-orange-800 dark:text-orange-300 shrink-0" onClick={() => openDelay()}>申請延期</Button>}
                       </div>
                     )}
@@ -748,6 +790,12 @@ export function AWeeklyReportComposer({
                       ))}
                     </div>
                   </>
+                )}
+                {overdueUnresolved.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-2 text-xs text-orange-800 dark:text-orange-300">
+                    <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>有 <b>{overdueUnresolved.length}</b> 筆填報日超過規劃截止日，這些<b>逾期紀錄不計入進度</b>；如需調整時程可另外申請延期（非必要）。</span>
+                  </div>
                 )}
                 <div className="text-xs text-muted-foreground pt-1">送出後仍可再進來修改。</div>
               </div>
@@ -907,33 +955,6 @@ export function AWeeklyReportComposer({
             <AlertDialogCancel className="mt-0">返回繼續編輯</AlertDialogCancel>
             <Button variant="outline" disabled={savingDraft} onClick={async () => { const ok = await saveDraft(); if (ok) { setCloseConfirmOpen(false); onOpenChange(false) } }}>{savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : '暫存並關閉'}</Button>
             <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setCloseConfirmOpen(false); onOpenChange(false) }}>不儲存，直接關閉</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* 逾期未處理，擋送出 */}
-      <AlertDialog open={overdueBlockOpen} onOpenChange={setOverdueBlockOpen}>
-        <AlertDialogContent className="sm:max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-orange-500" />有逾期任務未處理，無法送出</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">下列任務的填報日已超過截止日，須先<b>申請延期</b>或把日期改到截止日當日或之前，才能送出本週報告。</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="rounded-lg border divide-y max-h-[40vh] overflow-y-auto">
-            {overdueUnresolved.map(o => {
-              const days = Math.round((new Date(o.latest).getTime() - new Date(o.end).getTime()) / 86400000)
-              return (
-                <div key={o.id} className="flex items-center gap-2 px-3 py-2 text-xs">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{o.title}</div>
-                    <div className="text-orange-700 dark:text-orange-400">工作日期 {new Date(o.latest).toLocaleDateString('zh-TW')} 已超過截止日 {new Date(o.end).toLocaleDateString('zh-TW')}（逾期 {days} 天）</div>
-                  </div>
-                  <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => { setSelectedId(o.id); setOverdueBlockOpen(false) }}>前往處理</Button>
-                </div>
-              )
-            })}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>知道了</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
