@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { WeekPicker } from '@/components/ui/week-picker'
+import { normalizeName } from '@/lib/user-match'
 import {
   Dialog,
   DialogContent,
@@ -267,7 +268,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const pagedMatrixWeeks = matrixWeeks.slice(safePage * WEEKS_PER_PAGE, (safePage + 1) * WEEKS_PER_PAGE)
 
   // 人員比對：選「未指派」時匹配沒有負責人的項目（空值 或 字串「未指派」都算）
-  const matchMember = (a: string | undefined | null) => selectedMember === '未指派' ? (!a || a === '未指派') : a === selectedMember
+  const matchMember = (a: string | undefined | null) => selectedMember === '未指派' ? (!a || a === '未指派') : normalizeName(a) === normalizeName(selectedMember)
 
   // Summary mode: apply member/search filters at the week level
   const summaryFilteredWeeks = useMemo(() => {
