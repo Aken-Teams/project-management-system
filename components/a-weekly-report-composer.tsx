@@ -514,10 +514,20 @@ export function AWeeklyReportComposer({
     return out
   }, [rows, byId])
 
+  // 同日重複：同一任務開兩列同一天 → 後端視為同一筆會互相覆蓋（與 R 端 rDuplicateDates 卡控一致）
+  const duplicateDateTasks = useMemo(() => {
+    const out: { id: string; title: string }[] = []
+    for (const [taskId, rs] of Object.entries(rows)) {
+      const dates = rs.filter(r => r.date && r.content.trim()).map(r => r.date)
+      if (new Set(dates).size !== dates.length) out.push({ id: taskId, title: byId.get(taskId)?.title || '任務' })
+    }
+    return out
+  }, [rows, byId])
+
   // 按「送出」：半填時按鈕已禁用（見 footer）。逾期不再硬擋——改在確認框軟提醒，
   // A 仍可送出（逾期紀錄不計進度），申請延期變成建議而非必要。
   const onClickSubmit = () => {
-    if (incompleteRows.length > 0) return
+    if (incompleteRows.length > 0 || duplicateDateTasks.length > 0) return
     setConfirmOpen(true)
   }
 
@@ -696,6 +706,8 @@ export function AWeeklyReportComposer({
             <div className="text-xs min-w-0">
               {incompleteRows.length > 0
                 ? <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />有 {incompleteRows.length} 筆紀錄只填了日期或內容，請補齊或刪除該列</span>
+                : duplicateDateTasks.length > 0
+                ? <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />有任務在同一天填了多列，同一天視為同一筆會互相覆蓋，請併到同一列</span>
                 : <span className="text-muted-foreground">本週報告 {reportCount} 項{doneCount > 0 && <>，標記完成 <span className="text-green-600 font-medium">{doneCount}</span></>}</span>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -703,7 +715,7 @@ export function AWeeklyReportComposer({
                 {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : draftDone ? <Check className="h-4 w-4 text-green-600" /> : <Save className="h-4 w-4" />}
                 {draftDone ? '已暫存' : '暫存草稿'}
               </Button>
-              <Button className="gap-1.5 font-medium shadow-sm" disabled={saving || savingDraft || loading || incompleteRows.length > 0} onClick={onClickSubmit}><Send className="h-4 w-4" />送出本週報告</Button>
+              <Button className="gap-1.5 font-medium shadow-sm" disabled={saving || savingDraft || loading || incompleteRows.length > 0 || duplicateDateTasks.length > 0} onClick={onClickSubmit}><Send className="h-4 w-4" />送出本週報告</Button>
             </div>
           </div>
         </DialogContent>
