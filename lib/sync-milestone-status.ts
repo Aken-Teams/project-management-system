@@ -243,12 +243,13 @@ export async function syncTaskProgressFromLogs(
       // 新模型：每個任務（含父層）一律以「自己的報告」推算時間進度，不繼承子層。
       //   父層沒寫自己的報告 → 沒有 log → 0。里程碑才做聚合（見 syncMilestoneStatus）。
       // IMPORTANT: Only completedAt grants 100%. Auto-calc caps at 99%.
-      // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %；逾期紀錄不灌水。
+      // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %。
       const plannedStart = task.originalStartDate && task.originalStartDate < task.startDate
         ? task.originalStartDate : task.startDate
       const allLogs = logsByTask.get(task.id) || []
-      // 只算截止日(含)以前的紀錄；逾期紀錄不灌水（需申請延期）
-      const logsUpToEnd = allLogs.filter(d => d <= task.endDate)
+      // 客戶決策（2026-07-10）：「有紀錄就有進度」——不管快逾期/已延期，有報告就算，
+      //   不再濾掉逾期紀錄（逾期報告日超過 endDate → 分子>分母 → 封頂 99%）。
+      const logsUpToEnd = allLogs
       if (logsUpToEnd.length === 0) {
         target = 0
       } else {

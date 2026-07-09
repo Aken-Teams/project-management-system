@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 
@@ -84,8 +85,8 @@ export async function PUT(
       author: updated.author.name,
       logDate: updated.logDate.toISOString().split('T')[0],
       content: updated.content,
-      ...(updated.nextPlans ? { nextPlans: JSON.parse(updated.nextPlans) } : {}),
-      ...(updated.attachments ? { attachments: JSON.parse(updated.attachments) } : {}),
+      ...(updated.nextPlans ? { nextPlans: safeJsonParse(updated.nextPlans, [] as unknown[]) } : {}),
+      ...(updated.attachments ? { attachments: safeJsonParse(updated.attachments, [] as unknown[]) } : {}),
       createdAt: updated.createdAt.toISOString(),
     })
   } catch (error) {

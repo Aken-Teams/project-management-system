@@ -5,6 +5,7 @@
 import { prisma } from '@/lib/db'
 import type { NotificationType } from '@prisma/client'
 import { isSameUser } from '@/lib/user-match'
+import { todayUtc } from '@/lib/date-utils'
 
 // ─── Core ──────────────────────────────────────────────────────────────────
 
@@ -109,32 +110,31 @@ export async function notifyWeeklyReportReady({
   }
 }
 
-/** R 送出工作紀錄 → 通知任務的當責 A（依 assignee 姓名解析，A 為該任務所屬專案的 role='A' 成員） */
+/** R 送出工作紀錄 → 通知該專案當責 A（role='A' 成員） */
 export async function notifyRecordUploadedToAccountable({
   projectId,
   projectName,
-  uploaderName,
 }: {
   projectId: string
   projectName: string
-  uploaderName: string
 }) {
   const accountables = await prisma.projectTeamMember.findMany({
     where: { projectId, role: 'A' },
     select: { user: { select: { id: true } } },
   })
+  const startOfToday = todayUtc()
   for (const a of accountables) {
-    // 去重：同一 A、同專案、同上傳者已有未讀通知就不再重複發（R 逐里程碑存檔不洗版）
+    // 去重：同 A、同專案、專屬型別、「當日時間窗」已有一則就不再發（不看 uploaderName 子字串、不看已讀）
     const existing = await prisma.notification.findFirst({
-      where: { userId: a.user.id, projectId, type: 'weekly_report_ready', read: false, message: { contains: uploaderName } },
+      where: { userId: a.user.id, projectId, type: 'record_uploaded', createdAt: { gte: startOfToday } },
       select: { id: true },
     })
     if (existing) continue
     await createNotification({
       userId: a.user.id,
-      type: 'weekly_report_ready',
+      type: 'record_uploaded',
       title: '有新的工作紀錄',
-      message: `${uploaderName} 在「${projectName}」上傳了工作紀錄，可查看並彙整`,
+      message: `「${projectName}」本日有成員上傳工作紀錄，可查看並彙整`,
       projectId,
     })
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 import { notifyWeeklyReportReady } from '@/lib/notifications'
@@ -43,8 +44,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({
       aLogs: aLogs.map(l => ({
         id: l.id, taskId: l.taskId, logDate: l.logDate.toISOString().split('T')[0], content: l.content,
-        attachments: l.attachments ? JSON.parse(l.attachments) : [],
-        nextPlans: l.nextPlans ? JSON.parse(l.nextPlans) : [],
+        attachments: l.attachments ? safeJsonParse(l.attachments, [] as unknown[]) : [],
+        nextPlans: l.nextPlans ? safeJsonParse(l.nextPlans, [] as unknown[]) : [],
       })),
       notes: notes.map(n => ({ taskId: n.taskId, content: n.content })),
     })

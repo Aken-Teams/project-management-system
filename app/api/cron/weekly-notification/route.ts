@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendMail } from '@/lib/send-mail'
 import { isSameUser } from '@/lib/user-match'
+import { notifyProjectOverdueIfNeeded } from '@/lib/notifications'
 
 function replaceVars(template: string, vars: Record<string, string>): string {
   return template.replace(/{{(\w+)}}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         name: true,
+        ownerId: true,
         projectTier: true,
         teamMembers: {
           select: {
@@ -189,6 +191,11 @@ export async function POST(request: NextRequest) {
       }
 
       evaluatedCount++
+
+      // ── 逾期通知（原本掛在專案 GET 的寫副作用，移來這裡 #17）：里程碑逾期就提醒 A/owner，7 天去重 ──
+      if (!isPreview) {
+        await notifyProjectOverdueIfNeeded({ projectId: project.id, projectName: project.name, fallbackOwnerId: project.ownerId })
+      }
 
       // ── Frequency gate: check ISO week vs frequencyWeeks ───────────────────
       if (profile.frequencyWeeks > 1 && isoWeek % profile.frequencyWeeks !== 0) {

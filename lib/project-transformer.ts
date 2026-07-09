@@ -4,6 +4,7 @@ import {
   demandSourceToFe,
 } from '@/lib/enum-mappers'
 import { todayUtcStr, toUtcDateStr } from '@/lib/date-utils'
+import { safeJsonParse } from '@/lib/utils'
 // ─── Auto-compute project status & progress from tasks ─────
 
 interface FeTask {
@@ -342,8 +343,8 @@ export function dbProjectToFrontend(
     author: tl.author.name,
     logDate: tl.logDate.toISOString().split('T')[0],
     content: tl.content,
-    ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
-    ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
+    ...(tl.nextPlans ? { nextPlans: safeJsonParse(tl.nextPlans, [] as unknown[]) } : {}),
+    ...(tl.attachments ? { attachments: safeJsonParse(tl.attachments, [] as unknown[]) } : {}),
     createdAt: tl.createdAt.toISOString(),
     publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
     weekOf: (tl as { weekOf?: string | null }).weekOf ?? null,

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
-import { notifyProjectOverdueIfNeeded } from '@/lib/notifications'
 import {
   projectTypeToDb,
   projectTierToDb,
@@ -57,14 +56,7 @@ export async function GET(
       }
     }
 
-    // ── Overdue check: notify PM at most once per 7 days（僅已開案專案）──
-    if ((project as { phase?: string }).phase === 'active') {
-      await notifyProjectOverdueIfNeeded({
-        projectId: id,
-        projectName: project.name,
-        fallbackOwnerId: project.ownerId,
-      })
-    }
+    // ── 逾期通知已移出 GET（讀操作不再有寫副作用 #17）→ 改由 weekly-notification cron 觸發 ──
 
     // ── Date consistency repair: fix tasks outside milestone range ──
     //   已核准延期的任務要「保護」原始日期不被清（供甘特畫紅段）

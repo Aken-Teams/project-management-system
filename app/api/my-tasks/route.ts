@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
 import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
 
@@ -177,8 +178,8 @@ export async function GET(request: NextRequest) {
           updatedAt: tl.updatedAt.toISOString(),
           lastEditedBy: tl.lastEditedBy || null,
           publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
-          ...(tl.nextPlans ? { nextPlans: JSON.parse(tl.nextPlans) } : {}),
-          ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
+          ...(tl.nextPlans ? { nextPlans: safeJsonParse(tl.nextPlans, [] as unknown[]) } : {}),
+          ...(tl.attachments ? { attachments: safeJsonParse(tl.attachments, [] as unknown[]) } : {}),
         })),
         reviewEvents: p.tasks.flatMap(t =>
           ((t as Record<string, unknown>).reviewEvents as Array<{ id: string; type: string; actor: string; note: string | null; createdAt: Date }> || []).map(e => ({

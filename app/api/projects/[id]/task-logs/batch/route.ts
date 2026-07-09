@@ -162,7 +162,6 @@ export async function POST(
       await notifyRecordUploadedToAccountable({
         projectId: id,
         projectName: proj?.name || '專案',
-        uploaderName: user.name,
       })
     }
 

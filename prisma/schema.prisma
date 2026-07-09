@@ -105,6 +105,7 @@ enum NotificationType {
   support_needed
   weekly_upload_missing
   weekly_report_ready
+  record_uploaded
 }
 
 // ─── Models ──────────────────────────────────────────────

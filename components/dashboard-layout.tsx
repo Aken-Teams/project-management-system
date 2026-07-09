@@ -38,8 +38,6 @@ import {
   Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useProjectStore } from '@/lib/project-store'
-import { computeTaskStatus } from '@/lib/task-utils'
 import { Badge } from '@/components/ui/badge'
 import { NotificationBell } from '@/components/notification-bell'
 import { isAdmin } from '@/lib/permissions'
@@ -77,13 +75,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout } = useAuth()
-  const { getPendingApprovals, getTasksForUser } = useProjectStore()
-  const pendingCount = getPendingApprovals().length
-  const userTasks = user ? getTasksForUser(user.name) : []
-  const atRiskCount = userTasks.filter(({ project, task }) => {
-    const status = computeTaskStatus(task, project.taskLogs)
-    return status === 'at-risk' || status === 'overdue'
-  }).length
+  // 側邊欄徽章：改用 DB 真實數據（取代 localStorage 假資料 #13）
+  const [pendingCount, setPendingCount] = useState(0)
+  const [atRiskCount, setAtRiskCount] = useState(0)
+  useEffect(() => {
+    if (!user) { setPendingCount(0); setAtRiskCount(0); return }
+    fetch(`/api/sidebar-badges?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) { setPendingCount(d.pendingApprovals || 0); setAtRiskCount(d.atRiskTasks || 0) } })
+      .catch(() => {})
+  }, [user])
 
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
