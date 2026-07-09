@@ -346,6 +346,7 @@ export function dbProjectToFrontend(
     ...(tl.attachments ? { attachments: JSON.parse(tl.attachments) } : {}),
     createdAt: tl.createdAt.toISOString(),
     publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
+    weekOf: (tl as { weekOf?: string | null }).weekOf ?? null,
   }))
 
   // Find the Accountable (A) member from team, fallback to project owner

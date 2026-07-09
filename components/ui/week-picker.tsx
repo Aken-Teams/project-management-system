@@ -4,7 +4,7 @@ import * as React from 'react'
 import { DayPicker } from 'react-day-picker'
 import { startOfWeek, endOfWeek, isWithinInterval, getISOWeek, format, addWeeks, subWeeks } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { CalendarDays, CalendarCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -99,8 +99,9 @@ export function WeekPicker({ value, onChange, warningLabel, className }: WeekPic
           <span className="text-xs font-medium text-muted-foreground">週報周別</span>
         </div>
         {!isThisWeek && (
-          <button type="button" onClick={handleGoThisWeek} className="text-[10px] text-primary hover:underline">
-            回到本周
+          <button type="button" onClick={handleGoThisWeek} className="inline-flex items-center gap-1 text-[11px] text-primary rounded-md border border-primary/30 px-1.5 py-0.5 hover:bg-primary/10 transition-colors">
+            <CalendarCheck className="h-3 w-3" />
+            回到本週
           </button>
         )}
       </div>

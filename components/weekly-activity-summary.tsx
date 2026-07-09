@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { WeekPicker } from '@/components/ui/week-picker'
 import {
   Dialog,
   DialogContent,
@@ -127,13 +128,13 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     }
   })
 
-  // 更新紀錄只放 A 已發布的紀錄
+  // 更新紀錄只放 A 已發布的紀錄；依「填報週(weekOf)」分組，沒有才退回用 log 日期
   project.taskLogs.filter(l => l.publishedAt).forEach(log => {
-    const monday = getWeekMonday(log.logDate)
+    const monday = log.weekOf || getWeekMonday(log.logDate)
     const task = project.tasks.find(t => t.id === log.taskId)
     const milestone = task ? project.milestones.find(m => m.id === task.milestoneId) : null
     const week = getOrCreate(monday)
-    const assignee = task?.assignee || log.author
+    const assignee = task?.assignee || '' // 任務真實負責人（未指派則空字串，供「未指派」篩選）
     week.logs.push({
       logId: log.id,
       taskId: log.taskId,
@@ -177,18 +178,35 @@ const WEEKS_PER_PAGE = 4
 // --- Component ---
 
 export function WeeklyActivitySummary({ project }: { project: Project }) {
-  const allWeeks = useMemo(() => buildWeeklyActivities(project), [project])
+  const rawWeeks = useMemo(() => buildWeeklyActivities(project), [project])
+  // 週報彙整說明（A 送出的專案/父層敘述）— 先抓，供補週區塊 + 顯示用
+  const [weekNotes, setWeekNotes] = useState<{ weekOf: string; taskId: string; content: string; author: string; submittedAt: string | null }[]>([])
+  useEffect(() => {
+    fetch(`/api/projects/${project.id}/weekly-report`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: { notes: { weekOf: string; taskId: string; content: string; author: string; submittedAt: string | null }[] }) => setWeekNotes(d.notes.filter(n => n.submittedAt && n.content.trim())))
+      .catch(() => setWeekNotes([]))
+  }, [project.id])
+  // 合併：有彙整的那一週即使沒有任務 log，也補出一個週區塊，讓 A 的彙整一定顯示得出來
+  const allWeeks = useMemo(() => {
+    const weeks = [...rawWeeks]
+    const existing = new Set(weeks.map(w => w.weekMonday))
+    for (const n of weekNotes) {
+      if (n.weekOf && !existing.has(n.weekOf)) {
+        existing.add(n.weekOf)
+        weeks.push({ weekMonday: n.weekOf, completedTasks: [], logs: [], delayRequests: [], activeMembers: new Set() })
+      }
+    }
+    return weeks.sort((a, b) => b.weekMonday.localeCompare(a.weekMonday))
+  }, [rawWeeks, weekNotes])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [page, setPage] = useState(0)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [selectedWeekMonday, setSelectedWeekMonday] = useState<string | null>(null)
-  const [weekFilter, setWeekFilter] = useState<string>('')
-  const [weekFilterOpen, setWeekFilterOpen] = useState(false)
-  const [weekFilterMonth, setWeekFilterMonth] = useState(new Date())
-  const [viewMode, setViewMode] = useState<'matrix' | 'summary'>('summary')
+  const [weekMon, setWeekMon] = useState<string>('') // 週別篩選：'' = 全部；值 = 該週週一 YYYY-MM-DD
+  const viewMode: string = 'summary' // 監控矩陣已移除，固定用週報彙整（matrix 分支為死碼）
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(new Set())
+  const [collapsedNotes, setCollapsedNotes] = useState<Set<string>>(new Set()) // 收合「本週專案彙整」的週
   const [collapsedMs, setCollapsedMs] = useState<Set<string>>(new Set())
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set())
   const [expandedDelays, setExpandedDelays] = useState<Set<string>>(new Set())
@@ -219,14 +237,6 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
   const [reportDownloaded, setReportDownloaded] = useState<string | null>(null)
   const [comingSoonOpen, setComingSoonOpen] = useState(false)
 
-  // 週報彙整說明（A 送出的父層/專案層敘述）— 依週顯示在更新紀錄
-  const [weekNotes, setWeekNotes] = useState<{ weekOf: string; taskId: string; content: string; author: string; submittedAt: string | null }[]>([])
-  useEffect(() => {
-    fetch(`/api/projects/${project.id}/weekly-report`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: { notes: { weekOf: string; taskId: string; content: string; author: string; submittedAt: string | null }[] }) => setWeekNotes(d.notes.filter(n => n.submittedAt && n.content.trim())))
-      .catch(() => setWeekNotes([]))
-  }, [project.id])
   // weekMonday → 該週彙整（專案層 taskId='' 排最前，其餘為父層任務彙整）
   const notesByWeek = useMemo(() => {
     const map = new Map<string, { taskId: string; title: string; content: string; author: string }[]>()
@@ -240,50 +250,31 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     return map
   }, [weekNotes, project.tasks])
 
-  const allActiveMembers = useMemo(() => {
-    const members = new Set<string>()
-    allWeeks.forEach(w => w.activeMembers.forEach(m => members.add(m)))
-    return [...members].sort()
-  }, [allWeeks])
-
-  // Available week numbers for filter dropdown
-  const availableWeeks = useMemo(() => {
-    const weeks = allWeeks.map(w => {
-      const weekNum = getISOWeekNumber(w.weekMonday)
-      const year = new Date(w.weekMonday).getFullYear()
-      const key = `${year}W${String(weekNum).padStart(2, '0')}`
-      return { weekMonday: w.weekMonday, weekNum, year, key }
-    })
-    return [...new Map(weeks.map(w => [w.key, w])).values()].sort((a, b) => a.key.localeCompare(b.key))
-  }, [allWeeks])
-
-  // Date + week filtered weeks for matrix (no member/search filter)
+  // 週別篩選（用週一比對，簡單可靠）
   const matrixWeeks = useMemo(() => {
-    return allWeeks.filter(week => {
-      if (dateFrom && getWeekSunday(week.weekMonday) < dateFrom) return false
-      if (dateTo && week.weekMonday > dateTo) return false
-      if (weekFilter) {
-        const wn = getISOWeekNumber(week.weekMonday)
-        const yr = new Date(week.weekMonday).getFullYear()
-        const key = `${yr}W${String(wn).padStart(2, '0')}`
-        if (key !== weekFilter) return false
-      }
-      return true
-    })
-  }, [allWeeks, dateFrom, dateTo, weekFilter])
+    return allWeeks.filter(week => !weekMon || week.weekMonday === weekMon)
+  }, [allWeeks, weekMon])
 
-  const projectMembers = useMemo(() => [...new Set(project.team)].sort(), [project.team])
+  // 人員篩選：列出「整個專案團隊」（不只有寫報告的人）；有未指派任務時附上「未指派」
+  const projectMembers = useMemo(() => {
+    const members = [...new Set(project.team)].filter(Boolean).sort()
+    if (project.tasks.some(t => !t.assignee || t.assignee === '未指派')) members.push('未指派')
+    return members
+  }, [project.team, project.tasks])
 
   const totalPages = Math.max(1, Math.ceil(matrixWeeks.length / WEEKS_PER_PAGE))
   const safePage = Math.min(page, totalPages - 1)
   const pagedMatrixWeeks = matrixWeeks.slice(safePage * WEEKS_PER_PAGE, (safePage + 1) * WEEKS_PER_PAGE)
 
+  // 人員比對：選「未指派」時匹配沒有負責人的項目（空值 或 字串「未指派」都算）
+  const matchMember = (a: string | undefined | null) => selectedMember === '未指派' ? (!a || a === '未指派') : a === selectedMember
+
   // Summary mode: apply member/search filters at the week level
   const summaryFilteredWeeks = useMemo(() => {
     return matrixWeeks.filter(week => {
       if (selectedMember) {
-        const hasLogs = week.logs.some(l => l.assignee === selectedMember)
-        const hasCompleted = week.completedTasks.some(ct => ct.assignee === selectedMember)
+        const hasLogs = week.logs.some(l => matchMember(l.assignee))
+        const hasCompleted = week.completedTasks.some(ct => matchMember(ct.assignee))
         if (!hasLogs && !hasCompleted) return false
       }
       if (searchQuery.trim()) {
@@ -365,188 +356,22 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
           />
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Popover open={weekFilterOpen} onOpenChange={setWeekFilterOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  'flex items-center gap-1.5 text-sm border rounded-lg px-3 h-8 bg-background hover:bg-muted/50 transition-colors',
-                  weekFilter ? 'border-primary/30 font-medium' : '',
-                )}
-              >
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="truncate">
-                  {weekFilter ? (() => {
-                    const w = availableWeeks.find(aw => aw.key === weekFilter)
-                    if (!w) return weekFilter
-                    const mon = new Date(w.weekMonday)
-                    const sun = endOfWeek(mon, { weekStartsOn: 1 })
-                    return `${w.key} (${mon.getMonth() + 1}/${mon.getDate()} ~ ${sun.getMonth() + 1}/${sun.getDate()})`
-                  })() : '全部週別'}
-                </span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <div className="p-2 pb-0">
-                <div className="flex items-center justify-center gap-2 mb-1">
-                  <select
-                    value={weekFilterMonth.getFullYear()}
-                    onChange={e => setWeekFilterMonth(new Date(Number(e.target.value), weekFilterMonth.getMonth(), 1))}
-                    className="text-sm font-medium border rounded px-2 py-0.5 bg-background"
-                  >
-                    {Array.from({ length: 7 }, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
-                      <option key={y} value={y}>{y}年</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <DayPicker
-                mode="default"
-                showOutsideDays
-                showWeekNumber
-                weekStartsOn={1}
-                month={weekFilterMonth}
-                onMonthChange={setWeekFilterMonth}
-                modifiers={weekFilter ? (() => {
-                  const w = availableWeeks.find(aw => aw.key === weekFilter)
-                  if (!w) return {}
-                  const mon = getMondayOfWeek(new Date(w.weekMonday))
-                  const sun = endOfWeek(mon, { weekStartsOn: 1 })
-                  return {
-                    selectedWeek: (day: Date) => { try { return isWithinInterval(day, { start: mon, end: sun }) } catch { return false } },
-                    weekStart: mon,
-                    weekEnd: sun,
-                  }
-                })() : {}}
-                modifiersClassNames={{
-                  selectedWeek: 'bg-primary/15 text-primary',
-                  weekStart: '!bg-primary !text-primary-foreground rounded-l-md',
-                  weekEnd: '!bg-primary !text-primary-foreground rounded-r-md',
-                }}
-                onDayClick={(day) => {
-                  const mon = getMondayOfWeek(day)
-                  const wn = getISOWeek(mon)
-                  const yr = mon.getFullYear()
-                  const key = `${yr}W${String(wn).padStart(2, '0')}`
-                  setWeekFilter(key)
-                  setPage(0)
-                  setWeekFilterOpen(false)
-                }}
-                className="p-3"
-                classNames={{
-                  months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
-                  month: 'space-y-4',
-                  caption: 'flex justify-center pt-1 relative items-center',
-                  caption_label: 'text-sm font-medium',
-                  nav: 'space-x-1 flex items-center',
-                  nav_button: cn(buttonVariants({ variant: 'outline' }), 'h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100'),
-                  nav_button_previous: 'absolute left-1',
-                  nav_button_next: 'absolute right-1',
-                  table: 'w-full border-collapse space-y-1',
-                  head_row: 'flex',
-                  head_cell: 'text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]',
-                  row: 'flex w-full mt-2 cursor-pointer hover:bg-accent/50 rounded-md transition-colors',
-                  cell: 'h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20',
-                  day: cn(buttonVariants({ variant: 'ghost' }), 'h-9 w-9 p-0 font-normal'),
-                  day_today: 'bg-accent text-accent-foreground font-bold',
-                  day_outside: 'text-muted-foreground opacity-50',
-                  day_disabled: 'text-muted-foreground opacity-50',
-                  day_hidden: 'invisible',
-                }}
-                components={{
-                  IconLeft: () => <ChevronLeft className="h-4 w-4" />,
-                  IconRight: () => <ChevronRight className="h-4 w-4" />,
-                }}
-              />
-              <div className="border-t px-3 py-2 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const now = new Date()
-                    const mon = getMondayOfWeek(now)
-                    const wn = getISOWeek(mon)
-                    const yr = mon.getFullYear()
-                    setWeekFilter(`${yr}W${String(wn).padStart(2, '0')}`)
-                    setWeekFilterMonth(now)
-                    setPage(0)
-                    setWeekFilterOpen(false)
-                  }}
-                  className="text-xs text-primary hover:underline"
-                >
-                  跳到本周 (W{String(getISOWeek(getMondayOfWeek(new Date()))).padStart(2, '0')})
-                </button>
-                {weekFilter && (
-                  <button
-                    type="button"
-                    onClick={() => { setWeekFilter(''); setPage(0); setWeekFilterOpen(false) }}
-                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-                  >
-                    清除篩選
-                  </button>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
-          {weekFilter && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => { setWeekFilter(''); setPage(0) }}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={e => { setDateFrom(e.target.value); setPage(0) }}
-            className="h-8 text-sm w-[140px]"
-          />
-          <span className="text-sm text-muted-foreground">至</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={e => { setDateTo(e.target.value); setPage(0) }}
-            className="h-8 text-sm w-[140px]"
-          />
-          {(dateFrom || dateTo) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => { setDateFrom(''); setDateTo(''); setPage(0) }}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
+        {/* 週別篩選：用 WeekPicker 元件 */}
+        {weekMon === '' ? (
           <Button
-            variant={viewMode === 'summary' ? 'default' : 'ghost'}
+            variant="outline"
             size="sm"
-            className="h-7 text-xs gap-1 px-2.5"
-            onClick={() => { setViewMode('summary'); setPage(0) }}
+            className="h-8 gap-1.5 text-sm"
+            onClick={() => { setWeekMon(allWeeks[0]?.weekMonday || getWeekMonday(new Date().toISOString().slice(0, 10))); setPage(0) }}
           >
-            <FileText className="h-3.5 w-3.5" />
-            週報彙整
+            <Calendar className="h-3.5 w-3.5" />依週篩選
           </Button>
-          <Button
-            variant={viewMode === 'matrix' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-7 text-xs gap-1 px-2.5"
-            onClick={() => { setViewMode('matrix'); setPage(0) }}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            監控矩陣
-          </Button>
-        </div>
+        ) : (
+          <div className="flex items-end gap-1.5">
+            <div className="w-[240px]"><WeekPicker value={weekMon} onChange={w => { setWeekMon(w); setPage(0) }} /></div>
+            <Button variant="ghost" size="sm" className="h-[38px] text-xs" onClick={() => { setWeekMon(''); setPage(0) }}>全部週別</Button>
+          </div>
+        )}
 
         <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
           <DialogTrigger asChild>
@@ -716,7 +541,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
         >
           全部
         </button>
-        {allActiveMembers.map(name => (
+        {projectMembers.map(name => (
           <button
             key={name}
             onClick={() => { setSelectedMember(selectedMember === name ? null : name); setPage(0) }}
@@ -988,8 +813,9 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
             let filteredLogs = week.logs
             let filteredCompleted = week.completedTasks
             if (selectedMember) {
-              filteredLogs = filteredLogs.filter(l => l.author === selectedMember)
-              filteredCompleted = filteredCompleted.filter(ct => ct.completedBy === selectedMember)
+              // 以「任務負責人(assignee)」篩選，與週層一致；「未指派」則匹配無負責人者
+              filteredLogs = filteredLogs.filter(l => matchMember(l.assignee))
+              filteredCompleted = filteredCompleted.filter(ct => matchMember(ct.assignee))
             }
             if (searchQuery.trim()) {
               const q = searchQuery.trim().toLowerCase()
@@ -1076,20 +902,39 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                 {isWeekCollapsed ? null : (() => {
                   const wNotes = notesByWeek.get(week.weekMonday) || []
                   if (wNotes.length === 0) return null
+                  const notesCollapsed = collapsedNotes.has(week.weekMonday)
                   return (
-                    <div className="px-4 py-3 border-b bg-primary/5 space-y-2">
-                      {wNotes.map((n, i) => (
-                        <div key={i}>
-                          <div className="text-[11px] font-semibold text-primary/80 mb-0.5">{n.taskId ? `【${n.title}】彙整` : '本週專案彙整'}{n.author && <span className="text-muted-foreground font-normal ml-1">· {n.author}</span>}</div>
-                          <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{n.content}</div>
+                    <div className="border-b bg-gradient-to-r from-primary/[0.06] to-transparent">
+                      <button
+                        onClick={() => setCollapsedNotes(prev => { const s = new Set(prev); s.has(week.weekMonday) ? s.delete(week.weekMonday) : s.add(week.weekMonday); return s })}
+                        className="w-full flex items-center gap-1.5 px-4 py-2 text-primary hover:bg-primary/5 transition-colors"
+                      >
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${notesCollapsed ? '-rotate-90' : ''}`} />
+                        <FileText className="h-3.5 w-3.5" />
+                        <span className="text-xs font-semibold">本週專案彙整</span>
+                        <span className="text-[10px] text-muted-foreground font-normal ml-1">（{wNotes.length}）</span>
+                      </button>
+                      {!notesCollapsed && (
+                        <div className="px-4 pb-3 space-y-2">
+                          {wNotes.map((n, i) => (
+                            <div key={i} className="rounded-lg border border-primary/20 bg-background/70 px-3 py-2.5 shadow-sm">
+                              {n.taskId && (
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <FileText className="h-3.5 w-3.5 text-primary shrink-0" /><span className="text-xs font-semibold text-primary">{n.title} · 彙整</span>
+                                </div>
+                              )}
+                              <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{n.content}</div>
+                              {n.author && <div className="text-[11px] text-muted-foreground text-right mt-1.5">— {n.author}</div>}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )
                 })()}
 
                 {isWeekCollapsed ? null : isEmpty ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">此週無紀錄</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">{(notesByWeek.get(week.weekMonday) || []).length > 0 ? '本週僅有專案彙整說明，無個別任務紀錄' : '此週無紀錄'}</p>
                 ) : (
                   <div className="divide-y">
                     {sortedMilestoneEntries.map(([msName, tasks]) => {
