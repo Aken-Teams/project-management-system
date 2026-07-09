@@ -89,6 +89,8 @@ export function AWeeklyReportComposer({
   const [completingPrereq, setCompletingPrereq] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [completeDate, setCompleteDate] = useState('')
+  const [delayRequestedTasks, setDelayRequestedTasks] = useState<Set<string>>(new Set()) // 本次已送出延期申請的任務
+  const [overdueBlockOpen, setOverdueBlockOpen] = useState(false)
 
   const { weekStart, weekEnd } = useMemo(() => {
     const s = new Date(weekOf); const e = new Date(weekOf); e.setDate(e.getDate() + 6)
@@ -205,6 +207,55 @@ export function AWeeklyReportComposer({
     return { extraDays, milestoneDelta, proposedMilestoneDate, msName: ms.name, msDue: ms.dueDate }
   }, [selTask, delayDate, project])
 
+  // 下游相依（遞迴）：延此任務會連帶順延的後續任務 / 里程碑
+  // 種子＝此任務本身 + 其祖先鏈（延葉任務也會拖累父層 aaa，凡相依 aaa 者也算下游）
+  const delayDownstream = useMemo(() => {
+    if (!selTask) return { tasks: [] as Task[], milestones: [] as typeof project.milestones }
+    const seeds = new Set<string>([selTask.id])
+    let p = selTask.parentId
+    while (p) { seeds.add(p); p = byId.get(p)?.parentId }
+    const hit = new Set<string>()
+    const stack = [...seeds]
+    while (stack.length) {
+      const cur = stack.pop() as string
+      for (const t of project.tasks) {
+        if ((t.dependencies || []).includes(cur) && !seeds.has(t.id) && !hit.has(t.id)) { hit.add(t.id); stack.push(t.id) }
+      }
+    }
+    const tasks = project.tasks.filter(t => hit.has(t.id))
+    const msIds = new Set(tasks.map(t => t.milestoneId).filter(id => id !== selTask.milestoneId))
+    const milestones = project.milestones.filter(m => msIds.has(m.id))
+    return { tasks, milestones }
+  }, [selTask, byId, project.tasks, project.milestones])
+
+  // 延期前後差異（甘特視覺化）：原定區間(灰) vs 延後區間(橘)
+  //  - 延期里程碑：起始不變、結束延後（條變長）
+  //  - 下游里程碑：整條往後平移
+  const delayPreviewRows = useMemo(() => {
+    if (!selTask || !delayImpact) return [] as { name: string; oe: string; ne: string; delta: number; osPct: number; oePct: number; nsPct: number; nePct: number }[]
+    const dstr = (d: string | Date) => (typeof d === 'string' ? d : ymd(new Date(d)))
+    const msStartOf = (msId: string) => {
+      const ts = project.tasks.filter(t => t.milestoneId === msId)
+      if (!ts.length) return null
+      return ts.reduce((m, t) => (t.startDate < m ? t.startDate : m), ts[0].startDate)
+    }
+    const shiftDays = (d: string, n: number) => ymd(new Date(new Date(d).getTime() + n * 86400000))
+    const raw: { name: string; os: string; oe: string; ns: string; ne: string; delta: number }[] = []
+    const ms = project.milestones.find(m => m.id === selTask.milestoneId)
+    if (ms) {
+      const oe = dstr(ms.dueDate); const os = msStartOf(ms.id) || oe
+      raw.push({ name: ms.name, os, oe, ns: os, ne: delayImpact.proposedMilestoneDate, delta: delayImpact.milestoneDelta })
+    }
+    for (const dm of delayDownstream.milestones) {
+      const oe = dstr(dm.dueDate); const os = msStartOf(dm.id) || oe
+      raw.push({ name: dm.name, os, oe, ns: shiftDays(os, delayImpact.extraDays), ne: shiftDays(oe, delayImpact.extraDays), delta: delayImpact.extraDays })
+    }
+    const times = raw.flatMap(r => [r.os, r.oe, r.ns, r.ne].map(d => new Date(d).getTime()))
+    const min = Math.min(...times), max = Math.max(...times), span = max - min || 1
+    const p = (d: string) => ((new Date(d).getTime() - min) / span) * 100
+    return raw.map(r => ({ name: r.name, oe: r.oe, ne: r.ne, delta: r.delta, osPct: p(r.os), oePct: p(r.oe), nsPct: p(r.ns), nePct: p(r.ne) }))
+  }, [selTask, delayImpact, delayDownstream, project.milestones, project.tasks])
+
   const openDelay = (preferDate?: string) => {
     if (!selTask) return
     // 預設新截止日：指定日 或 填報最晚日 或 今天
@@ -228,6 +279,7 @@ export function AWeeklyReportComposer({
         }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || '送出失敗') }
+      setDelayRequestedTasks(p => new Set(p).add(selTask.id))
       setDelayDone(true)
       setTimeout(() => { setDelayOpen(false); setDelayDone(false) }, 1400)
     } catch (e) { alert(e instanceof Error ? e.message : '送出延期申請失敗') } finally { setDelaySubmitting(false) }
@@ -264,7 +316,8 @@ export function AWeeklyReportComposer({
     if (!selTask || !selectedId || sel?.isParent || !selTask.endDate) return null
     const cand: string[] = []
     const md = markDone[selectedId]; if (md) cand.push(md)
-    for (const r of (rows[selectedId] || [])) if (r.date) cand.push(r.date)
+    // 只算「有內容」的工作紀錄列，與送出擋控一致（空列不算報告）
+    for (const r of (rows[selectedId] || [])) if (r.date && r.content.trim()) cand.push(r.date)
     if (!cand.length) return null
     const latest = [...cand].sort().slice(-1)[0]
     const diffDays = Math.round((new Date(latest).getTime() - new Date(selTask.endDate).getTime()) / 86400000)
@@ -330,6 +383,40 @@ export function AWeeklyReportComposer({
 
   // 標記完成的日期是否已超過截止日（超過就必須先申請延期）
   const completeOverdue = !!(selTask && completeDate && new Date(completeDate).getTime() > new Date(selTask.endDate).getTime())
+
+  // 送出前檢查：填報日超過截止日、又還沒申請延期的任務（必須先處理才能送出）
+  const overdueUnresolved = useMemo(() => {
+    const out: { id: string; title: string; latest: string; end: string }[] = []
+    for (const [taskId, rs] of Object.entries(rows)) {
+      const task = byId.get(taskId)
+      if (!task) continue
+      const filled = rs.filter(r => r.content.trim() && r.date)
+      if (!filled.length) continue
+      const latest = filled.map(r => r.date).sort().slice(-1)[0]
+      if (new Date(latest).getTime() <= new Date(task.endDate).getTime()) continue
+      const resolved = delayRequestedTasks.has(taskId) ||
+        project.delayRequests?.some(dr => dr.status === 'pending' && dr.affectedMilestones?.some(am => am.milestoneId === task.milestoneId))
+      if (!resolved) out.push({ id: taskId, title: task.title, latest, end: task.endDate })
+    }
+    return out
+  }, [rows, byId, delayRequestedTasks, project.delayRequests])
+
+  // 半填的列（只填日期或只填內容）——不允許送出，避免用空內容繞過逾期擋控
+  const incompleteRows = useMemo(() => {
+    const out: { id: string; title: string }[] = []
+    for (const [taskId, rs] of Object.entries(rows)) {
+      const half = rs.some(r => (!!r.date) !== (!!r.content.trim()))
+      if (half) out.push({ id: taskId, title: byId.get(taskId)?.title || '任務' })
+    }
+    return out
+  }, [rows, byId])
+
+  // 按「送出」：半填時按鈕已禁用（見 footer）；此處只需擋逾期未處理
+  const onClickSubmit = () => {
+    if (incompleteRows.length > 0) return
+    if (overdueUnresolved.length > 0) { setOverdueBlockOpen(true); return }
+    setConfirmOpen(true)
+  }
 
   return (
     <>
@@ -442,7 +529,9 @@ export function AWeeklyReportComposer({
                           <div className="font-medium">填報日期比規劃截止日晚了 {selOverdue.diffDays} 天</div>
                           <div className="mt-0.5">規劃截止 {new Date(selOverdue.end).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}，此任務已逾期。逾期紀錄不計入進度，請申請延期調整時程。</div>
                         </div>
-                        <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 border-orange-400 text-orange-800 hover:bg-orange-100 dark:border-orange-800 dark:text-orange-300 shrink-0" onClick={() => openDelay()}>申請延期</Button>
+                        {delayRequestedTasks.has(selectedId)
+                          ? <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 border-orange-400 text-orange-700 dark:text-orange-300 shrink-0">已申請·待審核</Badge>
+                          : <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 border-orange-400 text-orange-800 hover:bg-orange-100 dark:border-orange-800 dark:text-orange-300 shrink-0" onClick={() => openDelay()}>申請延期</Button>}
                       </div>
                     )}
 
@@ -484,13 +573,17 @@ export function AWeeklyReportComposer({
 
           <input ref={uploadRef} type="file" multiple className="hidden" onChange={handleUpload} />
           <div className="px-6 py-3 border-t flex items-center justify-between gap-2 bg-muted/20">
-            <div className="text-xs text-muted-foreground">本週報告 {reportCount} 項{doneCount > 0 && <>，標記完成 <span className="text-green-600 font-medium">{doneCount}</span></>}</div>
-            <div className="flex items-center gap-2">
+            <div className="text-xs min-w-0">
+              {incompleteRows.length > 0
+                ? <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />有 {incompleteRows.length} 筆紀錄只填了日期或內容，請補齊或刪除該列</span>
+                : <span className="text-muted-foreground">本週報告 {reportCount} 項{doneCount > 0 && <>，標記完成 <span className="text-green-600 font-medium">{doneCount}</span></>}</span>}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <Button variant="outline" className="gap-1.5" disabled={savingDraft || saving || loading} onClick={saveDraft}>
                 {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : draftDone ? <Check className="h-4 w-4 text-green-600" /> : <Save className="h-4 w-4" />}
                 {draftDone ? '已暫存' : '暫存草稿'}
               </Button>
-              <Button className="gap-1.5 font-medium shadow-sm" disabled={saving || savingDraft || loading} onClick={() => setConfirmOpen(true)}><Send className="h-4 w-4" />送出本週報告</Button>
+              <Button className="gap-1.5 font-medium shadow-sm" disabled={saving || savingDraft || loading || incompleteRows.length > 0} onClick={onClickSubmit}><Send className="h-4 w-4" />送出本週報告</Button>
             </div>
           </div>
         </DialogContent>
@@ -625,13 +718,16 @@ export function AWeeklyReportComposer({
 
       {/* 申請延期（撰寫台內，兩步：填寫 → 確認） */}
       <AlertDialog open={delayOpen} onOpenChange={o => { if (!delaySubmitting) setDelayOpen(o) }}>
-        <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogContent className={cn('transition-all', delayStep === 'confirm' ? 'sm:max-w-2xl' : 'sm:max-w-md')}>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4 text-orange-500" />申請延期 · {sel?.title}
-              <Badge variant="outline" className="ml-1 text-[10px] font-normal">{delayStep === 'form' ? '步驟 1／2 填寫' : '步驟 2／2 確認'}</Badge>
+              <span className="ml-auto flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                <span className={cn('h-1.5 w-1.5 rounded-full', delayStep === 'confirm' ? 'bg-orange-500' : 'bg-muted')} />
+              </span>
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">{delayStep === 'form' ? '選擇新截止日，下方會即時顯示對里程碑的影響。' : '請確認以下內容，送出後進入審核；核准後時程才會重算、逾期紀錄才計入進度。'}</AlertDialogDescription>
+            <AlertDialogDescription className="text-xs">{delayStep === 'form' ? '選擇新截止日，下方即時顯示影響。' : '送出後進入審核，核准後始重算時程。'}</AlertDialogDescription>
           </AlertDialogHeader>
 
           {delayStep === 'form' ? (
@@ -640,12 +736,13 @@ export function AWeeklyReportComposer({
                 <div className="rounded border p-2"><div className="text-muted-foreground">目前截止</div><div className="font-medium mt-0.5">{selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')}</div></div>
                 <div className="rounded border p-2 border-orange-300 bg-orange-50/50 dark:bg-orange-950/10"><div className="text-muted-foreground mb-0.5">新截止日 <span className="text-destructive">*</span></div><input type="date" value={delayDate} min={selTask ? ymd(new Date(new Date(selTask.endDate).getTime() + 86400000)) : undefined} onChange={e => setDelayDate(e.target.value)} className="text-xs border rounded h-7 px-1.5 bg-background w-full" /></div>
               </div>
-              {/* 這個日期會影響什麼 */}
+              {/* 這個日期會造成什麼（含下游，整合成一個提醒）*/}
               {delayImpact ? (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-2.5 text-xs text-orange-800 dark:text-orange-300 space-y-1">
                   <div className="font-medium flex items-center gap-1"><Info className="h-3.5 w-3.5" />這個日期會造成：</div>
                   <div>• 此任務延後 <b>{delayImpact.extraDays}</b> 天</div>
-                  <div>• {delayImpact.milestoneDelta > 0 ? <>里程碑「{delayImpact.msName}」順延至 <b>{new Date(delayImpact.proposedMilestoneDate).toLocaleDateString('zh-TW')}</b>（+{delayImpact.milestoneDelta} 天），後續任務時程一併順延</> : <>不影響里程碑「{delayImpact.msName}」的截止日</>}</div>
+                  <div>• {delayImpact.milestoneDelta > 0 ? <>里程碑「{delayImpact.msName}」順延至 <b>{new Date(delayImpact.proposedMilestoneDate).toLocaleDateString('zh-TW')}</b>（+{delayImpact.milestoneDelta} 天）</> : <>不影響里程碑「{delayImpact.msName}」的截止日</>}</div>
+                  {delayDownstream.tasks.length > 0 && <div>• 連帶影響 <b>{delayDownstream.tasks.length}</b> 個後續相依任務：里程碑「{delayDownstream.milestones.map(m => m.name).join('」「')}」核准後一併順延</div>}
                 </div>
               ) : delayDate ? <div className="text-xs text-destructive">新截止日必須晚於目前截止日（{selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')}）</div> : <div className="text-xs text-muted-foreground">請先選擇新的截止日。</div>}
               <div><div className="text-xs font-medium mb-1">延期原因 <span className="text-destructive">*</span></div><Textarea value={delayReason} onChange={e => setDelayReason(e.target.value)} rows={2} placeholder="說明延期原因…" className="text-sm" /></div>
@@ -655,7 +752,35 @@ export function AWeeklyReportComposer({
             <div className="rounded-lg border divide-y text-sm">
               <div className="flex items-center justify-between px-3 py-2"><span className="text-xs text-muted-foreground">任務</span><span className="font-medium">{sel?.title}</span></div>
               <div className="flex items-center justify-between px-3 py-2"><span className="text-xs text-muted-foreground">截止日</span><span className="font-medium">{selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')} → <span className="text-orange-600">{new Date(delayDate).toLocaleDateString('zh-TW')}</span><span className="text-muted-foreground text-xs ml-1">（+{delayImpact?.extraDays} 天）</span></span></div>
-              <div className="flex items-start justify-between px-3 py-2 gap-3"><span className="text-xs text-muted-foreground shrink-0">里程碑影響</span><span className="text-xs text-right">{delayImpact && delayImpact.milestoneDelta > 0 ? <>「{delayImpact.msName}」順延至 {new Date(delayImpact.proposedMilestoneDate).toLocaleDateString('zh-TW')}（+{delayImpact.milestoneDelta} 天）</> : `不影響「${delayImpact?.msName}」截止日`}</span></div>
+
+              {/* 甘特視覺化：原定區間(灰) vs 延後區間(橘) */}
+              <div className="px-3 py-3 space-y-3">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">里程碑時程變化</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-slate-300 dark:bg-slate-600" />原定</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-orange-500" />延後</span>
+                </div>
+                {delayPreviewRows.map(r => (
+                  <div key={r.name} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs gap-2">
+                      <span className="truncate flex-1 font-medium">{r.name}</span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">{new Date(r.oe).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} → <span className="text-orange-600 font-medium">{new Date(r.ne).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span> <span className="text-orange-600">(+{r.delta})</span></span>
+                    </div>
+                    <div className="rounded bg-muted/40 px-1 py-1.5 space-y-2">
+                      <div className="relative h-2.5">
+                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border/60" />
+                        <div className="absolute top-0 h-2.5 rounded-sm bg-slate-300 dark:bg-slate-600" style={{ left: `${r.osPct}%`, width: `${Math.max(1.5, r.oePct - r.osPct)}%` }} />
+                      </div>
+                      <div className="relative h-2.5">
+                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border/60" />
+                        <div className="absolute top-0 h-2.5 rounded-sm bg-orange-500" style={{ left: `${r.nsPct}%`, width: `${Math.max(1.5, r.nePct - r.nsPct)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {delayDownstream.tasks.length > 0 && <div className="text-xs text-muted-foreground pt-1 border-t">＊下游為預估順延，實際依核准後系統重排為準。</div>}
+              </div>
+
               <div className="flex items-start justify-between px-3 py-2 gap-3"><span className="text-xs text-muted-foreground shrink-0">原因</span><span className="text-xs text-right whitespace-pre-wrap">{delayReason}</span></div>
               {delaySupport.trim() && <div className="flex items-start justify-between px-3 py-2 gap-3"><span className="text-xs text-muted-foreground shrink-0">需要支援</span><span className="text-xs text-right whitespace-pre-wrap">{delaySupport}</span></div>}
             </div>
@@ -673,6 +798,30 @@ export function AWeeklyReportComposer({
                 <AlertDialogAction onClick={e => { e.preventDefault(); submitDelay() }} disabled={delaySubmitting} className="bg-orange-600 hover:bg-orange-700">{delaySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : delayDone ? <><Check className="h-4 w-4" />已送出</> : '確定送出延期申請'}</AlertDialogAction>
               </>
             )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 逾期未處理，擋送出 */}
+      <AlertDialog open={overdueBlockOpen} onOpenChange={setOverdueBlockOpen}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-orange-500" />有逾期任務未處理，無法送出</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">下列任務的填報日已超過截止日，須先<b>申請延期</b>或把日期改到截止日當日或之前，才能送出本週報告。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-lg border divide-y max-h-[40vh] overflow-y-auto">
+            {overdueUnresolved.map(o => (
+              <div key={o.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{o.title}</div>
+                  <div className="text-orange-700 dark:text-orange-400">填報 {new Date(o.latest).toLocaleDateString('zh-TW')} ／ 截止 {new Date(o.end).toLocaleDateString('zh-TW')}</div>
+                </div>
+                <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => { setSelectedId(o.id); setOverdueBlockOpen(false) }}>前往處理</Button>
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>知道了</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
