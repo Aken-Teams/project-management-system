@@ -2108,7 +2108,7 @@ export default function MyTasksPage() {
 
                 {/* Hidden file inputs */}
                 <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileSelect} />
-                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" multiple className="hidden" accept=".xls,.xlsx,.csv,.ppt,.pptx,.doc,.docx,.txt,.md,.pdf,.zip,.rar,.7z" onChange={handleFileSelect} />
 
                 {/* 3 Tabs — hidden when extension form is open */}
                 {!showExtensionForm && <Tabs defaultValue="log" className="flex-1 flex flex-col min-h-0">
@@ -2513,7 +2513,7 @@ export default function MyTasksPage() {
                                     </div>
                                   </div>
                                   <input ref={editImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleEditFileSelect} />
-                                  <input ref={editFileInputRef} type="file" multiple className="hidden" onChange={handleEditFileSelect} />
+                                  <input ref={editFileInputRef} type="file" multiple className="hidden" accept=".xls,.xlsx,.csv,.ppt,.pptx,.doc,.docx,.txt,.md,.pdf,.zip,.rar,.7z" onChange={handleEditFileSelect} />
                                   {/* Save / cancel */}
                                   <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/40">
                                     <Button size="sm" variant="ghost" className="h-7 px-3 text-sm" onClick={handleCancelEditLog}>

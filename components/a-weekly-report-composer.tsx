@@ -409,6 +409,7 @@ export function AWeeklyReportComposer({
         const fd = new FormData(); fd.append('file', f)
         const r = await fetch('/api/upload', { method: 'POST', body: fd })
         if (r.ok) { const d = await r.json(); uploaded.push({ name: d.name || f.name, url: d.url, type: (d.type === 'image' || (f.type.startsWith('image/'))) ? 'image' : 'file' }) }
+        else { const d = await r.json().catch(() => ({})); alert(`「${f.name}」${d.error || '上傳失敗'}`) }
       }
       if (uploaded.length) setRows(p => { const cur = p[selectedId] || [{ date: '', content: '' }]; return { ...p, [selectedId]: cur.map((row, i) => i === ri ? { ...row, attachments: [...(row.attachments || []), ...uploaded] } : row) } })
     } catch { alert('附件上傳失敗') } finally { setUploadingRow(null); uploadTargetRow.current = null }
@@ -641,7 +642,7 @@ export function AWeeklyReportComposer({
             )}
           </div>
 
-          <input ref={uploadRef} type="file" multiple className="hidden" onChange={handleUpload} />
+          <input ref={uploadRef} type="file" multiple className="hidden" accept=".xls,.xlsx,.csv,.ppt,.pptx,.doc,.docx,.txt,.md,.pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.zip,.rar,.7z" onChange={handleUpload} />
           <div className="px-6 py-3 border-t flex items-center justify-between gap-2 bg-muted/20">
             <div className="text-xs min-w-0">
               {incompleteRows.length > 0
