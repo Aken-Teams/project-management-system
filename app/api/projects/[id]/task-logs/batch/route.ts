@@ -17,6 +17,7 @@ interface BatchEntry {
 interface BatchBody {
   taskId: string
   userId: string
+  weekOf?: string          // 填報週（Monday YYYY-MM-DD）；讓 A 依填報週看到 R 的報告
   entries: BatchEntry[]
   nextPlans?: { date?: string; content: string }[]
 }
@@ -70,6 +71,7 @@ export async function POST(
               content: entry.content.trim(),
               logDate: new Date(entry.logDate),
               lastEditedBy: user.name,
+              ...(body.weekOf ? { weekOf: body.weekOf } : {}),
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
             },
           })
@@ -102,6 +104,7 @@ export async function POST(
               data: {
                 content: entry.content.trim(),
                 lastEditedBy: user.name,
+                ...(body.weekOf ? { weekOf: body.weekOf } : {}),
                 ...(mergedAttachmentsJson !== undefined ? { attachments: mergedAttachmentsJson } : {}),
               },
             })
@@ -114,6 +117,7 @@ export async function POST(
                 authorId: user.id,
                 logDate: new Date(entry.logDate),
                 content: entry.content.trim(),
+                ...(body.weekOf ? { weekOf: body.weekOf } : {}),
                 ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               },
             })

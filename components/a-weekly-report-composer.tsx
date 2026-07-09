@@ -101,7 +101,8 @@ export function AWeeklyReportComposer({
   }, [weekOf])
 
   const byId = useMemo(() => new Map(project.tasks.map(t => [t.id, t])), [project.tasks])
-  const rLogsOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor && l.logDate >= weekStart && l.logDate <= weekEnd).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  // A 依「填報週(weekOf)」看 R 的報告：R 填 W12 就在 W12 看到；舊資料(無 weekOf) fallback 用工作日(logDate)
+  const rLogsOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor && (l.weekOf ? l.weekOf === weekOf : (l.logDate >= weekStart && l.logDate <= weekEnd))).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
 
   // 樹狀清單（給下拉）
   const nodes = useMemo<Node[]>(() => {

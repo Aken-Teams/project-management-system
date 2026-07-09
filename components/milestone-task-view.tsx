@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
+import { todayUtc } from '@/lib/date-utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -268,13 +269,13 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
 
   const isTaskOverdue = (task: Task) => {
     if (effectiveStatus(task) === 'done') return false
-    return new Date() > new Date(task.endDate)
+    return todayUtc() > new Date(task.endDate)
   }
 
   // Detect milestones where tasks should have started but nobody reported any progress
   const isMilestoneNoActivity = (milestoneId: string, tasks: Task[]) => {
     if (tasks.length === 0) return false
-    const today = new Date()
+    const today = todayUtc()
     const hasStartedTasks = tasks.some(t => new Date(t.startDate) <= today)
     if (!hasStartedTasks) return false
     const allZeroProgress = tasks.every(t => t.progress === 0)

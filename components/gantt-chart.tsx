@@ -8,6 +8,7 @@ import { type Task, type Milestone, type TaskLog } from '@/lib/mock-data'
 import { type DepNode } from '@/lib/dependency-graph'
 import { GanttDependencyOverlay } from '@/components/gantt-dependency-overlay'
 import { cn } from '@/lib/utils'
+import { todayUtc } from '@/lib/date-utils'
 import {
   ChevronRight,
   ChevronDown,
@@ -150,8 +151,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return { left: `${left}%`, width: `${Math.max(right - left, 0.1)}%` }
   }
 
-  // Today line
-  const today = new Date()
+  // Today line — 用 UTC 午夜「今天」，與 server(todayUtc)/DB 的日期定義一致，逾期判定不再差一天
+  const today = todayUtc()
   const todayStr = today.toISOString().split('T')[0]
   const todayPct = ((today.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24) / totalDays) * 100
   const showToday = todayPct >= 0 && todayPct <= 100

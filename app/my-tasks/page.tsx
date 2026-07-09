@@ -1362,6 +1362,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({
           taskId: rSelectedTaskId,
           userId: user.id,
+          weekOf: rReportWeekOf,            // 填報週：讓 A 依「填報週」看到 R 的報告，不是依工作日
           entries,
           ...(nextPlans.length > 0 ? { nextPlans } : {}),
         }),
