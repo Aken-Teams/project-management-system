@@ -11,9 +11,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import { WeekPicker } from '@/components/ui/week-picker'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
+import { GanttChart } from '@/components/gantt-chart'
 import { cn } from '@/lib/utils'
 import type { Project, Task, TaskLog, TaskLogAttachment } from '@/lib/mock-data'
-import { Loader2, Send, FileText, Info, ChevronDown, CornerDownLeft, CircleCheck, Inbox, Search, Eraser, Paperclip, Save, Check, AlertTriangle, CalendarClock, AlertCircle } from 'lucide-react'
+import { Loader2, Send, FileText, Info, ChevronDown, CornerDownLeft, CircleCheck, Inbox, Search, Eraser, Paperclip, Save, Check, AlertTriangle, CalendarClock, AlertCircle, BarChart3 } from 'lucide-react'
 
 // 附件小徽章：hover 展開檔案清單（可捲、可點），檔案多也不雜亂
 // 傳入 onRemove 時，清單每列會出現移除鈕（用於自己編輯中的附件）
@@ -77,6 +78,8 @@ export function AWeeklyReportComposer({
   const [uploadingRow, setUploadingRow] = useState<number | null>(null)
   const uploadRef = useRef<HTMLInputElement>(null)
   const uploadTargetRow = useRef<number | null>(null)
+  const snapshotRef = useRef('') // 載入時的內容快照，用來判斷是否有未儲存變更
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 前序守則 / 申請延期 / 標記完成 小流程
   const [prereqOpen, setPrereqOpen] = useState(false)
   const [delayOpen, setDelayOpen] = useState(false)
@@ -89,7 +92,8 @@ export function AWeeklyReportComposer({
   const [completingPrereq, setCompletingPrereq] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [completeDate, setCompleteDate] = useState('')
-  const [delayRequestedTasks, setDelayRequestedTasks] = useState<Set<string>>(new Set()) // 本次已送出延期申請的任務
+  const [delayRequestedTasks, setDelayRequestedTasks] = useState<Map<string, string>>(new Map()) // 本次已送出延期申請的任務 → 申請的新截止日
+  const [ganttPreviewOpen, setGanttPreviewOpen] = useState(false)
   const [overdueBlockOpen, setOverdueBlockOpen] = useState(false)
 
   const { weekStart, weekEnd } = useMemo(() => {
@@ -279,7 +283,7 @@ export function AWeeklyReportComposer({
         }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || '送出失敗') }
-      setDelayRequestedTasks(p => new Set(p).add(selTask.id))
+      setDelayRequestedTasks(p => new Map(p).set(selTask.id, delayDate))
       setDelayDone(true)
       setTimeout(() => { setDelayOpen(false); setDelayDone(false) }, 1400)
     } catch (e) { alert(e instanceof Error ? e.message : '送出延期申請失敗') } finally { setDelaySubmitting(false) }
@@ -293,9 +297,11 @@ export function AWeeklyReportComposer({
       .then((data: { aLogs: { taskId: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { content: string }[] }[]; notes: { taskId: string; content: string }[] }) => {
         const nr: Record<string, Row[]> = {}; const np: Record<string, string> = {}
         for (const l of data.aLogs) { (nr[l.taskId] = nr[l.taskId] || []).push({ date: l.logDate, content: l.content, attachments: l.attachments?.length ? l.attachments : undefined }); if (l.nextPlans?.length) np[l.taskId] = l.nextPlans.map(p => p.content).join('\n') }
-        setRows(nr); setNextPlan(np); setOverall(data.notes.find(n => n.taskId === '')?.content || '')
+        const ov = data.notes.find(n => n.taskId === '')?.content || ''
+        setRows(nr); setNextPlan(np); setOverall(ov)
+        snapshotRef.current = JSON.stringify({ rows: nr, nextPlan: np, overall: ov })
       })
-      .catch(() => { setRows({}); setNextPlan({}); setOverall('') })
+      .catch(() => { setRows({}); setNextPlan({}); setOverall(''); snapshotRef.current = JSON.stringify({ rows: {}, nextPlan: {}, overall: '' }) })
       .finally(() => setLoading(false))
   }, [open, project.id, weekOf, actorUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,7 +319,7 @@ export function AWeeklyReportComposer({
   // 延期偵測：填報/標記完成日期只要超過規劃截止日，就必須走申請延期
   const OVERSHOOT_DAYS = 0
   const selOverdue = useMemo(() => {
-    if (!selTask || !selectedId || sel?.isParent || !selTask.endDate) return null
+    if (!selTask || !selectedId || !selTask.endDate) return null
     const cand: string[] = []
     const md = markDone[selectedId]; if (md) cand.push(md)
     // 只算「有內容」的工作紀錄列，與送出擋控一致（空列不算報告）
@@ -324,6 +330,52 @@ export function AWeeklyReportComposer({
     return diffDays > OVERSHOOT_DAYS ? { latest, end: selTask.endDate, diffDays } : null
   }, [selTask, selectedId, sel, markDone, rows])
 
+  // 即時甘特預覽：重用原本 GanttChart 模板（showBaseline 會畫「預計 vs 實際」）
+  //  - 暫定填寫的 rows → 合成 log，讓「實際條起點 = 第一份報告日」
+  //  - 標記完成 → completedAt（實際條終點）
+  //  - 申請延期 → 拉長任務 endDate、里程碑 dueDate（畫在預計條）
+  const previewGantt = useMemo(() => {
+    const tasks = project.tasks.map(t => {
+      const md = markDone[t.id]
+      const delayNew = delayRequestedTasks.get(t.id)
+      const reportDates = (rows[t.id] || []).filter(r => r.content.trim() && r.date).map(r => r.date)
+      // 報告日期→時間推算進度（與後端 syncTaskProgressFromLogs 一致：濾掉起始日前/截止後的紀錄，不硬給 1%）
+      let progress = t.progress
+      if (reportDates.length) {
+        const plannedStart = new Date(t.originalStartDate && t.originalStartDate < t.startDate ? t.originalStartDate : t.startDate).getTime()
+        const end = new Date(delayNew || t.endDate).getTime()
+        const upToEnd = reportDates.map(d => new Date(d).getTime()).filter(ms => ms <= end)
+        if (upToEnd.length) {
+          const earliest = Math.min(...upToEnd)
+          const latest = Math.max(...upToEnd)
+          const effStart = Math.min(earliest, plannedStart) // 提前開工→基準往前拉
+          const span = end - effStart
+          progress = span > 0 ? Math.min(99, Math.max(0, Math.round(((latest - effStart) / span) * 100))) : 99
+        }
+      }
+      return {
+        ...t,
+        ...(delayNew ? { endDate: delayNew, originalEndDate: t.originalEndDate || t.endDate } : {}),
+        ...(md ? { status: 'done' as const, progress: 100, completedAt: md } : { progress }),
+      }
+    })
+    const milestones = project.milestones.map(m => {
+      const delayedEnds = project.tasks.filter(t => t.milestoneId === m.id && delayRequestedTasks.has(t.id)).map(t => delayRequestedTasks.get(t.id) as string)
+      if (delayedEnds.length) {
+        const maxEnd = [...delayedEnds].sort().slice(-1)[0]
+        if (new Date(maxEnd) > new Date(m.dueDate)) return { ...m, dueDate: maxEnd }
+      }
+      return m
+    })
+    const synthetic: TaskLog[] = []
+    for (const [taskId, rs] of Object.entries(rows)) {
+      for (const r of rs) {
+        if (r.content.trim() && r.date) synthetic.push({ id: `preview-${taskId}-${r.date}`, taskId, projectId: project.id, author: actor, logDate: r.date, content: r.content, createdAt: r.date })
+      }
+    }
+    return { tasks, milestones, taskLogs: [...project.taskLogs, ...synthetic], start: project.startDate, end: project.endDate }
+  }, [project, rows, markDone, delayRequestedTasks, actor])
+
   // 共用：把目前填寫內容打包成 API payload
   const buildPayload = (submit: boolean) => {
     const taskEntries = Object.entries(rows).map(([taskId, rs]) => ({ taskId, entries: rs.filter(r => r.content.trim() && r.date).map(r => ({ logDate: r.date, content: r.content.trim(), attachments: r.attachments?.length ? r.attachments : undefined })), nextPlans: nextPlan[taskId]?.trim() ? [{ content: nextPlan[taskId].trim() }] : [] })).filter(te => te.entries.length > 0)
@@ -332,13 +384,15 @@ export function AWeeklyReportComposer({
   }
 
   // 暫存草稿：只存不發布(submit:false)，視窗維持開啟，可稍後再回來續填
-  const saveDraft = async () => {
+  const saveDraft = async (): Promise<boolean> => {
     setSavingDraft(true); setDraftDone(false)
     try {
       const res = await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(false)) })
       if (!res.ok) throw new Error()
+      snapshotRef.current = JSON.stringify({ rows, nextPlan, overall }) // 暫存成功→更新快照
       setDraftDone(true); setTimeout(() => setDraftDone(false), 2500)
-    } catch { alert('暫存失敗，請稍後再試') } finally { setSavingDraft(false) }
+      return true
+    } catch { alert('暫存失敗，請稍後再試'); return false } finally { setSavingDraft(false) }
   }
 
   // A 自己上傳附件到指定列
@@ -419,14 +473,28 @@ export function AWeeklyReportComposer({
     setConfirmOpen(true)
   }
 
+  // 是否有未儲存變更（報告內容變動，或有待送出的標記完成）
+  const dirty = useMemo(
+    () => JSON.stringify({ rows, nextPlan, overall }) !== snapshotRef.current || Object.keys(markDone).length > 0,
+    [rows, nextPlan, overall, markDone],
+  )
+  // 關閉時：有未儲存內容 → 先提醒
+  const handleDialogOpenChange = (v: boolean) => {
+    if (!v && !loading && dirty) { setCloseConfirmOpen(true); return }
+    onOpenChange(v)
+  }
+
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" />撰寫本週報告 — {project.name}</DialogTitle>
-            <DialogDescription className="text-sm">自己挑要填的任務、寫你的報告(可查看/匯入 R 的)。<b>報告不改進度</b>;進度由「標記完成」決定。</DialogDescription>
-            <div className="pt-2"><WeekPicker value={weekOf} onChange={setWeekOf} /></div>
+            <DialogDescription className="text-sm">自己挑要填的任務、寫你的報告(可查看/匯入 R 的)。<b>報告日期會依時間推算進度</b>，標記完成則到 100%；可按<b>預覽甘特</b>看送出後的樣子。</DialogDescription>
+            <div className="pt-2 flex items-end gap-2">
+              <div className="flex-1 min-w-0"><WeekPicker value={weekOf} onChange={setWeekOf} /></div>
+              <Button variant="outline" className="gap-1.5 shrink-0 h-[38px]" onClick={() => setGanttPreviewOpen(true)}><BarChart3 className="h-4 w-4 text-blue-500" />預覽甘特</Button>
+            </div>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
@@ -477,6 +545,7 @@ export function AWeeklyReportComposer({
                                 className={cn('w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/60 text-left', n.id === selectedId && 'bg-primary/10')}
                                 style={{ paddingLeft: 12 + n.depth * 16 }}>
                                 <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[10px] text-violet-500 ml-1">(父)</span>}</span>
+                                {(rows[n.id] || []).some(r => r.content.trim() && r.date) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge>}
                                 {n.hasR ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 shrink-0">R已提交</Badge> : <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/50 shrink-0">未提交</Badge>}
                                 <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right shrink-0">{n.progress}%</span>
                               </button>
@@ -590,6 +659,28 @@ export function AWeeklyReportComposer({
         </DialogContent>
       </Dialog>
 
+      {/* 甘特預覽（重用原本模板，反映目前尚未送出的暫定變更）*/}
+      <Dialog open={ganttPreviewOpen} onOpenChange={setGanttPreviewOpen}>
+        <DialogContent className="sm:max-w-6xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-blue-500" />甘特預覽</DialogTitle>
+            <DialogDescription>依你目前填的報告日期、標記完成、申請延期即時產生（<b>尚未送出</b>）。灰＝預計、實色＝實際。</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-auto">
+            {ganttPreviewOpen && (
+              <GanttChart
+                milestones={previewGantt.milestones}
+                tasks={previewGantt.tasks}
+                taskLogs={previewGantt.taskLogs}
+                startDate={previewGantt.start}
+                endDate={previewGantt.end}
+                showBaseline
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 查看 R 報告 */}
       <AlertDialog open={rViewOpen} onOpenChange={setRViewOpen}>
         <AlertDialogContent className="sm:max-w-lg">
@@ -639,24 +730,25 @@ export function AWeeklyReportComposer({
           <AlertDialogHeader>
             <AlertDialogTitle>確認送出本週報告？</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-1.5 text-sm">
-                <div>• <b>{reportCount}</b> 項報告會發布到「更新紀錄」。</div>
-                <div>• <b>{doneCount}</b> 個任務會被「標記完成」→ <span className="text-foreground">帶動甘特/進度</span>。</div>
-                {donePreview.length > 0 && (
-                  <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5 mt-1">
-                    <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><CircleCheck className="h-3 w-3" />進度預覽</div>
-                    {donePreview.map(d => (
-                      <div key={d.id} className="flex items-center gap-2 text-xs">
-                        <span className="text-[10px] text-muted-foreground shrink-0 w-16 truncate">{d.msName}</span>
-                        <span className="flex-1 min-w-0 truncate">{d.title}</span>
-                        <span className="tabular-nums text-muted-foreground shrink-0">{d.from}%</span>
-                        <span className="text-muted-foreground shrink-0">→</span>
-                        <span className="tabular-nums font-medium text-green-600 shrink-0">100%</span>
-                      </div>
-                    ))}
-                  </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2"><Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" /><span>你填了 <b>{reportCount}</b> 項工作報告，送出後會出現在專案的「更新紀錄」，團隊都看得到。</span></div>
+                {doneCount > 0 && (
+                  <>
+                    <div className="flex items-start gap-2"><CircleCheck className="h-4 w-4 text-green-600 mt-0.5 shrink-0" /><span>你把 <b>{doneCount}</b> 個任務標記完成，送出後進度更新為 100%：</span></div>
+                    <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5 ml-6">
+                      {donePreview.map(d => (
+                        <div key={d.id} className="flex items-center gap-2 text-xs">
+                          <span className="text-[10px] text-muted-foreground shrink-0 w-16 truncate">{d.msName}</span>
+                          <span className="flex-1 min-w-0 truncate">{d.title}</span>
+                          <span className="tabular-nums text-muted-foreground shrink-0">{d.from}%</span>
+                          <span className="text-muted-foreground shrink-0">→</span>
+                          <span className="tabular-nums font-medium text-green-600 shrink-0">100%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
-                <div className="text-xs text-muted-foreground pt-1">報告(敘述)不改進度;進度只由「標記完成」決定。送出後仍可再進來修改。</div>
+                <div className="text-xs text-muted-foreground pt-1">送出後仍可再進來修改。</div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -803,6 +895,21 @@ export function AWeeklyReportComposer({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* 關閉前提醒：有未儲存內容 */}
+      <AlertDialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>離開前先儲存？</AlertDialogTitle>
+            <AlertDialogDescription>你有<b>尚未送出／暫存</b>的內容，直接關閉將不會保存本週報告。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel className="mt-0">返回繼續編輯</AlertDialogCancel>
+            <Button variant="outline" disabled={savingDraft} onClick={async () => { const ok = await saveDraft(); if (ok) { setCloseConfirmOpen(false); onOpenChange(false) } }}>{savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : '暫存並關閉'}</Button>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setCloseConfirmOpen(false); onOpenChange(false) }}>不儲存，直接關閉</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* 逾期未處理，擋送出 */}
       <AlertDialog open={overdueBlockOpen} onOpenChange={setOverdueBlockOpen}>
         <AlertDialogContent className="sm:max-w-md">
@@ -811,15 +918,18 @@ export function AWeeklyReportComposer({
             <AlertDialogDescription className="text-sm">下列任務的填報日已超過截止日，須先<b>申請延期</b>或把日期改到截止日當日或之前，才能送出本週報告。</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="rounded-lg border divide-y max-h-[40vh] overflow-y-auto">
-            {overdueUnresolved.map(o => (
-              <div key={o.id} className="flex items-center gap-2 px-3 py-2 text-xs">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{o.title}</div>
-                  <div className="text-orange-700 dark:text-orange-400">填報 {new Date(o.latest).toLocaleDateString('zh-TW')} ／ 截止 {new Date(o.end).toLocaleDateString('zh-TW')}</div>
+            {overdueUnresolved.map(o => {
+              const days = Math.round((new Date(o.latest).getTime() - new Date(o.end).getTime()) / 86400000)
+              return (
+                <div key={o.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{o.title}</div>
+                    <div className="text-orange-700 dark:text-orange-400">工作日期 {new Date(o.latest).toLocaleDateString('zh-TW')} 已超過截止日 {new Date(o.end).toLocaleDateString('zh-TW')}（逾期 {days} 天）</div>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => { setSelectedId(o.id); setOverdueBlockOpen(false) }}>前往處理</Button>
                 </div>
-                <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => { setSelectedId(o.id); setOverdueBlockOpen(false) }}>前往處理</Button>
-              </div>
-            ))}
+              )
+            })}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>知道了</AlertDialogCancel>

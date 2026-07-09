@@ -49,10 +49,11 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
   const [composerOpen, setComposerOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
-  // ADR-02: 甘特圖預設全展開（所有里程碑 + 所有有子項的任務，任意深度）。
-  const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(() =>
-    new Set(project.milestones.map(m => m.id))
-  )
+  // 甘特圖預設只展開「第一個未完成」的里程碑（依序:前面沒做完，後面先不展開；聚焦當下要更新的）。
+  const [ganttExpandedMs, setGanttExpandedMs] = useState<Set<string>>(() => {
+    const firstIncomplete = project.milestones.find(m => m.progress < 100)
+    return new Set(firstIncomplete ? [firstIncomplete.id] : [])
+  })
   const [ganttExpandedTasks, setGanttExpandedTasks] = useState<Set<string>>(() =>
     new Set(project.tasks.filter(t => project.tasks.some(c => c.parentId === t.id)).map(t => t.id))
   )
@@ -555,8 +556,9 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                       setExpandedMilestones(allMs)
                     } else {
                       setGanttExpandedMs(allMs)
+                      // 展開所有「有子任務」的任務（任意深度，6 層全開）
                       const parentTaskIds = new Set(
-                        project.tasks.filter(t => !t.parentId && project.tasks.some(s => s.parentId === t.id)).map(t => t.id)
+                        project.tasks.filter(t => project.tasks.some(s => s.parentId === t.id)).map(t => t.id)
                       )
                       setGanttExpandedTasks(parentTaskIds)
                     }

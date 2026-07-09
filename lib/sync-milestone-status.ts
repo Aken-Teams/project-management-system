@@ -27,16 +27,23 @@ export function computeWeightedProgress(
  *  - Progress = average of task progresses
  */
 export async function syncMilestoneStatus(milestoneId: string, projectId: string) {
-  // Exclude subtasks (parentId != null) to prevent double-counting
-  const tasks = await prisma.task.findMany({
-    where: { milestoneId, projectId, parentId: null },
-    select: { status: true, progress: true, durationDays: true },
+  // 新模型：里程碑聚合「葉任務」(實際有人做的最底層)，不再用頂層父任務
+  //  —— 因父任務進度現在只反映它自己的報告(可能 0)，用它彙整會失真。
+  const msTasks = await prisma.task.findMany({
+    where: { milestoneId, projectId },
+    select: { id: true, status: true, progress: true, durationDays: true },
   })
+  if (msTasks.length === 0) return
 
-  if (tasks.length === 0) return
+  const parentIds = new Set(
+    (await prisma.task.findMany({ where: { projectId, parentId: { not: null } }, select: { parentId: true } }))
+      .map(t => t.parentId),
+  )
+  const leaves = msTasks.filter(t => !parentIds.has(t.id))
+  const basis = leaves.length > 0 ? leaves : msTasks
 
-  const status = computeMilestoneStatus(tasks)
-  const progress = computeWeightedProgress(tasks)
+  const status = computeMilestoneStatus(basis)
+  const progress = computeWeightedProgress(basis)
 
   await prisma.milestone.update({
     where: { id: milestoneId },
@@ -198,10 +205,9 @@ export async function syncTaskProgressFromLogs(
   const msPerDay = 1000 * 60 * 60 * 24
 
   // Group all log dates by taskId (we'll filter per-task by endDate later).
-  // A 撰寫的「報告敘述」(reportOnly) 不驅動進度——進度由標記完成/延期決定。
+  // 報告日期→時間推算進度：A 的報告 log 也算（reportOnly 不再被略過）。
   const logsByTask = new Map<string, Date[]>()
   for (const log of taskLogs) {
-    if (log.reportOnly) continue
     const list = logsByTask.get(log.taskId) || []
     list.push(log.logDate)
     logsByTask.set(log.taskId, list)
@@ -230,37 +236,30 @@ export async function syncTaskProgressFromLogs(
   const ordered = [...tasks].sort((a, b) => depthOf(b) - depthOf(a))
 
   for (const task of ordered) {
-    const subtasks = subtasksByParent.get(task.id)
-
     let target: number
     if (task.completedAt) {
       target = 100
-    } else if (subtasks && subtasks.length > 0) {
-      // Parent task: weighted average of subtask progress by durationDays
-      target = computeWeightedProgress(subtasks)
     } else {
-      // Leaf task: time-position based progress
+      // 新模型：每個任務（含父層）一律以「自己的報告」推算時間進度，不繼承子層。
+      //   父層沒寫自己的報告 → 沒有 log → 0。里程碑才做聚合（見 syncMilestoneStatus）。
       // IMPORTANT: Only completedAt grants 100%. Auto-calc caps at 99%.
-      // effectiveStart = min(originalStartDate, startDate) — so logs from the
-      // original period still count even after delay shifts dates forward.
-      // Logs past endDate = overdue work, don't inflate progress.
-      const effectiveStart = task.originalStartDate && task.originalStartDate < task.startDate
+      // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %；逾期紀錄不灌水。
+      const plannedStart = task.originalStartDate && task.originalStartDate < task.startDate
         ? task.originalStartDate : task.startDate
       const allLogs = logsByTask.get(task.id) || []
-      const validLogs = allLogs.filter(d => d >= effectiveStart && d <= task.endDate)
-      const latestLog = validLogs.length > 0
-        ? validLogs.reduce((a, b) => (a > b ? a : b))
-        : null
-      if (!latestLog) {
+      // 只算截止日(含)以前的紀錄；逾期紀錄不灌水（需申請延期）
+      const logsUpToEnd = allLogs.filter(d => d <= task.endDate)
+      if (logsUpToEnd.length === 0) {
         target = 0
       } else {
-        const totalSpan = task.endDate.getTime() - effectiveStart.getTime()
-        if (totalSpan <= 0) {
-          target = 99
-        } else {
-          const elapsed = latestLog.getTime() - effectiveStart.getTime()
-          target = Math.min(99, Math.max(0, Math.round((elapsed / totalSpan) * 100)))
-        }
+        const earliestLog = logsUpToEnd.reduce((a, b) => (a < b ? a : b))
+        const latestLog = logsUpToEnd.reduce((a, b) => (a > b ? a : b))
+        // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %
+        const effStart = earliestLog < plannedStart ? earliestLog : plannedStart
+        const totalSpan = task.endDate.getTime() - effStart.getTime()
+        target = totalSpan <= 0
+          ? 99
+          : Math.min(99, Math.max(0, Math.round(((latestLog.getTime() - effStart.getTime()) / totalSpan) * 100)))
       }
     }
 

@@ -29,9 +29,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     }
     const { start, end } = weekBounds(weekOf)
 
+    // 依填報週載入 A 的報告（新資料有 weekOf）；舊資料無 weekOf 則退回用 logDate 落點
     const aLogs = authorId
       ? await prisma.taskLog.findMany({
-          where: { projectId: id, authorId, logDate: { gte: start, lte: end } },
+          where: { projectId: id, authorId, OR: [{ weekOf }, { weekOf: null, logDate: { gte: start, lte: end } }] },
           orderBy: { logDate: 'asc' },
         })
       : []
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           await prisma.taskLog.update({
             where: { id: existing.id },
             data: {
-              content: e.content.trim(), lastEditedBy: body.actor || '',
+              content: e.content.trim(), lastEditedBy: body.actor || '', weekOf: body.weekOf,
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               ...(nowPublish ? { publishedAt: nowPublish, publishedBy: body.actor || '' } : {}),
             },
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           await prisma.taskLog.create({
             data: {
               taskId: te.taskId, projectId: id, authorId: body.authorId,
-              logDate: new Date(e.logDate), content: e.content.trim(), reportOnly: true,
+              logDate: new Date(e.logDate), content: e.content.trim(), reportOnly: true, weekOf: body.weekOf,
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               ...(nowPublish ? { publishedAt: nowPublish, publishedBy: body.actor || '' } : {}),
             },
@@ -128,7 +129,17 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       })
     }
 
-    // 註：A 的報告是「敘述」(reportOnly)，不驅動進度。進度只由標記完成/延期決定。
+    // 送出後：讓報告日期驅動時間進度（報告 log 也算），並更新受影響里程碑
+    if (body.submit && touchedTaskIds.size > 0) {
+      const allTasks = await prisma.task.findMany({
+        where: { projectId: id },
+        select: { id: true, parentId: true, milestoneId: true, durationDays: true, startDate: true, endDate: true, originalStartDate: true, progress: true, completedAt: true },
+      })
+      const allLogs = await prisma.taskLog.findMany({ where: { projectId: id }, select: { taskId: true, logDate: true } })
+      await syncTaskProgressFromLogs(allTasks, allLogs)
+      const affectedMs = new Set(allTasks.filter(t => touchedTaskIds.has(t.id)).map(t => t.milestoneId))
+      for (const msId of affectedMs) await syncMilestoneStatus(msId, id)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -316,8 +316,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   }, [task, project.milestones, project.tasks])
 
   // Trigger dialog when sheet opens on a task with incomplete preceding item
+  // 面板已改唯讀（ALLOW_TASK_EDITING=false），不再彈前序提醒；前序守則改由撰寫台處理
   useEffect(() => {
-    if (open && task && incompletePreceding && !precedingDismissed) {
+    if (ALLOW_TASK_EDITING && open && task && incompletePreceding && !precedingDismissed) {
       setShowPrecedingDialog(true)
     }
     if (!open) {

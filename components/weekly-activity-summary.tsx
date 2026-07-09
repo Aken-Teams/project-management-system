@@ -1001,78 +1001,43 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
               )
             }
 
-            // Build parent-child map
-            const subtaskOf = new Map<string, string>()
-            project.tasks.forEach(t => { if (t.parentId) subtaskOf.set(t.id, t.parentId) })
-
-            // Group by milestone → task (with subtask nesting)
-            type SubEntry = { taskId: string; taskName: string; assignee?: string; completed?: { completedBy: string; completedAt: string }; logs: typeof filteredLogs }
-            type TaskEntry = {
-              taskId: string; taskName: string; assignee?: string
+            // 建立完整樹狀節點（任意深度／6 層）：只含「有紀錄或完成」的任務 + 其所有祖先
+            type NodeEntry = {
+              taskId: string; taskName: string; assignee?: string; depth: number
               completed?: { completedBy: string; completedAt: string }
               logs: typeof filteredLogs
-              subtasks: SubEntry[]
             }
-            const milestoneMap = new Map<string, TaskEntry[]>()
-            const getMs = (msName: string) => {
-              if (!milestoneMap.has(msName)) milestoneMap.set(msName, [])
-              return milestoneMap.get(msName)!
-            }
-            const findOrAdd = (list: TaskEntry[], id: string, name: string, assignee?: string) => {
-              let t = list.find(e => e.taskId === id)
-              if (!t) { t = { taskId: id, taskName: name, assignee, logs: [], subtasks: [] }; list.push(t) }
-              if (assignee && !t.assignee) t.assignee = assignee
-              return t
-            }
-            const findOrAddSub = (task: TaskEntry, id: string, name: string, assignee?: string) => {
-              let s = task.subtasks.find(e => e.taskId === id)
-              if (!s) { s = { taskId: id, taskName: name, assignee, logs: [] }; task.subtasks.push(s) }
-              if (assignee && !s.assignee) s.assignee = assignee
-              return s
-            }
+            const logsByTaskId = new Map<string, typeof filteredLogs>()
+            filteredLogs.forEach(log => { const l = logsByTaskId.get(log.taskId) || []; l.push(log); logsByTaskId.set(log.taskId, l) })
+            const completedByTaskId = new Map<string, { completedBy: string; completedAt: string }>()
+            filteredCompleted.forEach(ct => completedByTaskId.set(ct.taskId, { completedBy: ct.completedBy, completedAt: ct.completedAt }))
 
-            filteredLogs.forEach(log => {
-              const parentId = subtaskOf.get(log.taskId)
-              if (parentId) {
-                const parentTask = project.tasks.find(t => t.id === parentId)
-                const subTask = project.tasks.find(t => t.id === log.taskId)
-                const tasks = getMs(log.milestoneName)
-                const parent = findOrAdd(tasks, parentId, parentTask?.title || parentId, parentTask?.assignee)
-                const sub = findOrAddSub(parent, log.taskId, log.taskName, subTask?.assignee)
-                sub.logs.push(log)
-              } else {
-                const taskData = project.tasks.find(t => t.id === log.taskId)
-                const tasks = getMs(log.milestoneName)
-                const t = findOrAdd(tasks, log.taskId, log.taskName, taskData?.assignee)
-                t.logs.push(log)
-              }
-            })
-            filteredCompleted.forEach(ct => {
-              const tasks = getMs(ct.milestoneName)
-              const taskData = project.tasks.find(tk => tk.id === ct.taskId)
-              const t = findOrAdd(tasks, ct.taskId, ct.taskName, taskData?.assignee)
-              t.completed = { completedBy: ct.completedBy, completedAt: ct.completedAt }
-            })
+            const relevant = new Set<string>()
+            const addWithAncestors = (id: string) => {
+              let cur = project.tasks.find(t => t.id === id); const seen = new Set<string>()
+              while (cur && !seen.has(cur.id)) { seen.add(cur.id); relevant.add(cur.id); cur = cur.parentId ? project.tasks.find(t => t.id === cur!.parentId) : undefined }
+            }
+            logsByTaskId.forEach((_, id) => addWithAncestors(id))
+            completedByTaskId.forEach((_, id) => addWithAncestors(id))
 
-            // Sort milestones by project order, sort logs by date
-            const msOrder = new Map(project.milestones.map((m, i) => [m.name, i]))
-            const sortedMilestoneEntries = Array.from(milestoneMap.entries()).sort((a, b) => {
-              const ia = msOrder.get(a[0]) ?? 999
-              const ib = msOrder.get(b[0]) ?? 999
-              return ia - ib
-            })
-            // 里程碑底下的「任務 / 子任務」照專案任務順序排列；各自的紀錄照日期
             const taskOrder = new Map(project.tasks.map((t, i) => [t.id, i]))
-            const byTaskOrder = (a: { taskId: string }, b: { taskId: string }) =>
-              (taskOrder.get(a.taskId) ?? 999) - (taskOrder.get(b.taskId) ?? 999)
-            milestoneMap.forEach(tasks => {
-              tasks.sort(byTaskOrder)
-              tasks.forEach(t => {
-                t.subtasks.sort(byTaskOrder)
-                t.logs.sort((a, b) => a.logDate.localeCompare(b.logDate))
-                t.subtasks.forEach(s => s.logs.sort((a, b) => a.logDate.localeCompare(b.logDate)))
-              })
-            })
+            const byOrder = (a: { id: string }, b: { id: string }) => (taskOrder.get(a.id) ?? 999) - (taskOrder.get(b.id) ?? 999)
+            const childrenOf = (id: string) => project.tasks.filter(t => t.parentId === id && relevant.has(t.id)).sort(byOrder)
+            const msNameOf = (id: string) => { const t = project.tasks.find(x => x.id === id); return project.milestones.find(m => m.id === t?.milestoneId)?.name || '' }
+
+            const milestoneMap = new Map<string, NodeEntry[]>()
+            const dfs = (id: string, depth: number, msName: string) => {
+              const t = project.tasks.find(x => x.id === id); if (!t) return
+              const arr = milestoneMap.get(msName) || []
+              arr.push({ taskId: id, taskName: t.title, assignee: t.assignee, depth, completed: completedByTaskId.get(id), logs: (logsByTaskId.get(id) || []).slice().sort((a, b) => a.logDate.localeCompare(b.logDate)) })
+              milestoneMap.set(msName, arr)
+              childrenOf(id).forEach(c => dfs(c.id, depth + 1, msName))
+            }
+            const roots = project.tasks.filter(t => relevant.has(t.id) && (!t.parentId || !relevant.has(t.parentId))).sort(byOrder)
+            roots.forEach(r => dfs(r.id, 0, msNameOf(r.id)))
+
+            const msOrder = new Map(project.milestones.map((m, i) => [m.name, i]))
+            const sortedMilestoneEntries = Array.from(milestoneMap.entries()).sort((a, b) => (msOrder.get(a[0]) ?? 999) - (msOrder.get(b[0]) ?? 999))
 
             // Filter delay requests
             let filteredDelayRequests = week.delayRequests
@@ -1144,142 +1109,67 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                           {/* Tasks under this milestone */}
                           {!isMsCollapsed && (
                             <div className="divide-y">
-                              {tasks.map(task => {
-                                const hasSubtasks = task.subtasks.length > 0
-                                const taskKey = `${week.weekMonday}-${task.taskId}`
-                                const isTaskCollapsed = collapsedTasks.has(taskKey)
-                                return (
-                                  <div key={task.taskId}>
-                                    <div className="flex">
-                                      {/* Left: task name + status */}
-                                      <div
-                                        className={`w-[180px] shrink-0 px-4 py-2.5 border-r bg-muted/5 ${hasSubtasks ? 'cursor-pointer hover:bg-muted/20 transition-colors' : ''}`}
-                                        onClick={() => hasSubtasks && setCollapsedTasks(prev => { const s = new Set(prev); s.has(taskKey) ? s.delete(taskKey) : s.add(taskKey); return s })}
-                                      >
-                                        <div className="flex items-start gap-1.5">
-                                          {hasSubtasks && (
-                                            <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform shrink-0 mt-0.5 -ml-1 ${isTaskCollapsed ? '-rotate-90' : ''}`} />
-                                          )}
-                                          {task.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
-                                          <span className={`text-sm font-medium break-words ${task.completed ? 'text-success' : ''}`}>{task.taskName}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                          {task.assignee && (
-                                            <span className="text-[11px] text-muted-foreground">{task.assignee}</span>
-                                          )}
-                                          {task.assignee && task.completed && (
-                                            <span className="text-[11px] text-muted-foreground/30">|</span>
-                                          )}
-                                          {task.completed && (
-                                            <span className="text-[11px] text-success/70">{fmtDate(task.completed.completedAt)} 完成</span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      {/* Right: log entries + nextPlans on far right */}
-                                      <div className="flex-1 min-w-0 divide-y divide-dashed">
-                                        {task.logs.length === 0 && (
-                                          <div className="px-3 py-2.5 text-xs text-muted-foreground italic">—</div>
-                                        )}
-                                        {task.logs.map(log => (
-                                          <div key={log.logId} className="px-3 py-2 flex gap-3">
-                                            <div className="flex-1 min-w-0">
-                                              <div className="flex items-center gap-2 mb-0.5">
-                                                <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
-                                              </div>
-                                              <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
-                                              {log.attachments && log.attachments.length > 0 && (
-                                                <div className="mt-1 space-y-1">
-                                                  {log.attachments.filter(a => a.type === 'image').length > 0 && (
-                                                    <div className="flex flex-wrap gap-1">
-                                                      {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
-                                                        <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
-                                                          <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded border border-border/50 hover:opacity-80 transition-opacity" />
-                                                        </a>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                  {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                                    <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                                                      <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
+                              {tasks.map(node => (
+                                <div key={node.taskId} className="flex">
+                                  {/* Left: task name + status（依 depth 縮排，呈現完整層級）*/}
+                                  <div className="w-[220px] shrink-0 pr-3 py-2.5 border-r bg-muted/5" style={{ paddingLeft: 16 + node.depth * 16 }}>
+                                    <div className="flex items-start gap-1.5">
+                                      {node.depth > 0 && <span className="inline-block w-3 h-3 border-l-2 border-b-2 border-muted-foreground/30 rounded-bl-sm -mt-1 shrink-0" />}
+                                      {node.completed && <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />}
+                                      <span className={`text-sm font-medium break-words ${node.completed ? 'text-success' : node.depth > 0 ? 'text-foreground/70' : ''}`}>{node.taskName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap pl-[18px]">
+                                      {node.assignee && <span className="text-[11px] text-muted-foreground">{node.assignee}</span>}
+                                      {node.assignee && node.completed && <span className="text-[11px] text-muted-foreground/30">|</span>}
+                                      {node.completed && <span className="text-[11px] text-success/70">{fmtDate(node.completed.completedAt)} 完成</span>}
+                                    </div>
+                                  </div>
+                                  {/* Right: log entries + nextPlans on far right */}
+                                  <div className="flex-1 min-w-0 divide-y divide-dashed">
+                                    {node.logs.length === 0 && (
+                                      <div className="px-3 py-2.5 text-xs text-muted-foreground italic">—</div>
+                                    )}
+                                    {node.logs.map(log => (
+                                      <div key={log.logId} className="px-3 py-2 flex gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-0.5">
+                                            <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
+                                          </div>
+                                          <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
+                                          {log.attachments && log.attachments.length > 0 && (
+                                            <div className="mt-1 space-y-1">
+                                              {log.attachments.filter(a => a.type === 'image').length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
+                                                    <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
+                                                      <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded border border-border/50 hover:opacity-80 transition-opacity" />
                                                     </a>
                                                   ))}
                                                 </div>
                                               )}
-                                            </div>
-                                            {log.nextPlans && log.nextPlans.length > 0 && (
-                                              <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
-                                                <span className="text-[10px] text-muted-foreground/50 font-medium">預計後續</span>
-                                                {log.nextPlans.map((plan, pi) => (
-                                                  <span key={pi} className="text-xs text-primary/60">
-                                                    {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    {/* Subtask entries (collapsible) */}
-                                    {hasSubtasks && !isTaskCollapsed && task.subtasks.map(sub => (
-                                      <div key={sub.taskId} className="flex border-t">
-                                        <div className="w-[180px] shrink-0 pl-4 pr-4 py-2 border-r bg-muted/5">
-                                          <div className="flex items-start gap-1.5">
-                                            {/* L-shaped connector */}
-                                            <span className="inline-block w-4 h-4 border-l-2 border-b-2 border-muted-foreground/30 rounded-bl-sm -mt-2 shrink-0" />
-                                            {sub.completed && <CheckCircle2 className="h-3 w-3 text-success shrink-0" />}
-                                            <span className="text-xs font-medium break-words text-muted-foreground">{sub.taskName}</span>
-                                          </div>
-                                          {sub.assignee && (
-                                            <div className="flex items-center gap-1.5 mt-0.5 pl-[22px]">
-                                              <span className="text-[11px] text-muted-foreground">{sub.assignee}</span>
+                                              {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
+                                                <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                                  <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
+                                                </a>
+                                              ))}
                                             </div>
                                           )}
                                         </div>
-                                        <div className="flex-1 min-w-0 divide-y divide-dashed">
-                                          {sub.logs.map(log => (
-                                            <div key={log.logId} className="px-3 py-2 flex gap-3">
-                                              <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-0.5">
-                                                  <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(log.logDate)}</span>
-                                                </div>
-                                                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{log.content}</p>
-                                                {log.attachments && log.attachments.length > 0 && (
-                                                  <div className="mt-1 space-y-1">
-                                                    {log.attachments.filter(a => a.type === 'image').length > 0 && (
-                                                      <div className="flex flex-wrap gap-1">
-                                                        {log.attachments.filter(a => a.type === 'image').map((att, ai) => (
-                                                          <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer">
-                                                            <img src={att.url} alt={att.name} className="h-14 w-14 object-cover rounded border border-border/50 hover:opacity-80 transition-opacity" />
-                                                          </a>
-                                                        ))}
-                                                      </div>
-                                                    )}
-                                                    {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                                      <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                                                        <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
-                                                      </a>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                              {log.nextPlans && log.nextPlans.length > 0 && (
-                                                <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
-                                                  {log.nextPlans.map((plan, pi) => (
-                                                    <span key={pi} className="text-xs text-primary/60">
-                                                      {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
+                                        {log.nextPlans && log.nextPlans.length > 0 && (
+                                          <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
+                                            <span className="text-[10px] text-muted-foreground/50 font-medium">預計後續</span>
+                                            {log.nextPlans.map((plan, pi) => (
+                                              <span key={pi} className="text-xs text-primary/60">
+                                                {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
-                                )
-                              })}
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>

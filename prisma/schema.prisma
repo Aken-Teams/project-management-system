@@ -337,6 +337,8 @@ model TaskLog {
   publishedBy String?   @map("published_by")
   // true = A 撰寫的「報告敘述」(進更新紀錄，但不驅動進度；進度由標記完成/延期決定)
   reportOnly  Boolean   @default(false) @map("report_only")
+  // 填報週(週一 YYYY-MM-DD)；讓 A 依填報週重新載入編輯，不受 logDate 落點影響
+  weekOf      String?   @map("week_of")
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

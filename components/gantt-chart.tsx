@@ -200,31 +200,24 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return earliestLogDateMap.get(t.id) || t.completedAt || null
   }, [earliestLogDateMap])
 
-  // Helper: compute milestone actual start (earliest actual start among tasks + subtasks)
+  // Helper: 里程碑實際起點 = 該里程碑「底層所有任務(任意深度)報告的最小日」
   const getMilestoneActualStart = useCallback((msTasks: Task[]) => {
+    if (msTasks.length === 0) return null
+    const msId = msTasks[0].milestoneId
     let earliest: string | null = null
-    for (const t of msTasks) {
-      // Check task's own logs
-      const actualStart = getTaskActualStart(t)
-      if (actualStart && (!earliest || actualStart < earliest)) {
-        earliest = actualStart
-      }
-      // Also check subtask logs for parent tasks
-      const subs = tasks.filter(st => st.parentId === t.id)
-      for (const sub of subs) {
-        const subStart = earliestLogDateMap.get(sub.id) || sub.completedAt || null
-        if (subStart && (!earliest || subStart < earliest)) earliest = subStart
-      }
+    for (const t of tasks) {
+      if (t.milestoneId !== msId) continue
+      const s = earliestLogDateMap.get(t.id) || t.completedAt || null
+      if (s && (!earliest || s < earliest)) earliest = s
     }
     return earliest
-  }, [getTaskActualStart, tasks, earliestLogDateMap])
+  }, [tasks, earliestLogDateMap])
 
-  // Helper: check if any task (or its subtasks) under a milestone has activity
+  // Helper: 里程碑是否有活動（任意深度任一任務有報告或已完成）
   const milestoneHasActivity = useCallback((msTasks: Task[]) => {
-    return msTasks.some(t => {
-      if (earliestLogDateMap.has(t.id)) return true
-      return tasks.some(st => st.parentId === t.id && (earliestLogDateMap.has(st.id) || !!st.completedAt))
-    })
+    if (msTasks.length === 0) return false
+    const msId = msTasks[0].milestoneId
+    return tasks.some(t => t.milestoneId === msId && (earliestLogDateMap.has(t.id) || !!t.completedAt))
   }, [earliestLogDateMap, tasks])
 
   const formatDate = (d: string) => {
@@ -364,7 +357,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                 <span className="text-muted-foreground/30 text-xs select-none">└</span>
               )}
               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: subColors.bg }} />
-              <span className={cn('text-sm truncate', effectiveStatus(sub) === 'done' && 'text-muted-foreground')}>{sub.title}</span>
+              <span className={cn('text-sm truncate', effectiveStatus(sub) === 'done' && 'text-muted-foreground')} title={sub.title}>{sub.title}</span>
               {subHasChildren && (
                 <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
                   {subChildren.filter(c => c.progress >= 100 || c.status === 'done').length}/{subChildren.length}
@@ -389,7 +382,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   <div className="absolute h-3 rounded-sm" style={{ ...barStyle(sub.startDate, sub.endDate), top: 5, backgroundColor: subPlanColors.bg, border: subIsDone ? `1px dashed ${subPlanColors.border}` : `1px solid ${subPlanColors.border}` }} />
                   {subIsDone && sub.completedAt ? (
                     <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt), top: 24, backgroundColor: subColors.bg }} />
-                  ) : sub.progress > 0 ? (
+                  ) : earliestLogDateMap.has(sub.id) ? (
                     <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), todayStr), top: 24, backgroundColor: subColors.bg }} />
                   ) : null}
                   <span className="absolute text-[10px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 5 }}>
@@ -509,24 +502,16 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             // 里程碑長條、到期標籤、逾期判斷都用這個，不用可能不同步的 dueDate。
             const msEnd = msBar.end
 
-            // Compute aggregated milestone progress from subtask-aware task progress
+            // 里程碑進度 = 聚合「葉任務」(實際做的最底層)，依 durationDays 加權
+            const msLeaves = tasks.filter(t => t.milestoneId === milestone.id && !tasks.some(c => c.parentId === t.id))
+            const msBasis = msLeaves.length > 0 ? msLeaves : msTasks
             const msAggregatedProgress = (() => {
-              if (msTasks.length === 0) return milestone.progress
-              const total = msTasks.length
-              const sum = msTasks.reduce((acc, t) => {
-                const subs = tasks.filter(st => st.parentId === t.id)
-                const prog = subs.length > 0
-                  ? Math.round(subs.reduce((s, sub) => s + sub.progress, 0) / subs.length)
-                  : t.progress
-                return acc + prog
-              }, 0)
-              return Math.round(sum / total)
+              if (msBasis.length === 0) return milestone.progress
+              const totalDays = msBasis.reduce((s, t) => s + Math.max(t.durationDays || 1, 1), 0)
+              if (totalDays <= 0) return 0
+              return Math.round(msBasis.reduce((s, t) => s + t.progress * Math.max(t.durationDays || 1, 1), 0) / totalDays)
             })()
-            const msAllDoneAgg = msTasks.every(t => {
-              const subs = tasks.filter(st => st.parentId === t.id)
-              if (subs.length > 0) return subs.every(s => s.status === 'done' || s.progress >= 100)
-              return t.status === 'done' || t.progress >= 100
-            })
+            const msAllDoneAgg = msBasis.length > 0 && msBasis.every(t => t.status === 'done' || t.progress >= 100)
             const msDisplayStatus = msAllDoneAgg ? 'done' : msAggregatedProgress > 0 ? 'in-progress' : milestone.status
             const colors = STATUS_COLORS[msDisplayStatus] || STATUS_COLORS.todo
 
@@ -557,22 +542,24 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
                         {msIndex + 1}
                       </div>
-                      <span className="text-sm font-semibold truncate">{milestone.name}</span>
+                      {/* 名稱獨佔第一行，完整顯示（不被徽章擠壓）*/}
+                      <span className="text-sm font-semibold truncate" title={milestone.name}>{milestone.name}</span>
+                    </div>
+                    {/* 徽章 + 到期移到第二行，避免擠壓名稱 */}
+                    <div className="flex items-center gap-1.5 flex-wrap ml-[38px] mt-0.5">
                       <Badge
                         className="text-[10px] px-1.5 py-0 shrink-0 text-white border-0"
                         style={{ backgroundColor: colors.bg }}
                       >
                         {msAggregatedProgress}%
                       </Badge>
-                      {noActivityMilestoneIds?.has(milestone.id) && (
+                      <span className="text-sm text-muted-foreground">到期：{formatDate(msEnd)}</span>
+                      {!milestoneHasActivity(msTasks) && (
                         <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
                           <AlertTriangle className="h-3 w-3 mr-0.5" />
                           尚無人回報
                         </Badge>
                       )}
-                    </div>
-                    <div className="text-sm text-muted-foreground ml-[38px] mt-0.5">
-                      到期：{formatDate(msEnd)}
                     </div>
                   </div>
                   <div
@@ -745,18 +732,12 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   const subtasks = tasks.filter(t => t.parentId === task.id)
                   const hasSubtasks = subtasks.length > 0
 
-                  // For parent tasks, aggregate progress from subtasks
-                  const aggregatedProgress = hasSubtasks
-                    ? Math.round(subtasks.reduce((sum, s) => sum + s.progress, 0) / subtasks.length)
-                    : task.progress
-                  const parentAllDone = hasSubtasks && subtasks.every(s => s.status === 'done' || s.progress >= 100)
-                  const parentHasActivity = hasSubtasks && subtasks.some(s => earliestLogDateMap.has(s.id) || !!s.completedAt)
-                  const parentActualStart = hasSubtasks
-                    ? subtasks.reduce<string | null>((earliest, s) => {
-                        const logStart = earliestLogDateMap.get(s.id) || s.completedAt || null
-                        return logStart && (!earliest || logStart < earliest) ? logStart : earliest
-                      }, null)
-                    : null
+                  // 新模型：任務/子任務(含父層)一律顯示「自己的進度」，不聚合子層（只有里程碑聚合）
+                  const aggregatedProgress = task.progress
+                  const parentAllDone = false
+                  // 甘特「實際條」以手動為主：只看任務自己的報告，不由子層聚合（% 才聚合）
+                  const parentHasActivity = earliestLogDateMap.has(task.id)
+                  const parentActualStart = earliestLogDateMap.get(task.id) || null
                   const parentLatestCompletion = parentAllDone
                     ? subtasks.reduce<string | null>((latest, s) => s.completedAt && (!latest || s.completedAt > latest) ? s.completedAt : latest, null)
                     : null
@@ -830,7 +811,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             'text-sm truncate',
                             displayDone && 'text-muted-foreground',
                             taskOverdue && 'text-red-600 dark:text-red-400',
-                          )}>{task.title}</span>
+                          )} title={task.title}>{task.title}</span>
                           {subtasks.length > 0 && (
                             <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
                               {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
@@ -1074,7 +1055,16 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
         {msTooltip && (() => {
           const ms = msTooltip.milestone
           const msTks = msTooltip.msTasks
-          const doneCount = msTks.filter(t => effectiveStatus(t) === 'done').length
+          // 完成度/完成數與甘特一致：聚合「葉任務」(不用頂層父任務)
+          const msLeavesTip = tasks.filter(t => t.milestoneId === ms.id && !tasks.some(c => c.parentId === t.id))
+          const msBasisTip = msLeavesTip.length > 0 ? msLeavesTip : msTks
+          const liveProgress = (() => {
+            if (msBasisTip.length === 0) return ms.progress
+            const totalDays = msBasisTip.reduce((s, t) => s + Math.max(t.durationDays || 1, 1), 0)
+            if (totalDays <= 0) return 0
+            return Math.round(msBasisTip.reduce((s, t) => s + t.progress * Math.max(t.durationDays || 1, 1), 0) / totalDays)
+          })()
+          const doneCount = msBasisTip.filter(t => effectiveStatus(t) === 'done').length
           const msActualStartStr = getMilestoneActualStart(msTks)
           const msActualStart = msActualStartStr ? new Date(msActualStartStr) : null
           // Latest completion among tasks (only meaningful when ALL tasks are done)
@@ -1085,7 +1075,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             return !latest || d > latest ? d : latest
           }, null) : null
           const plannedEnd = new Date(getMilestoneBarRange(ms, msTks).end)
-          const diffDays = ms.progress >= 100 && latestCompletion
+          const diffDays = liveProgress >= 100 && latestCompletion
             ? Math.round((plannedEnd.getTime() - latestCompletion.getTime()) / (1000 * 60 * 60 * 24))
             : null
           const fmtDate = (d: Date) => d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'numeric', day: 'numeric' })
@@ -1110,7 +1100,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
               <div className="font-medium mb-1.5 text-foreground">{ms.name}</div>
               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                 <span className="text-muted-foreground">任務數</span>
-                <span>{doneCount}/{msTks.length} 完成</span>
+                <span>{doneCount}/{msBasisTip.length} 完成</span>
                 {earliestPlanned && (
                   <>
                     <span className="text-muted-foreground">規劃期間</span>
@@ -1128,7 +1118,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   </>
                 )}
                 <span className="text-muted-foreground">完成度</span>
-                <span>{ms.progress}%</span>
+                <span>{liveProgress}%</span>
                 {diffDays !== null && (
                   <>
                     <span className="text-muted-foreground">時程差異</span>
