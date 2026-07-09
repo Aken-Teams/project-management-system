@@ -259,19 +259,49 @@ export function AWeeklyReportComposer({
     if (!delayReason.trim()) { alert('請填寫延期原因'); return }
     setDelaySubmitting(true)
     try {
-      // 延期模型：只有「觸發任務本身」工期拉長（紅段）；父/子任務都不自動連動（各自獨立、手動為主）。
-      //   里程碑：觸發任務的里程碑拉長 + 其後（依里程碑順序）所有里程碑順延 extraDays（另一色＝順延）。
+      // 延期連動模型（見 memory/delay-cascade-model）：
+      //   🔴 延期群組(延長)= X + X 的父層鏈 + X 的里程碑（只改 endDate）。
+      //   🟠 下游(順延)= 同里程碑內排在 X 頂層之後的任務 + 其後里程碑全部任務（改 startDate+endDate）。
+      //   視覺用「有沒有 startDate」判斷：無=延長(紅)、有=順延(琥珀)。
       const shiftYmd = (d: string, n: number) => ymd(new Date(new Date(d).getTime() + n * 86400000))
       const dstr = (d: string | Date) => (typeof d === 'string' ? d : ymd(new Date(d)))
+      const N = delayImpact.extraDays
+      // X 的父層鏈（含 X，往上到頂層）
+      const chain: Task[] = []
+      { let cur: Task | undefined = selTask; const seen = new Set<string>()
+        while (cur && !seen.has(cur.id)) { seen.add(cur.id); chain.push(cur); cur = cur.parentId ? byId.get(cur.parentId) : undefined } }
+      const groupIds = new Set(chain.map(t => t.id))
+      const topAncestorOf = (t: Task): Task => {
+        let cur = t; const seen = new Set<string>()
+        while (cur.parentId && byId.get(cur.parentId) && !seen.has(cur.id)) { seen.add(cur.id); cur = byId.get(cur.parentId)! }
+        return cur
+      }
+      // 順序＝任務在（已依 sortOrder 排序的）project.tasks 陣列中的索引
+      const taskIndex = new Map(project.tasks.map((t, i) => [t.id, i]))
+      const orderOf = (t: Task) => taskIndex.get(topAncestorOf(t).id) ?? 0
+      const sX = orderOf(selTask)
+      const miX = project.milestones.findIndex(m => m.id === selTask.milestoneId)
+      // 下游順延任務：後續里程碑全部 + 同里程碑排在 X 頂層之後（不含 X 群組、不含 X 子孫）
+      const shiftTasks = N > 0 ? project.tasks.filter(t => {
+        if (groupIds.has(t.id)) return false
+        const mt = project.milestones.findIndex(m => m.id === t.milestoneId)
+        if (mt > miX) return true
+        if (t.milestoneId === selTask.milestoneId) return orderOf(t) > sX
+        return false
+      }) : []
       const pendingTaskChanges = [
+        // 延期群組：X 到新截止日；祖先 endDate += N（只改 end → 紅色延長）
         { taskId: selTask.id, taskTitle: selTask.title, endDate: delayDate },
+        ...chain.slice(1).map(a => ({ taskId: a.id, taskTitle: a.title, endDate: shiftYmd(dstr(a.endDate), N) })),
+        // 下游順延：整條 start/end += N（有 startDate → 琥珀順延）
+        ...shiftTasks.map(t => ({ taskId: t.id, taskTitle: t.title, startDate: shiftYmd(dstr(t.startDate), N), endDate: shiftYmd(dstr(t.endDate), N) })),
       ]
       const affectedMilestones = [
         { milestoneId: ms.id, originalDate: ms.dueDate, proposedDate: delayImpact.proposedMilestoneDate },
-        ...(delayImpact.extraDays > 0
+        ...(N > 0
           ? subsequentMilestones.map(sm => {
               const od = dstr(sm.dueDate)
-              return { milestoneId: sm.id, originalDate: od, proposedDate: shiftYmd(od, delayImpact.extraDays) }
+              return { milestoneId: sm.id, originalDate: od, proposedDate: shiftYmd(od, N) }
             })
           : []),
       ]
