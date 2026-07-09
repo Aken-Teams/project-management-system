@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { notifyRecordUploadedToAccountable } from '@/lib/notifications'
 
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date)
@@ -159,14 +158,6 @@ export async function POST(request: NextRequest) {
         user: { select: { id: true, name: true } },
         milestone: { select: { id: true, name: true } },
       },
-    })
-
-    // R 上傳工作紀錄 → 通知該專案的當責 A
-    const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
-    await notifyRecordUploadedToAccountable({
-      projectId,
-      projectName: proj?.name || '專案',
-      uploaderName: report.user.name,
     })
 
     return NextResponse.json(report)

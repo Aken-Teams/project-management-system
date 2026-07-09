@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
+import { notifyRecordUploadedToAccountable } from '@/lib/notifications'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -150,6 +151,16 @@ export async function POST(
     })
     await syncTaskProgressFromLogs([task], allLogs)
     await syncMilestoneStatus(task.milestoneId, id)
+
+    // R（或任何非 A 的成員）送出工作紀錄 → 通知該專案當責 A（去重見 notifyRecordUploadedToAccountable）
+    if (results.created + results.updated > 0) {
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyRecordUploadedToAccountable({
+        projectId: id,
+        projectName: proj?.name || '專案',
+        uploaderName: user.name,
+      })
+    }
 
     return NextResponse.json({
       success: true,
