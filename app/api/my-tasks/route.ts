@@ -95,12 +95,15 @@ export async function GET(request: NextRequest) {
       // 2. Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo
       await autoProgressTasks(p.tasks, p.taskLogs)
 
-      // 3. Re-sync milestone statuses (exclude subtasks to prevent double-counting)
+      // 3. Re-sync milestone statuses — 聚合「葉任務」(與 syncMilestoneStatus / 甘特一致)
+      const pParentIds = new Set(p.tasks.filter(t => t.parentId).map(t => t.parentId))
       for (const ms of p.milestones) {
-        const msTasks = p.tasks.filter(t => t.milestoneId === ms.id && !t.parentId)
+        const msTasks = p.tasks.filter(t => t.milestoneId === ms.id)
         if (msTasks.length === 0) continue
-        const correctStatus = computeMilestoneStatus(msTasks)
-        const correctProgress = computeWeightedProgress(msTasks)
+        const leaves = msTasks.filter(t => !pParentIds.has(t.id))
+        const basis = leaves.length > 0 ? leaves : msTasks
+        const correctStatus = computeMilestoneStatus(basis)
+        const correctProgress = computeWeightedProgress(basis)
         if (ms.status !== correctStatus || ms.progress !== correctProgress) {
           await prisma.milestone.update({
             where: { id: ms.id },
