@@ -150,8 +150,9 @@ export function DelayGanttPreviewButton({ delay }: { delay: DelayInfo }) {
                             <div className="flex-1 relative h-5 min-w-0">
                               {tk.kind === 'extend' ? (
                                 <>
-                                  <div className="absolute bg-slate-300 h-3 rounded-l-sm" style={{ top: 4, left: `${pct(tk.origStart)}%`, width: `${w(tk.origStart, tk.origEnd)}%` }} />
+                                  {/* 先畫紅延長段，再把灰(原定)畫在上層＋給最小寬度 → 0 寬度原定(如 7/1~7/1)也看得見 */}
                                   {tk.newEnd > tk.origEnd && <div className="absolute bg-red-400 h-3 rounded-r-sm" style={{ top: 4, left: `${pct(tk.origEnd)}%`, width: `${w(tk.origEnd, tk.newEnd)}%` }} />}
+                                  <div className="absolute bg-slate-300 h-3 rounded-l-sm border-r border-white/70" style={{ top: 4, left: `${pct(tk.origStart)}%`, width: `${Math.max(((tk.origEnd - tk.origStart) / span) * 100, 2)}%` }} />
                                 </>
                               ) : (
                                 <>

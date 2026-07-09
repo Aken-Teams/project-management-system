@@ -265,7 +265,11 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     (project.tasks ?? []).map(t => ({
       id: t.id, milestoneId: t.milestoneId, title: t.title,
       assignee: t.assignee, priority: t.priority,
-      durationDays: t.durationDays, startDate: t.startDate, endDate: t.endDate,
+      // 工期以 DB 日期反推（與 dbToTimelineState 一致），避免一開啟就誤判「工期變了」
+      durationDays: (t.startDate && t.endDate)
+        ? Math.max(1, Math.ceil((new Date(t.endDate).getTime() - new Date(t.startDate).getTime()) / 86400000) + 1)
+        : t.durationDays,
+      startDate: t.startDate, endDate: t.endDate,
       parentId: t.parentId ?? undefined,
       manualDates: (t as { manualDates?: boolean }).manualDates ?? false,
     }))
@@ -627,7 +631,10 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
       setOrigTasks((fresh.tasks ?? []).map((t: { id: string; milestoneId: string; title: string; assignee: string; priority: string; durationDays: number; startDate: string; endDate: string; parentId?: string | null; manualDates?: boolean }) => ({
         id: t.id, milestoneId: t.milestoneId, title: t.title,
         assignee: t.assignee, priority: t.priority,
-        durationDays: t.durationDays, startDate: t.startDate, endDate: t.endDate,
+        durationDays: (t.startDate && t.endDate)
+          ? Math.max(1, Math.ceil((new Date(t.endDate).getTime() - new Date(t.startDate).getTime()) / 86400000) + 1)
+          : t.durationDays,
+        startDate: t.startDate, endDate: t.endDate,
         parentId: t.parentId ?? undefined,
         manualDates: t.manualDates ?? false,
       })))

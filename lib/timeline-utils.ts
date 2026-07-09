@@ -280,8 +280,13 @@ export function dbToTimelineState(
   tasks: TimelineTask[]
 } {
   const milestones: TimelineMilestone[] = dbMilestones.map((ms, index) => {
+    // 里程碑起點以「它最早任務的開始」為準（與甘特一致）：延期順延後任務移了，
+    // 里程碑起點也跟著移，不再用可能過時的 ms.startDate。
+    const msTaskStarts = dbTasks.filter(t => t.milestoneId === ms.id && t.startDate).map(t => new Date(t.startDate!).getTime())
     let msStart: Date
-    if (ms.startDate) {
+    if (msTaskStarts.length) {
+      msStart = new Date(Math.min(...msTaskStarts))
+    } else if (ms.startDate) {
       // New overlapping model: milestone has its own startDate
       msStart = new Date(ms.startDate)
     } else {
@@ -311,18 +316,27 @@ export function dbToTimelineState(
     }
   })
 
-  const tasks: TimelineTask[] = dbTasks.map(t => ({
-    id: t.id,
-    milestoneId: t.milestoneId,
-    title: t.title,
-    assignee: t.assignee,
-    priority: t.priority as 'low' | 'medium' | 'high',
-    durationDays: t.durationDays || 1,
-    manualDates: t.manualDates ?? false,
-    ...(t.parentId ? { parentId: t.parentId } : {}),
-    // Carry explicit startDate for overlapping tasks
-    ...(t.startDate ? { startDate: new Date(t.startDate).toISOString().split('T')[0] } : {}),
-  }))
+  const tasks: TimelineTask[] = dbTasks.map(t => {
+    // 工期以「資料庫日期」為準（延期後 end 已更新）：有 start+end 就反推工期，
+    // 讓編輯畫面顯示的 end = start + 工期 = DB 的 end = 甘特（不再各算各的）。
+    let durationDays = t.durationDays || 1
+    if (t.startDate && t.endDate) {
+      const s = new Date(t.startDate).getTime(), e = new Date(t.endDate).getTime()
+      durationDays = Math.max(1, Math.ceil((e - s) / (1000 * 60 * 60 * 24)) + 1)
+    }
+    return {
+      id: t.id,
+      milestoneId: t.milestoneId,
+      title: t.title,
+      assignee: t.assignee,
+      priority: t.priority as 'low' | 'medium' | 'high',
+      durationDays,
+      manualDates: t.manualDates ?? false,
+      ...(t.parentId ? { parentId: t.parentId } : {}),
+      // Carry explicit startDate for overlapping tasks
+      ...(t.startDate ? { startDate: new Date(t.startDate).toISOString().split('T')[0] } : {}),
+    }
+  })
 
   return { milestones, tasks }
 }

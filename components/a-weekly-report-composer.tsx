@@ -591,7 +591,7 @@ export function AWeeklyReportComposer({
                               <button key={n.id} onClick={() => chooseTask(n.id)}
                                 className={cn('w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/60 text-left', n.id === selectedId && 'bg-primary/10')}
                                 style={{ paddingLeft: 12 + n.depth * 16 }}>
-                                <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[10px] text-violet-500 ml-1">(父)</span>}</span>
+                                <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[10px] text-violet-500 ml-1">(父)</span>}{(() => { const bt = byId.get(n.id); return bt ? <span className="text-[10px] text-muted-foreground/70 tabular-nums ml-1.5">{new Date(bt.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}~{new Date(bt.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span> : null })()}</span>
                                 {pendingDelayTaskIds.has(n.id) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-300 shrink-0">延期待審核</Badge>}
                                 {(rows[n.id] || []).some(r => r.content.trim() && r.date) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge>}
                                 {n.hasR ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 shrink-0">R已提交</Badge> : <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/50 shrink-0">未提交</Badge>}
@@ -612,6 +612,7 @@ export function AWeeklyReportComposer({
                       <div className="flex-1 min-w-0">
                         <div className="text-[11px] text-muted-foreground truncate">{sel.path.replace('› ' + sel.title, '')}</div>
                         <div className="text-sm font-semibold flex items-center gap-1.5">你正在填：{sel.title}{sel.isParent && <Badge variant="outline" className="text-[10px] px-1 py-0 text-violet-600 border-violet-300">父任務</Badge>}</div>
+                        <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3 shrink-0" />預計 {new Date(selTask.startDate).toLocaleDateString('zh-TW')} ~ {new Date(selTask.endDate).toLocaleDateString('zh-TW')}</div>
                       </div>
                       <div className="w-24 shrink-0 flex items-center gap-1.5"><Progress value={sel.progress} className="h-2 flex-1 bg-slate-200 dark:bg-slate-700" /><span className="text-[11px] font-medium text-muted-foreground tabular-nums w-8 text-right">{sel.progress}%</span></div>
                     </div>
