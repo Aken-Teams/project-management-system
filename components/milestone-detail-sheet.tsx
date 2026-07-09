@@ -288,6 +288,35 @@ export function MilestoneDetailSheet({
     }
   }
 
+  const statusDot = (status: string) => status === 'done' ? '#10b981' : status === 'in-progress' ? '#3b82f6' : status === 'blocked' ? '#ef4444' : '#94a3b8'
+
+  // 遞迴渲染任務樹（任意深度，6 層）——統一單列樣式、依 depth 縮排
+  const renderTaskNode = (task: Task, depth: number): React.ReactNode => {
+    const children = project.tasks.filter(t => t.parentId === task.id)
+    const status = effectiveStatus(task)
+    const overdue = isOverdue(task)
+    return (
+      <div key={task.id}>
+        <div
+          className={cn('flex items-center gap-2 py-2.5 pr-3 cursor-pointer hover:bg-muted/50 transition-colors', overdue && 'bg-red-50/40 dark:bg-red-950/10')}
+          style={{ paddingLeft: 12 + depth * 18 }}
+          onClick={() => onTaskClick?.(task)}
+        >
+          {depth > 0 && <span className="text-muted-foreground/40 text-sm shrink-0 -ml-3">└</span>}
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusDot(status) }} />
+          <span className={cn('text-sm font-medium truncate flex-1 min-w-0', status === 'done' && 'text-muted-foreground line-through decoration-1')} title={task.title}>{task.title}</span>
+          {task.assignee && <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">{task.assignee}</span>}
+          {overdue && <span className="text-xs font-medium text-red-600 dark:text-red-400 whitespace-nowrap shrink-0">逾期{Math.round((Date.now() - new Date(task.endDate).getTime()) / 86400000)}天</span>}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-14"><Progress value={task.progress} className="h-1.5" /></div>
+            <span className="text-xs font-medium tabular-nums w-9 text-right">{task.progress}%</span>
+          </div>
+        </div>
+        {children.map(c => renderTaskNode(c, depth + 1))}
+      </div>
+    )
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -310,82 +339,44 @@ export function MilestoneDetailSheet({
             <p className="text-xs text-muted-foreground">進度由任務自動計算</p>
           </div>
 
-          {/* Date & Stats grid */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Due date */}
-            <div className="rounded-lg border p-3 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5" />
-                到期日
-              </div>
+          {/* 精簡資訊列（合併原本 4 張卡）*/}
+          <div className="rounded-lg border divide-y text-sm">
+            {/* 規劃期間（草稿階段可在此改到期日）*/}
+            <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+              <span className="text-muted-foreground flex items-center gap-1.5"><Flag className="h-4 w-4" />規劃期間</span>
               {!readOnly && project.phase === 'draft' && editingDueDate ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={draftDueDate}
-                    onChange={e => setDraftDueDate(e.target.value)}
-                    className="text-sm border rounded px-1.5 py-0.5 bg-background w-full"
-                  />
-                  <button onClick={handleSaveDueDate} disabled={savingDate} className="text-green-600 hover:text-green-700">
-                    {savingDate ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  </button>
-                  <button onClick={() => setEditingDueDate(false)} className="text-muted-foreground hover:text-foreground">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <span className="flex items-center gap-1.5">
+                  <span className="font-medium">{stats?.plannedStart ? fmtDate(stats.plannedStart) : fmtDate(milestone.dueDate)} ~</span>
+                  <input type="date" value={draftDueDate} onChange={e => setDraftDueDate(e.target.value)} className="text-xs border rounded px-1.5 py-0.5 bg-background" />
+                  <button onClick={handleSaveDueDate} disabled={savingDate} className="text-green-600 hover:text-green-700">{savingDate ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>
+                  <button onClick={() => setEditingDueDate(false)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                </span>
               ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium">{fmtDate(milestone.dueDate)}</span>
+                <span className="font-medium flex items-center gap-1.5">
+                  {stats?.plannedStart ? `${fmtDate(stats.plannedStart)} ~ ` : '~ '}{fmtDate(milestone.dueDate)}
                   {!readOnly && project.phase === 'draft' && (
-                    <button
-                      onClick={() => { setDraftDueDate(milestone.dueDate); setEditingDueDate(true) }}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+                    <button onClick={() => { setDraftDueDate(milestone.dueDate); setEditingDueDate(true) }} className="text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
                   )}
-                </div>
+                </span>
               )}
             </div>
-
-            {/* Task count */}
-            <div className="rounded-lg border p-3 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <ListChecks className="h-3.5 w-3.5" />
-                任務統計
-              </div>
-              <div className="text-sm font-medium">
-                {stats?.doneCount ?? 0}/{msTasks.length} 完成
-              </div>
-            </div>
-
-            {/* Planned period */}
-            {stats?.plannedStart && (
-              <div className="rounded-lg border p-3 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Flag className="h-3.5 w-3.5" />
-                  規劃期間
-                </div>
-                <div className="text-sm font-medium">
-                  {fmtDate(stats.plannedStart)} ~ {fmtDate(milestone.dueDate)}
-                </div>
-              </div>
-            )}
-
-            {/* Actual period */}
+            {/* 實際期間 */}
             {(stats?.actualStart || stats?.actualEnd) && (
-              <div className="rounded-lg border p-3 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  實際期間
-                </div>
-                <div className="text-sm font-medium">
-                  {stats.actualStart ? fmtDate(stats.actualStart) : '—'}
-                  {' ~ '}
-                  {stats.actualEnd ? fmtDate(stats.actualEnd) : '進行中'}
-                </div>
+              <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                <span className="text-muted-foreground flex items-center gap-1.5"><Clock className="h-4 w-4" />實際期間</span>
+                <span className="font-medium">{stats.actualStart ? fmtDate(stats.actualStart) : '—'} ~ {stats.actualEnd ? fmtDate(stats.actualEnd) : '進行中'}</span>
               </div>
             )}
+            {/* 任務（完成數 + 各狀態）*/}
+            <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+              <span className="text-muted-foreground flex items-center gap-1.5"><ListChecks className="h-4 w-4" />任務</span>
+              <span className="flex items-center gap-2 flex-wrap justify-end">
+                <span className="font-medium">{stats?.doneCount ?? 0}/{msTasks.length} 完成</span>
+                {!!stats?.inProgressCount && <span className="text-xs text-blue-600 dark:text-blue-400">進行中 {stats.inProgressCount}</span>}
+                {!!stats?.blockedCount && <span className="text-xs text-red-600 dark:text-red-400">受阻 {stats.blockedCount}</span>}
+                {!!stats?.todoCount && <span className="text-xs text-muted-foreground">待辦 {stats.todoCount}</span>}
+              </span>
+            </div>
           </div>
 
           {/* Time difference */}
@@ -415,48 +406,23 @@ export function MilestoneDetailSheet({
             </div>
           )}
 
-          {/* Status breakdown + delay request button */}
-          {stats && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {stats.inProgressCount > 0 && (
-                <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/50 transition-colors">
-                  進行中 {stats.inProgressCount}
-                </Badge>
-              )}
-              {stats.doneCount > 0 && (
-                <Badge className="text-xs bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700 dark:hover:bg-emerald-900/50 transition-colors">
-                  已完成 {stats.doneCount}
-                </Badge>
-              )}
-              {stats.blockedCount > 0 && (
-                <Badge className="text-xs bg-red-100 text-red-700 border-red-300 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/50 transition-colors">
-                  受阻 {stats.blockedCount}
-                </Badge>
-              )}
-              {stats.todoCount > 0 && (
-                <Badge className="text-xs bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
-                  待辦 {stats.todoCount}
-                </Badge>
-              )}
-              {/* Delay request button */}
-              {!readOnly && project.phase === 'active' && isMilestoneOverdue && milestone.progress < 100 && !hasPendingDelay && !showExtensionForm && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-auto gap-1 text-xs h-6 px-2 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-950/30"
-                  onClick={() => setShowExtensionForm(true)}
-                >
-                  <CalendarClock className="h-3 w-3" />
-                  提出延期
-                </Button>
-              )}
-              {!readOnly && project.phase === 'active' && hasPendingDelay && (
-                <Badge className="ml-auto text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 gap-1">
-                  <Clock className="h-3 w-3" />
-                  延期審核中
-                </Badge>
-              )}
-            </div>
+          {/* 延期按鈕 / 審核中（狀態數量已併入上方「任務」列）*/}
+          {!readOnly && project.phase === 'active' && isMilestoneOverdue && milestone.progress < 100 && !hasPendingDelay && !showExtensionForm && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 text-xs h-7 px-2 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 dark:hover:bg-amber-950/30"
+              onClick={() => setShowExtensionForm(true)}
+            >
+              <CalendarClock className="h-3 w-3" />
+              提出延期
+            </Button>
+          )}
+          {!readOnly && project.phase === 'active' && hasPendingDelay && (
+            <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 gap-1">
+              <Clock className="h-3 w-3" />
+              延期審核中
+            </Badge>
           )}
 
           {/* Extension form (shown when "提出延期" button clicked) */}
@@ -534,137 +500,8 @@ export function MilestoneDetailSheet({
                 此里程碑尚未有任務
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {msTasks.map(task => {
-                  const subtasks = project.tasks.filter(t => t.parentId === task.id)
-                  const overdue = isOverdue(task)
-                  const status = effectiveStatus(task)
-                  const actualEndDate = task.completedAt ? new Date(task.completedAt) : null
-                  const plannedEndDate = new Date(task.endDate)
-                  const timeDiff = status === 'done' && actualEndDate
-                    ? Math.round((plannedEndDate.getTime() - actualEndDate.getTime()) / (1000 * 60 * 60 * 24))
-                    : null
-
-                  return (
-                    <div key={task.id}>
-                      <div
-                        className={cn(
-                          'p-2.5 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors',
-                          overdue && 'border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20',
-                        )}
-                        onClick={() => onTaskClick?.(task)}
-                      >
-                        {/* Row 1: Title + status + progress */}
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            'text-sm font-medium truncate flex-1 min-w-0',
-                            status === 'done' && 'text-muted-foreground',
-                          )}>
-                            {task.title}
-                          </span>
-                          {getStatusBadge(status)}
-                          {subtasks.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
-                              {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
-                            </span>
-                          )}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <div className="w-14">
-                              <Progress value={task.progress} className="h-1.5" />
-                            </div>
-                            <span className="text-xs font-medium tabular-nums w-8 text-right">{task.progress}%</span>
-                          </div>
-                        </div>
-                        {/* Row 2: Assignee + dates + time indicator */}
-                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          {task.assignee && (
-                            <div className="flex items-center gap-1 whitespace-nowrap">
-                              <Avatar className="h-4 w-4 shrink-0">
-                                <AvatarFallback className={cn('text-[7px] text-white', assigneeColorMap.get(task.assignee) || AVATAR_COLORS[0])}>
-                                  {task.assignee.split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                              {task.assignee}
-                            </div>
-                          )}
-                          <span className="whitespace-nowrap">{fmtDate(task.startDate)} ~ {fmtDate(task.endDate)}</span>
-                          {/* Time difference indicator instead of full actual dates */}
-                          {timeDiff !== null ? (
-                            <span className={cn(
-                              'whitespace-nowrap font-medium',
-                              timeDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' :
-                              timeDiff < 0 ? 'text-red-600 dark:text-red-400' : '',
-                            )}>
-                              {timeDiff > 0 ? `提前${timeDiff}天` : timeDiff < 0 ? `延後${Math.abs(timeDiff)}天` : '準時'}
-                            </span>
-                          ) : overdue ? (
-                            <span className="whitespace-nowrap font-medium text-red-600 dark:text-red-400">
-                              逾期{Math.round((new Date().getTime() - plannedEndDate.getTime()) / (1000 * 60 * 60 * 24))}天
-                            </span>
-                          ) : null}
-                          {/* Undo completion for completed tasks (no subtasks) */}
-                          {!readOnly && status === 'done' && subtasks.length === 0 && (
-                            <button
-                              className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              onClick={(e) => { e.stopPropagation(); handleUncompleteTask(task) }}
-                            >
-                              <Undo2 className="h-3 w-3" />
-                              取消完成
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Subtasks — compact list */}
-                      {subtasks.length > 0 && (
-                        <div className="ml-4 mt-0.5 rounded-md border bg-muted/15 divide-y">
-                          {subtasks.map((sub) => {
-                            const subStatus = effectiveStatus(sub)
-                            const subOverdue = isOverdue(sub)
-                            return (
-                              <div
-                                key={sub.id}
-                                className={cn(
-                                  'flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors',
-                                  subOverdue && 'bg-red-50/30 dark:bg-red-950/10',
-                                )}
-                                onClick={(e) => { e.stopPropagation(); onTaskClick?.(sub) }}
-                              >
-                                <div
-                                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                                  style={{
-                                    backgroundColor: subStatus === 'done' ? '#10b981'
-                                      : subStatus === 'in-progress' ? '#3b82f6'
-                                      : subStatus === 'blocked' ? '#ef4444'
-                                      : '#94a3b8',
-                                  }}
-                                />
-                                <span className={cn(
-                                  'text-sm truncate flex-1 min-w-0',
-                                  subStatus === 'done' && 'text-muted-foreground',
-                                )}>
-                                  {sub.title}
-                                </span>
-                                {sub.assignee && (
-                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap hidden sm:inline">{sub.assignee}</span>
-                                )}
-                                <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
-                                  {new Date(sub.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                </span>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <div className="w-8">
-                                    <Progress value={sub.progress} className="h-1" />
-                                  </div>
-                                  <span className="text-[10px] font-medium tabular-nums w-7 text-right">{sub.progress}%</span>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+              <div className="rounded-lg border divide-y overflow-hidden">
+                {msTasks.map(task => renderTaskNode(task, 0))}
               </div>
             )}
           </div>

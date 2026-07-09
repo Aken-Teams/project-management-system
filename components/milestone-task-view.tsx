@@ -46,6 +46,13 @@ const SHOW_LIST_VIEW = false
 
 export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: MilestoneTaskViewProps) {
   const { user } = useAuth()
+  // 只有「該專案的當責 A」或系統角色(pm/admin)能撰寫本週報告
+  const canWriteReport = useMemo(() => {
+    if (user?.role === 'admin' || user?.role === 'pm') return true
+    return !!project.teamMembers?.some(m => m.role === 'A' && (
+      (!!user?.email && m.email === user.email) || (!!user?.name && m.name === user.name)
+    ))
+  }, [user, project.teamMembers])
   const [composerOpen, setComposerOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'gantt'>('gantt')
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set())
@@ -494,7 +501,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
           <span className="text-sm">
             {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑完成
           </span>
-          {!readOnly && (
+          {!readOnly && canWriteReport && (
             <Button size="sm" className="h-7 text-sm gap-1.5" onClick={() => setComposerOpen(true)}>
               <PenLine className="h-3.5 w-3.5" />撰寫本週報告
             </Button>

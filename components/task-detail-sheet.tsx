@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import {
   Dialog,
   DialogContent,
@@ -168,6 +169,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
   const [showHistoryDialog, setShowHistoryDialog] = useState(false)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [rReportCopied, setRReportCopied] = useState(false)
+  const [reportWeek, setReportWeek] = useState<string>('') // 最終報告的週別篩選（'' = 全部；值 = 該週週一 YYYY-MM-DD）
+  const [reportPage, setReportPage] = useState(0)
 
   // 審核者模式：可編輯週報的人(專案A / 系統 pm / 系統 admin)。系統角色優先：
   // 這些人視為「審核者(A)」——自己寫的紀錄歸到 R 週報、不自動載入填寫表。
@@ -886,6 +889,20 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     .filter(l => l.taskId === task.id)
     .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
 
+  // A 的最終報告：已發布(publishedAt)的紀錄，最早日期在最上面
+  const mondayOf = (dateStr: string) => {
+    const d = new Date(dateStr); const day = d.getDay()
+    return fmtLocalDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + (day === 0 ? -6 : 1)))
+  }
+  const aFinalReportAll = taskLogs.filter(l => l.publishedAt).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  const reportWeeks = [...new Set(aFinalReportAll.map(l => mondayOf(l.logDate)))].sort()
+  const aFinalReportFiltered = reportWeek ? aFinalReportAll.filter(l => mondayOf(l.logDate) === reportWeek) : aFinalReportAll
+  // 分頁：一頁 10 筆
+  const REPORTS_PER_PAGE = 10
+  const reportPageCount = Math.max(1, Math.ceil(aFinalReportFiltered.length / REPORTS_PER_PAGE))
+  const reportSafePage = Math.min(reportPage, reportPageCount - 1)
+  const aFinalReport = aFinalReportFiltered.slice(reportSafePage * REPORTS_PER_PAGE, (reportSafePage + 1) * REPORTS_PER_PAGE)
+
   // Check pending delay — look at project.delayRequests if available
   const hasPendingDelay = (project as Record<string, unknown>).pendingDelayMilestoneIds
     ? ((project as Record<string, unknown>).pendingDelayMilestoneIds as string[]).includes(task.milestoneId)
@@ -1549,78 +1566,98 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                 </div>
               </div>}
 
-              {/* ReadOnly mode: show task summary */}
+              {/* ReadOnly mode: A 最終報告（表格）；任務資訊收進底部按鈕彈窗 */}
               {readOnly && (
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-                  {task.description && (
-                    <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
-                      <p className="text-sm text-muted-foreground leading-relaxed">{task.description}</p>
-                    </div>
-                  )}
-                  <div className="rounded-lg border divide-y">
-                    <div className="flex items-center justify-between py-2.5 px-3">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1.5"><User className="h-3.5 w-3.5" />負責人</span>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>{task.assignee.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
-                        <span className="text-sm font-medium">{task.assignee}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-2.5 px-3">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" />時程</span>
-                      <span className="text-sm font-medium">
-                        {new Date(task.startDate).toLocaleDateString('zh-TW')} → {new Date(task.endDate).toLocaleDateString('zh-TW')}
-                        <span className="text-muted-foreground text-xs ml-1">（{task.durationDays} 天）</span>
-                      </span>
-                    </div>
-                    {task.completedAt && (
-                      <div className="flex items-center justify-between py-2.5 px-3">
-                        <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" />完成</span>
-                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                          {new Date(task.completedAt).toLocaleDateString('zh-TW')}
-                          {task.completedBy && <span className="text-muted-foreground font-normal ml-1.5">由 {task.completedBy}</span>}
-                        </span>
-                      </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold flex items-center gap-1.5"><FileText className="h-4 w-4 text-primary" />最終報告</div>
+                    {reportWeeks.length > 0 && (
+                      reportWeek === ''
+                        ? <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => { setReportWeek(reportWeeks[reportWeeks.length - 1]); setReportPage(0) }}><Calendar className="h-3.5 w-3.5" />依週篩選</Button>
+                        : <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setReportWeek(''); setReportPage(0) }}>顯示全部</Button>
                     )}
                   </div>
+                  {reportWeek !== '' && (
+                    <WeekPicker value={reportWeek} onChange={w => { setReportWeek(w); setReportPage(0) }} />
+                  )}
+                  {aFinalReportAll.length === 0 ? (
+                    <div className="text-sm text-muted-foreground rounded-lg border border-dashed p-4 text-center">尚無最終報告（當責 A 尚未送出本週報告）</div>
+                  ) : (
+                    <div className="rounded-lg border overflow-hidden">
+                      <div className="max-h-[52vh] overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/40 text-xs text-muted-foreground">
+                            <th className="text-left font-medium px-2.5 py-1.5 w-[64px]">日期</th>
+                            <th className="text-left font-medium px-2.5 py-1.5">工作內容</th>
+                            <th className="text-left font-medium px-2.5 py-1.5 w-[72px]">附件</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {aFinalReport.map(log => (
+                            <tr key={log.id} className="border-t align-top">
+                              <td className="px-2.5 py-2 text-xs text-muted-foreground tabular-nums whitespace-nowrap">{new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
+                              <td className="px-2.5 py-2">
+                                <div className="whitespace-pre-wrap leading-relaxed break-words">{log.content}</div>
+                                {log.nextPlans && log.nextPlans.length > 0 && (
+                                  <div className="text-xs text-muted-foreground mt-1"><span className="font-medium">預計後續：</span>{log.nextPlans.map((p, pi) => <span key={pi}>{pi > 0 ? '；' : ''}{p.content}</span>)}</div>
+                                )}
+                              </td>
+                              <td className="px-2.5 py-2">
+                                {log.attachments && log.attachments.length > 0 ? (
+                                  <HoverCard openDelay={80} closeDelay={80}>
+                                    <HoverCardTrigger asChild>
+                                      <button type="button" className="inline-flex items-center gap-0.5 text-xs text-primary hover:bg-primary/10 rounded px-1.5 py-0.5"><Paperclip className="h-3 w-3" />{log.attachments.length}</button>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent side="left" align="start" collisionPadding={12} className="w-56 p-2">
+                                      <div className="text-[11px] font-medium text-muted-foreground mb-1">附件（{log.attachments.length}）</div>
+                                      <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                                        {log.attachments.map((att, ai) => (
+                                          <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                                            {att.type === 'image'
+                                              ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" />
+                                              : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
+                                            <span className="truncate flex-1">{att.name}</span>
+                                          </a>
+                                        ))}
+                                      </div>
+                                    </HoverCardContent>
+                                  </HoverCard>
+                                ) : <span className="text-xs text-muted-foreground/50">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      </div>
+                      {reportPageCount > 1 && (
+                        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-t bg-muted/20 text-xs text-muted-foreground">
+                          <span>第 {reportSafePage + 1}／{reportPageCount} 頁（共 {aFinalReportFiltered.length} 筆）</span>
+                          <div className="flex gap-1">
+                            <button disabled={reportSafePage === 0} onClick={() => setReportPage(p => Math.max(0, p - 1))} className="px-2 py-0.5 rounded border bg-background hover:bg-muted disabled:opacity-40">上一頁</button>
+                            <button disabled={reportSafePage >= reportPageCount - 1} onClick={() => setReportPage(p => Math.min(reportPageCount - 1, p + 1))} className="px-2 py-0.5 rounded border bg-background hover:bg-muted disabled:opacity-40">下一頁</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Quick action buttons — open center Dialogs */}
-              <div className="px-6 py-3 border-t shrink-0 flex gap-2 bg-muted/40">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowRReportDialog(true)}
-                  className="flex-1 gap-1.5 text-sm h-9 bg-background"
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  R 週報
-                  {rMemberLogs.weekLogs.length > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full">{rMemberLogs.weekLogs.length}</Badge>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowHistoryDialog(true)}
-                  className="flex-1 gap-1.5 text-sm h-9 bg-background"
-                >
-                  <Clock className="h-3.5 w-3.5" />
-                  過往紀錄
-                  {taskLogs.length > 0 && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full">{taskLogs.length}</Badge>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowInfoDialog(true)}
-                  className="flex-1 gap-1.5 text-sm h-9 bg-background"
-                >
-                  <Info className="h-3.5 w-3.5" />
-                  任務資訊
-                </Button>
-              </div>
+              {/* 唯讀底部：只留「任務資訊」(關聯/相依)；R 週報、過往紀錄已移除 */}
+              {readOnly && (
+                <div className="px-6 py-3 border-t shrink-0 flex gap-2 bg-muted/40">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowInfoDialog(true)}
+                    className="flex-1 gap-1.5 text-sm h-9 bg-background"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    任務資訊（負責人・時程・相依關係）
+                  </Button>
+                </div>
+              )}
             </div>
           ) : null}
 
