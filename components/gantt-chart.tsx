@@ -377,9 +377,18 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             {showBaseline ? (() => {
               const subPlanColors = getPlanBarColors(sub.endDate, sub.progress, sub.completedAt, sub.status)
               const subIsDone = effectiveStatus(sub) === 'done'
+              // 延長 = 工期真的變長（延期），非只是平移 → 畫出紅色延長段（深層子任務也要，例如 c1）
+              const subHasExtension = !!(sub.originalEndDate && sub.originalStartDate) &&
+                (new Date(sub.endDate).getTime() - new Date(sub.startDate).getTime()) >
+                (new Date(sub.originalEndDate!).getTime() - new Date(sub.originalStartDate!).getTime())
+              const subPlanStart = subHasExtension ? sub.originalStartDate! : sub.startDate
+              const subPlanEnd = subHasExtension ? sub.originalEndDate! : sub.endDate
               return (
                 <>
-                  <div className="absolute h-3 rounded-sm" style={{ ...barStyle(sub.startDate, sub.endDate), top: 5, backgroundColor: subPlanColors.bg, border: subIsDone ? `1px dashed ${subPlanColors.border}` : `1px solid ${subPlanColors.border}` }} />
+                  <div className="absolute h-3 rounded-sm" style={{ ...barStyle(subPlanStart, subPlanEnd), top: 5, backgroundColor: subPlanColors.bg, border: subIsDone ? `1px dashed ${subPlanColors.border}` : `1px solid ${subPlanColors.border}`, ...(subHasExtension ? { borderRight: 'none', borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}) }} />
+                  {subHasExtension && (
+                    <div className="absolute h-3 rounded-r-sm" style={{ ...barStyle(sub.originalEndDate!, sub.endDate), top: 5, backgroundColor: EXTENSION_COLOR.bg, border: subIsDone ? `1px dashed ${EXTENSION_COLOR.border}` : `1px solid ${EXTENSION_COLOR.border}`, borderLeft: 'none' }} />
+                  )}
                   {subIsDone && sub.completedAt ? (
                     <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt), top: 24, backgroundColor: subColors.bg }} />
                   ) : earliestLogDateMap.has(sub.id) ? (

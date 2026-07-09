@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuth } from '@/lib/auth-context'
+import { DelayGanttPreviewButton } from '@/components/delay-gantt-preview-button'
 import { PROJECT_TIER_LABELS, type ProjectTier } from '@/lib/mock-data'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import {
@@ -677,58 +678,24 @@ export default function ApprovalsPage() {
             </div>
           )}
 
-          {/* Affected milestones */}
-          {request.affectedMilestones.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-muted-foreground" /> 受影響里程碑
-              </h4>
-              <div className="space-y-2">
-                {request.affectedMilestones.map(am => {
-                  const delayDays = calculateDelayDays(am.originalDate, am.proposedDate)
-                  return (
-                    <div key={am.milestoneId} className="flex items-center gap-2 p-3 rounded-lg border">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm">{am.milestoneName}</div>
-                        <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-                          {formatDate(am.originalDate)}
-                          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-                          {formatDate(am.proposedDate)}
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-xs shrink-0">
-                        {delayDays >= 0 ? '+' : ''}{delayDays} 天
-                      </Badge>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Affected tasks / subtasks */}
-          {request.pendingTaskChanges && request.pendingTaskChanges.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-muted-foreground" /> 任務 / 子任務變更
-              </h4>
-              <div className="space-y-2">
-                {request.pendingTaskChanges.map(tc => (
-                  <div key={tc.taskId} className="flex items-center justify-between gap-2 p-3 rounded-lg border text-sm">
-                    <span className="font-medium truncate">{tc.taskTitle}</span>
-                    <div className="flex items-center gap-2 text-xs whitespace-nowrap tabular-nums text-muted-foreground">
-                      {tc.durationDays !== undefined && (
-                        <span>天數 → <span className="font-medium text-amber-600">{tc.durationDays}</span></span>
-                      )}
-                      {tc.startDate && (
-                        <span>起 → <span className="font-medium text-amber-600">{formatDate(tc.startDate)}</span></span>
-                      )}
-                    </div>
+          {/* 延期影響：一句話摘要 + 按鈕彈開視覺（表單保持精簡） */}
+          {(request.affectedMilestones.length > 0 || (request.pendingTaskChanges && request.pendingTaskChanges.length > 0)) && (() => {
+            const delayN = request.affectedMilestones.length ? calculateDelayDays(request.affectedMilestones[0].originalDate, request.affectedMilestones[0].proposedDate) : 0
+            return (
+              <div className="rounded-lg border p-3 flex items-center justify-between gap-3">
+                <div className="text-sm min-w-0">
+                  <div>
+                    {request.taskTitle ? <>延期任務「<b>{request.taskTitle}</b>」</> : '延期'}
+                    {delayN > 0 && <span className="text-red-500 font-medium"> 延長 {delayN} 天</span>}
                   </div>
-                ))}
+                  {request.affectedMilestones.length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-0.5">影響 {request.affectedMilestones.length} 個里程碑（其後順延）</div>
+                  )}
+                </div>
+                <DelayGanttPreviewButton delay={{ projectId: request.projectId, affectedMilestones: request.affectedMilestones, pendingTaskChanges: request.pendingTaskChanges }} />
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Can catch up + support needed */}
           {request.type !== 'date_change' && (

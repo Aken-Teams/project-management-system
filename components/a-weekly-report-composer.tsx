@@ -210,26 +210,12 @@ export function AWeeklyReportComposer({
     return { extraDays, milestoneDelta, proposedMilestoneDate, msName: ms.name, msDue: ms.dueDate }
   }, [selTask, delayDate, project])
 
-  // 下游相依（遞迴）：延此任務會連帶順延的後續任務 / 里程碑
-  // 種子＝此任務本身 + 其祖先鏈（延葉任務也會拖累父層 aaa，凡相依 aaa 者也算下游）
-  const delayDownstream = useMemo(() => {
-    if (!selTask) return { tasks: [] as Task[], milestones: [] as typeof project.milestones }
-    const seeds = new Set<string>([selTask.id])
-    let p = selTask.parentId
-    while (p) { seeds.add(p); p = byId.get(p)?.parentId }
-    const hit = new Set<string>()
-    const stack = [...seeds]
-    while (stack.length) {
-      const cur = stack.pop() as string
-      for (const t of project.tasks) {
-        if ((t.dependencies || []).includes(cur) && !seeds.has(t.id) && !hit.has(t.id)) { hit.add(t.id); stack.push(t.id) }
-      }
-    }
-    const tasks = project.tasks.filter(t => hit.has(t.id))
-    const msIds = new Set(tasks.map(t => t.milestoneId).filter(id => id !== selTask.milestoneId))
-    const milestones = project.milestones.filter(m => msIds.has(m.id))
-    return { tasks, milestones }
-  }, [selTask, byId, project.tasks, project.milestones])
+  // 依「里程碑順序」的後續里程碑（延期只讓其後里程碑順延，不看相依、不動任務）
+  const subsequentMilestones = useMemo(() => {
+    if (!selTask) return [] as typeof project.milestones
+    const idx = project.milestones.findIndex(m => m.id === selTask.milestoneId)
+    return idx >= 0 ? project.milestones.slice(idx + 1) : []
+  }, [selTask, project.milestones])
 
   // 延期前後差異（甘特視覺化）：原定區間(灰) vs 延後區間(橘)
   //  - 延期里程碑：起始不變、結束延後（條變長）
@@ -249,7 +235,7 @@ export function AWeeklyReportComposer({
       const oe = dstr(ms.dueDate); const os = msStartOf(ms.id) || oe
       raw.push({ name: ms.name, os, oe, ns: os, ne: delayImpact.proposedMilestoneDate, delta: delayImpact.milestoneDelta })
     }
-    for (const dm of delayDownstream.milestones) {
+    for (const dm of subsequentMilestones) {
       const oe = dstr(dm.dueDate); const os = msStartOf(dm.id) || oe
       raw.push({ name: dm.name, os, oe, ns: shiftDays(os, delayImpact.extraDays), ne: shiftDays(oe, delayImpact.extraDays), delta: delayImpact.extraDays })
     }
@@ -257,7 +243,7 @@ export function AWeeklyReportComposer({
     const min = Math.min(...times), max = Math.max(...times), span = max - min || 1
     const p = (d: string) => ((new Date(d).getTime() - min) / span) * 100
     return raw.map(r => ({ name: r.name, oe: r.oe, ne: r.ne, delta: r.delta, osPct: p(r.os), oePct: p(r.oe), nsPct: p(r.ns), nePct: p(r.ne) }))
-  }, [selTask, delayImpact, delayDownstream, project.milestones, project.tasks])
+  }, [selTask, delayImpact, subsequentMilestones, project.milestones, project.tasks])
 
   const openDelay = (preferDate?: string) => {
     if (!selTask) return
@@ -273,31 +259,19 @@ export function AWeeklyReportComposer({
     if (!delayReason.trim()) { alert('請填寫延期原因'); return }
     setDelaySubmitting(true)
     try {
-      // 把「下游相依任務 + 下游里程碑」整批往後移 extraDays，跟延期申請一起送 →
-      //   審核者(S)看得到完整影響範圍、核准時真的順延（與 A 預覽一致）
+      // 延期模型：只有「觸發任務本身」工期拉長（紅段）；父/子任務都不自動連動（各自獨立、手動為主）。
+      //   里程碑：觸發任務的里程碑拉長 + 其後（依里程碑順序）所有里程碑順延 extraDays（另一色＝順延）。
       const shiftYmd = (d: string, n: number) => ymd(new Date(new Date(d).getTime() + n * 86400000))
       const dstr = (d: string | Date) => (typeof d === 'string' ? d : ymd(new Date(d)))
       const pendingTaskChanges = [
-        // 觸發任務本身：結束日延到新截止日。經 step 2c 保存 original → 甘特能畫紅段，
-        //   且不受核准端 step-4「只到深度 0~1」的限制（c1 這種深層觸發任務也涵蓋）。
         { taskId: selTask.id, taskTitle: selTask.title, endDate: delayDate },
-        // 下游相依任務：整批往後移 extraDays
-        ...(delayImpact.extraDays > 0
-          ? delayDownstream.tasks.map(t => ({
-              taskId: t.id,
-              taskTitle: t.title,
-              startDate: shiftYmd(t.startDate, delayImpact.extraDays),
-              endDate: shiftYmd(t.endDate, delayImpact.extraDays),
-            }))
-          : []),
       ]
-      // 直接里程碑放第一（review route 用 affectedMilestones[0] 算觸發任務延長），下游里程碑接在後面
       const affectedMilestones = [
         { milestoneId: ms.id, originalDate: ms.dueDate, proposedDate: delayImpact.proposedMilestoneDate },
         ...(delayImpact.extraDays > 0
-          ? delayDownstream.milestones.map(dm => {
-              const od = dstr(dm.dueDate)
-              return { milestoneId: dm.id, originalDate: od, proposedDate: shiftYmd(od, delayImpact.extraDays) }
+          ? subsequentMilestones.map(sm => {
+              const od = dstr(sm.dueDate)
+              return { milestoneId: sm.id, originalDate: od, proposedDate: shiftYmd(od, delayImpact.extraDays) }
             })
           : []),
       ]
@@ -884,7 +858,7 @@ export function AWeeklyReportComposer({
                   <div className="font-medium flex items-center gap-1"><Info className="h-3.5 w-3.5" />這個日期會造成：</div>
                   <div>• 此任務延後 <b>{delayImpact.extraDays}</b> 天</div>
                   <div>• {delayImpact.milestoneDelta > 0 ? <>里程碑「{delayImpact.msName}」順延至 <b>{new Date(delayImpact.proposedMilestoneDate).toLocaleDateString('zh-TW')}</b>（+{delayImpact.milestoneDelta} 天）</> : <>不影響里程碑「{delayImpact.msName}」的截止日</>}</div>
-                  {delayDownstream.tasks.length > 0 && <div>• 連帶影響 <b>{delayDownstream.tasks.length}</b> 個後續相依任務：里程碑「{delayDownstream.milestones.map(m => m.name).join('」「')}」核准後一併順延</div>}
+                  {delayImpact.extraDays > 0 && subsequentMilestones.length > 0 && <div>• 其後 <b>{subsequentMilestones.length}</b> 個里程碑順延 {delayImpact.extraDays} 天：「{subsequentMilestones.map(m => m.name).join('」「')}」</div>}
                 </div>
               ) : delayDate ? <div className="text-xs text-destructive">新截止日必須晚於目前截止日（{selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')}）</div> : <div className="text-xs text-muted-foreground">請先選擇新的截止日。</div>}
               <div><div className="text-xs font-medium mb-1">延期原因 <span className="text-destructive">*</span></div><Textarea value={delayReason} onChange={e => setDelayReason(e.target.value)} rows={2} placeholder="說明延期原因…" className="text-sm" /></div>
@@ -920,7 +894,7 @@ export function AWeeklyReportComposer({
                     </div>
                   </div>
                 ))}
-                {delayDownstream.tasks.length > 0 && <div className="text-xs text-muted-foreground pt-1 border-t">＊下游為預估順延，實際依核准後系統重排為準。</div>}
+                {subsequentMilestones.length > 0 && <div className="text-xs text-muted-foreground pt-1 border-t">＊其後里程碑為順延預估，任務不自動連動（各自獨立、手動調整）。</div>}
               </div>
 
               <div className="flex items-start justify-between px-3 py-2 gap-3"><span className="text-xs text-muted-foreground shrink-0">原因</span><span className="text-xs text-right whitespace-pre-wrap">{delayReason}</span></div>
