@@ -79,12 +79,6 @@ export function AWeeklyReportComposer({
   const uploadRef = useRef<HTMLInputElement>(null)
   const uploadTargetRow = useRef<number | null>(null)
   const snapshotRef = useRef('') // 載入時的內容快照，用來判斷是否有未儲存變更
-  // 本 session 已「暫存/送出」套用完成的任務(taskId→完成日)。因 onSaved 是整頁重載、暫存不觸發，
-  //   project prop 不會即時刷新；用這個 ref 讓重開撰寫台時能把剛完成的日期重建回 markDone。
-  const sessionCompletedRef = useRef<Record<string, string>>({})
-  // 載入時的「已完成基準」(taskId→日)。用來把「本次新標的完成」與「原本就完成」區分開，
-  //   讓送出確認「你把 N 個標記完成」只算新標的、不灌水。
-  const baselineDoneRef = useRef<Record<string, string>>({})
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 前序守則 / 申請延期 / 標記完成 小流程
   const [prereqOpen, setPrereqOpen] = useState(false)
@@ -362,28 +356,37 @@ export function AWeeklyReportComposer({
     } catch (e) { alert(e instanceof Error ? e.message : '送出延期申請失敗') } finally { setDelaySubmitting(false) }
   }
 
-  // 重建「已標記完成」基準：DB 已完成 ∪ 本 session 已套用的完成（避開 project prop 尚未刷新）
-  const rebuildMarkDone = (): Record<string, string> => {
-    const base: Record<string, string> = {}
-    for (const t of project.tasks) if (t.completedAt) base[t.id] = t.completedAt
-    Object.assign(base, sessionCompletedRef.current)
-    return base
+  // 「待送的標記完成」草稿存 localStorage（每專案+週+作者一份）。暫存＝存草稿、不完成任務；
+  //   送出週報才真的套用完成。→ A 每次打開都能改，標記完成不會按下就送出。
+  const mdKey = `a-md:${project.id}:${weekOf}:${actorUserId}`
+  const readDraftMarks = (): Record<string, string> => {
+    try { const s = localStorage.getItem(mdKey); return s ? JSON.parse(s) : {} } catch { return {} }
+  }
+  const writeDraftMarks = (m: Record<string, string>) => {
+    try { if (Object.keys(m).length) localStorage.setItem(mdKey, JSON.stringify(m)); else localStorage.removeItem(mdKey) } catch { /* quota / no-op */ }
   }
 
   useEffect(() => {
     if (!open) return
     setLoading(true); setSelectedId('')
+    // 還原「待送標記」草稿：只留「尚未真正完成」的任務（已完成的以 completedAt 顯示，不當待送）
+    const restore = () => {
+      const draft = readDraftMarks()
+      const md: Record<string, string> = {}
+      for (const [id, d] of Object.entries(draft)) if (!byId.get(id)?.completedAt) md[id] = d
+      return md
+    }
     fetch(`/api/projects/${project.id}/weekly-report?weekOf=${weekOf}&authorId=${actorUserId}`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { aLogs: { taskId: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { content: string }[] }[]; notes: { taskId: string; content: string }[] }) => {
         const nr: Record<string, Row[]> = {}; const np: Record<string, string> = {}
         for (const l of data.aLogs) { (nr[l.taskId] = nr[l.taskId] || []).push({ date: l.logDate, content: l.content, attachments: l.attachments?.length ? l.attachments : undefined }); if (l.nextPlans?.length) np[l.taskId] = l.nextPlans.map(p => p.content).join('\n') }
         const ov = data.notes.find(n => n.taskId === '')?.content || ''
-        const md = rebuildMarkDone(); baselineDoneRef.current = md
+        const md = restore()
         setRows(nr); setNextPlan(np); setOverall(ov); setMarkDone(md)
         snapshotRef.current = JSON.stringify({ rows: nr, nextPlan: np, overall: ov, markDone: md })
       })
-      .catch(() => { const md = rebuildMarkDone(); baselineDoneRef.current = md; setRows({}); setNextPlan({}); setOverall(''); setMarkDone(md); snapshotRef.current = JSON.stringify({ rows: {}, nextPlan: {}, overall: '', markDone: md }) })
+      .catch(() => { const md = restore(); setRows({}); setNextPlan({}); setOverall(''); setMarkDone(md); snapshotRef.current = JSON.stringify({ rows: {}, nextPlan: {}, overall: '', markDone: md }) })
       .finally(() => setLoading(false))
   }, [open, project.id, weekOf, actorUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -394,7 +397,7 @@ export function AWeeklyReportComposer({
   const clearSel = () => { if (selectedId) { setRows(p => { const n = { ...p }; delete n[selectedId]; return n }); setNextPlan(p => { const n = { ...p }; delete n[selectedId]; return n }); setMarkDone(p => { const n = { ...p }; delete n[selectedId]; return n }) } setClearOpen(false) }
 
   const reportCount = useMemo(() => Object.values(rows).filter(rs => rs.some(r => r.content.trim() && r.date)).length + (overall.trim() ? 1 : 0), [rows, overall])
-  const doneCount = Object.entries(markDone).filter(([id, date]) => baselineDoneRef.current[id] !== date).length
+  const doneCount = Object.keys(markDone).length
   const selDirty = selectedId ? (rowsFor(selectedId).some(r => r.content.trim() || r.date) || !!nextPlan[selectedId]) : false
   const selHasLog = selectedId ? rowsFor(selectedId).some(r => r.content.trim() && r.date) : false
 
@@ -471,15 +474,10 @@ export function AWeeklyReportComposer({
     try {
       const res = await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(false)) })
       if (!res.ok) throw new Error()
-      // 「標記完成」也一起暫存（與送出相同：done/100%/completedAt）→ 暫存後不遺失、關閉不再誤報未存。
-      //   記到 sessionCompletedRef，讓重開撰寫台能重建日期（project prop 尚未刷新也不遺失）。
-      for (const [taskId, date] of Object.entries(markDone)) {
-        if (baselineDoneRef.current[taskId] === date) continue // 已是基準、無變更 → 不重複套用
-        await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: date }) })
-        sessionCompletedRef.current[taskId] = date
-      }
-      baselineDoneRef.current = { ...markDone } // 已全部套用 → 成為新的已完成基準
-      snapshotRef.current = JSON.stringify({ rows, nextPlan, overall, markDone }) // 暫存成功→更新快照（含標記完成）
+      // 「待送的標記完成」只存草稿(localStorage)，**不完成任務**——完成只在「送出週報」時發生。
+      //   → 重開撰寫台能還原、可繼續改；標記完成不會按下就送出。
+      writeDraftMarks(markDone)
+      snapshotRef.current = JSON.stringify({ rows, nextPlan, overall, markDone }) // 暫存成功→更新快照（含待送標記）
       setDraftDone(true); setTimeout(() => setDraftDone(false), 2500)
       return true
     } catch { alert('暫存失敗，請稍後再試'); return false } finally { setSavingDraft(false) }
@@ -511,10 +509,11 @@ export function AWeeklyReportComposer({
     try {
       const res = await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(true)) })
       if (!res.ok) throw new Error()
+      // 送出週報才真的套用完成（標記完成在此生效）
       for (const [taskId, date] of Object.entries(markDone)) {
-        if (baselineDoneRef.current[taskId] === date) continue // 原本就完成、無變更 → 不重複套用
         await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: date }) })
       }
+      writeDraftMarks({}) // 已送出 → 清掉待送標記草稿
       setConfirmOpen(false); onSaved(); onOpenChange(false)
     } catch { alert('送出失敗，請稍後再試') } finally { setSaving(false) }
   }
@@ -523,12 +522,10 @@ export function AWeeklyReportComposer({
   const willDone = selectedId ? markDone[selectedId] : undefined
 
   // 送出前預覽：被標記完成的任務會如何影響進度（子層 100%，父層/里程碑隨之上升）
-  const donePreview = useMemo(() => Object.entries(markDone)
-    .filter(([id, date]) => baselineDoneRef.current[id] !== date) // 只顯示「本次新標的完成」，不含原本就完成的
-    .map(([id, date]) => {
-      const t = byId.get(id); const n = nodes.find(x => x.id === id)
-      return t ? { id, title: t.title, msName: n?.msName || '', from: t.progress, date } : null
-    }).filter((x): x is { id: string; title: string; msName: string; from: number; date: string } => !!x), [markDone, byId, nodes])
+  const donePreview = useMemo(() => Object.entries(markDone).map(([id, date]) => {
+    const t = byId.get(id); const n = nodes.find(x => x.id === id)
+    return t ? { id, title: t.title, msName: n?.msName || '', from: t.progress, date } : null
+  }).filter((x): x is { id: string; title: string; msName: string; from: number; date: string } => !!x), [markDone, byId, nodes])
 
   // 標記完成的日期是否已超過截止日（超過就必須先申請延期）
   const completeOverdue = !!(selTask && completeDate && new Date(completeDate).getTime() > new Date(selTask.endDate).getTime())
@@ -588,10 +585,9 @@ export function AWeeklyReportComposer({
   }
 
   // 是否有未儲存變更（報告內容變動，或有待送出的標記完成）
-  const dirty = useMemo(
-    () => JSON.stringify({ rows, nextPlan, overall, markDone }) !== snapshotRef.current,
-    [rows, nextPlan, overall, markDone],
-  )
+  // 純 const（不可用 useMemo）：snapshotRef 是 ref、不在 deps，暫存後更新 snapshot 但 rows/markDone
+  //   沒變會讓 useMemo 回傳舊值 → 暫存後仍誤判「未儲存」。每次 render 重算才會讀到最新 snapshot。
+  const dirty = JSON.stringify({ rows, nextPlan, overall, markDone }) !== snapshotRef.current
   // 關閉時：有未儲存內容 → 先提醒
   const handleDialogOpenChange = (v: boolean) => {
     if (!v && !loading && dirty) { setCloseConfirmOpen(true); return }
@@ -660,7 +656,9 @@ export function AWeeklyReportComposer({
                                 style={{ paddingLeft: 12 + n.depth * 16 }}>
                                 <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[10px] text-violet-500 ml-1">(父)</span>}{(() => { const bt = byId.get(n.id); return bt ? <span className="text-[10px] text-muted-foreground/70 tabular-nums ml-1.5">{new Date(bt.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}~{new Date(bt.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span> : null })()}</span>
                                 {pendingDelayTaskIds.has(n.id) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-300 shrink-0">延期待審核</Badge>}
-                                {(rows[n.id] || []).some(r => r.content.trim() && r.date) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge>}
+                                {byId.get(n.id)?.completedAt
+                                  ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 shrink-0">已完成</Badge>
+                                  : (rows[n.id] || []).some(r => r.content.trim() && r.date) ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge> : null}
                                 {n.hasR ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 shrink-0">R已提交</Badge> : <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/50 shrink-0">未提交</Badge>}
                                 <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right shrink-0">{n.progress}%</span>
                               </button>
@@ -737,6 +735,11 @@ export function AWeeklyReportComposer({
                     </div>
                     <div className="space-y-1"><div className="text-[11px] font-medium text-muted-foreground">預計下週工作（選填）</div><Textarea value={nextPlan[selectedId] || ''} onChange={e => setNextPlan(p => ({ ...p, [selectedId]: e.target.value }))} rows={1} placeholder="預計下週…" className="text-xs min-h-[36px]" /></div>
 
+                    {!sel.isParent && selTask.completedAt && (
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t">
+                        <span className="text-xs text-green-700 dark:text-green-400 inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />已完成 · {selTask.completedAt}</span>
+                      </div>
+                    )}
                     {!sel.isParent && !selTask.completedAt && (
                       <div className="flex items-center justify-end gap-2 pt-1 border-t">
                         {willDone ? (
