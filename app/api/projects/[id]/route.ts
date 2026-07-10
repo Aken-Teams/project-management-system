@@ -27,13 +27,17 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
+    // 甘特/進度「一律以 A 為主」：只吃 A 已發布(publishedAt)的紀錄，R 的生料 log 不驅動進度/狀態，
+    //   與「更新紀錄」同一把尺。R 送出報告只是通知 A，A 評估後發布才算數。
+    const publishedLogs = project.taskLogs.filter(l => l.publishedAt)
+
     // ── Compute task progress from task-log coverage FIRST ──
     // (must precede autoProgressTasks, which reads fresh progress to decide
     //  todo→in_progress vs blocked — Bug #10)
-    await syncTaskProgressFromLogs(project.tasks, project.taskLogs)
+    await syncTaskProgressFromLogs(project.tasks, publishedLogs)
 
     // ── Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo ──
-    await autoProgressTasks(project.tasks, project.taskLogs)
+    await autoProgressTasks(project.tasks, publishedLogs)
 
     // ── Auto-sync milestone statuses (now includes blocked) ──
     //   里程碑聚合「葉任務」(最底層原子工作)，與 syncMilestoneStatus / 甘特一致；

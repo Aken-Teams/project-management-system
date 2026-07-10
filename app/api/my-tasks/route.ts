@@ -89,12 +89,15 @@ export async function GET(request: NextRequest) {
 
     // ── Auto-progress, compute progress from logs, sync milestones ──
     for (const p of projects) {
+      // 甘特/進度「一律以 A 為主」：只吃 A 已發布(publishedAt)的紀錄，R 生料不驅動進度/狀態。
+      const pPublishedLogs = p.taskLogs.filter(l => l.publishedAt)
+
       // 1. Compute task progress from task-log coverage FIRST (before autoProgress
       //    reads fresh progress to decide todo→in_progress vs blocked — Bug #10)
-      await syncTaskProgressFromLogs(p.tasks, p.taskLogs)
+      await syncTaskProgressFromLogs(p.tasks, pPublishedLogs)
 
       // 2. Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo
-      await autoProgressTasks(p.tasks, p.taskLogs)
+      await autoProgressTasks(p.tasks, pPublishedLogs)
 
       // 3. Re-sync milestone statuses — 聚合「葉任務」(與 syncMilestoneStatus / 甘特一致)
       const pParentIds = new Set(p.tasks.filter(t => t.parentId).map(t => t.parentId))
