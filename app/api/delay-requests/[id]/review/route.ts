@@ -231,12 +231,17 @@ export async function PATCH(
       if (!project) return
 
       const affectedMsIds = new Set(delayRequest.affectedMilestones.map(am => am.milestoneId))
+      // B-H1：step-4 只重排「這筆延期實際影響的任務」（pendingTaskChanges + trigger）。
+      //   真正的延期連動（群組延長/下游順延）由 step-2/2c/3 依撰寫台算好的值套用；
+      //   step-4 原本會把「全專案每個任務」強制 end=start+dur-1，會誤改手動改過(end≠start+dur-1)
+      //   的無關任務、還存 original 冒假紅段。改成：只有受影響任務才重排、存 original；
+      //   其餘任務用「實際 DB 日期」納入里程碑 envelope，完全不改寫（以手動 DB 為主）。
+      const affectedTaskIds = new Set<string>([
+        ...((pendingTaskChanges ?? []).map(tc => tc.taskId)),
+        ...(triggerTaskId ? [triggerTaskId] : []),
+      ])
 
       for (const ms of project.milestones) {
-        const msStart = (ms as any).startDate
-          ? new Date((ms as any).startDate)
-          : new Date(project.startDate)
-
         const msTasks = project.tasks
           .filter(t => t.milestoneId === ms.id && t.parentId == null)
           .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -245,41 +250,49 @@ export async function PATCH(
         let newDueDate = msDueDate
 
         for (const task of msTasks) {
-          const taskDurationDays = Math.max(task.durationDays, 1)
-          const taskStart = new Date(task.startDate)
-          const taskEnd = addDays(taskStart, taskDurationDays - 1)
-
-          if (task.startDate.getTime() !== taskStart.getTime() ||
-              task.endDate.getTime() !== taskEnd.getTime()) {
-            const preserveOriginal = (task as any).originalStartDate == null
-              ? { originalStartDate: task.startDate, originalEndDate: task.endDate }
-              : {}
-            await tx.task.update({
-              where: { id: task.id },
-              data: { startDate: taskStart, endDate: taskEnd, ...preserveOriginal },
-            })
+          if (affectedTaskIds.has(task.id)) {
+            const taskDurationDays = Math.max(task.durationDays, 1)
+            const taskStart = new Date(task.startDate)
+            const taskEnd = addDays(taskStart, taskDurationDays - 1)
+            if (task.startDate.getTime() !== taskStart.getTime() ||
+                task.endDate.getTime() !== taskEnd.getTime()) {
+              const preserveOriginal = (task as any).originalStartDate == null
+                ? { originalStartDate: task.startDate, originalEndDate: task.endDate }
+                : {}
+              await tx.task.update({
+                where: { id: task.id },
+                data: { startDate: taskStart, endDate: taskEnd, ...preserveOriginal },
+              })
+            }
+            if (taskEnd > newDueDate) newDueDate = taskEnd
+          } else if (task.endDate > newDueDate) {
+            // 未受影響：不改寫，只用實際日期納入 envelope
+            newDueDate = new Date(task.endDate)
           }
 
           const subtasks = project.tasks
             .filter(t => t.parentId === task.id)
             .sort((a, b) => a.sortOrder - b.sortOrder)
           for (const sub of subtasks) {
-            const subDays = Math.max(sub.durationDays || 1, 1)
-            const subStart = new Date(sub.startDate)
-            const subEnd = addDays(subStart, subDays - 1)
-            if (sub.startDate.getTime() !== subStart.getTime() ||
-                sub.endDate.getTime() !== subEnd.getTime()) {
-              const subPreserve = (sub as any).originalStartDate == null
-                ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
-                : {}
-              await tx.task.update({
-                where: { id: sub.id },
-                data: { startDate: subStart, endDate: subEnd, ...subPreserve },
-              })
+            if (affectedTaskIds.has(sub.id)) {
+              const subDays = Math.max(sub.durationDays || 1, 1)
+              const subStart = new Date(sub.startDate)
+              const subEnd = addDays(subStart, subDays - 1)
+              if (sub.startDate.getTime() !== subStart.getTime() ||
+                  sub.endDate.getTime() !== subEnd.getTime()) {
+                const subPreserve = (sub as any).originalStartDate == null
+                  ? { originalStartDate: sub.startDate, originalEndDate: sub.endDate }
+                  : {}
+                await tx.task.update({
+                  where: { id: sub.id },
+                  data: { startDate: subStart, endDate: subEnd, ...subPreserve },
+                })
+              }
+              if (subEnd > newDueDate) newDueDate = subEnd
+            } else if (sub.endDate > newDueDate) {
+              newDueDate = new Date(sub.endDate)
             }
-            if (subEnd > newDueDate) newDueDate = subEnd
           }
-          if (taskEnd > newDueDate) newDueDate = taskEnd
         }
 
         if (affectedMsIds.has(ms.id)) {

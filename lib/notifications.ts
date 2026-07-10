@@ -164,6 +164,38 @@ export async function notifyTaskAssigned({
   })
 }
 
+/**
+ * 建立專案時批次指派 → 每個被指派者「一則彙總通知」（避免同一人被指派多個任務時洗版）。
+ * assignees 為各任務的指派值（可重複、可含「未指派」）；同一人合併計數。
+ */
+export async function notifyTasksAssignedOnCreate({
+  projectId,
+  projectName,
+  assignees,
+}: {
+  projectId: string
+  projectName: string
+  assignees: (string | null | undefined)[]
+}) {
+  const counts = new Map<string, number>()
+  for (const a of assignees) {
+    const name = (a || '').trim()
+    if (!name || name === '未指派') continue
+    counts.set(name, (counts.get(name) || 0) + 1)
+  }
+  for (const [assignee, count] of counts) {
+    const user = await resolveAssignee(assignee)
+    if (!user) continue
+    await createNotification({
+      userId: user.id,
+      type: 'task_assigned',
+      title: '新任務指派',
+      message: `您在專案「${projectName}」被指派了 ${count} 個任務`,
+      projectId,
+    })
+  }
+}
+
 // ─── 延期申請 (delay_submitted) ────────────────────────────────────────────
 
 export async function notifyDelaySubmitted({

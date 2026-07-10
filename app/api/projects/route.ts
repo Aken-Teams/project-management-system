@@ -40,6 +40,7 @@ async function resolveAdEmail(name: string): Promise<string | null> {
   }
 }
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
+import { notifyTasksAssignedOnCreate } from '@/lib/notifications'
 import type { ProjectType as FeProjectType, ProjectTier as FeProjectTier, DemandSource as FeDemandSource } from '@/lib/mock-data'
 
 // ─── GET /api/projects — List all projects ───────────────
@@ -484,6 +485,15 @@ export async function POST(request: NextRequest) {
     const feProject = dbProjectToFrontend(
       fullProject as Parameters<typeof dbProjectToFrontend>[0],
     )
+
+    // 建案完成 → 通知被指派者（每人一則彙總，站內通知不受草稿/開案影響）
+    if (body.tasks?.length) {
+      notifyTasksAssignedOnCreate({
+        projectId: fullProject.id,
+        projectName: fullProject.name,
+        assignees: body.tasks.map((t: Record<string, unknown>) => t.assignee as string | undefined),
+      }).catch((e) => console.error('notifyTasksAssignedOnCreate failed', e))
+    }
 
     return NextResponse.json(feProject, { status: 201 })
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { syncMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
+import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
 import { notifyTaskAssigned } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
@@ -182,41 +182,17 @@ export async function PUT(
       }
     }
 
-    // ── Auto-sync ancestor progress from children (ADR-02: roll up through ALL
-    //    ancestors, not just the direct parent, so deep trees aggregate correctly) ──
+    // ── 父任務進度不再從子任務 rollup（B-H2）──
+    //    模型：每個任務（含父層）進度＝自己報告，只有里程碑聚合葉任務（見 syncMilestoneStatus）。
+    //    子任務變動不再改寫父層進度/狀態，否則會與 GET 的 syncTaskProgressFromLogs（父＝自己報告）
+    //    互相打架 → 父任務那格在 50%↔0% 來回跳。里程碑已於上方 syncMilestoneStatus 同步。
+    //    仍回傳父層「現值」供前端更新該列（唯讀，不重算、不寫入）。
     if (task.parentId && (data.status !== undefined || data.progress !== undefined)) {
-      let directParent: { progress: number; status: string } | null = null
-      let ancestorId: string | null = task.parentId
-      const walked = new Set<string>()
-      while (ancestorId && !walked.has(ancestorId)) {
-        const curId: string = ancestorId
-        walked.add(curId)
-        const children = await prisma.task.findMany({
-          where: { parentId: curId },
-          select: { status: true, progress: true, durationDays: true },
-        })
-        // Weighted by durationDays + guards divide-by-zero (Bug #2/#11)
-        const avgProgress = computeWeightedProgress(children)
-        const allDone = children.length > 0 && children.every(t => t.status === 'done')
-        const parentUpdate: Record<string, unknown> = { progress: allDone ? 100 : avgProgress }
-        if (allDone) {
-          parentUpdate.status = 'done'
-          parentUpdate.completedAt = new Date()
-          parentUpdate.completedBy = 'system'
-        } else {
-          const anc = await prisma.task.findUnique({ where: { id: curId }, select: { status: true } })
-          if (anc?.status === 'done') {
-            parentUpdate.status = 'in_progress'
-            parentUpdate.completedAt = null
-            parentUpdate.completedBy = null
-          }
-        }
-        const updatedAnc = await prisma.task.update({ where: { id: curId }, data: parentUpdate })
-        if (curId === task.parentId) directParent = { progress: updatedAnc.progress, status: updatedAnc.status }
-        ancestorId = updatedAnc.parentId
-      }
-      const updatedParent = directParent ?? { progress: 0, status: 'todo' }
-      await syncMilestoneStatus(milestoneId, id)
+      const parentNow = await prisma.task.findUnique({
+        where: { id: task.parentId },
+        select: { progress: true, status: true },
+      })
+      const updatedParent = parentNow ?? { progress: 0, status: 'todo' }
 
       return NextResponse.json({
         id: updated.id,

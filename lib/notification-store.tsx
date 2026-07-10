@@ -64,8 +64,17 @@ export function NotificationStoreProvider({ children }: { children: React.ReactN
       return
     }
     fetchNotifications()
-    const interval = setInterval(fetchNotifications, 20000) // poll every 20s
-    return () => clearInterval(interval)
+    // 自動輪詢（不需手動刷新）。10s 讓「被別人指派/審核」等通知更即時。
+    const interval = setInterval(fetchNotifications, 10000)
+    // 切回分頁 / 視窗重新聚焦時立刻抓一次 → 回到頁面幾乎即時看到新通知
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchNotifications() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', fetchNotifications)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', fetchNotifications)
+    }
   }, [user?.id, fetchNotifications])
 
   const unreadCount = notifications.filter(n => !n.read).length

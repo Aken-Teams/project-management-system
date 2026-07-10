@@ -365,6 +365,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     [teamMembers],
   )
 
+  // B-H1：有 pending 延期審核時，鎖住「里程碑」分頁的時程編輯（新增/刪除/改名/日期/日曆天/
+  //   拖曳/縮排/優先度全鎖），唯一仍可改的是「指派人」。避免審核期間又改動、破壞審核一致性。
+  const hasPendingDelay = useMemo(
+    () => (project.delayRequests ?? []).some(dr => dr.status === 'pending'),
+    [project.delayRequests],
+  )
+
   // ─── Batch save work items (extracted for reuse) ───
   type WorkItemsDiff = ReturnType<typeof computeWorkItemsDiff>
 
@@ -1502,6 +1509,16 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
 
           {/* Tab 6: Milestones & Tasks */}
           <TabsContent value="workitems" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4 px-1">
+            {/* B-H1：延期審核中 → 時程鎖定提示 */}
+            {hasPendingDelay && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  此專案有<strong>延期申請審核中</strong>，為維持審核一致性，時程（里程碑/任務的新增、刪除、改名、日期、日曆天、拖曳、縮排、優先度）暫時鎖定；
+                  審核（核准或駁回）後即可編輯。<strong>目前僅「指派人」可調整。</strong>
+                </span>
+              </div>
+            )}
             {/* Project dates */}
             <div className="grid gap-4 grid-cols-2 p-3 rounded-lg border bg-muted/30">
               <div className="space-y-1.5">
@@ -1512,6 +1529,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                   type="date"
                   value={form.startDate || ''}
                   onChange={e => update('startDate', e.target.value)}
+                  disabled={hasPendingDelay}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1548,6 +1566,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onOutdent={handleOutdent}
               onMilestoneDemote={handleMilestoneDemote}
               storageKey={project.id}
+              locked={hasPendingDelay}
             />
 
             {workItemError && (

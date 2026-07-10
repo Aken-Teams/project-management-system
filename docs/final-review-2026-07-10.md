@@ -66,16 +66,22 @@
    - 對應「除了延期，誰都不連動、以手動 DB 為主」。
    - **保護區注意**：屬「不可移除 cascade」，實作前另出「改動點＋影響範圍」細部 diff 再動。
 
-##### 待確認的實作邊界（下一步）
-- 鎖定的判斷資料源：前端用 `project.delayRequests` 篩 `status==='pending'`（transformer 已回傳）即可，不需新 API。
-- 拖曳鎖定：`timeline-table` 拖曳 handler 在 pending 時 disable draggable + 日期 input `readOnly`。
-- step-4 縮範圍：需逐行對 `review/route.ts:247-283` 的重排迴圈，確認「只跑 affected 集合」不會破壞既有 group延長/downstream順延 的正確結果。
+##### 實作狀態（2026-07-10，兩部分都已完成）
+- ✅ **pending 卡控已實作**：`project-edit-dialog` 算 `hasPendingDelay = delayRequests.some(status==='pending')` → 傳 `locked` 給 `TimelineTable`；`TimelineTable` 新增 `locked` prop，鎖住拖曳(不 spread dnd listeners)、里程碑/任務的改名/日曆天/日期(改唯讀 span)/優先度/新增/刪除/縮排/升降階/新增里程碑，**唯一保留「指派人」下拉可改**；專案開始日期 input 也一併 disable。里程碑分頁頂端顯示琥珀色審核中提示。TimelineTable 僅用於編輯對話框與建案精靈（新專案無 pending），入口全覆蓋。
+- ✅ **step-4 縮範圍已實作**：`review/route.ts` 核准 step-4 加 `affectedTaskIds`（= pendingTaskChanges 的 taskId ∪ trigger），**只有受影響任務才重排日期/存 original**；其餘任務用「實際 DB 日期」納入里程碑 envelope、完全不改寫。真正的延期連動（群組延長/下游順延）照舊由 step-2/2c/3 套用，未動。
+  - **關鍵發現**：舊 step-4 的 `taskStart = new Date(task.startDate)` 從不移動 start，它只是全域強制 `end=start+dur-1`（＝ B-H1 來源）；真正順延在 pendingTaskChanges。
+  - **為何卡控之外仍需這條**：卡控只擋 pending 窗內；step-4 守的是「延期**之前/之間**產生的手動日期」——(a) 第一筆延期前就手動拖成 end≠start+dur-1；(b) 某任務延期**核准後**（無 pending、可自由拖）USER 又拖成 end≠start+dur-1，再送**另一筆**延期核准。這兩條卡控管不到，靠 step-4 縮範圍守住。
 
-#### B-H2　父任務進度雙來源、會 50%↔0% 來回跳
-- **位置**：`app/api/projects/[id]/tasks/[taskId]/route.ts:187-217`（PATCH rollup）vs `lib/sync-milestone-status.ts:238-271`（GET 重算）
-- **問題**：改子任務時，PATCH 把父進度 rollup 成「子任務加權」（例如 50%）；但下次任一 GET（開專案頁/我的任務）會用 `syncTaskProgressFromLogs` 把同一個父重算成「**父自己的報告**」（父沒寫 → 0）。→ 父任務那一格進度在 **50% ↔ 0%** 之間閃跳。
-- **和你定的模型衝突**：你確認過「每個任務（含父）進度＝自己報告，只有里程碑做聚合」。GET 那套才是你要的；PATCH 的 rollup 是**舊模型殘留**。
-- **建議**：把 PATCH 時的祖先進度 rollup 拿掉/改成「父＝自己報告」，對齊單一來源。屬正確性暗雷，但因會改「任務更新時的行為」，先給你確認。
+##### 驗收測試（B-H1）
+1. **延期連動仍正確**：送一筆會「延長+順延」的延期 → 核准 → 群組延長、下游順延、里程碑 dueDate 皆正確。
+2. **無關手動任務不被清**：在**無 pending**時把某無關任務拖成 end≠start+dur-1（pending 時鎖住無法設置，故先設置）→ 再送並核准**另一筆**延期 → 該無關任務日期**不變、無假紅段**。
+3. **卡控**：有 pending 時開「編輯專案 › 里程碑」→ 只有指派人可改、其餘全鎖 + 提示橫幅；S 審完解鎖。
+
+#### B-H2　父任務進度雙來源、會 50%↔0% 來回跳 ✅ 已修（2026-07-10，客戶授權直接動手）
+- **位置**：`app/api/projects/[id]/tasks/[taskId]/route.ts:185-219`（原 PATCH rollup）
+- **問題（原）**：改子任務時 PATCH 把父進度 rollup 成子加權（如 50%）；下次 GET 用 `syncTaskProgressFromLogs` 把父重算成「父自己報告」（父沒寫→0）→ 父那格 50%↔0% 閃跳，與模型「每個任務含父＝自己報告、只有里程碑聚合葉任務」衝突。
+- **修法**：**移除 PATCH 時的祖先進度 rollup 整段**（不再改寫父層 progress/status/completedAt）。父任務進度單一來源＝GET 的自己報告；里程碑聚合維持葉任務。回傳殼保留（`parentProgress/parentStatus` 改回傳父層現值，不重算、不寫入），前端該列更新不受影響。順手移除已無用的 `computeWeightedProgress` import。
+- **附帶行為變更**：父任務不再「子任務全完成就自動完成」——符合模型（父完成看自己報告）。里程碑進度不受影響（本就聚合葉任務）。
 
 ### 🟠 中（要你決定語意/範圍）
 
@@ -113,12 +119,12 @@
 - 有稽核文件、身分容錯比對、typecheck 守住 21。
 
 **扣分（−）**
-- **正確性暗雷**：父進度雙來源跳動（B-H2）、延期 step-4 誤改日期（B-H1）還沒收。
+- ~~正確性暗雷：B-H1 step-4 誤改日期、B-H2 父進度雙來源~~ → **已修（2026-07-10）**，兩顆 🔴 收掉。
 - **權限層整套是 mock**：server 端幾乎不擋、`x-user-email` 可偽造、4 支破壞性 admin API 裸奔（#S1~S5）。內部測沒差，**上線前必過**。
-- 一些邊界（時區第 4 套今天、徽章一致性）。
+- 剩中/低：B-M1 徽章一致性、B-M2 一鍵前序完成語意、B-L 邊界（第 4 套今天、isSameUser 過寬、舊 project-store 孤兒頁）。
 
-### 一句話結論
-> **流程面已到「可以請 USER 測」了；但正確性暗雷（B-H1 父進度、B-H2 step-4）最好在測之前收掉；權限（#S1~S5）是上線前的門檻，不是測試前的。**
+### 一句話結論（2026-07-10 更新）
+> **兩顆 🔴 正確性暗雷（B-H1 step-4 + pending 卡控、B-H2 父進度）已收 → 流程面可以請 USER 測了。** 剩中/低（徽章、一鍵完成語意、時區邊界）可測試中一併觀察；權限（#S1~S5）是**上線前**的門檻，非測試前。
 
 ### 建議下一步（三選一）
 - **(A)** A 區已改的先回退，我們一條一條看。

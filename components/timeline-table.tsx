@@ -105,6 +105,9 @@ export interface TimelineTableProps {
   // Namespaces the collapse-state memory (localStorage). Pass the project id when
   // editing; a stable string (e.g. 'new-manual') for the create wizard.
   storageKey?: string
+  // B-H1：有 pending 延期審核時鎖住時程編輯（新增/刪除/改名/日期/日曆天/拖曳/縮排/優先度全鎖），
+  //   唯一仍可改的是「指派人」。避免審核期間又改動、破壞審核一致性。
+  locked?: boolean
 }
 
 export type DropMode = 'inside' | 'before' | 'after'
@@ -182,6 +185,7 @@ const MilestoneRow = memo(function MilestoneRow({
   onDemote,
   dropHint,
   dropBadge,
+  locked,
 }: {
   milestone: TimelineMilestone
   index: number
@@ -196,6 +200,7 @@ const MilestoneRow = memo(function MilestoneRow({
   onDemote?: (milestoneId: string) => void
   dropHint?: DropMode
   dropBadge?: DropMode
+  locked?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: milestone.id })
@@ -217,11 +222,11 @@ const MilestoneRow = memo(function MilestoneRow({
       }`, dropRingClass(dropHint))}
     >
       <DropBadge mode={dropBadge} inside="放入·成為任務" edge="成為里程碑" />
-      {/* Drag */}
+      {/* Drag（鎖定時不可拖曳） */}
       <div
-        {...attributes}
-        {...listeners}
-        className="flex items-center justify-center cursor-grab active:cursor-grabbing"
+        {...(locked ? {} : attributes)}
+        {...(locked ? {} : listeners)}
+        className={cn("flex items-center justify-center", locked ? "cursor-default opacity-30" : "cursor-grab active:cursor-grabbing")}
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
@@ -243,9 +248,10 @@ const MilestoneRow = memo(function MilestoneRow({
           value={milestone.name}
           onChange={(e) => onUpdate(index, 'name', e.target.value)}
           placeholder="里程碑名稱"
+          readOnly={locked}
           className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
         />
-        {onDemote && (
+        {onDemote && !locked && (
           <Button
             type="button"
             variant="ghost"
@@ -271,6 +277,7 @@ const MilestoneRow = memo(function MilestoneRow({
           min={0}
           value={milestone.durationDays || ''}
           onChange={(e) => onUpdate(index, 'durationDays', Number(e.target.value) || 0)}
+          disabled={locked}
           className="h-8 w-14 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
         />
       </div>
@@ -316,7 +323,7 @@ const MilestoneRow = memo(function MilestoneRow({
       {/* Priority (empty for milestone) */}
       <div />
 
-      {/* Delete */}
+      {/* Delete（鎖定時不可刪除） */}
       <div className="flex justify-center">
         <Button
           type="button"
@@ -324,7 +331,7 @@ const MilestoneRow = memo(function MilestoneRow({
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-destructive"
           onClick={() => onRemove(index)}
-          disabled={!canRemove}
+          disabled={!canRemove || locked}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
@@ -335,7 +342,7 @@ const MilestoneRow = memo(function MilestoneRow({
   a.milestone === b.milestone && a.index === b.index && a.canRemove === b.canRemove &&
   a.collapsed === b.collapsed && a.taskCount === b.taskCount && a.overflowInfo === b.overflowInfo &&
   a.onUpdate === b.onUpdate && a.onRemove === b.onRemove && a.onDateChange === b.onDateChange &&
-  a.onDemote === b.onDemote && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge)
+  a.onDemote === b.onDemote && a.dropHint === b.dropHint && a.dropBadge === b.dropBadge && a.locked === b.locked)
 
 // ─── TaskRow ────────────────────────────────────────────────
 const TaskRow = memo(function TaskRow({
@@ -356,6 +363,7 @@ const TaskRow = memo(function TaskRow({
   onOutdent,
   depth,
   dropHint,
+  locked,
 }: {
   task: TimelineTask
   startDate?: string
@@ -374,6 +382,7 @@ const TaskRow = memo(function TaskRow({
   onOutdent?: (taskId: string) => void
   depth: number
   dropHint?: DropMode
+  locked?: boolean
 }) {
   // ADR-02: task-depth 1 = top-level task; children go deeper up to MAX_TASK_DEPTH.
   const canNestDeeper = depth < MAX_TASK_DEPTH
@@ -411,11 +420,11 @@ const TaskRow = memo(function TaskRow({
       }`, dropRingClass(dropHint))}
     >
       <DropBadge mode={dropHint} inside="放入·成為子任務" edge="成為任務" />
-      {/* Drag */}
+      {/* Drag（鎖定時不可拖曳） */}
       <div
-        {...attributes}
-        {...listeners}
-        className="flex items-center justify-center cursor-grab active:cursor-grabbing"
+        {...(locked ? {} : attributes)}
+        {...(locked ? {} : listeners)}
+        className={cn("flex items-center justify-center", locked ? "cursor-default opacity-30" : "cursor-grab active:cursor-grabbing")}
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40" />
       </div>
@@ -440,6 +449,7 @@ const TaskRow = memo(function TaskRow({
         <Input
           value={task.title}
           onChange={(e) => onUpdate(task.id, 'title', e.target.value)}
+          readOnly={locked}
           className="h-7 text-sm border-0 bg-transparent focus-visible:ring-1 px-1 truncate"
           placeholder="任務名稱"
         />
@@ -448,7 +458,7 @@ const TaskRow = memo(function TaskRow({
             {subtaskCount} 子任務
           </span>
         )}
-        {onIndent && canNestDeeper && (
+        {onIndent && canNestDeeper && !locked && (
           <Button
             type="button"
             variant="ghost"
@@ -460,7 +470,7 @@ const TaskRow = memo(function TaskRow({
             <IndentIncrease className="h-3.5 w-3.5" />
           </Button>
         )}
-        {onOutdent && (
+        {onOutdent && !locked && (
           <Button
             type="button"
             variant="ghost"
@@ -472,7 +482,7 @@ const TaskRow = memo(function TaskRow({
             <IndentDecrease className="h-3.5 w-3.5" />
           </Button>
         )}
-        {canNestDeeper && (
+        {canNestDeeper && !locked && (
           <Button
             type="button"
             variant="ghost"
@@ -493,6 +503,7 @@ const TaskRow = memo(function TaskRow({
           min={1}
           value={task.durationDays || ''}
           onChange={(e) => onUpdate(task.id, 'durationDays', Number(e.target.value) || 0)}
+          disabled={locked}
           className="h-7 w-12 text-center text-sm border-0 bg-transparent focus-visible:ring-1 px-0"
         />
       </div>
@@ -552,34 +563,37 @@ const TaskRow = memo(function TaskRow({
         </Select>
       </div>
 
-      {/* Priority (click to cycle) */}
+      {/* Priority (click to cycle)（鎖定時不可改） */}
       <div className="flex justify-center">
         <button
           type="button"
-          onClick={cyclePriority}
+          onClick={locked ? undefined : cyclePriority}
+          disabled={locked}
           className="transition-opacity"
         >
           <Badge
             variant="outline"
-            className={`text-[10px] px-1.5 py-0 cursor-pointer ${p.className}`}
+            className={cn(`text-[10px] px-1.5 py-0 ${p.className}`, locked ? "cursor-default opacity-70" : "cursor-pointer")}
           >
             {p.label}
           </Badge>
         </button>
       </div>
 
-      {/* Remove */}
+      {/* Remove（鎖定時隱藏） */}
       <div className="flex justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-          onClick={() => onRemove(task.id)}
-          title="刪除任務"
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
+        {!locked && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+            onClick={() => onRemove(task.id)}
+            title="刪除任務"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -588,7 +602,8 @@ const TaskRow = memo(function TaskRow({
   a.teamMembers === b.teamMembers && a.subtaskCount === b.subtaskCount && a.collapsed === b.collapsed &&
   a.msIndex === b.msIndex && a.overflowInfo === b.overflowInfo &&
   a.onRemove === b.onRemove && a.onUpdate === b.onUpdate && a.onDateChange === b.onDateChange &&
-  a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.depth === b.depth && a.dropHint === b.dropHint)
+  a.onIndent === b.onIndent && a.onOutdent === b.onOutdent && a.depth === b.depth && a.dropHint === b.dropHint &&
+  a.locked === b.locked)
 
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
@@ -918,6 +933,7 @@ export function TimelineTable({
   onOutdent,
   onMilestoneDemote,
   storageKey,
+  locked = false,
 }: TimelineTableProps) {
   const collapseStoreKey = storageKey ? `tl-collapse:${storageKey}` : null
   // Default = all milestones collapsed; a saved per-project state (localStorage)
@@ -1091,14 +1107,15 @@ export function TimelineTable({
           onUpdate={onTaskUpdate}
           onToggleAddSubtask={() => setAddingSubtaskForId((prev) => (prev === task.id ? null : task.id))}
           onToggleCollapse={() => toggleCollapse(task.id)}
-          onDateChange={onTaskDateChange}
+          onDateChange={locked ? undefined : onTaskDateChange}
           onIndent={onIndent}
           onOutdent={onOutdent}
+          locked={locked}
         />
         {!isCollapsed && (
           <>
             {children.map((c) => renderTaskTree(c, msIndex, depth + 1))}
-            {addingSubtaskForId === task.id && (
+            {!locked && addingSubtaskForId === task.id && (
               <InlineSubtaskInput
                 parentTask={task}
                 teamMembers={teamMembers}
@@ -1173,13 +1190,14 @@ export function TimelineTable({
                   onUpdate={onMilestoneUpdate}
                   onRemove={onMilestoneRemove}
                   onToggleCollapse={() => toggleCollapse(milestone.id)}
-                  onDateChange={onMilestoneDateChange}
+                  onDateChange={locked ? undefined : onMilestoneDateChange}
                   onDemote={onMilestoneDemote}
+                  locked={locked}
                 />
                 {!isCollapsed && (
                   <>
                     {msParentTasks.map((task) => renderTaskTree(task, msIndex, 1))}
-                    <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} msIndex={msIndex} onAdd={onTaskAdd} />
+                    {!locked && <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} msIndex={msIndex} onAdd={onTaskAdd} />}
                   </>
                 )}
               </div>
@@ -1189,17 +1207,19 @@ export function TimelineTable({
       </DndContext>
       </div>
 
-      {/* Add milestone */}
-      <div className="px-3 py-2 border-t border-dashed">
-        <button
-          type="button"
-          onClick={onMilestoneAdd}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          新增里程碑
-        </button>
-      </div>
+      {/* Add milestone（鎖定時隱藏） */}
+      {!locked && (
+        <div className="px-3 py-2 border-t border-dashed">
+          <button
+            type="button"
+            onClick={onMilestoneAdd}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            新增里程碑
+          </button>
+        </div>
+      )}
     </div>
   )
 }
