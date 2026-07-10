@@ -79,6 +79,12 @@ export function AWeeklyReportComposer({
   const uploadRef = useRef<HTMLInputElement>(null)
   const uploadTargetRow = useRef<number | null>(null)
   const snapshotRef = useRef('') // 載入時的內容快照，用來判斷是否有未儲存變更
+  // 本 session 已「暫存/送出」套用完成的任務(taskId→完成日)。因 onSaved 是整頁重載、暫存不觸發，
+  //   project prop 不會即時刷新；用這個 ref 讓重開撰寫台時能把剛完成的日期重建回 markDone。
+  const sessionCompletedRef = useRef<Record<string, string>>({})
+  // 載入時的「已完成基準」(taskId→日)。用來把「本次新標的完成」與「原本就完成」區分開，
+  //   讓送出確認「你把 N 個標記完成」只算新標的、不灌水。
+  const baselineDoneRef = useRef<Record<string, string>>({})
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 前序守則 / 申請延期 / 標記完成 小流程
   const [prereqOpen, setPrereqOpen] = useState(false)
@@ -356,19 +362,28 @@ export function AWeeklyReportComposer({
     } catch (e) { alert(e instanceof Error ? e.message : '送出延期申請失敗') } finally { setDelaySubmitting(false) }
   }
 
+  // 重建「已標記完成」基準：DB 已完成 ∪ 本 session 已套用的完成（避開 project prop 尚未刷新）
+  const rebuildMarkDone = (): Record<string, string> => {
+    const base: Record<string, string> = {}
+    for (const t of project.tasks) if (t.completedAt) base[t.id] = t.completedAt
+    Object.assign(base, sessionCompletedRef.current)
+    return base
+  }
+
   useEffect(() => {
     if (!open) return
-    setLoading(true); setMarkDone({}); setSelectedId('')
+    setLoading(true); setSelectedId('')
     fetch(`/api/projects/${project.id}/weekly-report?weekOf=${weekOf}&authorId=${actorUserId}`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then((data: { aLogs: { taskId: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { content: string }[] }[]; notes: { taskId: string; content: string }[] }) => {
         const nr: Record<string, Row[]> = {}; const np: Record<string, string> = {}
         for (const l of data.aLogs) { (nr[l.taskId] = nr[l.taskId] || []).push({ date: l.logDate, content: l.content, attachments: l.attachments?.length ? l.attachments : undefined }); if (l.nextPlans?.length) np[l.taskId] = l.nextPlans.map(p => p.content).join('\n') }
         const ov = data.notes.find(n => n.taskId === '')?.content || ''
-        setRows(nr); setNextPlan(np); setOverall(ov)
-        snapshotRef.current = JSON.stringify({ rows: nr, nextPlan: np, overall: ov })
+        const md = rebuildMarkDone(); baselineDoneRef.current = md
+        setRows(nr); setNextPlan(np); setOverall(ov); setMarkDone(md)
+        snapshotRef.current = JSON.stringify({ rows: nr, nextPlan: np, overall: ov, markDone: md })
       })
-      .catch(() => { setRows({}); setNextPlan({}); setOverall(''); snapshotRef.current = JSON.stringify({ rows: {}, nextPlan: {}, overall: '' }) })
+      .catch(() => { const md = rebuildMarkDone(); baselineDoneRef.current = md; setRows({}); setNextPlan({}); setOverall(''); setMarkDone(md); snapshotRef.current = JSON.stringify({ rows: {}, nextPlan: {}, overall: '', markDone: md }) })
       .finally(() => setLoading(false))
   }, [open, project.id, weekOf, actorUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -379,7 +394,7 @@ export function AWeeklyReportComposer({
   const clearSel = () => { if (selectedId) { setRows(p => { const n = { ...p }; delete n[selectedId]; return n }); setNextPlan(p => { const n = { ...p }; delete n[selectedId]; return n }); setMarkDone(p => { const n = { ...p }; delete n[selectedId]; return n }) } setClearOpen(false) }
 
   const reportCount = useMemo(() => Object.values(rows).filter(rs => rs.some(r => r.content.trim() && r.date)).length + (overall.trim() ? 1 : 0), [rows, overall])
-  const doneCount = Object.keys(markDone).length
+  const doneCount = Object.entries(markDone).filter(([id, date]) => baselineDoneRef.current[id] !== date).length
   const selDirty = selectedId ? (rowsFor(selectedId).some(r => r.content.trim() || r.date) || !!nextPlan[selectedId]) : false
   const selHasLog = selectedId ? rowsFor(selectedId).some(r => r.content.trim() && r.date) : false
 
@@ -456,7 +471,15 @@ export function AWeeklyReportComposer({
     try {
       const res = await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(false)) })
       if (!res.ok) throw new Error()
-      snapshotRef.current = JSON.stringify({ rows, nextPlan, overall }) // 暫存成功→更新快照
+      // 「標記完成」也一起暫存（與送出相同：done/100%/completedAt）→ 暫存後不遺失、關閉不再誤報未存。
+      //   記到 sessionCompletedRef，讓重開撰寫台能重建日期（project prop 尚未刷新也不遺失）。
+      for (const [taskId, date] of Object.entries(markDone)) {
+        if (baselineDoneRef.current[taskId] === date) continue // 已是基準、無變更 → 不重複套用
+        await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: date }) })
+        sessionCompletedRef.current[taskId] = date
+      }
+      baselineDoneRef.current = { ...markDone } // 已全部套用 → 成為新的已完成基準
+      snapshotRef.current = JSON.stringify({ rows, nextPlan, overall, markDone }) // 暫存成功→更新快照（含標記完成）
       setDraftDone(true); setTimeout(() => setDraftDone(false), 2500)
       return true
     } catch { alert('暫存失敗，請稍後再試'); return false } finally { setSavingDraft(false) }
@@ -489,6 +512,7 @@ export function AWeeklyReportComposer({
       const res = await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(true)) })
       if (!res.ok) throw new Error()
       for (const [taskId, date] of Object.entries(markDone)) {
+        if (baselineDoneRef.current[taskId] === date) continue // 原本就完成、無變更 → 不重複套用
         await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: date }) })
       }
       setConfirmOpen(false); onSaved(); onOpenChange(false)
@@ -499,10 +523,12 @@ export function AWeeklyReportComposer({
   const willDone = selectedId ? markDone[selectedId] : undefined
 
   // 送出前預覽：被標記完成的任務會如何影響進度（子層 100%，父層/里程碑隨之上升）
-  const donePreview = useMemo(() => Object.entries(markDone).map(([id, date]) => {
-    const t = byId.get(id); const n = nodes.find(x => x.id === id)
-    return t ? { id, title: t.title, msName: n?.msName || '', from: t.progress, date } : null
-  }).filter((x): x is { id: string; title: string; msName: string; from: number; date: string } => !!x), [markDone, byId, nodes])
+  const donePreview = useMemo(() => Object.entries(markDone)
+    .filter(([id, date]) => baselineDoneRef.current[id] !== date) // 只顯示「本次新標的完成」，不含原本就完成的
+    .map(([id, date]) => {
+      const t = byId.get(id); const n = nodes.find(x => x.id === id)
+      return t ? { id, title: t.title, msName: n?.msName || '', from: t.progress, date } : null
+    }).filter((x): x is { id: string; title: string; msName: string; from: number; date: string } => !!x), [markDone, byId, nodes])
 
   // 標記完成的日期是否已超過截止日（超過就必須先申請延期）
   const completeOverdue = !!(selTask && completeDate && new Date(completeDate).getTime() > new Date(selTask.endDate).getTime())
@@ -563,7 +589,7 @@ export function AWeeklyReportComposer({
 
   // 是否有未儲存變更（報告內容變動，或有待送出的標記完成）
   const dirty = useMemo(
-    () => JSON.stringify({ rows, nextPlan, overall }) !== snapshotRef.current || Object.keys(markDone).length > 0,
+    () => JSON.stringify({ rows, nextPlan, overall, markDone }) !== snapshotRef.current,
     [rows, nextPlan, overall, markDone],
   )
   // 關閉時：有未儲存內容 → 先提醒
