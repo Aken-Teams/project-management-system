@@ -514,9 +514,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
             // 里程碑長條、到期標籤、逾期判斷都用這個，不用可能不同步的 dueDate。
             const msEnd = msBar.end
 
-            // 里程碑進度 = 聚合「葉任務」(實際做的最底層)，依 durationDays 加權
-            const msLeaves = tasks.filter(t => t.milestoneId === milestone.id && !tasks.some(c => c.parentId === t.id))
-            const msBasis = msLeaves.length > 0 ? msLeaves : msTasks
+            // 里程碑進度 = 聚合「所有層級任務」(含子任務、各看自己進度)，依 durationDays 加權；所有任務完成才 100%
+            const msBasis = tasks.filter(t => t.milestoneId === milestone.id)
             const msAggregatedProgress = (() => {
               if (msBasis.length === 0) return milestone.progress
               const totalDays = msBasis.reduce((s, t) => s + Math.max(t.durationDays || 1, 1), 0)
@@ -1067,9 +1066,8 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
         {msTooltip && (() => {
           const ms = msTooltip.milestone
           const msTks = msTooltip.msTasks
-          // 完成度/完成數與甘特一致：聚合「葉任務」(不用頂層父任務)
-          const msLeavesTip = tasks.filter(t => t.milestoneId === ms.id && !tasks.some(c => c.parentId === t.id))
-          const msBasisTip = msLeavesTip.length > 0 ? msLeavesTip : msTks
+          // 完成度/完成數與甘特一致：聚合「所有層級任務」(含子任務，所有任務完成才 100%)
+          const msBasisTip = tasks.filter(t => t.milestoneId === ms.id)
           const liveProgress = (() => {
             if (msBasisTip.length === 0) return ms.progress
             const totalDays = msBasisTip.reduce((s, t) => s + Math.max(t.durationDays || 1, 1), 0)

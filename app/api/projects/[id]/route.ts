@@ -40,16 +40,13 @@ export async function GET(
     await autoProgressTasks(project.tasks, publishedLogs)
 
     // ── Auto-sync milestone statuses (now includes blocked) ──
-    //   里程碑聚合「葉任務」(最底層原子工作)，與 syncMilestoneStatus / 甘特一致；
-    //   父任務進度只反映它自己的報告，不進里程碑(避免父子工期重疊重複計)。
-    const projParentIds = new Set(project.tasks.filter(t => t.parentId).map(t => t.parentId))
+    //   客戶決策(2026-07-10)：里程碑聚合「所有層級任務」(各看自己進度、依 durationDays 加權)，
+    //   所有任務完成才 100%，與 syncMilestoneStatus / 甘特一致。
     for (const ms of project.milestones) {
       const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
       if (msTasks.length === 0) continue
-      const leaves = msTasks.filter(t => !projParentIds.has(t.id))
-      const basis = leaves.length > 0 ? leaves : msTasks
-      const correctStatus = computeMilestoneStatus(basis)
-      const correctProgress = computeWeightedProgress(basis)
+      const correctStatus = computeMilestoneStatus(msTasks)
+      const correctProgress = computeWeightedProgress(msTasks)
       if (ms.status !== correctStatus || ms.progress !== correctProgress) {
         await prisma.milestone.update({
           where: { id: ms.id },

@@ -27,23 +27,16 @@ export function computeWeightedProgress(
  *  - Progress = average of task progresses
  */
 export async function syncMilestoneStatus(milestoneId: string, projectId: string) {
-  // 新模型：里程碑聚合「葉任務」(實際有人做的最底層)，不再用頂層父任務
-  //  —— 因父任務進度現在只反映它自己的報告(可能 0)，用它彙整會失真。
+  // 客戶決策（2026-07-10）：里程碑 =「所有任務都完成」才 100%。聚合「該里程碑所有層級的任務」
+  //   （各看自己進度、依 durationDays 加權），不再只算葉任務。父層自己的報告也計入。
   const msTasks = await prisma.task.findMany({
     where: { milestoneId, projectId },
     select: { id: true, status: true, progress: true, durationDays: true },
   })
   if (msTasks.length === 0) return
 
-  const parentIds = new Set(
-    (await prisma.task.findMany({ where: { projectId, parentId: { not: null } }, select: { parentId: true } }))
-      .map(t => t.parentId),
-  )
-  const leaves = msTasks.filter(t => !parentIds.has(t.id))
-  const basis = leaves.length > 0 ? leaves : msTasks
-
-  const status = computeMilestoneStatus(basis)
-  const progress = computeWeightedProgress(basis)
+  const status = computeMilestoneStatus(msTasks)
+  const progress = computeWeightedProgress(msTasks)
 
   await prisma.milestone.update({
     where: { id: milestoneId },

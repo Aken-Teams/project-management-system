@@ -276,6 +276,9 @@ model Task {
   assignedAt  DateTime   @default(now()) @map("assigned_at")
   completedAt DateTime?  @map("completed_at")
   completedBy String?    @map("completed_by")
+  // 標記完成時「所屬的報告填報週」(週一 YYYY-MM-DD)。更新紀錄依此分組——完成事件放在 A 送報告那週，
+  //   而非 completedAt(A 填的實際完成日)那週。舊資料為 null 時 fallback 用 completedAt 的週。
+  completedWeekOf String? @map("completed_week_of")
   // R（執行者）自我回報「此任務已完成／無後續進度」— 與 A 正式標記完成(completedAt)是不同定義。
   // R 按下後不再被催填週報；A 端會看到「R 回報完成待確認」提示，由 A 決定是否按下正式完成。
   reportedDoneAt DateTime? @map("reported_done_at")

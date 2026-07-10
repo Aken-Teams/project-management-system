@@ -118,6 +118,7 @@ export function dbProjectToFrontend(
       progress: number
       completedAt: Date | null
       completedBy: string | null
+      completedWeekOf: string | null
       parentId: string | null
       originalStartDate: Date | null
       originalEndDate: Date | null
@@ -135,6 +136,7 @@ export function dbProjectToFrontend(
         progress: number
         completedAt: Date | null
         completedBy: string | null
+        completedWeekOf: string | null
       }[]
     }[]
     risks: {
@@ -250,6 +252,7 @@ export function dbProjectToFrontend(
     progress: t.progress,
     ...(t.completedAt ? { completedAt: t.completedAt.toISOString().split('T')[0] } : {}),
     ...(t.completedBy ? { completedBy: t.completedBy } : {}),
+    ...(t.completedWeekOf ? { completedWeekOf: t.completedWeekOf } : {}),
     ...(t.originalStartDate ? { originalStartDate: t.originalStartDate.toISOString().split('T')[0] } : {}),
     ...(t.originalEndDate ? { originalEndDate: t.originalEndDate.toISOString().split('T')[0] } : {}),
     ...(t.parentId ? { parentId: t.parentId } : {}),
@@ -266,6 +269,7 @@ export function dbProjectToFrontend(
         durationDays: c.durationDays,
         ...(c.completedAt ? { completedAt: c.completedAt.toISOString().split('T')[0] } : {}),
         ...(c.completedBy ? { completedBy: c.completedBy } : {}),
+        ...(c.completedWeekOf ? { completedWeekOf: c.completedWeekOf } : {}),
       })),
     } : {}),
   }))

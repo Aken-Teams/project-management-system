@@ -23,6 +23,7 @@ interface UpdateTaskBody {
   durationDays?: number
   completedAt?: string
   completedBy?: string
+  completedWeekOf?: string
   manualDates?: boolean
   // R 自我回報「已完成/無後續」：true=設定、false=取消（與 completedAt 正式完成獨立）
   reportedDone?: boolean
@@ -76,11 +77,16 @@ export async function PUT(
         if (body.completedBy) {
           data.completedBy = body.completedBy
         }
+        // 記「完成時所屬的報告填報週」→ 更新紀錄依此分組（放在 A 送報告那週）
+        if (body.completedWeekOf) {
+          data.completedWeekOf = body.completedWeekOf
+        }
         data.progress = 100
       } else if (task.status === 'done') {
-        // Clearing completedAt/completedBy when un-completing
+        // Clearing completedAt/completedBy/completedWeekOf when un-completing
         data.completedAt = null
         data.completedBy = null
+        data.completedWeekOf = null
       }
     }
     if (body.progress !== undefined && data.progress === undefined) data.progress = body.progress

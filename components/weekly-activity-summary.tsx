@@ -112,9 +112,12 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     return weekMap.get(weekMonday)!
   }
 
-  project.tasks.filter(t => !t.parentId).forEach(task => {
+  // 完成紀錄含所有層級（含深層子任務）——標記完成是針對「該任務」，子任務完成也要顯示完成日。
+  //   分組依「完成時所屬的報告填報週」(completedWeekOf)——放在 A 送報告那週；舊資料無此欄位則
+  //   fallback 用 completedAt(實際完成日)的週。
+  project.tasks.forEach(task => {
     if (task.completedAt) {
-      const monday = getWeekMonday(task.completedAt)
+      const monday = task.completedWeekOf || getWeekMonday(task.completedAt)
       const milestone = project.milestones.find(m => m.id === task.milestoneId)
       const week = getOrCreate(monday)
       week.completedTasks.push({

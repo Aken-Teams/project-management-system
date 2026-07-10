@@ -216,7 +216,7 @@ export function AWeeklyReportComposer({
       await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(false)) }).catch(() => {})
       const today = ymd(new Date())
       for (const t of prereqTodoTasks) {
-        await fetch(`/api/projects/${project.id}/tasks/${t.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: today }) })
+        await fetch(`/api/projects/${project.id}/tasks/${t.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: today, completedWeekOf: weekOf }) })
       }
       setPrereqOpen(false)
       onSaved()
@@ -509,9 +509,9 @@ export function AWeeklyReportComposer({
     try {
       const res = await fetch(`/api/projects/${project.id}/weekly-report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildPayload(true)) })
       if (!res.ok) throw new Error()
-      // 送出週報才真的套用完成（標記完成在此生效）
+      // 送出週報才真的套用完成（標記完成在此生效）；completedWeekOf=本報告填報週 → 更新紀錄依此分組
       for (const [taskId, date] of Object.entries(markDone)) {
-        await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: date }) })
+        await fetch(`/api/projects/${project.id}/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', progress: 100, completedBy: actor, completedAt: date, completedWeekOf: weekOf }) })
       }
       writeDraftMarks({}) // 已送出 → 清掉待送標記草稿
       setConfirmOpen(false); onSaved(); onOpenChange(false)
@@ -623,6 +623,8 @@ export function AWeeklyReportComposer({
                   </button>
                   {overallOpen && <div className="px-3 pb-3"><Textarea value={overall} onChange={e => setOverall(e.target.value)} rows={2} placeholder="這週專案整體進展、重點、風險…（顯示在更新紀錄最前面）" className="text-sm" /></div>}
                 </div>
+                {/* 淡分隔線：把「彙整說明」與下方選任務區隔開 */}
+                <div className="border-b border-border/40" />
 
                 {/* 選任務（可搜尋樹狀下拉）*/}
                 <div className="space-y-1.5">
@@ -683,7 +685,7 @@ export function AWeeklyReportComposer({
                     </div>
 
                     <div className="flex items-center justify-end gap-2 flex-wrap">
-                      {sel.isParent && selKidLogs.length > 0 && <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={importKids}><CornerDownLeft className="h-3.5 w-3.5" />帶入子任務報告（{selKidLogs.length}）</Button>}
+                      {sel.isParent && selKidLogs.length > 0 && <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-400 dark:hover:bg-violet-950/30" onClick={importKids}><CornerDownLeft className="h-3.5 w-3.5" />帶入子任務報告（{selKidLogs.length}）</Button>}
                       {selRLogs.length > 0 && (
                         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400" onClick={() => setRViewOpen(true)}>
                           <Inbox className="h-3.5 w-3.5" />查看 R 報告
@@ -735,12 +737,12 @@ export function AWeeklyReportComposer({
                     </div>
                     <div className="space-y-1"><div className="text-[11px] font-medium text-muted-foreground">預計下週工作（選填）</div><Textarea value={nextPlan[selectedId] || ''} onChange={e => setNextPlan(p => ({ ...p, [selectedId]: e.target.value }))} rows={1} placeholder="預計下週…" className="text-xs min-h-[36px]" /></div>
 
-                    {!sel.isParent && selTask.completedAt && (
+                    {selTask.completedAt && (
                       <div className="flex items-center justify-end gap-2 pt-1 border-t">
                         <span className="text-xs text-green-700 dark:text-green-400 inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />已完成 · {selTask.completedAt}</span>
                       </div>
                     )}
-                    {!sel.isParent && !selTask.completedAt && (
+                    {!selTask.completedAt && (
                       <div className="flex items-center justify-end gap-2 pt-1 border-t">
                         {willDone ? (
                           <>
@@ -749,11 +751,10 @@ export function AWeeklyReportComposer({
                             <button onClick={() => setMarkDone(p => { const n = { ...p }; delete n[selectedId]; return n })} className="text-xs text-muted-foreground hover:text-destructive">取消</button>
                           </>
                         ) : (
-                          <button onClick={() => { const ds = rowsFor(selectedId).filter(r => r.date).map(r => r.date).sort(); setCompleteDate(ds.length ? ds[ds.length - 1] : ymd(new Date())); setCompleteOpen(true) }} className="inline-flex items-center gap-1 text-xs border rounded px-2 py-1 hover:bg-muted"><CircleCheck className="h-3.5 w-3.5" />標記完成…</button>
+                          <button onClick={() => { const ds = rowsFor(selectedId).filter(r => r.date).map(r => r.date).sort(); setCompleteDate(ds.length ? ds[ds.length - 1] : ymd(new Date())); setCompleteOpen(true) }} className="inline-flex items-center gap-1 text-xs border border-green-300 text-green-700 rounded px-2.5 py-1 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/30 transition-colors"><CircleCheck className="h-3.5 w-3.5" />標記完成…</button>
                         )}
                       </div>
                     )}
-                    {sel.isParent && <div className="text-[11px] text-muted-foreground flex items-start gap-1 pt-1 border-t"><Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />父任務進度由子任務繼承，此處只是報告，不給標記完成。</div>}
                   </div>
                 )}
               </>
