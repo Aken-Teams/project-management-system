@@ -135,42 +135,72 @@ export function AWeeklyReportComposer({
   const selRLogs = selectedId ? rLogsOf(selectedId) : []
   const selKidLogs = useMemo(() => selectedId ? project.tasks.filter(t => t.parentId === selectedId).flatMap(k => rLogsOf(k.id).map(l => ({ title: k.title, log: l }))) : [], [selectedId, project.tasks, weekStart, weekEnd, actor]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 前序守則：某任務的前序任務（dependencies）尚未完成者
+  // 頂層祖先（往上走 parentId 到頂）
+  const topAncestorOf = (t: Task): Task => {
+    let cur = t
+    const seen = new Set<string>()
+    while (cur.parentId && byId.get(cur.parentId) && !seen.has(cur.id)) { seen.add(cur.id); cur = byId.get(cur.parentId)! }
+    return cur
+  }
+  // 頂層任務的全域順序（里程碑順序 → 任務陣列順序），供「前序＝上游」判定
+  const topOrder = useMemo(() => {
+    const msIdx = new Map(project.milestones.map((m, i) => [m.id, i]))
+    const arrIdx = new Map(project.tasks.map((t, i) => [t.id, i]))
+    const map = new Map<string, number>()
+    project.tasks.filter(t => !t.parentId).slice()
+      .sort((a, b) => {
+        const ma = msIdx.get(a.milestoneId) ?? 0, mb = msIdx.get(b.milestoneId) ?? 0
+        return ma !== mb ? ma - mb : (arrIdx.get(a.id) ?? 0) - (arrIdx.get(b.id) ?? 0)
+      })
+      .forEach((t, i) => map.set(t.id, i))
+    return map
+  }, [project.milestones, project.tasks])
+
+  // 前序 = 「排在選取任務的頂層祖先之前」的所有未完成任務（上游，跨里程碑）。
+  //   不含選取任務自己的群組(祖先鏈/自己/子孫)、也不含下游；選子孫時一律以其頂層祖先判定
+  //   → 點 bbb 底下任何一層(6 層)都會觸發，一鍵只標「上游」而非整個里程碑。
   const incompletePrereqsOf = (taskId: string): Task[] => {
     const t = byId.get(taskId)
     if (!t) return []
-    return (t.dependencies || []).map(id => byId.get(id)).filter((x): x is Task => !!x && x.status !== 'done')
+    const xOrd = topOrder.get(topAncestorOf(t).id) ?? 0
+    return project.tasks.filter(t2 => {
+      if (t2.status === 'done') return false
+      const ord = topOrder.get(topAncestorOf(t2).id) ?? 0
+      return ord < xOrd
+    })
   }
-  const selPrereqs = useMemo(() => (selTask ? incompletePrereqsOf(selTask.id) : []), [selTask, byId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const selPrereqs = useMemo(() => (selTask ? incompletePrereqsOf(selTask.id) : []), [selTask, byId, topOrder]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 前序所在的里程碑（可能多個）、里程碑內所有未完成任務（含父層，供一鍵完成整個里程碑）、
-  // 以及可跳去填寫的最底層葉任務（不是父層 aaa）
+  // 上游未完成任務所在的里程碑（顯示用）
   const prereqMilestones = useMemo(() => {
     const ids = new Set(selPrereqs.map(p => p.milestoneId))
     return project.milestones.filter(m => ids.has(m.id))
   }, [selPrereqs, project.milestones])
-  const prereqTodoTasks = useMemo(() => {
-    const ids = new Set(selPrereqs.map(p => p.milestoneId))
-    return project.tasks.filter(t => ids.has(t.milestoneId) && t.status !== 'done')
-  }, [selPrereqs, project.tasks])
+  // 一鍵標 100% 的對象＝「上游未完成任務」本身（不再是整個里程碑，不含自己/子孫）
+  const prereqTodoTasks = selPrereqs
+  // 可跳去填寫的上游葉任務：取「最接近的」上游葉（topOrder 最大），真正該先做的那一個
   const prereqJumpTarget = useMemo(() => {
-    const ids = new Set(selPrereqs.map(p => p.milestoneId))
-    // 里程碑內未完成、且沒有子任務的葉任務（真正要填的那一層）
-    return project.tasks.find(t => ids.has(t.milestoneId) && t.status !== 'done' && !project.tasks.some(c => c.parentId === t.id))
-  }, [selPrereqs, project.tasks])
-  // 樹狀排序（含 depth）：供 hover 清單以層級呈現
+    const leaves = selPrereqs.filter(t => !project.tasks.some(c => c.parentId === t.id))
+    if (leaves.length === 0) return undefined
+    return leaves.reduce((best, t) =>
+      (topOrder.get(topAncestorOf(t).id) ?? 0) > (topOrder.get(topAncestorOf(best).id) ?? 0) ? t : best
+    )
+  }, [selPrereqs, project.tasks, topOrder]) // eslint-disable-line react-hooks/exhaustive-deps
+  // 樹狀排序（含 depth）：供 hover 清單以層級呈現（只列上游未完成）
   const prereqTreeItems = useMemo(() => {
-    const childrenOf = (pid: string) => project.tasks.filter(t => t.parentId === pid)
+    const ids = new Set(selPrereqs.map(p => p.id))
+    const msById = new Map(project.milestones.map(m => [m.id, m.name]))
+    const childrenOf = (pid: string) => project.tasks.filter(t => t.parentId === pid && ids.has(t.id))
     const out: { id: string; title: string; depth: number; msName: string }[] = []
-    for (const ms of prereqMilestones) {
-      const walk = (t: Task, depth: number) => {
-        if (t.status !== 'done') out.push({ id: t.id, title: t.title, depth, msName: ms.name })
-        childrenOf(t.id).forEach(k => walk(k, depth + 1))
-      }
-      project.tasks.filter(t => t.milestoneId === ms.id && !t.parentId).forEach(t => walk(t, 0))
+    const walk = (t: Task, depth: number) => {
+      out.push({ id: t.id, title: t.title, depth, msName: msById.get(t.milestoneId) || '' })
+      childrenOf(t.id).forEach(k => walk(k, depth + 1))
     }
+    selPrereqs.filter(t => !t.parentId || !ids.has(t.parentId!))
+      .sort((a, b) => (topOrder.get(topAncestorOf(a).id) ?? 0) - (topOrder.get(topAncestorOf(b).id) ?? 0))
+      .forEach(t => walk(t, 0))
     return out
-  }, [prereqMilestones, project.tasks])
+  }, [selPrereqs, project.tasks, project.milestones, topOrder]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 選任務：若前序未完成，跳出提醒彈窗（守則）
   const chooseTask = (id: string) => {
@@ -178,7 +208,7 @@ export function AWeeklyReportComposer({
     if (incompletePrereqsOf(id).length > 0) setPrereqOpen(true)
   }
 
-  // 一鍵把前序里程碑內所有未完成任務（含父層）標記完成（先暫存草稿避免遺失，再整頁刷新）
+  // 一鍵把「上游」所有未完成任務標記完成（不含自己/子孫；先暫存草稿避免遺失，再整頁刷新）
   const completePrereqMilestones = async () => {
     if (prereqTodoTasks.length === 0) return
     setCompletingPrereq(true)
@@ -644,8 +674,8 @@ export function AWeeklyReportComposer({
                       <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                         <div className="flex-1">
-                          <div className="font-medium">此任務有前序尚未完成</div>
-                          <div className="mt-0.5">建議先完成前序：{selPrereqs.map(p => p.title).join('、')}</div>
+                          <div className="font-medium">此任務有上游前序尚未完成（{selPrereqs.length} 項）</div>
+                          <div className="mt-0.5">建議先完成上游：{prereqMilestones.map(m => m.name).join('、')}</div>
                         </div>
                         <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-300 shrink-0" onClick={() => setPrereqOpen(true)}>查看</Button>
                       </div>
@@ -657,7 +687,7 @@ export function AWeeklyReportComposer({
                         <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                         <div className="flex-1">
                           <div className="font-medium">填報日期比規劃截止日晚了 {selOverdue.diffDays} 天</div>
-                          <div className="mt-0.5">規劃截止 {new Date(selOverdue.end).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}，此任務已逾期。逾期紀錄不計入進度，請申請延期調整時程。</div>
+                          <div className="mt-0.5">規劃截止 {new Date(selOverdue.end).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}，此任務已逾期（進度最高到 99%、無法標記完成）。<b>建議送出延期申請</b>調整時程。</div>
                         </div>
                         {pendingDelayTaskIds.has(selectedId)
                           ? <Badge variant="outline" className="text-xs px-2.5 py-1 font-medium border-orange-400 bg-orange-100/60 text-orange-700 dark:text-orange-300 shrink-0">已申請延期·待審核</Badge>
@@ -800,8 +830,11 @@ export function AWeeklyReportComposer({
                     <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5 ml-6">
                       {donePreview.map(d => (
                         <div key={d.id} className="flex items-center gap-2 text-xs">
-                          <span className="text-[10px] text-muted-foreground shrink-0 w-16 truncate">{d.msName}</span>
-                          <span className="flex-1 min-w-0 truncate">{d.title}</span>
+                          <CircleCheck className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-foreground truncate">{d.title}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">里程碑：{d.msName}</div>
+                          </div>
                           <span className="tabular-nums text-muted-foreground shrink-0">{d.from}%</span>
                           <span className="text-muted-foreground shrink-0">→</span>
                           <span className="tabular-nums font-medium text-green-600 shrink-0">100%</span>
@@ -813,7 +846,7 @@ export function AWeeklyReportComposer({
                 {overdueUnresolved.length > 0 && (
                   <div className="flex items-start gap-2 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-2 text-xs text-orange-800 dark:text-orange-300">
                     <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span>有 <b>{overdueUnresolved.length}</b> 筆填報日超過規劃截止日，這些<b>逾期紀錄不計入進度</b>；如需調整時程可另外申請延期（非必要）。</span>
+                    <span>有 <b>{overdueUnresolved.length}</b> 筆填報日超過規劃截止日，該任務已逾期（進度最高到 99%、無法標記完成）。<b>建議送出延期申請</b>調整時程，才能正常完成這些任務。</span>
                   </div>
                 )}
                 <div className="text-xs text-muted-foreground pt-1">送出後仍可再進來修改。</div>

@@ -252,13 +252,13 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
   // Also detect "overdue-not-started": auto-progressed to in-progress but nobody has done anything
   type DisplayStatus = TaskStatus | 'overdue-not-started'
   const displayStatus = (task: Task): DisplayStatus => {
-    if (task.progress >= 100) return 'done' as const
-    if (task.status === 'in-progress' && task.progress === 0) {
-      const hasLogs = project.taskLogs.some(tl => tl.taskId === task.id)
-      if (!hasLogs) return 'overdue-not-started'
-    }
-    if (task.progress > 0 && task.status === 'todo') return 'in-progress' as const
-    return task.status
+    // A 為主：progress 已只由 A 發布的紀錄計算（見 syncTaskProgressFromLogs）。
+    if (task.progress >= 100 || task.status === 'done' || task.completedAt) return 'done' as const
+    if (task.progress > 0) return 'in-progress' as const            // A 已發布進度 → 進行中
+    // 以下：無 A 進度且未完成
+    if (task.status === 'blocked') return 'blocked'                 // 相依未完成優先（保留）
+    if (todayUtc() > new Date(task.endDate)) return 'overdue-not-started'  // 已過截止日仍無 A 進度 → 逾期未開始
+    return 'todo'                                                    // 未逾期 → 待辦
   }
   // Keep effectiveStatus for logic that only cares about raw status (overdue check etc.)
   const effectiveStatus = (task: Task) => {

@@ -97,13 +97,8 @@ export async function autoProgressTasks(
   const updatedIds: string[] = []
   const doneTaskIds = new Set(tasks.filter(t => t.status === 'done').map(t => t.id))
 
-  // Build set of task IDs that have at least one log
-  const tasksWithLogs = new Set<string>()
-  if (taskLogs) {
-    for (const log of taskLogs) {
-      tasksWithLogs.add(log.taskId)
-    }
-  }
+  // A 為主：狀態不再看 R 的 log。進行中只認「A 已發布的進度」(progress>0，已在 syncTaskProgressFromLogs
+  //   只用 publishedAt 計算)。taskLogs 參數保留給呼叫端相容，但不再用於狀態判定。
 
   // Helper: check if all prerequisites are done
   const allDepsDone = (task: typeof tasks[number]) => {
@@ -119,28 +114,23 @@ export async function autoProgressTasks(
 
   const toInProgress: string[] = []
   const toBlocked: string[] = []
+  const toTodoPast: string[] = []   // 相依完成但 A 還沒發布進度 → 待辦（即使 startDate 過了）
 
   for (const t of pastStart) {
     if (t.status === 'done') continue
 
     const depsDone = allDepsDone(t)
-    const hasLogs = tasksWithLogs.has(t.id)
 
-    if (depsDone) {
-      // No blocking deps → should be in_progress
-      if (t.status !== 'in_progress') {
-        toInProgress.push(t.id)
-      }
-    } else if (hasLogs || t.progress > 0) {
-      // Deps not done but person has started prep work → in_progress
-      if (t.status !== 'in_progress') {
-        toInProgress.push(t.id)
-      }
+    // A 為主：
+    //  - 進行中 = A 已發布進度(progress>0)（不再因 startDate 過了就自動進行中）
+    //  - 受阻   = 無 A 進度 且 相依未完成（保留，讓使用者知道卡在相依）
+    //  - 待辦   = 無 A 進度 且 相依完成（startDate 過了也維持待辦）
+    if (t.progress > 0) {
+      if (t.status !== 'in_progress') toInProgress.push(t.id)
+    } else if (!depsDone) {
+      if (t.status !== 'blocked') toBlocked.push(t.id)
     } else {
-      // Deps not done, no work done → blocked
-      if (t.status !== 'blocked') {
-        toBlocked.push(t.id)
-      }
+      if (t.status !== 'todo') toTodoPast.push(t.id)
     }
   }
 
@@ -170,6 +160,20 @@ export async function autoProgressTasks(
       }
     }
     updatedIds.push(...toBlocked)
+  }
+
+  // Batch update: → todo（相依完成但 A 還沒發布進度；startDate 過了也維持待辦，A 為主）
+  if (toTodoPast.length > 0) {
+    await prisma.task.updateMany({
+      where: { id: { in: toTodoPast } },
+      data: { status: 'todo' },
+    })
+    for (const t of tasks) {
+      if (toTodoPast.includes(t.id)) {
+        ;(t as { status: string }).status = 'todo'
+      }
+    }
+    updatedIds.push(...toTodoPast)
   }
 
   // ── in_progress/blocked → todo: startDate moved to future AND no work done ──
