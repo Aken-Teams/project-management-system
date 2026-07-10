@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>待確認流程議題 — 示意圖</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;background:#f1f5f9;color:#1e293b;padding:32px 16px}
+  .wrap{max-width:980px;margin:0 auto}
+  .h{text-align:center;font-size:26px;font-weight:800;color:#0f172a}
+  .sub{text-align:center;color:#94a3b8;font-size:14px;margin:6px 0 28px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.05);padding:24px 26px 26px;margin-bottom:24px}
+  .card h2{font-size:18px;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:9px}
+  .card h2 .n{background:#b45309;color:#fff;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+  .q{color:#334155;font-size:14px;margin:8px 0 16px;padding:10px 14px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .opt{border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px}
+  .opt.now{background:#f8fafc}
+  .opt.alt{background:#eff6ff;border-color:#bfdbfe}
+  .opt .lab{font-weight:800;font-size:13px;margin-bottom:10px;display:inline-block;padding:2px 10px;border-radius:999px}
+  .opt.now .lab{background:#e2e8f0;color:#475569}
+  .opt.alt .lab{background:#dbeafe;color:#1d4ed8}
+  .bars{font-size:12.5px}
+  .brow{display:grid;grid-template-columns:66px 1fr;align-items:center;gap:8px;margin:6px 0}
+  .blab{color:#334155;font-weight:600}
+  .track{background:#f1f5f9;border-radius:5px;height:16px;position:relative}
+  .fill{position:absolute;top:0;bottom:0;border-radius:5px}
+  .tick{color:#94a3b8;font-size:11px;text-align:center;margin-bottom:2px}
+  .pct{font-size:12px;color:#64748b;margin-left:6px}
+  .tl{position:relative;height:52px;margin:6px 0}
+  .tl .axis{position:absolute;left:0;right:0;top:26px;height:2px;background:#e2e8f0}
+  .tl .dot{position:absolute;top:20px;width:14px;height:14px;border-radius:50%;transform:translateX(-50%)}
+  .tl .cap{position:absolute;top:0;font-size:11px;color:#475569;transform:translateX(-50%);white-space:nowrap}
+  .tl .cap2{position:absolute;top:36px;font-size:11px;color:#94a3b8;transform:translateX(-50%);white-space:nowrap}
+  .take{font-size:12px;color:#64748b;margin-top:12px;border-top:1px dashed #e2e8f0;padding-top:8px}
+  .take b{color:#334155}
+  .mermaid{display:flex;justify-content:center;margin-top:6px}
+  @media print{body{background:#fff}.card{box-shadow:none;break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="h">待確認流程議題 — 示意圖</div>
+  <div class="sub">「手動為主」前提下的一致性議題 · 現況 vs 可選方案 · 逐張可截圖</div>
+
+  <!-- 議題1 -->
+  <div class="card">
+    <h2><span class="n">1</span>父任務的起訖日，是否須與子任務一致？</h2>
+    <div class="q">現況為手動輸入，父任務日期與子任務可各自獨立設定，兩者可能不一致。</div>
+    <div class="cmp">
+      <div class="opt now"><span class="lab">現況：各自獨立</span>
+        <div class="bars">
+          <div class="tick">7/1　　　　　7/10　　　　7/20</div>
+          <div class="brow"><span class="blab">父任務</span><div class="track"><div class="fill" style="left:15%;width:45%;background:#8b5cf6"></div></div></div>
+          <div class="brow"><span class="blab">└ 子A</span><div class="track"><div class="fill" style="left:5%;width:35%;background:#3b82f6"></div></div></div>
+          <div class="brow"><span class="blab">└ 子B</span><div class="track"><div class="fill" style="left:55%;width:40%;background:#3b82f6"></div></div></div>
+        </div>
+        <div class="take">父的範圍不必涵蓋子；彈性高，但可能出現「子超出父」的視覺落差。</div>
+      </div>
+      <div class="opt alt"><span class="lab">方案 B：父＝子的範圍</span>
+        <div class="bars">
+          <div class="tick">7/1　　　　　7/10　　　　7/20</div>
+          <div class="brow"><span class="blab">父任務</span><div class="track"><div class="fill" style="left:5%;width:90%;background:#8b5cf6"></div></div></div>
+          <div class="brow"><span class="blab">└ 子A</span><div class="track"><div class="fill" style="left:5%;width:35%;background:#3b82f6"></div></div></div>
+          <div class="brow"><span class="blab">└ 子B</span><div class="track"><div class="fill" style="left:55%;width:40%;background:#3b82f6"></div></div></div>
+        </div>
+        <div class="take">父自動＝最早子開始～最晚子結束；一致，但父日期不可手動偏離。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 議題2 -->
+  <div class="card">
+    <h2><span class="n">2</span>父任務的報告，是否須與子任務報告內容／時間相符？</h2>
+    <div class="q">父任務與子任務各自撰寫報告；父的報告內容與日期，目前不強制與子任務一致。</div>
+    <div class="cmp">
+      <div class="opt now"><span class="lab">現況：各自撰寫</span>
+        <div class="tl">
+          <div class="axis"></div>
+          <div class="dot" style="left:25%;background:#3b82f6"></div><div class="cap" style="left:25%">子報告 7/8</div>
+          <div class="dot" style="left:70%;background:#3b82f6"></div><div class="cap2" style="left:70%">子報告 7/15</div>
+          <div class="dot" style="left:45%;background:#8b5cf6"></div><div class="cap2" style="left:45%">父報告 7/11</div>
+        </div>
+        <div class="take">父報告由 A 自行撰寫，日期／內容與子層不必對齊。</div>
+      </div>
+      <div class="opt alt"><span class="lab">方案 B：需對應子層</span>
+        <div class="tl">
+          <div class="axis"></div>
+          <div class="dot" style="left:25%;background:#3b82f6"></div><div class="cap" style="left:25%">子報告 7/8</div>
+          <div class="dot" style="left:70%;background:#3b82f6"></div><div class="cap2" style="left:70%">子報告 7/15</div>
+          <div class="dot" style="left:80%;background:#8b5cf6"></div><div class="cap" style="left:80%">父報告 ≥ 最新子</div>
+        </div>
+        <div class="take">系統檢核父報告日期不早於最新子報告；一致但增加限制。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 議題3 -->
+  <div class="card">
+    <h2><span class="n">3</span>父任務百分比：看自己，還是以子層聚合為主？</h2>
+    <div class="q">目前每個任務（含父）進度都看自己的報告；父任務不由子層聚合（只有里程碑聚合所有任務）。</div>
+    <div class="cmp">
+      <div class="opt now"><span class="lab">現況：父看自己</span>
+        <div class="bars">
+          <div class="brow"><span class="blab">父任務</span><div class="track"><div class="fill" style="width:40%;background:#8b5cf6"></div></div><span class="pct">40%（自己的報告）</span></div>
+          <div class="brow"><span class="blab">└ 子A</span><div class="track"><div class="fill" style="width:100%;background:#10b981"></div></div><span class="pct">100%</span></div>
+          <div class="brow"><span class="blab">└ 子B</span><div class="track"><div class="fill" style="width:0;background:#3b82f6"></div></div><span class="pct">0%</span></div>
+        </div>
+        <div class="take">父自己回報 40%，與子層各自獨立；父可有自己的觀點。</div>
+      </div>
+      <div class="opt alt"><span class="lab">方案 B：父＝子層聚合</span>
+        <div class="bars">
+          <div class="brow"><span class="blab">父任務</span><div class="track"><div class="fill" style="width:50%;background:#8b5cf6"></div></div><span class="pct">50%（子加權）</span></div>
+          <div class="brow"><span class="blab">└ 子A</span><div class="track"><div class="fill" style="width:100%;background:#10b981"></div></div><span class="pct">100%</span></div>
+          <div class="brow"><span class="blab">└ 子B</span><div class="track"><div class="fill" style="width:0;background:#3b82f6"></div></div><span class="pct">0%</span></div>
+        </div>
+        <div class="take">父自動＝(100+0)/2＝50%；反映子層，但父層不再自己報告。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 議題4 -->
+  <div class="card">
+    <h2><span class="n">4</span>延期「駁回」後，已逾期任務如何處理？</h2>
+    <div class="q">延期駁回後時程維持原樣；若該任務已超過預計截止日，後續內容／完成日的處理方式尚未明確規範。</div>
+    <div class="mermaid">
+flowchart LR
+  R(["延期申請被駁回"]):::ng --> O(["任務仍為逾期<br/>（時程不變）"]):::lock
+  O --> A(["方案 A：修正日期後<br/>重新提出延期"]):::alt
+  O --> B(["方案 B：於原截止日內補完<br/>（完成日填在期限內）"]):::alt
+  O --> C(["方案 C：其他規範<br/>（由貴方定義）"]):::q
+  classDef ng fill:#fef2f2,stroke:#ef4444,color:#991b1b,stroke-width:1.5px;
+  classDef lock fill:#fff7ed,stroke:#fb923c,color:#9a3412,stroke-width:1.5px;
+  classDef alt fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:1.5px;
+  classDef q fill:#f8fafc,stroke:#94a3b8,color:#334155,stroke-width:1.5px;
+    </div>
+  </div>
+
+  <!-- 議題5 -->
+  <div class="card">
+    <h2><span class="n">5</span>延期審核延遲時，A 的週報是否應暫停？</h2>
+    <div class="q">目前延期審核中僅鎖時程，A 仍可持續撰寫並送出週報。若 S 遲未審核，是否應暫停 A 的下週報告？</div>
+    <div class="mermaid">
+flowchart TD
+  S(["送出延期申請"]):::r --> W{"逾一週仍未審核？"}:::dec
+  W -- "否（已審）" --> N(["A 正常撰寫並送出週報"]):::a
+  W -- "是（未審）" --> D{"採用哪個方案？"}:::dec2
+  D -- "方案 A：維持現況" --> AA(["A 仍可持續撰寫／送出週報"]):::now
+  D -- "方案 B：建議卡控" --> BB(["暫停 A 下週報告<br/>待 S 審核完成後才可填寫＋送出"]):::alt
+  classDef r fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:1.5px;
+  classDef dec fill:#fffbeb,stroke:#f59e0b,color:#92400e,stroke-width:1.5px;
+  classDef dec2 fill:#fef3c7,stroke:#d97706,color:#92400e,stroke-width:1.5px;
+  classDef a fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
+  classDef now fill:#f1f5f9,stroke:#94a3b8,color:#334155,stroke-width:1.5px;
+  classDef alt fill:#eff6ff,stroke:#2563eb,color:#1e40af,stroke-width:1.5px;
+    </div>
+  </div>
+
+  <div class="sub" style="margin-top:4px">＊各議題請就「現況 / 方案 B / 其他」評估後決定；決定後將依此調整。</div>
+</div>
+<script>
+  mermaid.initialize({startOnLoad:true,theme:'base',securityLevel:'loose',
+    flowchart:{curve:'basis',htmlLabels:true,padding:14,nodeSpacing:40,rankSpacing:46},
+    themeVariables:{fontFamily:'Microsoft JhengHei, sans-serif',fontSize:'14px',lineColor:'#94a3b8'}});
+</script>
+</body>
+</html>

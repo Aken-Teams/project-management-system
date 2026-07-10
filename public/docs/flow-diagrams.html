@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專案管理系統 — 流程圖</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif; background:#f1f5f9; color:#1e293b; padding:32px 16px; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  .h { text-align:center; font-size:26px; font-weight:800; color:#0f172a; }
+  .sub { text-align:center; color:#94a3b8; font-size:14px; margin:6px 0 28px; }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; box-shadow:0 8px 24px rgba(15,23,42,.05); padding:24px 26px 28px; margin-bottom:24px; }
+  .card h2 { font-size:18px; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:9px; }
+  .card h2 .n { background:#0f172a; color:#fff; width:26px; height:26px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; }
+  .cap { color:#64748b; font-size:13.5px; margin:6px 0 16px; }
+  .cap b { color:#059669; }
+  .mermaid { display:flex; justify-content:center; }
+
+  /* 狀態燈 */
+  .lights { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .light { text-align:center; border:1px solid #e2e8f0; border-radius:12px; padding:14px 8px; }
+  .dot { width:18px; height:18px; border-radius:50%; margin:0 auto 8px; }
+  .light .t { font-weight:700; font-size:14px; }
+  .light .c { font-size:11.5px; color:#64748b; margin-top:3px; }
+
+  /* 進度條 */
+  .bars { font-size:13px; }
+  .brow { display:grid; grid-template-columns:120px 1fr 44px; align-items:center; gap:10px; margin:8px 0; }
+  .blab { color:#334155; font-weight:600; }
+  .btr { background:#f1f5f9; border-radius:6px; height:20px; position:relative; }
+  .bf { position:absolute; left:0; top:0; bottom:0; border-radius:6px; }
+  .bp { text-align:right; color:#64748b; font-variant-numeric:tabular-nums; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
+  .two h3 { font-size:14px; color:#334155; margin-bottom:10px; }
+
+  /* 通知 chips */
+  .nrow { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px dashed #e2e8f0; font-size:13.5px; }
+  .nrow:last-child{border-bottom:none}
+  .evt { flex:1; color:#334155; }
+  .to { display:inline-flex; align-items:center; gap:6px; }
+  .pill { padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .pR{background:#eff6ff;color:#2563eb} .pA{background:#ecfdf5;color:#059669} .pS{background:#f5f3ff;color:#7c3aed} .pAll{background:#f1f5f9;color:#475569}
+  .kind { font-size:11px; padding:1px 7px; border-radius:6px; font-weight:700; }
+  .k-now{background:#dbeafe;color:#1d4ed8} .k-cron{background:#fef3c7;color:#b45309}
+  .ncols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .ncols h3{font-size:13px;color:#334155;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  @media print { body{background:#fff} .card{box-shadow:none;break-inside:avoid} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="h">專案管理系統 — 流程圖</div>
+  <div class="sub">逐張可截圖 · 圖為主、字為輔</div>
+
+  <div class="card">
+    <h2><span class="n">1</span>角色關係：誰把什麼交給誰</h2>
+    <div class="cap">一律<b>以 A 送出的正式報告為準</b>；R 提交工作報告，供 A 彙整撰寫。</div>
+    <div class="mermaid">
+flowchart LR
+  R(["R 負責<br/>執行 + 填工作報告"]):::r -- "① 工作報告" --> A(["A 當責<br/>彙整寫正式報告"]):::a
+  A -- "② 送出報告" --> REC(["更新紀錄 · 進度 · 甘特"]):::sys
+  A -. "③ 要改日期 → 申請延期" .-> S(["S 審核<br/>核准 / 駁回"]):::s
+  S -. "結果" .-> A
+  classDef r fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:1.5px;
+  classDef a fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
+  classDef s fill:#f5f3ff,stroke:#8b5cf6,color:#5b21b6,stroke-width:1.5px;
+  classDef sys fill:#f1f5f9,stroke:#94a3b8,color:#334155,stroke-width:1.5px;
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>專案生命週期</h2>
+    <div class="cap"><b>開案</b>後改日期要走延期審核、才會催繳/算逾期；草稿階段可自由改。</div>
+    <div class="mermaid">
+flowchart LR
+  D(["建立<br/>草稿"]):::d --> K(["開案<br/>啟動"]):::k --> E(["執行<br/>每週循環"]):::e --> F(["完成<br/>全部任務 100%"]):::f
+  classDef d fill:#f1f5f9,stroke:#94a3b8,color:#334155,stroke-width:1.5px;
+  classDef k fill:#fff7ed,stroke:#f59e0b,color:#92400e,stroke-width:1.5px;
+  classDef e fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:1.5px;
+  classDef f fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>每週報告流程（核心）</h2>
+    <div class="cap">只有 A 按「<b>送出本週報告</b>」才會發布、更新進度、套用完成；暫存不算。</div>
+    <div class="mermaid">
+flowchart TD
+  R(["R 填工作報告"]):::r -- "① 通知 A" --> A(["A 撰寫本週報告<br/>可匯入 R · 可標記完成"]):::a
+  A -- "送出本週報告" --> PUB{{"發布"}}:::pub
+  PUB --> U(["更新紀錄<br/>通知全體團隊"]):::sys
+  PUB --> G(["任務/里程碑進度<br/>+ 甘特更新"]):::sys
+  PUB --> C(["標記完成的任務<br/>→ 100%"]):::a
+  classDef r fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:1.5px;
+  classDef a fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
+  classDef sys fill:#f1f5f9,stroke:#94a3b8,color:#334155,stroke-width:1.5px;
+  classDef pub fill:#fff7ed,stroke:#f59e0b,color:#92400e,stroke-width:1.5px;
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span>進度怎麼算</h2>
+    <div class="cap">任務看自己；里程碑 = 底下<b>所有任務</b>加權平均，全部完成才 100%。</div>
+    <div class="two">
+      <div>
+        <h3>任務進度＝看自己的報告</h3>
+        <div class="bars">
+          <div class="brow"><span class="blab">任務 A</span><div class="btr"><div class="bf" style="width:60%;background:#3b82f6"></div></div><span class="bp">60%</span></div>
+          <div class="brow"><span class="blab">任務 B</span><div class="btr"><div class="bf" style="width:100%;background:#10b981"></div></div><span class="bp">100%</span></div>
+        </div>
+      </div>
+      <div>
+        <h3>里程碑＝所有任務加權平均</h3>
+        <div class="bars">
+          <div class="brow"><span class="blab">里程碑 M</span><div class="btr"><div class="bf" style="width:53%;background:#8b5cf6"></div></div><span class="bp">53%</span></div>
+          <div class="brow"><span class="blab" style="padding-left:12px">└ A</span><div class="btr"><div class="bf" style="width:60%;background:#3b82f6"></div></div><span class="bp">60%</span></div>
+          <div class="brow"><span class="blab" style="padding-left:12px">└ B</span><div class="btr"><div class="bf" style="width:100%;background:#10b981"></div></div><span class="bp">100%</span></div>
+          <div class="brow"><span class="blab" style="padding-left:12px">└ C</span><div class="btr"><div class="bf" style="width:0;background:#3b82f6"></div></div><span class="bp">0%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">5</span>任務狀態燈</h2>
+    <div class="cap">一律看「<b>A 是否已發布進度</b>」。</div>
+    <div class="lights">
+      <div class="light"><div class="dot" style="background:#94a3b8"></div><div class="t">待辦</div><div class="c">A 未發布</div></div>
+      <div class="light"><div class="dot" style="background:#3b82f6"></div><div class="t">進行中</div><div class="c">進度 &gt; 0%</div></div>
+      <div class="light"><div class="dot" style="background:#f97316"></div><div class="t">逾期未開始</div><div class="c">過期仍 0%</div></div>
+      <div class="light"><div class="dot" style="background:#ef4444"></div><div class="t">受阻</div><div class="c">前序未完成</div></div>
+      <div class="light"><div class="dot" style="background:#10b981"></div><div class="t">完成</div><div class="c">A 已標記</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">6</span>延期申請與審核</h2>
+    <div class="cap">系統<b>唯一</b>會「連動」的地方；平常手動拖曳只動那一列、不連動。</div>
+    <div class="mermaid">
+flowchart TD
+  S1(["A 送出延期申請"]):::r --> L(["審核中<br/>時程鎖定（只能改指派人）"]):::lock
+  L --> D{"全部 S 都核准？"}:::dec
+  D -- "是" --> OK(["生效：群組延長 + 下游順延<br/>甘特畫紅色延長段"]):::a
+  D -- "任一駁回" --> NG(["退回<br/>時程維持不變"]):::ng
+  classDef r fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:1.5px;
+  classDef lock fill:#fff7ed,stroke:#fb923c,color:#9a3412,stroke-width:1.5px;
+  classDef dec fill:#fffbeb,stroke:#f59e0b,color:#92400e,stroke-width:1.5px;
+  classDef a fill:#ecfdf5,stroke:#10b981,color:#065f46,stroke-width:1.5px;
+  classDef ng fill:#fef2f2,stroke:#ef4444,color:#991b1b,stroke-width:1.5px;
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">7</span>通知：什麼事 → 通知誰</h2>
+    <div class="cap"><span class="kind k-now">即時</span> 動作當下就發 ·　<span class="kind k-cron">排程</span> 每週固定、只對已開案專案</div>
+    <div class="ncols">
+      <div>
+        <h3><span class="kind k-now">即時</span></h3>
+        <div class="nrow"><span class="evt">指派任務</span><span class="to"><span class="pill pAll">被指派者</span></span></div>
+        <div class="nrow"><span class="evt">R 送工作紀錄</span><span class="to"><span class="pill pA">A 當責</span></span></div>
+        <div class="nrow"><span class="evt">A 送本週報告</span><span class="to"><span class="pill pAll">全體團隊</span></span></div>
+        <div class="nrow"><span class="evt">送出延期申請</span><span class="to"><span class="pill pS">S 審核</span></span></div>
+        <div class="nrow"><span class="evt">核准 / 駁回</span><span class="to"><span class="pill pAll">申請人</span></span></div>
+      </div>
+      <div>
+        <h3><span class="kind k-cron">排程</span></h3>
+        <div class="nrow"><span class="evt">里程碑逾期<br><span style="color:#94a3b8;font-size:12px">每 7 天最多 1 則</span></span><span class="to"><span class="pill pA">A 當責</span></span></div>
+        <div class="nrow"><span class="evt">本週該寫沒寫<br><span style="color:#94a3b8;font-size:12px">催繳週報</span></span><span class="to"><span class="pill pR">當事 R</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sub" style="margin-top:4px">＊示意圖，逐張截圖即可；實際畫面以系統為準。</div>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true, theme: 'base', securityLevel: 'loose',
+    flowchart: { curve: 'basis', htmlLabels: true, padding: 14, nodeSpacing: 45, rankSpacing: 50 },
+    themeVariables: { fontFamily: 'Microsoft JhengHei, PingFang TC, sans-serif', fontSize: '15px', lineColor: '#94a3b8', edgeLabelBackground: '#ffffff' }
+  });
+</script>
+</body>
+</html>

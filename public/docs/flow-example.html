@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>範例示意圖 — R 工作報告 → A 正式報告</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;background:#f1f5f9;color:#1e293b;padding:36px 16px}
+  .wrap{max-width:1000px;margin:0 auto}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.05);padding:28px 30px 32px}
+  h2{font-size:19px;font-weight:800;color:#0f172a;margin-bottom:4px}
+  .cap{color:#64748b;font-size:13.5px;margin-bottom:24px}
+  .flow{display:grid;grid-template-columns:1fr 44px 1fr 44px 1.05fr;align-items:stretch;gap:0}
+  .col{display:flex;flex-direction:column}
+  .who{font-weight:800;font-size:13px;padding:3px 12px;border-radius:999px;align-self:flex-start;margin-bottom:12px}
+  .who.R{background:#eff6ff;color:#2563eb}.who.A{background:#ecfdf5;color:#059669}.who.S{background:#f1f5f9;color:#475569}
+  .box{border:1px solid #e2e8f0;border-radius:12px;padding:12px;background:#f8fafc;flex:1}
+  .rec{background:#fff;border:1px solid #dbeafe;border-left:3px solid #3b82f6;border-radius:8px;padding:7px 10px;margin-bottom:7px;font-size:12.5px;display:flex;justify-content:space-between;align-items:center}
+  .rec:last-child{margin-bottom:0}
+  .rec .d{color:#64748b;font-size:11.5px;font-variant-numeric:tabular-nums}
+  .report{background:#fff;border:1px solid #a7f3d0;border-left:3px solid #10b981;border-radius:8px;padding:12px;font-size:13px}
+  .report .t{font-weight:700;color:#065f46;margin-bottom:4px}
+  .report .s{color:#64748b;font-size:11.5px}
+  .arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8}
+  .arrow .a{font-size:24px;font-weight:800;line-height:1}
+  .arrow .l{font-size:10.5px;color:#94a3b8;margin-top:4px;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:1px}
+  .merge{text-align:center;color:#059669;font-size:12px;margin:8px 0}
+  .out{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:12.5px;display:flex;align-items:center;gap:8px}
+  .out .ic{color:#10b981;font-weight:800}
+  .note{margin-top:10px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:9px 11px;font-size:12px;color:#64748b}
+  .note b{color:#334155}
+  .legend{margin-top:20px;padding-top:14px;border-top:1px dashed #e2e8f0;font-size:12.5px;color:#475569;line-height:1.9}
+  .legend b{color:#0f172a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>範例：R 三筆工作報告 → A 彙整為一份正式報告</h2>
+    <div class="cap">任務「需求訪談」由 R 執行、A 當責。走一遍完整流程。</div>
+
+    <div class="flow">
+      <!-- R -->
+      <div class="col">
+        <span class="who R">R 負責</span>
+        <div class="box">
+          <div class="rec"><span>訪談紀錄 ①</span><span class="d">7/8</span></div>
+          <div class="rec"><span>訪談紀錄 ②</span><span class="d">7/9</span></div>
+          <div class="rec"><span>訪談紀錄 ③</span><span class="d">7/10</span></div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="a">→</div><div class="l">提交 · 通知 A</div></div>
+
+      <!-- A -->
+      <div class="col">
+        <span class="who A">A 當責</span>
+        <div class="box">
+          <div class="merge">於撰寫台匯入 3 筆 → 彙整</div>
+          <div class="report">
+            <div class="t">正式報告（1 份）</div>
+            <div class="s">A 彙整三筆訪談內容，撰寫為一段報告，填報告日期。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><div class="a">→</div><div class="l">送出本週報告</div></div>
+
+      <!-- 結果 -->
+      <div class="col">
+        <span class="who S">系統</span>
+        <div class="box" style="background:#fff">
+          <div class="out"><span class="ic">✓</span>更新紀錄呈現 A 的報告</div>
+          <div class="out"><span class="ic">✓</span>任務進度依報告日期更新</div>
+          <div class="out"><span class="ic">✓</span>甘特圖同步更新</div>
+          <div class="note">R 的三筆紀錄作為 <b>參考資料</b>，不單獨列於更新紀錄。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <b>重點：</b>R 提交三筆訪談紀錄；A 匯入後彙整為<b>一份正式報告</b>並送出。<br>
+      進度、更新紀錄、甘特圖<b>以 A 送出的正式報告為準</b>；R 的原始紀錄供 A 參考，不會各自列出。
+    </div>
+  </div>
+  <div style="text-align:center;color:#94a3b8;font-size:12.5px;margin-top:16px">＊示意圖，可截圖插入《流程說明》3.3 範例。</div>
+</div>
+</body>
+</html>
