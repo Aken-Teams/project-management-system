@@ -168,7 +168,7 @@ export async function PUT(
           taskTitle: updated.title,
           projectId: id,
           projectName: project.name,
-        })
+        }).catch((e) => console.error('notifyTaskAssigned failed', e))
       }
     }
 

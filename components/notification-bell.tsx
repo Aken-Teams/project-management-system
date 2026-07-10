@@ -30,6 +30,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'support-needed': HelpCircle,
   'weekly-upload-missing': AlertCircle,
   'weekly-report-ready': CheckCircle2,
+  'record-uploaded': ClipboardList,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -41,6 +42,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'support-needed': 'text-amber-500',
   'weekly-upload-missing': 'text-amber-500',
   'weekly-report-ready': 'text-emerald-500',
+  'record-uploaded': 'text-sky-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -52,6 +54,7 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'support-needed': '支援需求',
   'weekly-upload-missing': '未上傳週報',
   'weekly-report-ready': '週報已寄出',
+  'record-uploaded': '工作紀錄',
 }
 
 function formatRelativeTime(dateStr: string): string {

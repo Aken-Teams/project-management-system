@@ -254,7 +254,11 @@ export async function syncTaskProgressFromLogs(
         target = 0
       } else {
         const earliestLog = logsUpToEnd.reduce((a, b) => (a < b ? a : b))
-        const latestLog = logsUpToEnd.reduce((a, b) => (a > b ? a : b))
+        // 進度分子上界壓在「今天」：避免誤填未來日期的 log 讓進度瞬間跳到 99%（A-1）。
+        //   語意＝進度反映「到今天為止經過多少工期」，不是到某個未來報告日。
+        const today = todayUtc()
+        const rawLatest = logsUpToEnd.reduce((a, b) => (a > b ? a : b))
+        const latestLog = rawLatest > today ? today : rawLatest
         // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %
         const effStart = earliestLog < plannedStart ? earliestLog : plannedStart
         const totalSpan = task.endDate.getTime() - effStart.getTime()

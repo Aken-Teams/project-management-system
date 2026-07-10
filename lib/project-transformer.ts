@@ -187,6 +187,7 @@ export function dbProjectToFrontend(
       supportResolvedNotes: string | null
       taskId: string | null
       task: { id: string; title: string } | null
+      pendingTaskChanges: unknown
       affectedMilestones: {
         milestoneId: string
         originalDate: Date
@@ -324,6 +325,7 @@ export function dbProjectToFrontend(
       originalDate: am.originalDate.toISOString().split('T')[0],
       proposedDate: am.proposedDate.toISOString().split('T')[0],
     })),
+    ...(Array.isArray(dr.pendingTaskChanges) && dr.pendingTaskChanges.length > 0 ? { pendingTaskChanges: dr.pendingTaskChanges } : {}),
     canCatchUp: dr.canCatchUp,
     supportNeeded: dr.supportNeeded,
     status: dr.status as 'pending' | 'approved' | 'rejected',

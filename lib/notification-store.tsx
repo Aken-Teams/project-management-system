@@ -13,6 +13,7 @@ export type NotificationType =
   | 'support-needed'
   | 'weekly-upload-missing'
   | 'weekly-report-ready'
+  | 'record-uploaded'
 
 export interface Notification {
   id: string

@@ -99,7 +99,7 @@ export async function POST(
         taskTitle: task.title,
         projectId: id,
         projectName: project.name,
-      })
+      }).catch((e) => console.error('notifyTaskAssigned failed', e))
     }
 
     return NextResponse.json({

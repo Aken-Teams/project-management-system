@@ -257,12 +257,15 @@ export async function notifyProjectOverdueIfNeeded({
 }) {
   const now = new Date()
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  // 用 UTC 日曆日的「今天」判逾期，與甘特/里程碑視圖一致（當天到期不算逾期，B-3/B-4）。
+  //   否則 cron 會在到期當天就發逾期信、但 UI 當天還不顯示紅 → 使用者誤判為 bug。
+  const today = todayUtc()
 
   // Check for overdue incomplete milestones
   const overdueMilestone = await prisma.milestone.findFirst({
     where: {
       projectId,
-      dueDate: { lt: now },
+      dueDate: { lt: today },
       status: { not: 'done' },
     },
   })

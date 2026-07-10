@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         requesterName: requester.name,
         projectId: body.projectId,
         projectName: projectForNotif.name,
-      })
+      }).catch((e) => console.error('notifyDelaySubmitted failed', e))
       // Also notify support_needed if supportNeeded text is present
       if (body.supportNeeded?.trim()) {
         notifySupportNeeded({
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
           projectId: body.projectId,
           projectName: projectForNotif.name,
           detail: body.supportNeeded.trim(),
-        })
+        }).catch((e) => console.error('notifySupportNeeded failed', e))
       }
     }
 

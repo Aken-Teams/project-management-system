@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 import { notifyRecordUploadedToAccountable } from '@/lib/notifications'
+import { safeJsonParse } from '@/lib/utils'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -92,7 +93,7 @@ export async function POST(
             let mergedAttachmentsJson = attachmentsJson
             if (entry.attachments?.length) {
               type Att = { name: string; url: string; type: 'image' | 'file' }
-              const oldAtts: Att[] = existing.attachments ? JSON.parse(existing.attachments) : []
+              const oldAtts: Att[] = safeJsonParse(existing.attachments, [] as Att[])
               const merged: Att[] = [...oldAtts]
               for (const a of entry.attachments) {
                 if (!merged.some(o => o.url === a.url)) merged.push(a)
