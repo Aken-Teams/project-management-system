@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { toast } from 'sonner'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1369,6 +1370,7 @@ export default function MyTasksPage() {
       })
       if (!res.ok) throw new Error()
       setRDirty(false) // 已提交 → 清除未提交旗標
+      toast.success('週報已提交', { description: '工作紀錄已送出，A 會收到通知' })
       // Refresh task data
       const refreshRes = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
       if (refreshRes.ok) {
