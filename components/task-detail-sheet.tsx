@@ -44,6 +44,7 @@ import { type DepNode, computeImpact } from '@/lib/dependency-graph'
 import { computeTaskStatus, getStatusLabel, getStatusColor, getDaysUntilDeadline, type ComputedTaskStatus } from '@/lib/task-utils'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
+import { isReportVisible } from '@/lib/report-cutoff'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -889,12 +890,12 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
     .filter(l => l.taskId === task.id)
     .sort((a, b) => new Date(b.logDate).getTime() - new Date(a.logDate).getTime())
 
-  // A 的最終報告：已發布(publishedAt)的紀錄，最早日期在最上面
+  // A 的最終報告：已發布(publishedAt)或舊資料(7/12 前建檔)的紀錄，最早日期在最上面
   const mondayOf = (dateStr: string) => {
     const d = new Date(dateStr); const day = d.getDay()
     return fmtLocalDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + (day === 0 ? -6 : 1)))
   }
-  const aFinalReportAll = taskLogs.filter(l => l.publishedAt).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  const aFinalReportAll = taskLogs.filter(isReportVisible).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
   const reportWeeks = [...new Set(aFinalReportAll.map(l => mondayOf(l.logDate)))].sort()
   const aFinalReportFiltered = reportWeek ? aFinalReportAll.filter(l => mondayOf(l.logDate) === reportWeek) : aFinalReportAll
   // 分頁：一頁 10 筆

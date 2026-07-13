@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
+import { isReportVisible } from '@/lib/report-cutoff'
 import {
   projectTypeToDb,
   projectTierToDb,
@@ -27,9 +28,9 @@ export async function GET(
       return NextResponse.json({ error: '找不到專案' }, { status: 404 })
     }
 
-    // 甘特/進度「一律以 A 為主」：只吃 A 已發布(publishedAt)的紀錄，R 的生料 log 不驅動進度/狀態，
+    // 甘特/進度「一律以 A 為主」：只吃 A 已發布(publishedAt)或舊資料(7/12 前建檔)的紀錄，R 的生料 log 不驅動進度/狀態，
     //   與「更新紀錄」同一把尺。R 送出報告只是通知 A，A 評估後發布才算數。
-    const publishedLogs = project.taskLogs.filter(l => l.publishedAt)
+    const publishedLogs = project.taskLogs.filter(isReportVisible)
 
     // ── Compute task progress from task-log coverage FIRST ──
     // (must precede autoProgressTasks, which reads fresh progress to decide

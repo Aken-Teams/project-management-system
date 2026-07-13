@@ -46,6 +46,7 @@ import { startOfWeek, endOfWeek, isWithinInterval, getISOWeek } from 'date-fns'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { type Project, type TaskLogAttachment } from '@/lib/mock-data'
+import { isReportVisible } from '@/lib/report-cutoff'
 
 // --- Helpers ---
 
@@ -132,8 +133,8 @@ function buildWeeklyActivities(project: Project): WeekActivity[] {
     }
   })
 
-  // 更新紀錄只放 A 已發布的紀錄；依「填報週(weekOf)」分組，沒有才退回用 log 日期
-  project.taskLogs.filter(l => l.publishedAt).forEach(log => {
+  // 更新紀錄只放 A 已發布(或 7/12 前建檔的舊資料)的紀錄；依「填報週(weekOf)」分組，沒有才退回用 log 日期
+  project.taskLogs.filter(isReportVisible).forEach(log => {
     const monday = log.weekOf || getWeekMonday(log.logDate)
     const task = project.tasks.find(t => t.id === log.taskId)
     const milestone = task ? project.milestones.find(m => m.id === task.milestoneId) : null
@@ -304,7 +305,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     const recentLogAuthors = new Set<string>()
-    project.taskLogs.filter(l => l.publishedAt).forEach(log => {
+    project.taskLogs.filter(isReportVisible).forEach(log => {
       if (new Date(log.logDate) >= sevenDaysAgo) {
         const task = project.tasks.find(t => t.id === log.taskId)
         recentLogAuthors.add(task?.assignee || log.author)

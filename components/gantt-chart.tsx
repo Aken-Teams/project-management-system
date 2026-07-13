@@ -9,6 +9,7 @@ import { type DepNode } from '@/lib/dependency-graph'
 import { GanttDependencyOverlay } from '@/components/gantt-dependency-overlay'
 import { cn } from '@/lib/utils'
 import { todayUtc } from '@/lib/date-utils'
+import { isReportVisible } from '@/lib/report-cutoff'
 import {
   ChevronRight,
   ChevronDown,
@@ -81,11 +82,11 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   const setExpandedTasks = onExpandedTaskIdsChange ?? setInternalExpandedTasks
 
   // Earliest log date per task (used as "actual start date")
-  // 一律以 A 為主：只認 A 已發布(publishedAt)的紀錄畫實際條，R 生料不畫（與更新紀錄一致）。
+  // 一律以 A 為主：只認 A 已發布(publishedAt)或舊資料(7/12 前建檔)的紀錄畫實際條，R 生料不畫（與更新紀錄一致）。
   const earliestLogDateMap = useMemo(() => {
     const map = new Map<string, string>()
     for (const log of taskLogs) {
-      if (!log.publishedAt) continue
+      if (!isReportVisible(log)) continue
       const existing = map.get(log.taskId)
       if (!existing || log.logDate < existing) {
         map.set(log.taskId, log.logDate)

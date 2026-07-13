@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
+import { isReportVisible } from '@/lib/report-cutoff'
 import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
 
 // ─── GET /api/my-tasks — Fetch tasks for the current user ────
@@ -89,8 +90,8 @@ export async function GET(request: NextRequest) {
 
     // ── Auto-progress, compute progress from logs, sync milestones ──
     for (const p of projects) {
-      // 甘特/進度「一律以 A 為主」：只吃 A 已發布(publishedAt)的紀錄，R 生料不驅動進度/狀態。
-      const pPublishedLogs = p.taskLogs.filter(l => l.publishedAt)
+      // 甘特/進度「一律以 A 為主」：只吃 A 已發布(publishedAt)或舊資料(7/12 前建檔)的紀錄，R 生料不驅動進度/狀態。
+      const pPublishedLogs = p.taskLogs.filter(isReportVisible)
 
       // 1. Compute task progress from task-log coverage FIRST (before autoProgress
       //    reads fresh progress to decide todo→in_progress vs blocked — Bug #10)
