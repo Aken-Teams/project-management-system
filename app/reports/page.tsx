@@ -2083,6 +2083,7 @@ export default function ReportsPage() {
                                                 <a
                                                   key={i}
                                                   href={att.url}
+                                                  download={att.name}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
                                                   className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded px-1.5 py-0.5 transition-colors"

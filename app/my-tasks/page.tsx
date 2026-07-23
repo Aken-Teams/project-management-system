@@ -1140,7 +1140,7 @@ export default function MyTasksPage() {
                     <PopoverContent align="end" className="w-60 p-2">
                       <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
                         {l.attachments.map((att, ai) => (
-                          <a key={ai} href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                          <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
                             {att.type === 'image' ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" /> : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
                             <span className="truncate flex-1">{att.name}</span>
                           </a>
@@ -2630,7 +2630,7 @@ export default function MyTasksPage() {
                                   {log.attachments && log.attachments.filter(a => a.type === 'file').length > 0 && (
                                     <div className="flex flex-wrap gap-1.5">
                                       {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                        <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer"
+                                        <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer"
                                           className="flex items-center gap-1.5 pl-2.5 pr-3 py-1.5 rounded-lg border border-border/60 bg-muted/40 text-xs text-foreground hover:bg-muted transition-colors">
                                           <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                           <span className="max-w-[140px] truncate">{att.name}</span>
@@ -3208,7 +3208,7 @@ export default function MyTasksPage() {
                                                       </div>
                                                     ) : (
                                                       <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px]">
-                                                        <a href={att.url} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
+                                                        <a href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
                                                           <Paperclip className="h-2.5 w-2.5 shrink-0" />
                                                           <span className="truncate max-w-[50px]">{att.name}</span>
                                                         </a>
@@ -3505,7 +3505,7 @@ export default function MyTasksPage() {
                                                     <div className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">附件（{l.attachments.length}）</div>
                                                     <div className="space-y-0.5 max-h-[220px] overflow-y-auto">
                                                       {l.attachments.map((att, ai) => (
-                                                        <a key={ai} href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                                                        <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
                                                           {att.type === 'image'
                                                             ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" />
                                                             : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
@@ -3772,6 +3772,7 @@ export default function MyTasksPage() {
                                           <a
                                             key={ai}
                                             href={att.url}
+                                            download={att.name}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
@@ -3938,7 +3939,7 @@ export default function MyTasksPage() {
                                               <PopoverContent align="end" className="w-60 p-2">
                                                 <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
                                                   {l.attachments.map((att, ai) => (
-                                                    <a key={ai} href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                                                    <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
                                                       {att.type === 'image' ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" /> : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
                                                       <span className="truncate flex-1">{att.name}</span>
                                                     </a>

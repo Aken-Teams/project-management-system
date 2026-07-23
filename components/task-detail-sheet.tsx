@@ -1197,7 +1197,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                             </div>
                                           ) : (
                                             <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px]">
-                                              <a href={att.url} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
+                                              <a href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
                                                 <Paperclip className="h-2.5 w-2.5 shrink-0" />
                                                 <span className="truncate max-w-[50px]">{att.name}</span>
                                               </a>
@@ -1628,7 +1628,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                       <div className="text-[11px] font-medium text-muted-foreground mb-1">附件（{log.attachments.length}）</div>
                                       <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
                                         {log.attachments.map((att, ai) => (
-                                          <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
+                                          <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
                                             {att.type === 'image'
                                               ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" />
                                               : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
@@ -2094,7 +2094,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                               {log.attachments && log.attachments.filter(a => a.type === 'file').length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 pt-1">
                                   {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                    <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer"
+                                    <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer"
                                       className="flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-md border border-border/60 bg-muted/40 text-xs text-foreground hover:bg-muted transition-colors">
                                       <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
                                       <span className="max-w-[120px] truncate">{att.name}</span>

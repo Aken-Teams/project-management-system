@@ -784,7 +784,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                       </div>
                                     )}
                                     {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                      <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                      <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
                                         <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
                                       </a>
                                     ))}
@@ -1005,7 +1005,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                                 </div>
                                               )}
                                               {log.attachments.filter(a => a.type === 'file').map((att, ai) => (
-                                                <a key={ai} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                                                <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
                                                   <Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{att.name}</span>
                                                 </a>
                                               ))}

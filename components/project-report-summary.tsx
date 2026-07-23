@@ -318,7 +318,7 @@ export function ProjectReportSummary({
                           {log.attachments && log.attachments.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-1.5">
                               {log.attachments.map((att, i) => (
-                                <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" title={att.name} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded px-1.5 py-0.5 transition-colors">
+                                <a key={i} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" title={att.name} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted rounded px-1.5 py-0.5 transition-colors">
                                   {att.type === 'image' ? <ImageIcon className="h-3 w-3 shrink-0" /> : <Paperclip className="h-3 w-3 shrink-0" />}
                                   <span className="truncate max-w-[160px]">{att.name}</span>
                                 </a>

@@ -32,7 +32,7 @@ function AttachmentPill({ attachments, onRemove }: { attachments: TaskLogAttachm
         <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
           {attachments.map((att, i) => (
             <div key={i} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs group">
-              <a href={att.url} target="_blank" rel="noopener" className="flex items-center gap-2 flex-1 min-w-0">
+              <a href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-2 flex-1 min-w-0">
                 {att.type === 'image'
                   ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" />
                   : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
