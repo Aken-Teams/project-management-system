@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react'
 import { todayUtc } from '@/lib/date-utils'
+import { MilestonePhaseOverview } from '@/components/milestone-phase-overview'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -397,6 +398,9 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
 
   return (
     <div className="space-y-4">
+      {/* 里程碑階段總覽（Plan / Actual）— 常駐、可收合 */}
+      <MilestonePhaseOverview project={project} />
+
       {/* View toggle + Filters */}
       <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border bg-muted/30 px-4 py-3">
         <div className="flex items-center gap-3 flex-wrap">
