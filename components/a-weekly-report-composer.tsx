@@ -13,6 +13,7 @@ import { WeekPicker } from '@/components/ui/week-picker'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { GanttChart } from '@/components/gantt-chart'
 import { cn } from '@/lib/utils'
+import { uploadFile } from '@/lib/upload-file'
 import type { Project, Task, TaskLog, TaskLogAttachment } from '@/lib/mock-data'
 import { Loader2, Send, FileText, Info, ChevronDown, CornerDownLeft, CircleCheck, Inbox, Search, Eraser, Paperclip, Save, Check, AlertTriangle, CalendarClock, AlertCircle, BarChart3 } from 'lucide-react'
 
@@ -76,6 +77,7 @@ export function AWeeklyReportComposer({
   const [savingDraft, setSavingDraft] = useState(false)
   const [draftDone, setDraftDone] = useState(false)   // 暫存成功的短暫提示
   const [uploadingRow, setUploadingRow] = useState<number | null>(null)
+  const [uploadRowProgress, setUploadRowProgress] = useState(0)
   const uploadRef = useRef<HTMLInputElement>(null)
   const uploadTargetRow = useRef<number | null>(null)
   const snapshotRef = useRef('') // 載入時的內容快照，用來判斷是否有未儲存變更
@@ -491,16 +493,20 @@ export function AWeeklyReportComposer({
     e.target.value = ''
     if (!arr.length || ri === null || !selectedId) return
     setUploadingRow(ri)
+    setUploadRowProgress(0)
     try {
       const uploaded: TaskLogAttachment[] = []
+      let completed = 0
       for (const f of arr) {
-        const fd = new FormData(); fd.append('file', f)
-        const r = await fetch('/api/upload', { method: 'POST', body: fd })
-        if (r.ok) { const d = await r.json(); uploaded.push({ name: d.name || f.name, url: d.url, type: (d.type === 'image' || (f.type.startsWith('image/'))) ? 'image' : 'file' }) }
-        else { const d = await r.json().catch(() => ({})); alert(`「${f.name}」${d.error || '上傳失敗'}`) }
+        const d = await uploadFile(f, p => {
+          const cur = p < 0 ? 0 : p
+          setUploadRowProgress(Math.round(((completed + cur / 100) / arr.length) * 100))
+        })
+        uploaded.push({ name: d.name || f.name, url: d.url, type: (d.type === 'image' || f.type.startsWith('image/')) ? 'image' : 'file' })
+        completed++
       }
       if (uploaded.length) setRows(p => { const cur = p[selectedId] || [{ date: '', content: '' }]; return { ...p, [selectedId]: cur.map((row, i) => i === ri ? { ...row, attachments: [...(row.attachments || []), ...uploaded] } : row) } })
-    } catch { alert('附件上傳失敗') } finally { setUploadingRow(null); uploadTargetRow.current = null }
+    } catch (err) { alert(err instanceof Error ? err.message : '附件上傳失敗') } finally { setUploadingRow(null); setUploadRowProgress(0); uploadTargetRow.current = null }
   }
   const removeAttachment = (ri: number, ai: number) => { if (!selectedId) return; setRows(p => { const cur = p[selectedId] || []; return { ...p, [selectedId]: cur.map((row, i) => i === ri ? { ...row, attachments: (row.attachments || []).filter((_, k) => k !== ai) } : row) } }) }
 
@@ -728,7 +734,11 @@ export function AWeeklyReportComposer({
                           <textarea value={row.content} onChange={e => setRowsFor(selectedId, rs.map((r, i) => i === ri ? { ...r, content: e.target.value } : r))} placeholder="工作內容…" rows={1} className="flex-1 text-xs border rounded px-2 py-1.5 resize-y min-h-[32px]" />
                           {row.attachments?.length ? <div className="mt-1"><AttachmentPill attachments={row.attachments} onRemove={ai => removeAttachment(ri, ai)} /></div> : null}
                           <button type="button" onClick={() => pickFilesForRow(ri)} disabled={uploadingRow !== null} title="上傳附件" className="text-muted-foreground/60 hover:text-primary text-xs mt-1 shrink-0 h-[24px] w-[24px] inline-flex items-center justify-center rounded hover:bg-primary/10 disabled:opacity-40">
-                            {uploadingRow === ri ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+                            {uploadingRow === ri
+                              ? (uploadRowProgress > 0
+                                  ? <span className="text-[9px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
+                                  : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
+                              : <Paperclip className="h-3.5 w-3.5" />}
                           </button>
                           {rs.length > 1 && <button onClick={() => setRowsFor(selectedId, rs.filter((_, i) => i !== ri))} className="text-muted-foreground/50 hover:text-destructive text-xs mt-1.5 shrink-0">✕</button>}
                         </div>

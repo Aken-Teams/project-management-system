@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
 import { isSameUser } from '@/lib/user-match'
+import { uploadFile } from '@/lib/upload-file'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
@@ -186,11 +187,13 @@ export default function MyTasksPage() {
   const [logContentInterim, setLogContentInterim] = useState('')
   const [attachments, setAttachments] = useState<TaskLogAttachment[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [editLogContent, setEditLogContent] = useState('')
   const [editLogDate, setEditLogDate] = useState('')
   const [editLogAttachments, setEditLogAttachments] = useState<TaskLogAttachment[]>([])
   const [editUploadingFiles, setEditUploadingFiles] = useState(false)
+  const [editUploadProgress, setEditUploadProgress] = useState(0)
   const [editLogContentInterim, setEditLogContentInterim] = useState('')
   const [deletingLog, setDeletingLog] = useState<TaskLog | null>(null)
   const [msDateDialogOpen, setMsDateDialogOpen] = useState(false)
@@ -273,6 +276,7 @@ export default function MyTasksPage() {
   // 完成區展開查看紀錄的任務
   const [rDoneExpanded, setRDoneExpanded] = useState<Set<string>>(new Set())
   const [rUploadingRowIdx, setRUploadingRowIdx] = useState<number | null>(null)
+  const [rUploadProgress, setRUploadProgress] = useState<number>(0) // 0~100；0 或負值顯示為不確定進度
   const rRowFileInputRef = useRef<HTMLInputElement>(null)
   // A-tab: R member report dialog
   const [aRReportDialogOpen, setARReportDialogOpen] = useState(false)
@@ -529,25 +533,24 @@ export default function MyTasksPage() {
     const fileArray = Array.from(files)
     e.target.value = ''
     setUploadingFiles(true)
+    setUploadProgress(0)
     try {
       const uploaded: TaskLogAttachment[] = []
+      let completed = 0
       for (const file of fileArray) {
-        const fd = new FormData()
-        fd.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: fd })
-        if (res.ok) {
-          uploaded.push(await res.json())
-        } else {
-          const err = await res.json().catch(() => ({}))
-          alert(`上傳失敗：${err.error || res.status}`)
-        }
+        const att = await uploadFile(file, p => {
+          const cur = p < 0 ? 0 : p
+          setUploadProgress(Math.round(((completed + cur / 100) / fileArray.length) * 100))
+        })
+        uploaded.push(att)
+        completed++
       }
       if (uploaded.length > 0) setAttachments(prev => [...prev, ...uploaded])
     } catch (err) {
-      console.error('Upload error:', err)
-      alert('上傳失敗，請確認網路連線')
+      toast.error(err instanceof Error ? err.message : '上傳失敗，請確認網路連線')
     } finally {
       setUploadingFiles(false)
+      setUploadProgress(0)
     }
   }, [])
 
@@ -1257,13 +1260,18 @@ export default function MyTasksPage() {
     const idx = rUploadingRowIdx
     const fileArray = Array.from(files)
     e.target.value = ''
+    setRUploadProgress(0)
     try {
       const uploaded: TaskLogAttachment[] = []
+      let completed = 0
       for (const file of fileArray) {
-        const fd = new FormData()
-        fd.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: fd })
-        if (res.ok) uploaded.push(await res.json())
+        // 多檔時：整體進度 =（已完成檔數 + 當前檔進度）/ 總檔數
+        const att = await uploadFile(file, p => {
+          const cur = p < 0 ? 0 : p
+          setRUploadProgress(Math.round(((completed + cur / 100) / fileArray.length) * 100))
+        })
+        uploaded.push(att)
+        completed++
       }
       if (uploaded.length > 0) {
         setRLogRows(prev => prev.map((r, i) =>
@@ -1271,8 +1279,11 @@ export default function MyTasksPage() {
         ))
         setRDirty(true)
       }
-    } catch { /* ignore */ } finally {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '上傳失敗，請重試')
+    } finally {
       setRUploadingRowIdx(null)
+      setRUploadProgress(0)
     }
   }
 
@@ -1502,20 +1513,24 @@ export default function MyTasksPage() {
     const fileArray = Array.from(files)
     e.target.value = ''
     setEditUploadingFiles(true)
+    setEditUploadProgress(0)
     try {
       const uploaded: TaskLogAttachment[] = []
+      let completed = 0
       for (const file of fileArray) {
-        const fd = new FormData()
-        fd.append('file', file)
-        const res = await fetch('/api/upload', { method: 'POST', body: fd })
-        if (res.ok) uploaded.push(await res.json())
-        else alert(`上傳失敗：${res.status}`)
+        const att = await uploadFile(file, p => {
+          const cur = p < 0 ? 0 : p
+          setEditUploadProgress(Math.round(((completed + cur / 100) / fileArray.length) * 100))
+        })
+        uploaded.push(att)
+        completed++
       }
       if (uploaded.length > 0) setEditLogAttachments(prev => [...prev, ...uploaded])
-    } catch {
-      alert('上傳失敗，請確認網路連線')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '上傳失敗，請確認網路連線')
     } finally {
       setEditUploadingFiles(false)
+      setEditUploadProgress(0)
     }
   }
 
@@ -2306,7 +2321,12 @@ export default function MyTasksPage() {
                                     >
                                       <Paperclip className="h-4 w-4" />
                                     </button>
-                                    {uploadingFiles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
+                                    {uploadingFiles && (
+                                      <span className="ml-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        {uploadProgress > 0 && <span className="tabular-nums">{uploadProgress}%</span>}
+                                      </span>
+                                    )}
                                   </div>
                                   <Button
                                     size="sm"
@@ -2536,7 +2556,12 @@ export default function MyTasksPage() {
                                       >
                                         <Paperclip className="h-4 w-4" />
                                       </button>
-                                      {editUploadingFiles && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
+                                      {editUploadingFiles && (
+                                        <span className="ml-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                          {editUploadProgress > 0 && <span className="tabular-nums">{editUploadProgress}%</span>}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   <input ref={editImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleEditFileSelect} />
@@ -3239,7 +3264,9 @@ export default function MyTasksPage() {
                                                   title="上傳附件"
                                                 >
                                                   {rUploadingRowIdx === idx
-                                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    ? (rUploadProgress > 0
+                                                        ? <span className="text-[10px] font-medium tabular-nums leading-none">{rUploadProgress}%</span>
+                                                        : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
                                                     : <Paperclip className="h-3.5 w-3.5" />
                                                   }
                                                 </button>

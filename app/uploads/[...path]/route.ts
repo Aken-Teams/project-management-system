@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { readFile, stat } from 'fs/promises'
 import path from 'path'
+import { prisma } from '@/lib/db'
+import { safeJsonParse } from '@/lib/utils'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,15 +56,42 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pat
   const ext = path.extname(filePath).toLowerCase()
   const ctype = CONTENT_TYPES[ext] || 'application/octet-stream'
   const disposition = INLINE_EXTS.has(ext) ? 'inline' : 'attachment'
-  const filename = path.basename(filePath)
+
+  // 下載檔名：新版 nested 檔的磁碟名本來就是原檔名，直接用（不查 DB）。
+  //   7/9 前的 flat 舊檔磁碟名是 uuid（單段路徑），原檔名只存在 DB attachments.name → 查出來用。
+  let downloadName = path.basename(filePath)
+  if ((segs?.length ?? 0) === 1) {
+    const original = await lookupOriginalName(segs[0])
+    if (original) downloadName = original
+  }
 
   return new Response(new Uint8Array(buf), {
     headers: {
       'Content-Type': ctype,
-      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
       'Cache-Control': 'public, max-age=31536000, immutable',
     },
   })
+}
+
+// 依 flat 檔名（uuid.ext）從 DB 的 TaskLog.attachments 反查原始檔名（name 欄位）。
+async function lookupOriginalName(flatBasename: string): Promise<string | null> {
+  const uuid = flatBasename.replace(/\.[^.]+$/, '') // 去副檔名 → 純 uuid
+  if (!uuid) return null
+  try {
+    const logs = await prisma.taskLog.findMany({
+      where: { attachments: { contains: uuid } },
+      select: { attachments: true },
+    })
+    for (const log of logs) {
+      const atts = safeJsonParse<{ url?: string; name?: string }[]>(log.attachments, [])
+      const hit = atts.find(a => a.url?.includes(uuid) && a.name)
+      if (hit?.name) return hit.name
+    }
+  } catch (e) {
+    console.warn('lookupOriginalName failed:', e)
+  }
+  return null
 }
 
 async function isFile(p: string): Promise<boolean> {
