@@ -59,7 +59,17 @@ function phaseTone(p: Phase, today: Date) {
 
 export function MilestonePhaseOverview({ project }: { project: Project }) {
   const { user } = useAuth()
-  const [collapsed, setCollapsed] = useState(false)
+  // 預設收合（避免與下方甘特疊成兩排時間軸而顯亂）；展開/收合狀態記在 localStorage（個人偏好）
+  const [collapsed, setCollapsed] = useState(true)
+  const collapseKey = `phaseOverviewCollapsed:${project.id}`
+  useEffect(() => {
+    try { const v = localStorage.getItem(collapseKey); if (v !== null) setCollapsed(v === '1') } catch { /* ignore */ }
+  }, [collapseKey])
+  const toggleCollapsed = () => setCollapsed(c => {
+    const next = !c
+    try { localStorage.setItem(collapseKey, next ? '1' : '0') } catch { /* ignore */ }
+    return next
+  })
   const today = todayUtc()
 
   // 只有 A（當責）或 pm / admin 能調整篩選
@@ -173,7 +183,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
     <div className="rounded-xl border bg-card">
       {/* Header（左：收合；右：篩選，只有 A/pm/admin 顯示） */}
       <div className="flex items-center gap-2 px-4 py-2.5">
-        <button onClick={() => setCollapsed(c => !c)} className="flex items-center gap-2 flex-1 text-left">
+        <button onClick={toggleCollapsed} className="flex items-center gap-2 flex-1 text-left">
           <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
           <Flag className="h-4 w-4 text-primary" />
           <span className="font-medium text-sm">里程碑階段總覽</span>
