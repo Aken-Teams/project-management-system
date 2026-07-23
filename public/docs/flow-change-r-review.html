@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>填報流程變更對照 — 現有 vs 新版（R 主管審核）</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;background:#f1f5f9;color:#1e293b;padding:32px 16px}
+  .wrap{max-width:1060px;margin:0 auto}
+  .h{text-align:center;font-size:26px;font-weight:800;color:#0f172a}
+  .sub{text-align:center;color:#94a3b8;font-size:14px;margin:6px 0 26px}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.05);padding:24px 26px 26px;margin-bottom:24px}
+  .card h2{font-size:18px;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .card h2 .n{background:#0f172a;color:#fff;width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .flowwrap{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:6px}
+  .flowbox{border:1px solid #e2e8f0;border-radius:12px;padding:14px 12px 18px}
+  .flowbox.now{background:#f8fafc}
+  .flowbox.alt{background:#eff6ff;border-color:#bfdbfe}
+  .flowbox .lab{font-weight:800;font-size:13px;margin-bottom:6px;display:inline-block;padding:3px 12px;border-radius:999px}
+  .flowbox.now .lab{background:#e2e8f0;color:#475569}
+  .flowbox.alt .lab{background:#dbeafe;color:#1d4ed8}
+  .flowbox .oneline{font-size:12px;color:#64748b;margin-bottom:8px;min-height:32px}
+  .mermaid{display:flex;justify-content:center}
+  .diff{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{font-size:12.5px;padding:5px 11px;border-radius:999px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;font-weight:600}
+  .chip.rm{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
+  .q{color:#7c2d12;font-size:13.5px;margin:2px 0 4px;padding:9px 13px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;font-weight:600}
+  .qq{color:#334155;font-size:13.5px;line-height:1.85;margin-top:12px}
+  .qq b{color:#0f172a}
+  .decide{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+  .decide .d{font-size:12.5px;padding:5px 12px;border-radius:8px;background:#f8fafc;border:1px dashed #cbd5e1;color:#475569}
+  .impact{margin-top:12px;font-size:12.5px;color:#64748b;border-top:1px dashed #e2e8f0;padding-top:9px}
+  .impact b{color:#b45309}
+  .big{border-color:#fecaca;background:#fff5f5}
+  .big h2 .n{background:#dc2626}
+  .foot{text-align:center;color:#94a3b8;font-size:12.5px;margin-top:8px}
+  /* ── 迷你示意圖 ── */
+  .mini{margin:12px 0 4px;padding:13px 15px;background:#fcfcfd;border:1px solid #eef2f7;border-radius:10px}
+  .mini .cap{font-size:11px;color:#94a3b8;margin-bottom:9px;font-weight:800;letter-spacing:.5px}
+  .line{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .line .lb{font-size:11.5px;font-weight:800;color:#64748b;width:44px;flex:none}
+  .pill{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid;white-space:nowrap}
+  .pill.r{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+  .pill.a{background:#ecfdf5;color:#059669;border-color:#a7f3d0}
+  .pill.m{background:#fef3c7;color:#b45309;border-color:#fde68a}
+  .pill.s{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+  .pill.src{outline:2px solid #f59e0b;outline-offset:1px}
+  .arw{color:#94a3b8;font-weight:800;font-size:13px;display:inline-flex;flex-direction:column;align-items:center;line-height:1}
+  .arw small{color:#94a3b8;font-weight:700;font-size:9.5px;margin-top:1px}
+  .src-tag{font-size:11px;color:#b45309;font-weight:800;margin-left:4px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .rolebox{border:1px solid #e2e8f0;border-radius:10px;padding:11px 13px;font-size:12.5px}
+  .rolebox.now{background:#f8fafc}
+  .rolebox.alt{background:#eff6ff;border-color:#bfdbfe}
+  .rolebox .t{font-weight:800;font-size:12px;margin-bottom:8px}
+  .rolebox.now .t{color:#64748b}.rolebox.alt .t{color:#1d4ed8}
+  .rolebox ul{list-style:none;font-size:12px;color:#475569;line-height:1.95}
+  .rolebox li::before{content:"›";color:#94a3b8;margin-right:6px;font-weight:800}
+  .tline{display:flex;align-items:center;gap:2px;margin:6px 0;flex-wrap:wrap}
+  .tnode{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:#334155;white-space:nowrap}
+  .tgap{display:flex;flex-direction:column;align-items:center;color:#dc2626;font-size:10.5px;font-weight:800;padding:0 8px}
+  .tgap .z{font-size:15px}
+  .weeks{display:flex;gap:7px;margin-top:2px}
+  .wk{flex:1;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff}
+  .wk .wh{background:#eef2f7;font-size:11px;font-weight:800;color:#475569;text-align:center;padding:3px}
+  .wk .wt{font-size:11px;color:#475569;padding:6px;line-height:1.7}
+  .tasks{display:flex;flex-direction:column;gap:5px;margin-top:2px}
+  .trow{display:flex;align-items:center;justify-content:space-between;border:1px solid #e2e8f0;border-radius:8px;padding:5px 9px;font-size:12px;background:#fff}
+  .badge{font-size:10.5px;padding:1px 8px;border-radius:999px;background:#fef3c7;color:#b45309;font-weight:800}
+  .badge.g{background:#dcfce7;color:#15803d}
+  .dot-ok{color:#059669;font-weight:900}
+  .impact-grid{display:flex;flex-direction:column;gap:7px}
+  .iitem{display:flex;align-items:center;gap:9px}
+  .iname{padding:4px 11px;border-radius:8px;background:#f1f5f9;color:#334155;font-weight:700;font-size:12px;border:1px solid #e2e8f0}
+  .stamp{font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px}
+  .stamp.redo{background:#fee2e2;color:#b91c1c}
+  .stamp.clar{background:#fef3c7;color:#b45309}
+  .pbar{display:flex;align-items:center;gap:9px;margin:7px 0}
+  .pbar .pl{width:118px;flex:none;font-weight:700;color:#475569;white-space:nowrap;font-size:11.5px}
+  .ptrack{flex:1;height:15px;background:#eef2f7;border-radius:5px;position:relative;overflow:hidden}
+  .pfill{position:absolute;top:0;left:0;bottom:0;border-radius:5px}
+  .pnum{width:40px;flex:none;text-align:right;font-weight:800;color:#64748b;font-variant-numeric:tabular-nums;font-size:12px}
+  .qnote{font-size:11.5px;color:#b45309;margin-top:9px;font-weight:700;line-height:1.75}
+  .subcap{font-size:11.5px;color:#64748b;margin:2px 0 7px}
+  .warn{display:flex;gap:9px;align-items:flex-start;background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f97316;border-radius:10px;padding:10px 13px;margin:8px 0;font-size:13px;color:#7c2d12;line-height:1.75}
+  .warn .wi{font-size:15px;flex:none;line-height:1.4}
+  .warn b{color:#9a3412}
+  .info2{display:flex;gap:9px;align-items:flex-start;background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #38bdf8;border-radius:10px;padding:10px 13px;margin:8px 0;font-size:13px;color:#075985;line-height:1.75}
+  .info2 .wi{font-size:15px;flex:none;line-height:1.4}
+  .status{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 14px}
+  .st{font-size:12px;padding:4px 11px;border-radius:999px;font-weight:700}
+  .st.ok{background:#dcfce7;color:#15803d}
+  .st.no{background:#fef9c3;color:#a16207}
+  .ans{font-size:12.5px;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin:2px 0 4px;font-weight:700}
+  .legend2{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#475569;margin:12px 2px 2px;font-weight:600}
+  .legend2 span{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:13px;height:13px;border-radius:3px;display:inline-block;border:1px solid}
+  .sw.ok{background:#dcfce7;border-color:#22c55e}
+  .sw.bad{background:#fee2e2;border-color:#ef4444}
+  .sw.nrm{background:#f1f5f9;border-color:#cbd5e1}
+  .prob{background:#fef2f2;border:1px solid #fecaca;border-left:5px solid #ef4444;border-radius:10px;padding:12px 15px;margin:9px 0}
+  .prob .ph{font-weight:800;color:#b91c1c;font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .prob .pn{background:#ef4444;color:#fff;padding:2px 9px;border-radius:6px;font-size:12px;flex:none}
+  .prob .pb{font-size:13px;color:#7f1d1d;line-height:1.8}
+  .prob .pb b{color:#991b1b}
+  .prob .core{background:#fff;border:1px dashed #f87171;border-radius:8px;padding:9px 12px;margin:9px 0;font-weight:800;color:#b91c1c;font-size:13.5px}
+  .okbox{background:#f0fdf4;border:1px solid #bbf7d0;border-left:5px solid #22c55e;border-radius:10px;padding:11px 15px;margin:9px 0;font-size:13px;color:#166534;line-height:1.75}
+  .okbox b{color:#15803d}
+  .openb{background:#eff6ff;border:1px solid #bfdbfe;border-left:5px solid #3b82f6;border-radius:10px;padding:11px 15px;margin:9px 0;font-size:13px;color:#1e40af;line-height:1.75}
+  .openb b{color:#1d4ed8}
+  .st.bad{background:#fee2e2;color:#b91c1c}
+  @media print{body{background:#fff}.card{box-shadow:none;break-inside:avoid}}
+  @media(max-width:760px){.flowwrap,.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="h">填報流程變更對照</div>
+  <div class="sub">現有流程 vs 新版提案（R 主管審核 → 大 A 審核）· 差異與待決議事項 · 不評對錯，供評估</div>
+
+  <!-- 流程對照 -->
+  <div class="card">
+    <h2><span class="n">◎</span>流程對照圖</h2>
+    <div class="flowwrap">
+      <div class="flowbox now">
+        <span class="lab">現有流程</span>
+        <div class="oneline">單層：<b>A 彙整撰寫並送出</b>。R 的紀錄是原料，A 送出後才驅動進度、更新紀錄、甘特。</div>
+        <div class="mermaid">
+flowchart TD
+  R["R 填寫工作紀錄"] --> A["A 於撰寫台<br/>匯入 R 紀錄、彙整成報告"]
+  A --> S["A 送出本週報告"]
+  S --> U["出現在更新紀錄<br/>依 A 報告日期驅動進度／甘特"]
+  U --> M["標記完成 → 里程碑<br/>（所有任務完成即 100%）"]
+  classDef now fill:#e2e8f0,stroke:#94a3b8,color:#334155;
+  class R,A,S,U,M now;
+        </div>
+      </div>
+      <div class="flowbox alt">
+        <span class="lab">新版提案</span>
+        <div class="oneline">雙層：<b>R 主管審核 → 大 A 審核</b>。R 報告經主管通過即進更新紀錄，A 只審是否 100% 完成。</div>
+        <div class="mermaid">
+flowchart TD
+  T["我的任務"] --> RF["R 填寫完畢"]
+  RF --> RS{"R 主管審核"}
+  RS -->|通過| U2["出現在更新紀錄"]
+  RS -->|通過| NA["通知大 A"]
+  NA --> AA{"大 A 審核<br/>是否 100% 完成"}
+  AA -->|Pass| MS["更新里程碑紀錄"]
+  AA -->|Fail| F["填寫 Fail 原因<br/>（退回，R 重新處理）"]
+  RS -. 不通過·退回重填 .-> RF
+  classDef add fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef nrm fill:#f1f5f9,stroke:#cbd5e1,color:#334155;
+  class RS,NA,AA,F add;
+  class T,RF,U2,MS nrm;
+  linkStyle 7 stroke:#f59e0b,stroke-width:1.5px;
+        </div>
+      </div>
+    </div>
+    <div class="diff">
+      <span class="chip">＋ 新增「R 主管審核」一層</span>
+      <span class="chip">＋ 新增「退回給 R」路徑</span>
+      <span class="chip">＋ 大 A 改為「審核 100% 完成」</span>
+      <span class="chip">＋ 新增「Fail 原因」填寫</span>
+      <span class="chip">更新紀錄來源：A 報告 → <b>R 報告</b></span>
+      <span class="chip rm">－ A 不再彙整撰寫報告</span>
+    </div>
+  </div>
+
+  <!-- 整體拼起來 -->
+  <div class="card" style="border-color:#fdba74;background:#fffaf3">
+    <h2><span class="n" style="background:#ea580c">◎</span>依目前回覆拼出的「整體流程」</h2>
+    <div class="subcap">把客戶目前給的回覆組起來後的實際樣子。<b>✓</b>＝已回覆　<b>？</b>＝尚未回覆</div>
+    <div class="status">
+      <span class="st ok">✓ R 主管：由 A 指派</span>
+      <span class="st ok">✓ A 送延期 → S 審核</span>
+      <span class="st ok">✓ 採用新流程（R 主管 → 大 A）</span>
+      <span class="st bad">⚠ A 又審核又寫報告（重工，要討論）</span>
+      <span class="st no">？ 進度 % 以誰為主</span>
+    </div>
+    <div class="mermaid">
+flowchart LR
+  AS["A 指派 R 主管　✓"] --> RF["R 填寫工作紀錄"]
+  RF --> RS{"R 主管審核"}
+  RS -. 不通過·退回 .-> RF
+  RS -->|通過| U["更新紀錄"]
+  RS -->|通過| NA["通知 A"]
+  NA --> AA{"⚠ A 審核是否<br/>100% 完成"}
+  AA -->|Pass| MS["更新里程碑"]
+  AA -->|Fail| FF["填 Fail 原因<br/>（退回 R 重做）"]
+  AW["⚠ A 仍要自己撰寫報告"] -. 也灌進（重複）.-> U
+  AD["A 送出延期申請　✓"] --> SS{"S 審核延期"}
+  SS -->|核准| DC["下游順延·連動"]
+  SS -. 駁回 .-> AD
+  classDef ok fill:#dcfce7,stroke:#22c55e,color:#166534;
+  classDef bad fill:#fee2e2,stroke:#ef4444,color:#b91c1c;
+  classDef nrm fill:#f1f5f9,stroke:#cbd5e1,color:#334155;
+  class AS,AD ok;
+  class AW,AA bad;
+  class RF,RS,U,NA,MS,FF,SS,DC nrm;
+  linkStyle 8 stroke:#ef4444,stroke-width:2px;
+    </div>
+    <div class="legend2">
+      <span><i class="sw ok"></i>綠：已確認沒問題</span>
+      <span><i class="sw bad"></i>紅：要討論（重工）</span>
+      <span><i class="sw nrm"></i>灰：一般流程步驟</span>
+    </div>
+
+    <div class="prob">
+      <div class="ph"><span class="pn">要討論</span>A 重工：又「審核」又「寫報告」</div>
+      <div class="pb">A 已經要<b>審核是否 100% 完成</b>（＝審核者），卻又要<b>自己撰寫本週報告</b>（＝報告最終者）。兩個角色疊在同一人身上 → <b>重工</b>；也造成更新紀錄有兩個來源（R 主管審過的 R 報告 ＋ A 自己寫的報告，圖中<b>紅線</b>）。</div>
+      <div class="core">核心問題：A 到底是「審核者」，還是「報告最終者」？</div>
+      <div class="pb">
+        • 若 A <b>只當審核者</b> → 報告直接用「R 主管審核通過的 R 報告」，<b>A 不用再自己寫</b>（可拿掉 A 撰寫台，更新紀錄也只剩一個來源）。<br>
+        • 若 A <b>是報告最終者</b> → 那「R 主管審核」是在審什麼？會不會<b>同一份東西審兩次</b>？
+      </div>
+    </div>
+
+    <div class="openb"><b>？ 尚未回覆 —— 進度百分比以誰為主：</b>依 A 報告日還是 R 報告日推算 %（見議題 2）。這題沒答，進度與甘特無法定案。</div>
+
+    <div class="okbox"><b>✓ 已確認沒問題：</b>R 主管由 A 指派、A 送出延期申請 → S 審核、採用新流程（R 主管 → 大 A）。這幾塊維持即可，不用討論。</div>
+  </div>
+
+  <!-- 議題1 -->
+  <div class="card big">
+    <h2><span class="n">1</span>「R 主管」是誰、怎麼指派？（新角色）</h2>
+    <div class="ans">✓ 客戶已回覆：由 <b>A 指派</b>每位 R 的主管（不採父層／固定綁定）。給真正的 R 主管看。</div>
+    <div class="q">目前系統角色只有 R / A / S / C / I / P，沒有「R 主管」這個獨立審核角色。</div>
+    <div class="mini"><div class="cap">示意 · 誰審誰？</div>
+      <div class="mermaid">
+flowchart TD
+  C["子任務（R 執行）"] -->|① 送審| M["父任務負責人<br/>＝ R 主管？"]
+  M -->|② 再送| A["大 A"]
+  D["更深層子任務（第 3~6 層）"] -.->|審上一層？還是最上層？| M
+  classDef q fill:#fef3c7,stroke:#f59e0b,color:#92400e;
+  class M q;
+      </div>
+    </div>
+    <div class="qq">
+      這對應您先前提到的「<b>父層是主管</b>」。需要決定：R 主管＝<b>父層任務負責人</b>？還是每位成員各自綁定？系統子任務最多 <b>6 層</b>，要<b>審上一層</b>還是<b>逐層往上審</b>？
+    </div>
+    <div class="decide">
+      <span class="d">□ 主管＝父層 owner</span>
+      <span class="d">□ 主管＝成員固定綁定</span>
+      <span class="d">□ 只審一層</span>
+      <span class="d">□ 逐層往上審</span>
+    </div>
+    <div class="impact"><b>牽動：</b>新增角色定義、指派介面、權限判斷。</div>
+  </div>
+
+  <!-- 議題2 -->
+  <div class="card big">
+    <h2><span class="n">2</span>更新紀錄與進度的「來源」改變（影響最大）</h2>
+    <div class="q">現有：更新紀錄／進度／甘特一律以「A 送出的報告」為準（即剛完成的「A 為主 + 7/12 相容」整套邏輯）。</div>
+    <div class="mini"><div class="cap">示意 · 更新紀錄的內容從哪來？</div>
+      <div class="line"><span class="lb">現況</span>
+        <span class="pill r">R 紀錄</span><span class="arw">→<small>原料</small></span>
+        <span class="pill a src">A 報告</span><span class="arw">→</span>
+        <span class="pill s">更新紀錄</span><span class="src-tag">來源＝A</span>
+      </div>
+      <div class="line"><span class="lb">新版</span>
+        <span class="pill r src">R 紀錄</span><span class="arw">→<small>主管✓</small></span>
+        <span class="pill s">更新紀錄</span><span class="src-tag">來源＝R</span>
+      </div>
+    </div>
+
+    <div class="mini"><div class="cap">示意 · 進度 % 依「誰的報告日」推算（同一任務可能不同）</div>
+      <div class="subcap">進度 = 報告日落在計畫期間的位置。例：計畫 10/1～10/20，報告日越後面、% 越高。</div>
+      <div class="pbar"><span class="pl">現況 · 依 A 報告日 10/12</span><div class="ptrack"><div class="pfill" style="width:60%;background:#10b981"></div></div><span class="pnum">60%</span></div>
+      <div class="pbar"><span class="pl">新版 · 依 R 報告日 10/9</span><div class="ptrack"><div class="pfill" style="width:45%;background:#3b82f6"></div></div><span class="pnum">45%</span></div>
+      <div class="qnote">同一個任務，用 A 或 R 的報告日，算出的 % 不一樣 → 要決定<b>進度以誰的日期為準</b>。</div>
+    </div>
+
+    <div class="mini"><div class="cap">示意 · 父層／子層進度（現在「各自為準」）</div>
+      <div class="subcap">目前父任務、子任務的 % 各自獨立輸入，父的數字不等於子層的平均。</div>
+      <div class="pbar"><span class="pl">父任務</span><div class="ptrack"><div class="pfill" style="width:40%;background:#8b5cf6"></div></div><span class="pnum">40%</span></div>
+      <div class="pbar"><span class="pl">└ 子任務 A</span><div class="ptrack"><div class="pfill" style="width:80%;background:#3b82f6"></div></div><span class="pnum">80%</span></div>
+      <div class="pbar"><span class="pl">└ 子任務 B</span><div class="ptrack"><div class="pfill" style="width:20%;background:#3b82f6"></div></div><span class="pnum">20%</span></div>
+      <div class="pbar"><span class="pl">里程碑</span><div class="ptrack"><div class="pfill" style="width:50%;background:#f59e0b"></div></div><span class="pnum">？</span></div>
+      <div class="qnote">現況：父的 40% 是父自己填的，<b>不等於</b>子層平均（80+20)/2＝50%。新版若「父層＝主管」，要不要改成<b>父＝子層聚合</b>？<b>里程碑</b>又以誰為準？</div>
+    </div>
+
+    <div class="qq">
+      來源從 A 變成 R，牽動兩件事：<br>
+      • <b>進度日期</b>：進度、甘特實際條依<b>誰的報告日</b>推算 %（A 還是 R）？<br>
+      • <b>父子聚合</b>：父層／子層進度目前<b>各自為準</b>，新版要不要改成「父＝子層聚合」、里程碑以誰為準？<br>
+      若改以 R 為主，先前「A 為主」共用於 <b>8 處</b>的濾鏡與 7/12 相容處理需<b>重做／調整</b>。
+    </div>
+    <div class="decide">
+      <span class="d">□ 進度依 R 報告日</span>
+      <span class="d">□ 進度仍等大 A</span>
+      <span class="d">□ 父＝子層聚合</span>
+      <span class="d">□ 父子維持各自為準</span>
+      <span class="d">□ 7/12 相容規則沿用</span>
+    </div>
+    <div class="impact"><b>牽動：</b>進度計算、甘特、更新紀錄、概覽週彙整、父子/里程碑聚合（剛做完的相容邏輯可能重做）。</div>
+  </div>
+
+  <!-- 議題3 -->
+  <div class="card">
+    <h2><span class="n">3</span>大 A 的角色：從「撰寫」變「審核完成度」</h2>
+    <div class="q">現有：A 要匯入 R 紀錄、彙整成報告並送出。新版：A 不寫報告，只「審核是否 100% 完成」。</div>
+    <div class="mini"><div class="cap">示意 · 大 A 做的事變了</div>
+      <div class="two">
+        <div class="rolebox now"><div class="t">現況 · A ✍ 撰寫者</div>
+          <ul><li>匯入 R 紀錄</li><li>彙整成一份報告</li><li>撰寫內容、送出</li></ul></div>
+        <div class="rolebox alt"><div class="t">新版 · A ✔ 審核者</div>
+          <ul><li>不寫報告</li><li>只審「是否 100% 完成」</li><li>Pass / Fail</li></ul></div>
+      </div>
+    </div>
+    <div class="qq">
+      需要決定：「A 撰寫本週報告」功能<b>還保留嗎</b>？A 審核單位是<b>單一任務</b>還是<b>里程碑</b>？「是否 100%」是 A <b>主觀判定</b>還是看系統算出的進度？
+    </div>
+    <div class="decide">
+      <span class="d">□ 保留 A 撰寫台</span>
+      <span class="d">□ 廢除 A 撰寫台</span>
+      <span class="d">□ A 審單一任務</span>
+      <span class="d">□ A 審里程碑</span>
+    </div>
+  </div>
+
+  <!-- 議題4 -->
+  <div class="card">
+    <h2><span class="n">4</span>兩段審核 = 兩個等待點（卡控與逾時）</h2>
+    <div class="q">新版多了兩個可能「卡住」的點：R 主管沒審、大 A 沒審。</div>
+    <div class="mini"><div class="cap">示意 · 多了兩個「等審核」的卡點</div>
+      <div class="tline">
+        <span class="tnode">R 填完</span>
+        <span class="tgap"><span class="z">⏳</span>等主管</span>
+        <span class="tnode">主管 ✓</span>
+        <span class="tgap"><span class="z">⏳</span>等大 A</span>
+        <span class="tnode">大 A ✓</span>
+        <span class="arw" style="margin:0 4px">→</span>
+        <span class="tnode" style="background:#ecfdf5;border-color:#a7f3d0;color:#059669">完成</span>
+      </div>
+    </div>
+    <div class="qq">
+      需要決定：審核有沒有<b>時限</b>？逾時要<b>提醒／自動放行／往上升級</b>？（同先前 S 延期審核未審的卡點問題）
+    </div>
+    <div class="decide">
+      <span class="d">□ 無時限</span>
+      <span class="d">□ 逾時提醒</span>
+      <span class="d">□ 逾時自動放行</span>
+    </div>
+  </div>
+
+  <!-- 議題5 -->
+  <div class="card">
+    <h2><span class="n">5</span>退回與「Fail 原因」（新狀態、新資料）</h2>
+    <div class="q">新增兩條退回路徑：R 主管「不通過→退回給 R」；大 A「Fail→填原因→回我的任務」。</div>
+    <div class="mini"><div class="cap">示意 · 兩條「退回重來」路徑</div>
+      <div class="mermaid">
+flowchart LR
+  R["R 填寫"] --> M{"主管審"}
+  M -->|通過| A{"大 A 審"}
+  M -->|退回| R
+  A -->|Pass| OK["完成"]
+  A -->|Fail 填原因| R
+  classDef hot fill:#fee2e2,stroke:#ef4444,color:#b91c1c;
+  class M,A hot;
+      </div>
+    </div>
+    <div class="qq">
+      需要決定：Fail 原因<b>存哪、給誰看</b>？退回後 R 重填，原本紀錄<b>保留還是覆蓋</b>？要不要記錄退回<b>次數／歷程</b>？
+    </div>
+    <div class="decide">
+      <span class="d">□ Fail 原因只給 R 看</span>
+      <span class="d">□ 全員可見</span>
+      <span class="d">□ 保留歷程</span>
+    </div>
+  </div>
+
+  <!-- 議題6 -->
+  <div class="card big">
+    <h2><span class="n">6</span>「每週報告」的概念是否還存在？</h2>
+    <div class="q">現有整套是「週」制：A 每週彙整送一次（weekOf）。新版流程是「逐任務」跑審核鏈，看不到「週」。</div>
+    <div class="mini"><div class="cap">示意 · 有沒有「週」的概念？</div>
+      <div class="two">
+        <div class="rolebox now"><div class="t">現況 · 按週彙整</div>
+          <div class="weeks">
+            <div class="wk"><div class="wh">W27</div><div class="wt">任務A<br/>任務B</div></div>
+            <div class="wk"><div class="wh">W28</div><div class="wt">任務C</div></div>
+            <div class="wk"><div class="wh">W29</div><div class="wt">任務D</div></div>
+          </div>
+        </div>
+        <div class="rolebox alt"><div class="t">新版 · 逐任務（無週）</div>
+          <div class="tasks">
+            <div class="trow"><span>任務A</span><span class="badge">主管審核中</span></div>
+            <div class="trow"><span>任務B</span><span class="badge">待大 A</span></div>
+            <div class="trow"><span>任務C</span><span class="badge g">已完成</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="qq">
+      需要決定：還要不要<b>週報</b>？更新紀錄還要不要<b>按週分組</b>？<b>逾期／每週提醒</b>的計算基準是否跟著改？
+    </div>
+    <div class="decide">
+      <span class="d">□ 保留週報＋按週分組</span>
+      <span class="d">□ 改為逐任務、不分週</span>
+    </div>
+    <div class="impact"><b>牽動：</b>撰寫台、更新紀錄分組、CRON 提醒基準。</div>
+  </div>
+
+  <!-- 議題7 -->
+  <div class="card">
+    <h2><span class="n">7</span>通知要新增哪些？</h2>
+    <div class="mini"><div class="cap">示意 · 新增的 4 種通知</div>
+      <div class="mermaid">
+flowchart LR
+  R["R"] -->|① 填完| M["R 主管"]
+  M -->|② 退回| R
+  M -->|③ 通過| A["大 A"]
+  A -->|④ Fail| R
+      </div>
+    </div>
+    <div class="qq">
+      新流程至少多出 4 種通知（如上）。需要決定：即時（站內）還是排程（每日彙整）？
+    </div>
+    <div class="decide">
+      <span class="d">□ 即時站內</span>
+      <span class="d">□ 每日排程彙整</span>
+    </div>
+  </div>
+
+  <!-- 議題8 -->
+  <div class="card">
+    <h2><span class="n">8</span>里程碑「完成」的判定</h2>
+    <div class="q">現有：里程碑 = 所有子任務完成 → 100%（系統自動算）。新版：大 A「Pass→更新里程碑」，像逐項確認。</div>
+    <div class="mini"><div class="cap">示意 · 里程碑何時算完成？</div>
+      <div class="line"><span class="lb">現況</span>
+        <span class="pill s"><span class="dot-ok">✓</span> 子</span>
+        <span class="pill s"><span class="dot-ok">✓</span> 子</span>
+        <span class="pill s"><span class="dot-ok">✓</span> 子</span>
+        <span class="arw">→</span><span class="pill a">里程碑 100%</span><span class="src-tag">系統自動</span>
+      </div>
+      <div class="line"><span class="lb">新版</span>
+        <span class="pill s">子</span><span class="arw">→<small>A✔</small></span>
+        <span class="pill s">子</span><span class="arw">→<small>A✔</small></span>
+        <span class="pill s">子</span><span class="arw">→<small>A✔</small></span>
+        <span class="arw">→</span><span class="pill m">里程碑</span><span class="src-tag">A 逐一 Pass</span>
+      </div>
+    </div>
+    <div class="qq">
+      需要決定：里程碑完成是<b>系統自動算</b>，還是要 A <b>逐一 Pass</b> 才算？兩者若並存，<b>以誰為準</b>？
+    </div>
+    <div class="decide">
+      <span class="d">□ 系統自動</span>
+      <span class="d">□ A 逐一 Pass</span>
+    </div>
+  </div>
+
+  <!-- 議題9 -->
+  <div class="card big">
+    <h2><span class="n">9</span>對現有已完成功能／資料的衝擊（總結）</h2>
+    <div class="mini"><div class="cap">示意 · 會被動到的現有東西</div>
+      <div class="impact-grid">
+        <div class="iitem"><span class="iname">A 為主 · 8 處濾鏡</span><span class="stamp redo">可能重做</span></div>
+        <div class="iitem"><span class="iname">7/12 舊資料相容</span><span class="stamp redo">可能重做</span></div>
+        <div class="iitem"><span class="iname">A 撰寫台</span><span class="stamp clar">釐清去留</span></div>
+        <div class="iitem"><span class="iname">匯入 R 報告</span><span class="stamp clar">釐清</span></div>
+        <div class="iitem"><span class="iname">回報完成 → A 審核</span><span class="stamp clar">釐清</span></div>
+        <div class="iitem"><span class="iname">測試區舊資料</span><span class="stamp clar">要不要補審</span></div>
+      </div>
+    </div>
+    <div class="impact"><b>建議：</b>這幾項在動工前先與客戶逐條確認並留存紀錄，再開發。</div>
+  </div>
+
+  <div class="foot">＊本頁為差異對照與待決議清單，供評估與確認之用；各項確認後即可作為開發依據。</div>
+</div>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{fontFamily:'Microsoft JhengHei, PingFang TC, sans-serif',fontSize:'13px'},flowchart:{curve:'basis',nodeSpacing:26,rankSpacing:32}});</script>
+</body>
+</html>

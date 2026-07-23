@@ -205,6 +205,19 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
     return totals
   }, [items])
 
+  // 各群組「已付金額」= 訂/交/檢有付款日者的金額加總（供群組表頭付款比例用）
+  const capexPaidByBudget = useMemo(() => {
+    const totals = new Map<string, number>()
+    items.forEach(item => {
+      const key = item.budgetItemId || '_unlinked'
+      const paid = (item.depositPayDate ? (item.depositAmount ?? 0) : 0)
+        + (item.deliveryPayDate ? (item.deliveryAmount ?? 0) : 0)
+        + (item.acceptancePayDate ? (item.acceptanceAmount ?? 0) : 0)
+      totals.set(key, (totals.get(key) || 0) + paid)
+    })
+    return totals
+  }, [items])
+
   const capexCountByBudget = useMemo(() => {
     const counts = new Map<string, number>()
     groupedItems.forEach((list, key) => counts.set(key, list.length))
@@ -413,9 +426,10 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
           const biId = bi.id || `_bi_${biIdx}`
           const capexList = groupedItems.get(biId) || []
           const capexTotal = capexTotalByBudget.get(biId) ?? 0
+          const paidTotal = capexPaidByBudget.get(biId) ?? 0
           const isExpanded = expandedBudgetItems.has(biId)
-          const pct = bi.estimatedCost && bi.estimatedCost > 0 ? Math.round((capexTotal / bi.estimatedCost) * 100) : 0
-          const overBudget = pct > 100
+          // 付款比例 = 該項已付金額 / 該項目總金額(訂購總額)
+          const payPct = capexTotal > 0 ? Math.round((paidTotal / capexTotal) * 100) : 0
 
           return (
             <Card key={biId} className="overflow-hidden">
@@ -433,17 +447,18 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                     <span className="text-xs text-muted-foreground">
                       預估 {fmtNT(bi.estimatedCost)}
                     </span>
-                    {/* Progress bar */}
-                    {bi.estimatedCost != null && bi.estimatedCost > 0 && (
-                      <div className="flex items-center gap-1.5 flex-1 max-w-[180px]">
+                    {/* 付款比例：該項已付金額 / 該項目總金額 */}
+                    {capexTotal > 0 && (
+                      <div className="flex items-center gap-1.5 flex-1 max-w-[200px]">
+                        <span className="text-[10px] text-muted-foreground shrink-0">付款</span>
                         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${overBudget ? 'bg-red-500' : 'bg-blue-500'}`}
-                            style={{ width: `${Math.min(pct, 100)}%` }}
+                            className="h-full rounded-full bg-green-500 transition-all"
+                            style={{ width: `${Math.min(payPct, 100)}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] tabular-nums ${overBudget ? 'text-red-500' : 'text-muted-foreground'}`}>
-                          {pct}%
+                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                          {payPct}%
                         </span>
                       </div>
                     )}

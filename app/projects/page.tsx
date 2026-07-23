@@ -439,7 +439,7 @@ export default function ProjectsPage() {
                   <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1"><Users className="h-3 w-3" />{project.team.length} 人</span>
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{new Date(project.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                    <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{(project.budgetUsed / 1000000).toFixed(1)}M/{(project.budget / 1000000).toFixed(1)}M</span>
+                    <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{(project.budgetUsed / 1000000).toFixed(1)}M/{((project.budgetDenom ?? project.budget) / 1000000).toFixed(1)}M</span>
                     <span className="ml-auto">{project.owner} · {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑</span>
                   </div>
                 </CardContent>

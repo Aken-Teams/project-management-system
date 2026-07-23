@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { projectTypeToFe } from '@/lib/enum-mappers'
+import { computeCapexBudget } from '@/lib/budget-utils'
 
 // ─── Auto-compute project status & progress from tasks ─────
 interface FeTask {
@@ -165,6 +166,14 @@ export async function GET(request: NextRequest) {
         budgetItems: {
           select: { actualCost: true },
         },
+        capexItems: {
+          select: {
+            orderAmount: true,
+            depositAmount: true, depositPayDate: true,
+            deliveryAmount: true, deliveryPayDate: true,
+            acceptanceAmount: true, acceptancePayDate: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -183,7 +192,11 @@ export async function GET(request: NextRequest) {
       const actualStatus = computeProjectStatus(feTasks, p.endDate)
       const actualProgress = computeProjectProgress(p.milestones)
 
-      return { ...p, actualStatus, actualProgress }
+      // 預算：以採購明細(capex)為主 →「目前付出 / 實際採購」；無採購明細則沿用舊預算表/預算
+      const actualCostTotal = p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0)
+      const budget = computeCapexBudget(p.capexItems, { used: actualCostTotal, denom: p.budget })
+
+      return { ...p, actualStatus, actualProgress, budgetComputed: budget }
     })
 
     // ── Calculate statistics using actual status & progress ──
@@ -198,9 +211,8 @@ export async function GET(request: NextRequest) {
         T3: projectsWithProgress.filter(p => p.projectTier === 'T3').length,
         CIP: projectsWithProgress.filter(p => p.projectTier === 'CIP').length,
       },
-      totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budget, 0),
-      totalBudgetUsed: projectsWithProgress.reduce((acc, p) =>
-        acc + p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0), 0),
+      totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budgetComputed.denom, 0),
+      totalBudgetUsed: projectsWithProgress.reduce((acc, p) => acc + p.budgetComputed.used, 0),
       budgetUtilization: 0,
     }
     stats.budgetUtilization = stats.totalBudget > 0

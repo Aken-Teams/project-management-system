@@ -15,6 +15,7 @@ import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useAuth } from '@/lib/auth-context'
 import { useNotificationStore } from '@/lib/notification-store'
 import { TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
+import { computeCapexBudget } from '@/lib/budget-utils'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { Input } from '@/components/ui/input'
 import { Calendar as CalendarUI } from '@/components/ui/calendar'
@@ -308,8 +309,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   const actualTotal = budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
   const estimatedTotal = budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
-  const budgetDenom = estimatedTotal > 0 ? estimatedTotal : project.budget
-  const budgetUtilization = budgetDenom > 0 ? Math.round((actualTotal / budgetDenom) * 100) : 0
+  // 頂部「預算」卡：以採購明細(capex)為主，顯示「目前付出 / 實際採購」。
+  //   實際採購 = 各明細訂購金額(orderAmount)加總；目前付出 = 訂/交/檢已付款(有付款日)金額加總。
+  //   沒有採購明細的舊專案則沿用舊預算表（實際成本 / 預估支出）。
+  const { used: budgetNumerator, denom: budgetDenom } = computeCapexBudget(capexItems, {
+    used: actualTotal,
+    denom: estimatedTotal > 0 ? estimatedTotal : project.budget,
+  })
+  const budgetUtilization = budgetDenom > 0 ? Math.round((budgetNumerator / budgetDenom) * 100) : 0
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -434,7 +441,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               </div>
               <span className="text-xl font-bold">{budgetUtilization}%</span>
               <div className="text-sm text-muted-foreground">
-                ${(actualTotal / 1000000).toFixed(1)}M / ${(budgetDenom / 1000000).toFixed(1)}M
+                ${(budgetNumerator / 1000000).toFixed(1)}M / ${(budgetDenom / 1000000).toFixed(1)}M
               </div>
             </div>
           )}

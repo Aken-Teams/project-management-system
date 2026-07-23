@@ -260,12 +260,19 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
     return allWeeks.filter(week => !weekMon || week.weekMonday === weekMon)
   }, [allWeeks, weekMon])
 
-  // 人員篩選：列出「整個專案團隊」（不只有寫報告的人）；有未指派任務時附上「未指派」
+  // 人員篩選：只列出「實際有紀錄/完成的人」（未填報告者不出現）。
+  //   來源 = 各週 activeMembers（有 log 或完成紀錄的任務負責人 assignee），與下方 matchMember 篩選語意一致。
+  //   未指派的紀錄（assignee 為空或「未指派」）則附上「未指派」chip。
   const projectMembers = useMemo(() => {
-    const members = [...new Set(project.team)].filter(Boolean).sort()
-    if (project.tasks.some(t => !t.assignee || t.assignee === '未指派')) members.push('未指派')
+    const active = new Set<string>()
+    for (const week of rawWeeks) for (const m of week.activeMembers) active.add(m)
+    const hasUnassigned = active.has('') || active.has('未指派')
+    active.delete('')
+    active.delete('未指派')
+    const members = [...active].filter(Boolean).sort()
+    if (hasUnassigned) members.push('未指派')
     return members
-  }, [project.team, project.tasks])
+  }, [rawWeeks])
 
   const totalPages = Math.max(1, Math.ceil(matrixWeeks.length / WEEKS_PER_PAGE))
   const safePage = Math.min(page, totalPages - 1)

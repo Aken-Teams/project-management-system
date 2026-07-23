@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { projectTypeToFe } from '@/lib/enum-mappers'
+import { computeCapexBudget } from '@/lib/budget-utils'
 
 // ─── Auto-compute project status & progress from tasks ─────
 interface FeTask {
@@ -165,6 +166,14 @@ export async function GET(request: NextRequest) {
         budgetItems: {
           select: { actualCost: true },
         },
+        capexItems: {
+          select: {
+            orderAmount: true,
+            depositAmount: true, depositPayDate: true,
+            deliveryAmount: true, deliveryPayDate: true,
+            acceptanceAmount: true, acceptancePayDate: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -183,7 +192,11 @@ export async function GET(request: NextRequest) {
       const actualStatus = computeProjectStatus(feTasks, p.endDate)
       const actualProgress = computeProjectProgress(p.milestones)
 
-      return { ...p, actualStatus, actualProgress }
+      // 預算：以採購明細(capex)為主 →「目前付出 / 實際採購」；無採購明細則沿用舊預算表/預算
+      const actualCostTotal = p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0)
+      const budgetComputed = computeCapexBudget(p.capexItems, { used: actualCostTotal, denom: p.budget })
+
+      return { ...p, actualStatus, actualProgress, budgetComputed }
     })
 
     // ── Aggregate statistics (parent tasks only) ──
@@ -196,9 +209,8 @@ export async function GET(request: NextRequest) {
     const totalMilestones = projectsWithProgress.reduce((a, p) => a + p.milestones.length, 0)
     const doneMilestones = projectsWithProgress.reduce((a, p) => a + p.milestones.filter(m => m.status === 'done').length, 0)
 
-    const budget = projectsWithProgress.reduce((a, p) => a + p.budget, 0)
-    const budgetUsed = projectsWithProgress.reduce((a, p) =>
-      a + p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0), 0)
+    const budget = projectsWithProgress.reduce((a, p) => a + p.budgetComputed.denom, 0)
+    const budgetUsed = projectsWithProgress.reduce((a, p) => a + p.budgetComputed.used, 0)
     const openRisks = projectsWithProgress.reduce((a, p) => a + p.risks.length, 0)
     const pendingDelays = projectsWithProgress.reduce((a, p) => a + p.delayRequests.length, 0)
 
@@ -276,8 +288,8 @@ export async function GET(request: NextRequest) {
         owner: displayOwner,
         startDate: p.startDate.toISOString().split('T')[0],
         endDate: p.endDate.toISOString().split('T')[0],
-        budget: p.budget,
-        budgetUsed: p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0),
+        budget: p.budgetComputed.denom,
+        budgetUsed: p.budgetComputed.used,
         teamSize: p.teamMembers.length,
         totalTasks: parentTasks.length,
         doneTasks,

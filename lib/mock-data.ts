@@ -99,6 +99,7 @@ export interface Project {
   progress: number
   budget: number
   budgetUsed: number
+  budgetDenom?: number // 預算卡分母：有採購明細時=實際採購總額，否則=budget
   owner: string
   team: string[]
   teamMembers?: TeamMember[]

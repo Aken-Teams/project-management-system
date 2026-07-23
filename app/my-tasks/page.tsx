@@ -1746,6 +1746,21 @@ export default function MyTasksPage() {
           <p className="text-sm text-muted-foreground mt-1">{user.name} 的工作總覽</p>
         </div>
 
+        {/* 空狀態：沒有被指派任務、也沒有任何 RACI 角色的人 */}
+        {availableRoles.length === 0 && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center text-center py-16 gap-3">
+              <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
+                <ClipboardList className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-base font-medium">目前沒有指派給你的任務</p>
+                <p className="text-sm text-muted-foreground mt-1">被指派任務或負責審核時，會顯示在這裡。</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Role-based Tabs */}
         {availableRoles.length > 0 && (
           <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">

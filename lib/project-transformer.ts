@@ -5,6 +5,7 @@ import {
 } from '@/lib/enum-mappers'
 import { todayUtcStr, toUtcDateStr } from '@/lib/date-utils'
 import { safeJsonParse } from '@/lib/utils'
+import { computeCapexBudget, type CapexBudgetInput } from '@/lib/budget-utils'
 // ─── Auto-compute project status & progress from tasks ─────
 
 interface FeTask {
@@ -85,6 +86,7 @@ export function dbProjectToFrontend(
     budgetUsed: number
     ownerId: string
     budgetItems?: { actualCost: number | null; estimatedCost: number | null }[]
+    capexItems?: CapexBudgetInput[]
     createdAt: Date
     updatedAt: Date
     owner: { name: string }
@@ -383,9 +385,14 @@ export function dbProjectToFrontend(
     status: computeProjectStatus(feTasks.filter(t => !t.parentId), proj.endDate),
     progress: computeProjectProgress(feMilestones),
     budget: proj.budget,
-    budgetUsed: proj.budgetItems
-      ? proj.budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
-      : proj.budgetUsed,
+    // 預算數字以採購明細(capex)為主 →「目前付出 / 實際採購」；無採購明細則沿用舊預算表。
+    ...(() => {
+      const fallbackUsed = proj.budgetItems
+        ? proj.budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
+        : proj.budgetUsed
+      const { used, denom } = computeCapexBudget(proj.capexItems, { used: fallbackUsed, denom: proj.budget })
+      return { budgetUsed: used, budgetDenom: denom }
+    })(),
     owner: displayOwner,
     team: teamNames,
     teamMembers: proj.teamMembers.map((tm) => ({
@@ -446,5 +453,13 @@ export const projectFullInclude = {
   },
   budgetItems: {
     select: { actualCost: true, estimatedCost: true },
+  },
+  capexItems: {
+    select: {
+      orderAmount: true,
+      depositAmount: true, depositPayDate: true,
+      deliveryAmount: true, deliveryPayDate: true,
+      acceptanceAmount: true, acceptancePayDate: true,
+    },
   },
 } as const
