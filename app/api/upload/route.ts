@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir, unlink, rmdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import { prisma } from '@/lib/db'
+import { safeJsonParse } from '@/lib/utils'
+
+// 政策 A：把指定 URL 的附件從「所有」引用它的 TaskLog 移除（含 A 匯入的複本）。
+async function cascadeRemoveAttachment(url: string) {
+  try {
+    // 用 uuid 段當過濾條件（無 LIKE 萬用字元 % _，比整條 url 安全），再於 JS 精確比對 url
+    const uuid = url.match(/\/uploads\/([^/.]+)/)?.[1] ?? url
+    const logs = await prisma.taskLog.findMany({
+      where: { attachments: { contains: uuid } },
+      select: { id: true, attachments: true },
+    })
+    for (const log of logs) {
+      const atts = safeJsonParse<{ url: string }[]>(log.attachments, [])
+      const kept = atts.filter(a => a.url !== url)
+      if (kept.length !== atts.length) {
+        await prisma.taskLog.update({
+          where: { id: log.id },
+          data: { attachments: kept.length ? JSON.stringify(kept) : null },
+        })
+      }
+    }
+  } catch (e) {
+    console.warn('cascadeRemoveAttachment failed:', e)
+  }
+}
 
 export const runtime = 'nodejs'
 
@@ -78,6 +104,11 @@ export async function DELETE(request: NextRequest) {
     if (!filePath.startsWith(uploadsDir + path.sep)) {
       return NextResponse.json({ error: '無效的檔案路徑' }, { status: 400 })
     }
+
+    // 政策 A（連動消失）：刪實體檔前，先把「所有引用同一 URL 的工作紀錄」那筆附件一起移除，
+    //   讓 A 匯入 R 報告後、R 一刪，A 那邊也乾淨地不再顯示（不會留下 404 死連結）。
+    await cascadeRemoveAttachment(url)
+
     try {
       await unlink(filePath)
     } catch {
