@@ -387,7 +387,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                 <div className="text-center p-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                   <div className="text-[11px] text-muted-foreground mb-0.5">實際採購</div>
                   <div className="text-lg font-bold tabular-nums">{grandTotal > 0 ? fmtNT(grandTotal) : '-'}</div>
-                  <div className="text-[10px] text-muted-foreground">{items.length} 筆明細</div>
+                  <div className="text-[11px] text-muted-foreground">{items.length} 筆明細</div>
                 </div>
                 <div className={`text-center p-2.5 rounded-lg ${diff != null ? (diff <= 0 ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30') : 'bg-muted/40'}`}>
                   <div className="text-[11px] text-muted-foreground mb-0.5">差異</div>
@@ -397,7 +397,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                         {diff <= 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
                         {fmtNT(Math.abs(diff))}
                       </div>
-                      <div className={`text-[10px] ${diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div className={`text-[11px] ${diff <= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {diff <= 0 ? '節省' : '超支'} ({diffPct}%)
                       </div>
                     </>
@@ -450,14 +450,14 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
                     {/* 付款比例：該項已付金額 / 該項目總金額 */}
                     {capexTotal > 0 && (
                       <div className="flex items-center gap-1.5 flex-1 max-w-[200px]">
-                        <span className="text-[10px] text-muted-foreground shrink-0">付款</span>
+                        <span className="text-[11px] text-muted-foreground shrink-0">付款</span>
                         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
                             className="h-full rounded-full bg-green-500 transition-all"
                             style={{ width: `${Math.min(payPct, 100)}%` }}
                           />
                         </div>
-                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
                           {payPct}%
                         </span>
                       </div>
@@ -630,7 +630,7 @@ function CapexItemDisplay({ item }: { item: CapexItemData }) {
           <div className="flex items-center gap-2 flex-wrap">
             {item.supplier && <span className="text-sm font-semibold">{item.supplier}</span>}
             {item.equipmentCategory && (
-              <Badge variant="outline" className="text-[10px] py-0 h-4">{item.equipmentCategory.replace('固定資產_', '')}</Badge>
+              <Badge variant="outline" className="text-[11px] py-0 h-4">{item.equipmentCategory.replace('固定資產_', '')}</Badge>
             )}
             {item.paymentStatus && <PaymentBadge status={item.paymentStatus} />}
           </div>
@@ -641,7 +641,7 @@ function CapexItemDisplay({ item }: { item: CapexItemData }) {
         <div className="text-right shrink-0">
           <div className="text-sm font-bold tabular-nums">{fmtNT(item.orderAmount)}</div>
           {item.quantity > 0 && item.twdPrice != null && (
-            <div className="text-[10px] text-muted-foreground tabular-nums">
+            <div className="text-[11px] text-muted-foreground tabular-nums">
               {item.quantity} {item.unit || '組'} × {fmtNT(item.twdPrice)}
             </div>
           )}
@@ -698,5 +698,5 @@ function CapexItemDisplay({ item }: { item: CapexItemData }) {
 function PaymentBadge({ status }: { status: string }) {
   if (!status) return null
   const variant = status === '已付清' ? 'default' : status === '部分付款' ? 'secondary' : 'outline'
-  return <Badge variant={variant} className="text-[10px] py-0 h-4">{status}</Badge>
+  return <Badge variant={variant} className="text-[11px] py-0 h-4">{status}</Badge>
 }

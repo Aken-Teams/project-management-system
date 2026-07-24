@@ -368,7 +368,7 @@ export default function AdminNotificationsPage() {
               {/* Divider */}
               {tiers.length > 0 && (
                 <div className="px-3 py-1.5">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">依層級覆寫</span>
+                  <span className="text-[11px] text-muted-foreground uppercase tracking-wider">依層級覆寫</span>
                 </div>
               )}
 
@@ -386,7 +386,7 @@ export default function AdminNotificationsPage() {
                   >
                     <span className="truncate flex-1">{tier}</span>
                     {hasCustom && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                      <span className={`text-[11px] px-1.5 py-0.5 rounded-full shrink-0 ${
                         isSelected ? 'bg-white/20' : 'bg-blue-100 text-blue-600'
                       }`}>
                         自訂

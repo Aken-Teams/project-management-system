@@ -1143,7 +1143,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         <div className="flex items-center gap-1.5">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-xs font-medium text-muted-foreground">本周工作紀錄</span>
-                          <span className="text-[10px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
+                          <span className="text-[11px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
                         </div>
                         <div className="rounded-lg border overflow-hidden">
                           <table className="w-full border-collapse">
@@ -1176,7 +1176,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                         )}
                                       />
                                       {row.existingLogId && (
-                                        <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
+                                        <span className="text-[11px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
                                       )}
                                       {/* Attachment thumbnails under date（可刪除） */}
                                       {attCount > 0 && (
@@ -1196,7 +1196,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                               </button>
                                             </div>
                                           ) : (
-                                            <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px]">
+                                            <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[11px]">
                                               <a href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
                                                 <Paperclip className="h-2.5 w-2.5 shrink-0" />
                                                 <span className="truncate max-w-[50px]">{att.name}</span>
@@ -1252,7 +1252,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                       >
                                         {uploadingRowIdx === idx
                                           ? (uploadRowProgress > 0
-                                              ? <span className="text-[10px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
+                                              ? <span className="text-[11px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
                                               : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
                                           : <Paperclip className="h-3.5 w-3.5" />
                                         }
@@ -1379,7 +1379,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         <div className="flex items-center gap-1.5">
                           <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="text-xs font-medium text-muted-foreground">預計下周工作</span>
-                          <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">選填</span>
+                          <span className="text-[11px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">選填</span>
                         </div>
                         <Textarea
                           placeholder="預計下周要做什麼..."
@@ -1726,10 +1726,10 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                         <div key={author} className="border rounded-lg overflow-hidden">
                           <div className="px-4 py-2.5 bg-muted/30 flex items-center gap-2">
                             <Avatar className="h-6 w-6 shrink-0">
-                              <AvatarFallback className={cn('text-[10px] font-semibold text-white', getAvatarColor(author))}>{author.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
+                              <AvatarFallback className={cn('text-[11px] font-semibold text-white', getAvatarColor(author))}>{author.split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
                             </Avatar>
                             <span className="text-sm font-medium">{author}</span>
-                            <Badge variant="secondary" className="text-[10px] ml-auto">{logs.length} 筆紀錄</Badge>
+                            <Badge variant="secondary" className="text-[11px] ml-auto">{logs.length} 筆紀錄</Badge>
                           </div>
                           <div className="divide-y">
                             {logs.map(log => {
@@ -1737,7 +1737,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                               return (
                                 <div key={log.id} className="px-4 py-3 space-y-1.5">
                                   <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">{taskInfo?.title || '任務'}</Badge>
+                                    <Badge variant="outline" className="text-[11px] px-1.5 py-0 font-normal">{taskInfo?.title || '任務'}</Badge>
                                     <span className="text-[11px] text-muted-foreground tabular-nums ml-auto">
                                       {new Date(log.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                                     </span>
@@ -1994,7 +1994,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                                 <div className="flex items-center gap-1.5">
                                   <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
                                   <span className="text-xs font-medium text-muted-foreground">後續計畫</span>
-                                  <span className="text-[10px] text-muted-foreground/50">選填</span>
+                                  <span className="text-[11px] text-muted-foreground/50">選填</span>
                                 </div>
                                 <div className="space-y-2">
                                   {editLogNextPlans.map((item, idx) => (
@@ -2153,7 +2153,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                     <div className="flex items-center justify-between py-2.5 px-3">
                       <span className="text-sm text-muted-foreground flex items-center gap-1.5"><User className="h-3.5 w-3.5" />負責人</span>
                       <div className="flex items-center gap-2">
-                        <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[10px] text-white', getAvatarColor(task.assignee))}>{task.assignee.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                        <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[11px] text-white', getAvatarColor(task.assignee))}>{task.assignee.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
                         <span className="text-sm font-medium">{task.assignee}</span>
                       </div>
                     </div>

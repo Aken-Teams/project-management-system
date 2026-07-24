@@ -1886,7 +1886,7 @@ export default function MyTasksPage() {
                   {role !== 'MY' && role !== 'REVIEW' && <span className="font-bold">{role}</span>}
                   <span>{cfg?.label || role}</span>
                   {role === 'REVIEW' && count > 0
-                    ? <span className="text-[10px] px-1.5 rounded-full bg-red-500 text-white tabular-nums">{count}</span>
+                    ? <span className="text-[11px] px-1.5 rounded-full bg-red-500 text-white tabular-nums">{count}</span>
                     : <span className="text-xs opacity-60">{count}</span>}
                 </button>
               )
@@ -1926,7 +1926,7 @@ export default function MyTasksPage() {
                               className={cn('h-7 text-xs gap-1', pendN > 0 && 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400')}
                               onClick={() => setReviewDialogProjectId(proj.projectId)}>
                               <ClipboardList className="h-3 w-3" />審核報告
-                              {pendN > 0 && <Badge className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[10px] ml-0.5">{pendN}</Badge>}
+                              {pendN > 0 && <Badge className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[11px] ml-0.5">{pendN}</Badge>}
                             </Button>
                           </td>
                         </tr>
@@ -2251,7 +2251,7 @@ export default function MyTasksPage() {
                             return (
                               <Button size="sm" variant={pendN > 0 ? 'outline' : 'ghost'} className={cn('h-7 text-xs gap-1', pendN > 0 && 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400')} onClick={() => openReviewForProject(project.id)}>
                                 <ClipboardList className="h-3 w-3" />審核 R 週報
-                                {pendN > 0 && <Badge className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[10px] ml-0.5">{pendN}</Badge>}
+                                {pendN > 0 && <Badge className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[11px] ml-0.5">{pendN}</Badge>}
                               </Button>
                             )
                           })()}
@@ -2395,7 +2395,7 @@ export default function MyTasksPage() {
                       <TabsTrigger value="history" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2.5 pt-2 text-sm">
                         過往紀錄
                         {taskLogs.length > 0 && (
-                          <Badge variant="secondary" className="ml-1.5 h-4 min-w-4 px-1 text-[10px] rounded-full">
+                          <Badge variant="secondary" className="ml-1.5 h-4 min-w-4 px-1 text-[11px] rounded-full">
                             {taskLogs.length}
                           </Badge>
                         )}
@@ -3228,7 +3228,7 @@ export default function MyTasksPage() {
                     const filled = vals.filter(s => s !== 'none').length
                     return total > 0 ? (
                       <span className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded',
+                        'text-[11px] px-1.5 py-0.5 rounded',
                         filled === total
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                           : 'bg-muted text-muted-foreground',
@@ -3258,7 +3258,7 @@ export default function MyTasksPage() {
                   >
                     待確認
                     {rPendingCount > 0 && (
-                      <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{rPendingCount}</span>
+                      <span className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{rPendingCount}</span>
                     )}
                   </button>
                   <button
@@ -3269,7 +3269,7 @@ export default function MyTasksPage() {
                   >
                     完成區
                     {rDoneCount > 0 && (
-                      <span className="text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{rDoneCount}</span>
+                      <span className="text-[11px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{rDoneCount}</span>
                     )}
                   </button>
                   <button
@@ -3337,23 +3337,23 @@ export default function MyTasksPage() {
                               </span>
                               <span className="w-16 flex items-center justify-end gap-1 shrink-0">
                                 {task.reportedDoneAt ? (
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，等待確認">
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[11px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，等待確認">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已回報
                                   </Badge>
                                 ) : rStat === 'rejected' ? (
-                                  <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0 shrink-0" title="報告被審核主管駁回，請修改後重送">
+                                  <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 text-[11px] px-1.5 py-0 shrink-0" title="報告被審核主管駁回，請修改後重送">
                                     被駁回
                                   </Badge>
                                 ) : rStat === 'reviewing' ? (
-                                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[10px] px-1.5 py-0 shrink-0" title="報告已送出，審核中">
+                                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[11px] px-1.5 py-0 shrink-0" title="報告已送出，審核中">
                                     審核中
                                   </Badge>
                                 ) : rStat === 'published' ? (
-                                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title="已通過，進入更新紀錄">
+                                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[11px] px-1.5 py-0 shrink-0" title="已通過，進入更新紀錄">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已通過
                                   </Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0">
+                                  <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-muted-foreground shrink-0">
                                     未填
                                   </Badge>
                                 )}
@@ -3386,7 +3386,7 @@ export default function MyTasksPage() {
                                   <div className="flex items-center gap-1.5">
                                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                                     <span className="text-xs font-medium text-muted-foreground">本周工作紀錄</span>
-                                    <span className="text-[10px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
+                                    <span className="text-[11px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
                                   </div>
                                   {rRejectedNote && (
                                     <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 rounded-md px-2.5 py-1.5">
@@ -3527,7 +3527,7 @@ export default function MyTasksPage() {
                                                 >
                                                   {rUploadingRowIdx === idx
                                                     ? (rUploadProgress > 0
-                                                        ? <span className="text-[10px] font-medium tabular-nums leading-none">{rUploadProgress}%</span>
+                                                        ? <span className="text-[11px] font-medium tabular-nums leading-none">{rUploadProgress}%</span>
                                                         : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
                                                     : <Paperclip className="h-3.5 w-3.5" />
                                                   }
@@ -3581,7 +3581,7 @@ export default function MyTasksPage() {
                                   <div className="flex items-center gap-1.5">
                                     <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
                                     <span className="text-xs font-medium text-muted-foreground">預計下周工作</span>
-                                    <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">選填</span>
+                                    <span className="text-[11px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">選填</span>
                                   </div>
                                   <Textarea
                                     placeholder="預計下周要做什麼..."
@@ -3779,7 +3779,7 @@ export default function MyTasksPage() {
                                                 </Popover>
                                               ) : <span className="text-muted-foreground/30">—</span>}
                                             </td>
-                                            <td className="px-2 py-1.5 text-[10px] text-muted-foreground/70 whitespace-nowrap tabular-nums" title={l.lastEditedBy ? `編輯者：${l.lastEditedBy}` : undefined}>
+                                            <td className="px-2 py-1.5 text-[11px] text-muted-foreground/70 whitespace-nowrap tabular-nums" title={l.lastEditedBy ? `編輯者：${l.lastEditedBy}` : undefined}>
                                               {l.updatedAt
                                                 ? `${new Date(l.updatedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} ${new Date(l.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`
                                                 : '—'}
@@ -4005,7 +4005,7 @@ export default function MyTasksPage() {
                                   <div key={log.id} className="pl-3 border-l-2 border-primary/20 space-y-1.5">
                                     {/* Header: task/subtask label + name + date */}
                                     <div className="flex items-center gap-2">
-                                      <Badge variant="outline" className={cn('text-[10px] px-1 py-0 shrink-0', log.isSubtask ? 'border-amber-300 text-amber-600 dark:text-amber-400' : 'border-blue-300 text-blue-600 dark:text-blue-400')}>
+                                      <Badge variant="outline" className={cn('text-[11px] px-1 py-0 shrink-0', log.isSubtask ? 'border-amber-300 text-amber-600 dark:text-amber-400' : 'border-blue-300 text-blue-600 dark:text-blue-400')}>
                                         {log.isSubtask ? '子任務' : '任務'}
                                       </Badge>
                                       <span className="text-sm font-medium">{log.taskTitle}</span>
@@ -4106,14 +4106,14 @@ export default function MyTasksPage() {
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                   reviewTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                 待你確認
-                {reviewShownItems.length > 0 && <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewShownItems.length}</span>}
+                {reviewShownItems.length > 0 && <span className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewShownItems.length}</span>}
               </button>
               <button type="button" onClick={() => setReviewTab('members')}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                   reviewTab === 'members' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
                 title="依週別查看所有人的週報，並看出誰沒送出">
                 成員週報
-                {reviewMissingCount > 0 && <span className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{reviewMissingCount}</span>}
+                {reviewMissingCount > 0 && <span className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{reviewMissingCount}</span>}
               </button>
               <button type="button" onClick={() => setReviewTab('history')}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
@@ -4141,7 +4141,7 @@ export default function MyTasksPage() {
                               <div className="text-sm font-semibold truncate">{item.task.title}</div>
                               <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                                 <span className="inline-flex items-center gap-1">
-                                  <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[9px] text-white', avatarColorFor(item.reporter || '?'))}>{(item.reporter || '?').split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                                  <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[11px] text-white', avatarColorFor(item.reporter || '?'))}>{(item.reporter || '?').split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
                                   <span className="text-xs text-foreground/80">{item.reporter || '執行者'}</span>
                                 </span>
                                 <Badge variant="outline" className="text-[11px] px-1.5 py-0 gap-1 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700">
@@ -4189,7 +4189,7 @@ export default function MyTasksPage() {
                                         <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
                                         <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.author}</td>
                                         <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">
-                                          {srcTitle && <Badge variant="outline" className="text-[9px] px-1 py-0 mr-1 align-middle text-amber-600 border-amber-300">子：{srcTitle}</Badge>}
+                                          {srcTitle && <Badge variant="outline" className="text-[11px] px-1 py-0 mr-1 align-middle text-amber-600 border-amber-300">子：{srcTitle}</Badge>}
                                           {l.content}
                                         </td>
                                         <td className="px-2 py-1.5 text-center">
@@ -4256,7 +4256,7 @@ export default function MyTasksPage() {
                           <div key={row.name} className="border rounded-lg overflow-hidden">
                             <div className={cn('px-3 py-2 flex items-center gap-2 cursor-pointer', row.missing ? 'bg-red-50 dark:bg-red-950/20' : 'bg-muted/20')}
                               onClick={() => setReviewMemberExpanded(prev => { const n = new Set(prev); if (n.has(row.name)) n.delete(row.name); else n.add(row.name); return n })}>
-                              <Avatar className="h-6 w-6"><AvatarFallback className={cn('text-[10px] text-white', avatarColorFor(row.name))}>{row.name.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                              <Avatar className="h-6 w-6"><AvatarFallback className={cn('text-[11px] text-white', avatarColorFor(row.name))}>{row.name.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
                               <span className="text-sm font-medium flex-1 truncate">{row.name}</span>
                               {row.missing ? (
                                 <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400">未送出週報</Badge>

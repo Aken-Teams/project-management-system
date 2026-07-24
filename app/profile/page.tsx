@@ -346,7 +346,7 @@ export default function ProfilePage() {
                             </p>
                             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{log.content}</p>
                           </div>
-                          <span className="text-[10px] text-muted-foreground shrink-0 mt-1">{log.logDate}</span>
+                          <span className="text-[11px] text-muted-foreground shrink-0 mt-1">{log.logDate}</span>
                         </div>
                       ))}
                     </div>

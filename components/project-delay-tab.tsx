@@ -131,14 +131,14 @@ export function ProjectDelayTab({ project, onRefresh, readOnly }: Props) {
           <TabsList className="bg-transparent border-b-0 h-auto p-0 gap-0">
             <TabsTrigger value="delays" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-3 py-2 gap-1.5 text-sm">
               <TimerReset className="h-3.5 w-3.5" /> 延遲紀錄
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-0.5">{allDelays.length}</Badge>
+              <Badge variant="secondary" className="text-[11px] px-1.5 py-0 ml-0.5">{allDelays.length}</Badge>
             </TabsTrigger>
             <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-3 py-2 gap-1.5 text-sm">
               <Wrench className="h-3.5 w-3.5" /> 需要協助
               {unresolvedSupportCount > 0 ? (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0 ml-0.5">{unresolvedSupportCount}</Badge>
+                <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[11px] px-1.5 py-0 ml-0.5">{unresolvedSupportCount}</Badge>
               ) : (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-0.5">{allSupport.length}</Badge>
+                <Badge variant="secondary" className="text-[11px] px-1.5 py-0 ml-0.5">{allSupport.length}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -297,7 +297,7 @@ export function ProjectDelayTab({ project, onRefresh, readOnly }: Props) {
                       {mode === 'delay' ? (
                         <>
                           <td className="px-4 py-3">
-                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0',
+                            <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0',
                               r.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-300' :
                               r.status === 'approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
                               'bg-red-100 text-red-700 border-red-300',
@@ -313,7 +313,7 @@ export function ProjectDelayTab({ project, onRefresh, readOnly }: Props) {
                             <span className="line-clamp-1 text-muted-foreground">{msNames}</span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">
+                            <Badge variant="secondary" className="bg-destructive/10 text-destructive border-destructive/20 text-[11px]">
                               +{maxDays}天
                             </Badge>
                           </td>
@@ -325,7 +325,7 @@ export function ProjectDelayTab({ project, onRefresh, readOnly }: Props) {
                       ) : (
                         <>
                           <td className="px-4 py-3">
-                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0',
+                            <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0',
                               r.supportResolved
                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
                                 : 'bg-amber-100 text-amber-700 border-amber-300',

@@ -461,7 +461,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                       <div className="space-y-1">
                         {milestoneTasks.map(task => (
                           <div key={task.id} className="flex items-center gap-2 text-sm">
-                            <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 shrink-0">
+                            <Badge variant={task.status === 'done' ? 'default' : 'secondary'} className="text-[11px] px-1.5 py-0 shrink-0">
                               {task.status === 'done' ? '完成' : task.status === 'in-progress' ? '進行中' : task.status === 'blocked' ? '受阻' : '待辦'}
                             </Badge>
                             <span className={task.status === 'done' ? 'text-muted-foreground' : ''}>
@@ -571,7 +571,7 @@ export default function WeeklyUpdatePage({ params }: UpdatePageProps) {
                             {reports.map(report => (
                               <div key={report.id} className="pt-3 space-y-1.5">
                                 <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                  <Badge variant="outline" className="text-[11px] px-1.5 py-0">
                                     {report.milestoneName}
                                   </Badge>
                                   <span className="text-[11px] text-muted-foreground ml-auto">

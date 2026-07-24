@@ -615,18 +615,18 @@ export default function ReportsPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'done': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200">完成</Badge>
-      case 'in-progress': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200">進行中</Badge>
-      case 'blocked': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 hover:bg-red-200">受阻</Badge>
-      default: return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200">待辦</Badge>
+      case 'done': return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200">完成</Badge>
+      case 'in-progress': return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200">進行中</Badge>
+      case 'blocked': return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 hover:bg-red-200">受阻</Badge>
+      default: return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200">待辦</Badge>
     }
   }
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
-      case 'high': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 hover:bg-red-200">高</Badge>
-      case 'medium': return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200">中</Badge>
-      default: return <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200">低</Badge>
+      case 'high': return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 hover:bg-red-200">高</Badge>
+      case 'medium': return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200">中</Badge>
+      default: return <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200">低</Badge>
     }
   }
 
@@ -1420,7 +1420,7 @@ export default function ReportsPage() {
                     </div>
                     {selectedProject?.projectTier && (
                       <span className={cn(
-                        'inline-block mt-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none w-fit',
+                        'inline-block mt-1.5 text-[11px] font-semibold rounded px-1.5 py-0.5 leading-none w-fit',
                         selectedProject.projectTier === 'T1' ? 'bg-blue-100 text-blue-700' :
                         selectedProject.projectTier === 'T2' ? 'bg-emerald-100 text-emerald-700' :
                         selectedProject.projectTier === 'T3' ? 'bg-amber-100 text-amber-700' :
@@ -1628,7 +1628,7 @@ export default function ReportsPage() {
                       >
                         {p.projectTier && (
                           <span className={cn(
-                            'absolute top-1.5 right-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none',
+                            'absolute top-1.5 right-1.5 text-[11px] font-semibold rounded px-1.5 py-0.5 leading-none',
                             p.projectTier === 'T1' ? 'bg-blue-100 text-blue-700' :
                             p.projectTier === 'T2' ? 'bg-emerald-100 text-emerald-700' :
                             p.projectTier === 'T3' ? 'bg-amber-100 text-amber-700' :
@@ -1914,7 +1914,7 @@ export default function ReportsPage() {
                                     milestone.status === 'blocked' ? 'bg-red-500' : 'bg-slate-400',
                                   )} />
                                   <span className="text-sm font-semibold">{milestone.name}</span>
-                                  {blockedN > 0 && <span className="text-[10px] rounded-full bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 px-1.5 py-0.5">受阻 {blockedN}</span>}
+                                  {blockedN > 0 && <span className="text-[11px] rounded-full bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 px-1.5 py-0.5">受阻 {blockedN}</span>}
                                   <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
                                     <span className="tabular-nums">{doneN}/{totalN} 完成</span>
                                     <span className="tabular-nums">{milestone.progress}%</span>
@@ -1967,7 +1967,7 @@ export default function ReportsPage() {
                                                 <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                                                   <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${task.progress}%` }} />
                                                 </div>
-                                                <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{task.progress}%</span>
+                                                <span className="text-[11px] text-muted-foreground w-8 text-right shrink-0">{task.progress}%</span>
                                               </div>
                                             </td>
                                           </tr>
@@ -1991,7 +1991,7 @@ export default function ReportsPage() {
                                                   <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                                                     <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${sub.progress}%` }} />
                                                   </div>
-                                                  <span className="text-[10px] text-muted-foreground w-8 text-right shrink-0">{sub.progress}%</span>
+                                                  <span className="text-[11px] text-muted-foreground w-8 text-right shrink-0">{sub.progress}%</span>
                                                 </div>
                                               </td>
                                             </tr>
@@ -2045,7 +2045,7 @@ export default function ReportsPage() {
                                 <div key={name} className="border rounded-lg overflow-hidden">
                                   <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
                                     <div className="flex items-center gap-2">
-                                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary">
                                         {name.charAt(0)}
                                       </div>
                                       <span className="text-sm font-medium">{name}</span>
@@ -2062,7 +2062,7 @@ export default function ReportsPage() {
                                           <div className="flex items-center gap-1.5">
                                             <span className="font-medium truncate">{task?.title || '(未知任務)'}</span>
                                             {task?.status === 'done' && (
-                                              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 shrink-0">完成</Badge>
+                                              <Badge variant="outline" className="text-[11px] px-1 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 shrink-0">完成</Badge>
                                             )}
                                           </div>
                                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
@@ -2139,7 +2139,7 @@ export default function ReportsPage() {
                                   risk.impact === 'medium' ? 'text-amber-500' : 'text-slate-400',
                                 )} />
                                 <span className="text-sm font-medium">{risk.title}</span>
-                                <Badge variant="outline" className="text-[10px] ml-auto shrink-0">
+                                <Badge variant="outline" className="text-[11px] ml-auto shrink-0">
                                   {risk.impact === 'high' ? '高' : risk.impact === 'medium' ? '中' : '低'}影響
                                 </Badge>
                               </div>
@@ -2201,7 +2201,7 @@ export default function ReportsPage() {
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium">{entry.msName}</span>
                                 {entry.pendingDate && (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200">
+                                  <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200">
                                     待審中
                                   </Badge>
                                 )}
@@ -2209,20 +2209,20 @@ export default function ReportsPage() {
                               <div className="text-xs text-muted-foreground space-y-1">
                                 {entry.approvedAt && (
                                   <div className="flex items-center gap-1.5">
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 shrink-0">
+                                    <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 shrink-0">
                                       已核准
                                     </Badge>
                                     <span className="line-through">{entry.originalDate}</span>
                                     <span>→</span>
                                     <span className="font-medium text-foreground">{entry.finalDate}</span>
                                     {entry.approvedBy && (
-                                      <span className="ml-auto text-[10px] shrink-0">by {entry.approvedBy}</span>
+                                      <span className="ml-auto text-[11px] shrink-0">by {entry.approvedBy}</span>
                                     )}
                                   </div>
                                 )}
                                 {entry.pendingDate && (
                                   <div className="flex items-center gap-1.5">
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200 shrink-0">
+                                    <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200 shrink-0">
                                       待審
                                     </Badge>
                                     <span className="line-through">{entry.finalDate}</span>

@@ -929,11 +929,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono truncate text-muted-foreground">...{link.token.slice(-8)}</span>
                           {expired ? (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-destructive border-destructive/30">已過期</Badge>
+                            <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-destructive border-destructive/30">已過期</Badge>
                           ) : expSoon ? (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-warning border-warning/30">即將到期</Badge>
+                            <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-warning border-warning/30">即將到期</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-600 border-green-600/30">有效</Badge>
+                            <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-green-600 border-green-600/30">有效</Badge>
                           )}
                         </div>
                         <div className="text-muted-foreground">

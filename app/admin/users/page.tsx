@@ -158,7 +158,7 @@ function OrgTreeNodeItem({
           {node.name}
         </span>
         <span className={cn(
-          'shrink-0 mt-0.5 min-w-[22px] text-center text-[10px] font-semibold rounded-full px-1.5 py-px leading-4',
+          'shrink-0 mt-0.5 min-w-[22px] text-center text-[11px] font-semibold rounded-full px-1.5 py-px leading-4',
           isSelected
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted-foreground/15 text-muted-foreground',
@@ -211,7 +211,7 @@ function OrgTreePanel({
         <span className="flex-1">全部人員</span>
         {orgTree && (
           <span className={cn(
-            'min-w-[22px] text-center text-[10px] font-semibold rounded-full px-1.5 py-px leading-4',
+            'min-w-[22px] text-center text-[11px] font-semibold rounded-full px-1.5 py-px leading-4',
             selectedOrg === null
               ? 'bg-primary text-primary-foreground'
               : 'bg-muted-foreground/15 text-muted-foreground',

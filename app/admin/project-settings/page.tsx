@@ -568,7 +568,7 @@ export default function AdminProjectSettingsPage() {
                     <span className="truncate flex-1">
                       {pt.label}
                       {pt.codePrefix && (
-                        <span className={`ml-1.5 text-[10px] font-mono px-1 py-0.5 rounded ${isSelected ? 'bg-white/20' : 'bg-muted text-muted-foreground'}`}>
+                        <span className={`ml-1.5 text-[11px] font-mono px-1 py-0.5 rounded ${isSelected ? 'bg-white/20' : 'bg-muted text-muted-foreground'}`}>
                           {pt.codePrefix}
                         </span>
                       )}
@@ -849,7 +849,7 @@ export default function AdminProjectSettingsPage() {
                                                   {/* Subtask count badge (when collapsed) */}
                                                   {!expandedTasks.has(`${i}-${j}`) && task.children.length > 0 && (
                                                     <button
-                                                      className="ml-10 mt-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                                                      className="ml-10 mt-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                                                       onClick={() => toggleExpandTask(i, j)}
                                                     >
                                                       {task.children.length} 個子任務

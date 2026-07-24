@@ -924,7 +924,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${notesCollapsed ? '-rotate-90' : ''}`} />
                         <FileText className="h-3.5 w-3.5" />
                         <span className="text-xs font-semibold">本週專案彙整</span>
-                        <span className="text-[10px] text-muted-foreground font-normal ml-1">（{wNotes.length}）</span>
+                        <span className="text-[11px] text-muted-foreground font-normal ml-1">（{wNotes.length}）</span>
                       </button>
                       {!notesCollapsed && (
                         <div className="px-4 pb-3 space-y-2">
@@ -1014,7 +1014,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                                         </div>
                                         {log.nextPlans && log.nextPlans.length > 0 && (
                                           <div className="shrink-0 w-[180px] border-l pl-3 flex flex-col gap-0.5 justify-center">
-                                            <span className="text-[10px] text-muted-foreground/50 font-medium">預計後續</span>
+                                            <span className="text-[11px] text-muted-foreground/50 font-medium">預計後續</span>
                                             {log.nextPlans.map((plan, pi) => (
                                               <span key={pi} className="text-xs text-primary/60">
                                                 {plan.date ? `${fmtDate(plan.date)} ` : ''}{plan.content}
@@ -1055,7 +1055,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                       {filteredDelayRequests.map(dr => (
                         <div key={dr.id} className="px-4 py-2 space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={`text-[10px] shrink-0 ${
+                            <Badge variant="outline" className={`text-[11px] shrink-0 ${
                               dr.status === 'pending' ? 'border-warning text-warning' :
                               dr.status === 'approved' ? 'border-success text-success' :
                               'border-destructive text-destructive'
@@ -1075,7 +1075,7 @@ export function WeeklyActivitySummary({ project }: { project: Project }) {
                               <span className="text-muted-foreground ml-auto shrink-0">{fmtDate(am.originalDate)}</span>
                               <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
                               <span className="text-orange-600 dark:text-orange-400 font-medium shrink-0">{fmtDate(am.proposedDate)}</span>
-                              <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 dark:text-orange-400 shrink-0">
+                              <Badge variant="outline" className="text-[11px] border-orange-300 text-orange-600 dark:text-orange-400 shrink-0">
                                 {am.delayDays >= 0 ? '+' : ''}{am.delayDays}天
                               </Badge>
                             </div>

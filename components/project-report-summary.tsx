@@ -238,9 +238,9 @@ export function ProjectReportSummary({
                     selected ? 'border-primary bg-primary/10 text-primary' : 'border-transparent hover:bg-muted text-muted-foreground'
                   )}
                 >
-                  <div className={cn('font-semibold leading-tight', sm ? 'text-sm' : 'text-xs')}>W{w.week}{w.isCurrent && <span className="ml-1 text-[10px] font-normal">本週</span>}</div>
-                  <div className="text-[10px] leading-tight opacity-80">{w.range}</div>
-                  {w.logs > 0 && <div className={cn('mt-0.5 inline-block rounded-full px-1.5 text-[10px] leading-tight', selected ? 'bg-primary/20' : 'bg-muted')}>{w.logs} 筆</div>}
+                  <div className={cn('font-semibold leading-tight', sm ? 'text-sm' : 'text-xs')}>W{w.week}{w.isCurrent && <span className="ml-1 text-[11px] font-normal">本週</span>}</div>
+                  <div className="text-[11px] leading-tight opacity-80">{w.range}</div>
+                  {w.logs > 0 && <div className={cn('mt-0.5 inline-block rounded-full px-1.5 text-[11px] leading-tight', selected ? 'bg-primary/20' : 'bg-muted')}>{w.logs} 筆</div>}
                 </button>
               )
             })}
@@ -312,7 +312,7 @@ export function ProjectReportSummary({
                         <li key={log.id} className="pl-2.5">
                           <div className="flex items-baseline gap-2">
                             <span className={cn('font-medium truncate', sm ? 'text-sm' : 'text-xs')}>{task?.title || '（任務）'}</span>
-                            <span className="text-[10px] text-muted-foreground shrink-0">{log.logDate.slice(5).replace('-', '/')}</span>
+                            <span className="text-[11px] text-muted-foreground shrink-0">{log.logDate.slice(5).replace('-', '/')}</span>
                           </div>
                           <div className={cn('text-muted-foreground whitespace-pre-wrap', sm ? 'text-sm' : 'text-xs')}>{log.content}</div>
                           {log.attachments && log.attachments.length > 0 && (

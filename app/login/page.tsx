@@ -143,7 +143,7 @@ export default function LoginPage() {
                     <span className={`text-xs font-semibold ${item.textColor}`}>{item.initial}</span>
                   </div>
                   <span className="text-xs font-medium text-zinc-900">{item.label}</span>
-                  <span className="text-[10px] text-zinc-400">{item.email.split('@')[0]}</span>
+                  <span className="text-[11px] text-zinc-400">{item.email.split('@')[0]}</span>
                 </button>
               ))}
             </div>

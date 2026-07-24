@@ -164,7 +164,7 @@ function dropRingClass(mode?: DropMode): string {
 function DropBadge({ mode, inside, edge }: { mode?: DropMode; inside: string; edge: string }) {
   if (!mode) return null
   return (
-    <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 z-20 rounded bg-blue-500 text-white text-[10px] px-1.5 py-0.5 shadow whitespace-nowrap">
+    <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 z-20 rounded bg-blue-500 text-white text-[11px] px-1.5 py-0.5 shadow whitespace-nowrap">
       {mode === 'inside' ? inside : edge}
     </span>
   )
@@ -264,7 +264,7 @@ const MilestoneRow = memo(function MilestoneRow({
           </Button>
         )}
         {collapsed && taskCount > 0 && (
-          <span className="shrink-0 text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+          <span className="shrink-0 text-[11px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
             {taskCount} 任務
           </span>
         )}
@@ -454,7 +454,7 @@ const TaskRow = memo(function TaskRow({
           placeholder="任務名稱"
         />
         {subtaskCount > 0 && collapsed && (
-          <span className="shrink-0 text-[10px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 font-medium" title="天數與日期由子任務自動計算">
+          <span className="shrink-0 text-[11px] text-blue-600 bg-blue-50 rounded-full px-1.5 py-0.5 font-medium" title="天數與日期由子任務自動計算">
             {subtaskCount} 子任務
           </span>
         )}
@@ -573,7 +573,7 @@ const TaskRow = memo(function TaskRow({
         >
           <Badge
             variant="outline"
-            className={cn(`text-[10px] px-1.5 py-0 ${p.className}`, locked ? "cursor-default opacity-70" : "cursor-pointer")}
+            className={cn(`text-[11px] px-1.5 py-0 ${p.className}`, locked ? "cursor-default opacity-70" : "cursor-pointer")}
           >
             {p.label}
           </Badge>
@@ -723,7 +723,7 @@ function InlineTaskInput({
           <button type="button" onClick={cyclePriority} className="transition-opacity">
             <Badge
               variant="outline"
-              className={`text-[10px] px-1.5 py-0 cursor-pointer opacity-60 hover:opacity-100 ${p.className}`}
+              className={`text-[11px] px-1.5 py-0 cursor-pointer opacity-60 hover:opacity-100 ${p.className}`}
             >
               {p.label}
             </Badge>
@@ -874,7 +874,7 @@ function InlineSubtaskInput({
           <button type="button" onClick={cyclePriority} className="transition-opacity">
             <Badge
               variant="outline"
-              className={`text-[10px] px-1.5 py-0 cursor-pointer opacity-60 hover:opacity-100 ${p.className}`}
+              className={`text-[11px] px-1.5 py-0 cursor-pointer opacity-60 hover:opacity-100 ${p.className}`}
             >
               {p.label}
             </Badge>

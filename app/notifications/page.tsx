@@ -235,7 +235,7 @@ export default function NotificationsPage() {
                 <TabsTrigger key={tab.value} value={tab.value} className="text-sm px-3 py-1.5 gap-1.5">
                   {tab.label}
                   {cnt > 0 && (
-                    <span className="rounded-full bg-red-500 text-white text-[10px] font-semibold min-w-[16px] h-4 px-1 inline-flex items-center justify-center leading-none">
+                    <span className="rounded-full bg-red-500 text-white text-[11px] font-semibold min-w-[16px] h-4 px-1 inline-flex items-center justify-center leading-none">
                       {cnt}
                     </span>
                   )}

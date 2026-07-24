@@ -476,7 +476,7 @@ function GanttChart({
             <span className="text-sm font-medium text-muted-foreground">里程碑 / 任務</span>
             <button
               onClick={toggleAll}
-              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               title={allCollapsed ? '全部展開' : '全部收合'}
             >
               <ChevronsUpDown className="h-3 w-3" />
@@ -502,7 +502,7 @@ function GanttChart({
                       ? <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                       : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                     }
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-medium">
                       {msIdx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -511,7 +511,7 @@ function GanttChart({
                           {row.milestone?.name}
                         </span>
                         <Badge
-                          className="text-[9px] px-1 py-0 shrink-0 text-white border-0"
+                          className="text-[11px] px-1 py-0 shrink-0 text-white border-0"
                           style={{ backgroundColor: msStatusColor.fill }}
                         >
                           {msProgress}%

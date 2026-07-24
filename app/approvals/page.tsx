@@ -359,7 +359,7 @@ export default function ApprovalsPage() {
           <Filter className="h-3.5 w-3.5" />
           篩選
           {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-0.5 bg-primary-foreground text-primary">{activeFilterCount}</Badge>
+            <Badge variant="secondary" className="text-[11px] px-1.5 py-0 ml-0.5 bg-primary-foreground text-primary">{activeFilterCount}</Badge>
           )}
         </Button>
         <div className="relative w-56">
@@ -941,14 +941,14 @@ export default function ApprovalsPage() {
             <TabsTrigger value="pending" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-4 py-2.5 gap-1.5">
               <AlertTriangle className="h-4 w-4" /> 待審核
               {pendingAll.length > 0 && (
-                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 ml-1">{pendingAll.length}</Badge>
+                <Badge variant="destructive" className="text-[11px] px-1.5 py-0 ml-1">{pendingAll.length}</Badge>
               )}
             </TabsTrigger>
             {(user?.role === 'executive' || user?.role === 'admin') && (
               <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-4 py-2.5 gap-1.5">
                 <Wrench className="h-4 w-4" /> 待處理協助
                 {supportAll.length > 0 && (
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0 ml-1">{supportAll.length}</Badge>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[11px] px-1.5 py-0 ml-1">{supportAll.length}</Badge>
                 )}
               </TabsTrigger>
             )}

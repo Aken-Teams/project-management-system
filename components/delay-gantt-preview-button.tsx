@@ -143,9 +143,9 @@ export function DelayGanttPreviewButton({ delay }: { delay: DelayInfo }) {
                         {m.tasks.map((tk, ti) => (
                           <div key={ti} className="flex items-center gap-2 pr-3 py-2" style={{ paddingLeft: 20 + tk.depth * 12 }}>
                             <div className="shrink-0 min-w-0" style={{ width: 132 - tk.depth * 12 }}>
-                              {tk.breadcrumb && <div className="text-[10px] text-muted-foreground truncate">└ {tk.breadcrumb}</div>}
+                              {tk.breadcrumb && <div className="text-[11px] text-muted-foreground truncate">└ {tk.breadcrumb}</div>}
                               <div className="text-sm font-medium truncate">{tk.name}</div>
-                              <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 truncate"><User className="h-2.5 w-2.5 shrink-0" />{tk.assignee}</div>
+                              <div className="text-[11px] text-muted-foreground flex items-center gap-0.5 truncate"><User className="h-2.5 w-2.5 shrink-0" />{tk.assignee}</div>
                             </div>
                             <div className="flex-1 relative h-5 min-w-0">
                               {tk.kind === 'extend' ? (

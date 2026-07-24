@@ -297,7 +297,7 @@ export default function AdminRolesPage() {
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {SYSTEM_ROLES.map(r => (
-              <span key={r.key} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${r.color}`}>
+              <span key={r.key} className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${r.color}`}>
                 {r.label}
               </span>
             ))}
@@ -320,7 +320,7 @@ export default function AdminRolesPage() {
           </p>
           <div className="flex flex-wrap gap-1.5 mt-2.5">
             {PROJECT_ROLES.map(r => (
-              <span key={r.key} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${r.color}`}>
+              <span key={r.key} className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${r.color}`}>
                 {r.key}
               </span>
             ))}
@@ -429,7 +429,7 @@ export default function AdminRolesPage() {
                     </span>
                     <span className="text-xs font-medium text-foreground">{role.label}</span>
                     {'badge' in role && role.badge && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ml-auto">
+                      <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 ml-auto">
                         {role.badge}
                       </span>
                     )}

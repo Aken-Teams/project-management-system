@@ -93,7 +93,7 @@ export default function GuidePage() {
                 <AccordionItem value="sys-admin">
                   <AccordionTrigger className="text-sm">
                     <span className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">系統管理員</span>
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-red-100 text-red-700">系統管理員</span>
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
@@ -116,7 +116,7 @@ export default function GuidePage() {
                 <AccordionItem value="sys-executive">
                   <AccordionTrigger className="text-sm">
                     <span className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">主管</span>
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-700">主管</span>
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
@@ -136,7 +136,7 @@ export default function GuidePage() {
                 <AccordionItem value="sys-pm">
                   <AccordionTrigger className="text-sm">
                     <span className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">專案經理</span>
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-700">專案經理</span>
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
@@ -160,7 +160,7 @@ export default function GuidePage() {
                 <AccordionItem value="sys-member" className="border-b-0">
                   <AccordionTrigger className="text-sm">
                     <span className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">團隊成員</span>
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700">團隊成員</span>
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
@@ -197,7 +197,7 @@ export default function GuidePage() {
                 <div className="rounded-md border-2 px-3 py-2.5 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm">S — Sign-off 簽核者</span>
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">最高審核權限</span>
+                    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">最高審核權限</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">負責審核延期申請，可核准或駁回。每個專案可有多位 S 角色，需全部通過才算核准</p>
                 </div>
@@ -282,20 +282,20 @@ export default function GuidePage() {
                     <td className="px-4 py-2.5 font-medium text-muted-foreground">種類</td>
                     <td className="px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">管理員</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">主管</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">PM</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">成員</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-red-100 text-red-700">管理員</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-100 text-purple-700">主管</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-700">PM</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700">成員</span>
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700">R</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">A</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 text-violet-700">C</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">I</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-700">P</span>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">S</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-700">R</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-700">A</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-violet-100 text-violet-700">C</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-700">I</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-orange-100 text-orange-700">P</span>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-100 text-emerald-700">S</span>
                       </div>
                     </td>
                   </tr>

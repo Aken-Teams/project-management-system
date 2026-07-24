@@ -193,7 +193,7 @@ export function ProjectRiskTab({ project, onRefresh, readOnly }: Props) {
                       onClick={() => setSelectedRisk(risk)}
                     >
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0',
+                        <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0',
                           risk.status === 'open' ? 'bg-red-100 text-red-700 border-red-300' :
                           risk.status === 'mitigated' ? 'bg-amber-100 text-amber-700 border-amber-300' :
                           'bg-emerald-100 text-emerald-700 border-emerald-300',
@@ -207,12 +207,12 @@ export function ProjectRiskTab({ project, onRefresh, readOnly }: Props) {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Badge className={cn('text-[10px] px-1.5', getRiskLevelColor(risk.impact))}>
+                        <Badge className={cn('text-[11px] px-1.5', getRiskLevelColor(risk.impact))}>
                           {IMPACT_LABELS[risk.impact]}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Badge className={cn('text-[10px] px-1.5', getRiskLevelColor(risk.probability))}>
+                        <Badge className={cn('text-[11px] px-1.5', getRiskLevelColor(risk.probability))}>
                           {PROBABILITY_LABELS[risk.probability]}
                         </Badge>
                       </td>
@@ -246,7 +246,7 @@ export function ProjectRiskTab({ project, onRefresh, readOnly }: Props) {
                                     'bg-emerald-500',
                                   )} />
                                   {STATUS_LABELS[s]}
-                                  {risk.status === s && <span className="text-muted-foreground ml-auto text-[10px]">目前</span>}
+                                  {risk.status === s && <span className="text-muted-foreground ml-auto text-[11px]">目前</span>}
                                 </DropdownMenuItem>
                               ))}
                             </DropdownMenuContent>

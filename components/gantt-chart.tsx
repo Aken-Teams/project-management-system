@@ -363,7 +363,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: subColors.bg }} />
               <span className={cn('text-sm truncate', effectiveStatus(sub) === 'done' && 'text-muted-foreground')} title={sub.title}>{sub.title}</span>
               {subHasChildren && (
-                <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                <span className="text-[11px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
                   {subChildren.filter(c => c.progress >= 100 || c.status === 'done').length}/{subChildren.length}
                 </span>
               )}
@@ -398,7 +398,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   ) : earliestLogDateMap.has(sub.id) ? (
                     <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), todayStr), top: 24, backgroundColor: subColors.bg }} />
                   ) : null}
-                  <span className="absolute text-[10px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 5 }}>
+                  <span className="absolute text-[11px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 5 }}>
                     <span className="text-muted-foreground">{sub.progress}%</span>
                     {(() => { const diff = getTimeDiffLabel(sub); return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null })()}
                   </span>
@@ -409,7 +409,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                 <div className="absolute h-5 rounded-sm overflow-hidden" style={{ ...barStyle(sub.startDate, sub.endDate), top: 10, backgroundColor: PLAN_COLOR.bg, border: `1px solid ${PLAN_COLOR.border}80` }}>
                   <div className="h-full rounded-sm" style={{ width: `${Math.min(sub.progress, 100)}%`, backgroundColor: subColors.bg }} />
                 </div>
-                <span className="absolute text-[10px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 13 }}>
+                <span className="absolute text-[11px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 13 }}>
                   <span className="text-muted-foreground">{sub.progress}%</span>
                   {(() => { const diff = getTimeDiffLabel(sub); return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null })()}
                 </span>
@@ -450,7 +450,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     <div
                       key={i}
                       style={{ width: `${(week.days / totalDays) * 100}%` }}
-                      className="text-center py-0.5 text-[10px] text-muted-foreground/70 border-r last:border-r-0 bg-card overflow-hidden whitespace-nowrap"
+                      className="text-center py-0.5 text-[11px] text-muted-foreground/70 border-r last:border-r-0 bg-card overflow-hidden whitespace-nowrap"
                     >
                       {week.days >= 5 ? week.label : ''}
                     </div>
@@ -485,7 +485,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
               style={{ left: hoverX }}
             >
               <div
-                className="absolute top-1 left-1.5 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap"
+                className="absolute top-1 left-1.5 bg-foreground text-background text-[11px] px-1.5 py-0.5 rounded whitespace-nowrap"
               >
                 {hoverDate}
               </div>
@@ -551,7 +551,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                       ) : (
                         <div className="w-4 shrink-0" />
                       )}
-                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-medium">
                         {msIndex + 1}
                       </div>
                       {/* 名稱獨佔第一行，完整顯示（不被徽章擠壓）*/}
@@ -560,14 +560,14 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     {/* 徽章 + 到期移到第二行，避免擠壓名稱 */}
                     <div className="flex items-center gap-1.5 flex-wrap ml-[38px] mt-0.5">
                       <Badge
-                        className="text-[10px] px-1.5 py-0 shrink-0 text-white border-0"
+                        className="text-[11px] px-1.5 py-0 shrink-0 text-white border-0"
                         style={{ backgroundColor: colors.bg }}
                       >
                         {msAggregatedProgress}%
                       </Badge>
                       <span className="text-sm text-muted-foreground">到期：{formatDate(msEnd)}</span>
                       {!milestoneHasActivity(msTasks) && (
-                        <Badge className="text-[10px] px-1.5 py-0 shrink-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
+                        <Badge className="text-[11px] px-1.5 py-0 shrink-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
                           <AlertTriangle className="h-3 w-3 mr-0.5" />
                           尚無人回報
                         </Badge>
@@ -688,7 +688,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                         </div>
                         {/* Milestone percentage + time diff */}
                         <span
-                          className="absolute text-[10px] font-medium whitespace-nowrap"
+                          className="absolute text-[11px] font-medium whitespace-nowrap"
                           style={{
                             left: `calc(${parseFloat(barStyle(msBar.start, msEnd).left) + parseFloat(barStyle(msBar.start, msEnd).width)}% + 4px)`,
                             top: 13,
@@ -825,7 +825,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             taskOverdue && 'text-red-600 dark:text-red-400',
                           )} title={task.title}>{task.title}</span>
                           {subtasks.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+                            <span className="text-[11px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
                               {subtasks.filter(s => s.progress >= 100 || s.status === 'done').length}/{subtasks.length}
                             </span>
                           )}
@@ -923,7 +923,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             ) : null}
                             {/* Percentage + time diff label (after full bar including extension) */}
                             <span
-                              className="absolute text-[10px] font-medium whitespace-nowrap"
+                              className="absolute text-[11px] font-medium whitespace-nowrap"
                               style={{
                                 left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
                                 top: 5,
@@ -955,7 +955,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             </div>
                             {/* Percentage label + time diff */}
                             <span
-                              className="absolute text-[10px] font-medium whitespace-nowrap"
+                              className="absolute text-[11px] font-medium whitespace-nowrap"
                               style={{
                                 left: `calc(${parseFloat(barStyle(task.startDate, task.endDate).left) + parseFloat(barStyle(task.startDate, task.endDate).width)}% + 4px)`,
                                 top: 13,

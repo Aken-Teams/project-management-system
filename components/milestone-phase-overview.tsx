@@ -307,7 +307,7 @@ function PhaseBody({ model, today, project, LABEL_W, STAGE_LANE, STAGE_SEG, PLAN
           <div className={cn(LABEL_W, 'shrink-0')} />
           <div className="relative flex-1 h-5 bg-primary/[0.04] border-b border-border/50">
             {months.map((m, i) => (
-              <div key={i} className="absolute top-0 h-5 flex items-center justify-center text-[10px] text-muted-foreground border-l border-border/40"
+              <div key={i} className="absolute top-0 h-5 flex items-center justify-center text-[11px] text-muted-foreground border-l border-border/40"
                 style={{ left: `${m.left}%`, width: `${m.width}%` }}>{m.width > 3 ? m.label : ''}</div>
             ))}
           </div>
@@ -330,7 +330,7 @@ function PhaseBody({ model, today, project, LABEL_W, STAGE_LANE, STAGE_SEG, PLAN
                       className={cn('absolute cursor-default', tone.line)}
                       style={{ left: `${left}%`, width: `${width}%`, top: p.lane * PLAN_LANE, height: PLAN_SEG, clipPath: clip }}>
                       <div className={cn('absolute inset-[1.5px] flex items-center pr-3 bg-background', tone.text, i === 0 ? 'pl-2' : 'pl-4')} style={{ clipPath: clip }}>
-                        <span className="text-[10px] font-semibold truncate">{p.short}</span>
+                        <span className="text-[11px] font-semibold truncate">{p.short}</span>
                       </div>
                     </div>
                   </TooltipTrigger>
@@ -355,7 +355,7 @@ function PhaseBody({ model, today, project, LABEL_W, STAGE_LANE, STAGE_SEG, PLAN
                   <TooltipTrigger asChild>
                     <div className="absolute top-0 h-6 bg-emerald-500 flex items-center justify-center cursor-default"
                       style={{ left: '0%', width: `${todayPct}%`, clipPath: ARROW_HEAD }}>
-                      <span className="text-[10px] font-bold text-white px-1 truncate">Actual</span>
+                      <span className="text-[11px] font-bold text-white px-1 truncate">Actual</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">

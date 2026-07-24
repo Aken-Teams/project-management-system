@@ -623,7 +623,7 @@ export function AWeeklyReportComposer({
                   <button onClick={() => setOverallOpen(o => !o)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/30">
                     <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="font-medium">本週專案彙整說明</span>
-                    {overall.trim() ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">已填</Badge> : <span className="text-[11px] text-muted-foreground">（選填）</span>}
+                    {overall.trim() ? <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">已填</Badge> : <span className="text-[11px] text-muted-foreground">（選填）</span>}
                     <span className="flex-1" />
                     <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', overallOpen && 'rotate-180')} />
                   </button>
@@ -654,7 +654,7 @@ export function AWeeklyReportComposer({
                           <div key={g.msId}>
                             <div className="flex items-center gap-1.5 px-2 py-1 mt-0.5 bg-muted/40 text-[11px] font-semibold text-muted-foreground sticky top-0">
                               <span className="flex-1 truncate">{g.msName}</span>
-                              <span className="text-[10px] font-normal text-muted-foreground/70">{g.total > 0 ? `${g.total} 個任務` : '無任務'}</span>
+                              <span className="text-[11px] font-normal text-muted-foreground/70">{g.total > 0 ? `${g.total} 個任務` : '無任務'}</span>
                             </div>
                             {g.tasks.length === 0 ? (
                               <p className="text-[11px] text-muted-foreground/50 px-3 py-1.5">此里程碑底下沒有任務</p>
@@ -662,13 +662,13 @@ export function AWeeklyReportComposer({
                               <button key={n.id} onClick={() => chooseTask(n.id)}
                                 className={cn('w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/60 text-left', n.id === selectedId && 'bg-primary/10')}
                                 style={{ paddingLeft: 12 + n.depth * 16 }}>
-                                <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[10px] text-violet-500 ml-1">(父)</span>}{(() => { const bt = byId.get(n.id); return bt ? <span className="text-[10px] text-muted-foreground/70 tabular-nums ml-1.5">{new Date(bt.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}~{new Date(bt.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span> : null })()}</span>
-                                {pendingDelayTaskIds.has(n.id) && <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-300 shrink-0">延期待審核</Badge>}
+                                <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[11px] text-violet-500 ml-1">(父)</span>}{(() => { const bt = byId.get(n.id); return bt ? <span className="text-[11px] text-muted-foreground/70 tabular-nums ml-1.5">{new Date(bt.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}~{new Date(bt.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span> : null })()}</span>
+                                {pendingDelayTaskIds.has(n.id) && <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-300 shrink-0">延期待審核</Badge>}
                                 {byId.get(n.id)?.completedAt
-                                  ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 shrink-0">已完成</Badge>
-                                  : (rows[n.id] || []).some(r => r.content.trim() && r.date) ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge> : null}
-                                {n.hasR ? <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 shrink-0">R已提交</Badge> : <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground/50 shrink-0">未提交</Badge>}
-                                <span className="text-[10px] text-muted-foreground tabular-nums w-8 text-right shrink-0">{n.progress}%</span>
+                                  ? <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-emerald-100 text-emerald-700 border-emerald-300 shrink-0">已完成</Badge>
+                                  : (rows[n.id] || []).some(r => r.content.trim() && r.date) ? <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-300 shrink-0">我已填</Badge> : null}
+                                {n.hasR ? <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300 shrink-0">R已提交</Badge> : <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-muted-foreground/50 shrink-0">未提交</Badge>}
+                                <span className="text-[11px] text-muted-foreground tabular-nums w-8 text-right shrink-0">{n.progress}%</span>
                               </button>
                             ))}
                           </div>
@@ -684,7 +684,7 @@ export function AWeeklyReportComposer({
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <div className="text-[11px] text-muted-foreground truncate">{sel.path.replace('› ' + sel.title, '')}</div>
-                        <div className="text-sm font-semibold flex items-center gap-1.5">你正在填：{sel.title}{sel.isParent && <Badge variant="outline" className="text-[10px] px-1 py-0 text-violet-600 border-violet-300">父任務</Badge>}</div>
+                        <div className="text-sm font-semibold flex items-center gap-1.5">你正在填：{sel.title}{sel.isParent && <Badge variant="outline" className="text-[11px] px-1 py-0 text-violet-600 border-violet-300">父任務</Badge>}</div>
                         <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3 shrink-0" />預計 {new Date(selTask.startDate).toLocaleDateString('zh-TW')} ~ {new Date(selTask.endDate).toLocaleDateString('zh-TW')}</div>
                       </div>
                       <div className="w-24 shrink-0 flex items-center gap-1.5"><Progress value={sel.progress} className="h-2 flex-1 bg-slate-200 dark:bg-slate-700" /><span className="text-[11px] font-medium text-muted-foreground tabular-nums w-8 text-right">{sel.progress}%</span></div>
@@ -695,7 +695,7 @@ export function AWeeklyReportComposer({
                       {selRLogs.length > 0 && (
                         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400" onClick={() => setRViewOpen(true)}>
                           <Inbox className="h-3.5 w-3.5" />查看 R 報告
-                          <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[10px]">{selRLogs.length}</span>
+                          <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[11px]">{selRLogs.length}</span>
                         </Button>
                       )}
                       {selDirty && <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive" onClick={() => setClearOpen(true)}><Eraser className="h-3.5 w-3.5" />清空</Button>}
@@ -736,7 +736,7 @@ export function AWeeklyReportComposer({
                           <button type="button" onClick={() => pickFilesForRow(ri)} disabled={uploadingRow !== null} title="上傳附件" className="text-muted-foreground/60 hover:text-primary text-xs mt-1 shrink-0 h-[24px] w-[24px] inline-flex items-center justify-center rounded hover:bg-primary/10 disabled:opacity-40">
                             {uploadingRow === ri
                               ? (uploadRowProgress > 0
-                                  ? <span className="text-[9px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
+                                  ? <span className="text-[11px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
                                   : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
                               : <Paperclip className="h-3.5 w-3.5" />}
                           </button>
@@ -824,9 +824,9 @@ export function AWeeklyReportComposer({
             {selRLogs.map(l => (
               <div key={l.id} className="rounded-lg border bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-blue-600 text-white text-[10px] font-medium flex items-center justify-center shrink-0">{l.author.split(' ').map(x => x[0]).join('').slice(0, 2)}</div>
+                  <div className="h-6 w-6 rounded-full bg-blue-600 text-white text-[11px] font-medium flex items-center justify-center shrink-0">{l.author.split(' ').map(x => x[0]).join('').slice(0, 2)}</div>
                   <span className="text-sm font-medium">{l.author}</span>
-                  <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 ml-auto">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</Badge>
+                  <Badge variant="outline" className="text-[11px] font-mono px-1.5 py-0 ml-auto">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</Badge>
                 </div>
                 <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">{l.content}</div>
                 {l.attachments?.length ? (
@@ -873,7 +873,7 @@ export function AWeeklyReportComposer({
                           <CircleCheck className="h-3.5 w-3.5 text-green-600 shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-foreground truncate">{d.title}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">里程碑：{d.msName}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">里程碑：{d.msName}</div>
                           </div>
                           <span className="tabular-nums text-muted-foreground shrink-0">{d.from}%</span>
                           <span className="text-muted-foreground shrink-0">→</span>
@@ -916,7 +916,7 @@ export function AWeeklyReportComposer({
                     const prevMs = i > 0 ? prereqTreeItems[i - 1].msName : null
                     return (
                       <div key={t.id}>
-                        {t.msName !== prevMs && <div className="text-[10px] font-semibold text-muted-foreground/70 px-1 pt-1 pb-0.5">{t.msName}</div>}
+                        {t.msName !== prevMs && <div className="text-[11px] font-semibold text-muted-foreground/70 px-1 pt-1 pb-0.5">{t.msName}</div>}
                         <div className="flex items-center gap-1 text-xs py-0.5" style={{ paddingLeft: 4 + t.depth * 14 }}>
                           {t.depth > 0 && <span className="text-muted-foreground/40 -ml-2.5 mr-0.5">└</span>}
                           <CircleCheck className="h-3 w-3 text-green-500 shrink-0" />

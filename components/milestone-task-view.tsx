@@ -352,7 +352,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
             {overdue && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
             <span className={cn('text-sm truncate', effectiveStatus(task) === 'done' && 'text-muted-foreground')}>{task.title}</span>
             {children.length > 0 && (
-              <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
+              <span className="text-[11px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 shrink-0">
                 {children.filter(s => s.progress >= 100 || s.status === 'done').length}/{children.length}
               </span>
             )}
@@ -367,7 +367,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
             {task.assignee ? (
               <>
                 <Avatar className="h-6 w-6 shrink-0">
-                  <AvatarFallback className={cn('text-[9px] text-white', getAvatarColor(task.assignee))}>
+                  <AvatarFallback className={cn('text-[11px] text-white', getAvatarColor(task.assignee))}>
                     {task.assignee.split(' ').map(n => n[0]).join('')}
                   </AvatarFallback>
                 </Avatar>
@@ -527,7 +527,7 @@ export function MilestoneTaskView({ project, onTaskUpdate, readOnly }: Milestone
                   <Settings2 className="h-3.5 w-3.5" />
                   進階選項
                   {showBaseline && (
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] rounded-full ml-0.5">
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[11px] rounded-full ml-0.5">
                       1
                     </Badge>
                   )}
