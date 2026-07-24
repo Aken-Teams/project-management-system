@@ -218,6 +218,8 @@ export interface TeamMember {
   role: TeamRole
   responsibility: string
   isActive?: boolean
+  reportReviewerName?: string // 該成員的報告審核主管（R 主管），選填
+  reportReviewerEmail?: string
 }
 
 export const PROJECT_TYPE_LABELS: Record<string, string> = {

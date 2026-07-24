@@ -206,6 +206,10 @@ model ProjectTeamMember {
   jobTitle       String   @default("") @map("job_title")
   organization   String   @default("")
   responsibility String   @default("") @db.VarChar(500)
+  // 該成員的報告審核主管（R 主管）：選填。有壓人代表此成員的 R 週報需經此主管審核。
+  // AD 選人，存 name+email（email 供日後比對主管身分），先不做 User FK。
+  reportReviewerName  String? @map("report_reviewer_name")
+  reportReviewerEmail String? @map("report_reviewer_email")
 
   project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)

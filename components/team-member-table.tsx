@@ -25,7 +25,7 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
 function RoleBadge({ role, label }: { role: string; label: string }) {
   const c = ROLE_COLORS[role] || ROLE_COLORS.I
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${c.bg} ${c.text}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-sm font-medium whitespace-nowrap ${c.bg} ${c.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
       {label}
     </span>
@@ -41,6 +41,8 @@ export interface TeamMember {
   responsibility: string
   organization?: string
   email?: string
+  reportReviewerName?: string // 該成員的報告審核主管（R 主管），選填
+  reportReviewerEmail?: string
 }
 
 interface SearchResult {
@@ -60,7 +62,7 @@ export interface TeamMemberTableProps {
 }
 
 // ─── Column grid class ──────────────────────────────────────
-const GRID_COLS = 'grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center'
+const GRID_COLS = 'grid grid-cols-[minmax(120px,1.3fr)_72px_72px_92px_1fr_1fr_28px] gap-0 items-center'
 
 // ─── NameAutocompleteInput (shared) ─────────────────────────
 function NameAutocompleteInput({
@@ -237,6 +239,27 @@ function NameAutocompleteInput({
   )
 }
 
+// ─── ReviewerPickerCell（報告審核主管格）─────────────────────
+// 與「姓名」欄一致：頭像 + 可直接編輯的搜尋輸入框（有值才顯示頭像；不用打叉、不綁定）
+function ReviewerPickerCell({ name, onSet }: { name?: string; onSet: (name: string, email: string) => void }) {
+  return (
+    <div className="flex items-center gap-2 pr-2 min-w-0">
+      {name && (
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
+          {name.charAt(0)}
+        </div>
+      )}
+      <NameAutocompleteInput
+        value={name || ''}
+        onChange={(val) => onSet(val, '')}
+        onSelect={(u) => onSet(u.name, u.email || '')}
+        placeholder="—（選填）"
+        className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5 min-w-0"
+      />
+    </div>
+  )
+}
+
 // ─── MemberRow ──────────────────────────────────────────────
 function MemberRow({
   member,
@@ -318,6 +341,14 @@ function MemberRow({
         />
       </div>
 
+      {/* 報告審核主管（選填，AD 選人） */}
+      <div className="px-1 min-w-0">
+        <ReviewerPickerCell
+          name={member.reportReviewerName}
+          onSet={(n, e) => { onUpdate(member.id, 'reportReviewerName', n); onUpdate(member.id, 'reportReviewerEmail', e) }}
+        />
+      </div>
+
       {/* Remove */}
       <div className="flex justify-center">
         <Button
@@ -350,6 +381,13 @@ function InlineMemberInput({
   const [responsibility, setResponsibility] = useState('')
   const [organization, setOrganization] = useState('')
   const [email, setEmail] = useState('')
+  const [reviewerName, setReviewerName] = useState('')
+  const [reviewerEmail, setReviewerEmail] = useState('')
+
+  const resetFields = () => {
+    setName(''); setRole('R'); setJobTitle(''); setResponsibility('')
+    setOrganization(''); setEmail(''); setReviewerName(''); setReviewerEmail('')
+  }
 
   const handleAdd = () => {
     if (!name.trim()) return
@@ -361,13 +399,10 @@ function InlineMemberInput({
       responsibility: responsibility.trim(),
       organization: organization.trim() || undefined,
       email: email.trim() || undefined,
+      reportReviewerName: reviewerName.trim() || undefined,
+      reportReviewerEmail: reviewerEmail.trim() || undefined,
     })
-    setName('')
-    setRole('R')
-    setJobTitle('')
-    setResponsibility('')
-    setOrganization('')
-    setEmail('')
+    resetFields()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -395,13 +430,10 @@ function InlineMemberInput({
               responsibility: responsibility.trim(),
               organization: user.organization || undefined,
               email: user.email || undefined,
+              reportReviewerName: reviewerName.trim() || undefined,
+              reportReviewerEmail: reviewerEmail.trim() || undefined,
             })
-            setName('')
-            setRole('R')
-            setJobTitle('')
-            setResponsibility('')
-            setOrganization('')
-            setEmail('')
+            resetFields()
           }}
           onKeyDown={handleKeyDown}
           placeholder="+ 新增成員..."
@@ -466,6 +498,16 @@ function InlineMemberInput({
         )}
       </div>
 
+      {/* 報告審核主管（選填） */}
+      <div className="px-1 min-w-0">
+        {name.trim() && (
+          <ReviewerPickerCell
+            name={reviewerName}
+            onSet={(n, e) => { setReviewerName(n); setReviewerEmail(e) }}
+          />
+        )}
+      </div>
+
       {/* Add button */}
       <div className="flex justify-center">
         {name.trim() && (
@@ -505,6 +547,7 @@ export function TeamMemberTable({
         <span className="text-center">組織</span>
         <span className="text-center">角色</span>
         <span className="pl-1.5">負責工作項目</span>
+        <span className="pl-1.5">報告審核主管</span>
         <span />
       </div>
 

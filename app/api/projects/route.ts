@@ -91,7 +91,7 @@ interface CreateProjectBody {
   budget: number
   ownerName: string
   team: string[]
-  teamMembers?: { name: string; role: string; jobTitle?: string; organization?: string; responsibility: string; email?: string }[]
+  teamMembers?: { name: string; role: string; jobTitle?: string; organization?: string; responsibility: string; email?: string; reportReviewerName?: string; reportReviewerEmail?: string }[]
   milestones: { id: string; name: string; dueDate: string; startDate?: string }[]
   tasks?: {
     milestoneId: string
@@ -442,6 +442,8 @@ export async function POST(request: NextRequest) {
               jobTitle: tm.jobTitle?.trim() || '',
               organization: tm.organization?.trim() || '',
               responsibility: tm.responsibility || '',
+              reportReviewerName: tm.reportReviewerName?.trim() || null,
+              reportReviewerEmail: tm.reportReviewerEmail?.trim() || null,
             },
             create: {
               projectId: proj.id,
@@ -450,6 +452,8 @@ export async function POST(request: NextRequest) {
               jobTitle: tm.jobTitle?.trim() || '',
               organization: tm.organization?.trim() || '',
               responsibility: tm.responsibility || '',
+              reportReviewerName: tm.reportReviewerName?.trim() || null,
+              reportReviewerEmail: tm.reportReviewerEmail?.trim() || null,
             },
           })
         }

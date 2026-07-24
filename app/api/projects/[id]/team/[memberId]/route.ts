@@ -12,6 +12,8 @@ interface UpdateMemberBody {
   jobTitle?: string
   organization?: string
   responsibility?: string
+  reportReviewerName?: string | null
+  reportReviewerEmail?: string | null
 }
 
 export async function PUT(
@@ -42,6 +44,12 @@ export async function PUT(
     if (body.responsibility !== undefined) {
       data.responsibility = body.responsibility.trim()
     }
+    if (body.reportReviewerName !== undefined) {
+      data.reportReviewerName = body.reportReviewerName?.trim() || null
+    }
+    if (body.reportReviewerEmail !== undefined) {
+      data.reportReviewerEmail = body.reportReviewerEmail?.trim() || null
+    }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ error: '沒有提供任何更新欄位' }, { status: 400 })
@@ -61,6 +69,8 @@ export async function PUT(
       organization: updated.organization || updated.user.organization || '',
       role: body.role ?? updated.role,
       responsibility: updated.responsibility,
+      reportReviewerName: updated.reportReviewerName || undefined,
+      reportReviewerEmail: updated.reportReviewerEmail || undefined,
     })
   } catch (error) {
     console.error('Failed to update team member:', error)

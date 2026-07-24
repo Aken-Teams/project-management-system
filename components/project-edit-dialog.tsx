@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, ListChecks, CalendarClock, Send, DollarSign, BarChart3, CornerDownRight } from 'lucide-react'
+import { Loader2, Settings2, FileText, Target, Users, Trash2, Plus, AlertTriangle, Pencil, X, ShieldAlert, Shield, ListChecks, CalendarClock, Send, DollarSign, BarChart3, CornerDownRight } from 'lucide-react'
 import { BudgetListEditor, validateBudgetItems, type BudgetItem } from '@/components/budget-list-editor'
 import { GanttChart } from '@/components/gantt-chart'
 import { TimelineTable, type TimelineTeamMember, type OverflowInfo, type DropMode } from '@/components/timeline-table'
@@ -108,7 +108,7 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
 function RoleBadge({ role, label }: { role: string; label: string }) {
   const c = ROLE_COLORS[role] || ROLE_COLORS.I
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${c.bg} ${c.text}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-sm font-medium whitespace-nowrap ${c.bg} ${c.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
       {label}
     </span>
@@ -140,6 +140,29 @@ function getRiskSeverity(impact: string, probability: string): 'low' | 'medium' 
   if (score >= 6) return 'high'
   if (score >= 3) return 'medium'
   return 'low'
+}
+
+// 團隊表格內「報告審核主管」格：與「姓名」欄一致（頭像 + 可編輯搜尋框，不用打叉）。
+//   本地輸入狀態；選定 AD 使用者或清空時才寫回後端（避免每次按鍵都 PUT）。
+function ReviewerCell({ current, onSet }: { current?: string; onSet: (name: string, email: string) => void }) {
+  const [input, setInput] = useState(current || '')
+  useEffect(() => { setInput(current || '') }, [current])
+  return (
+    <div className="flex items-center gap-2 pr-2 min-w-0">
+      {input && (
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">
+          {input.charAt(0)}
+        </div>
+      )}
+      <TeamMemberAutocomplete
+        value={input}
+        onChange={(val) => { setInput(val); if (val === '') onSet('', '') }}
+        onSelect={(u) => onSet(u.name, u.email || '')}
+        placeholder="—（選填）"
+        className="h-8 border-0 bg-transparent font-medium text-sm focus-visible:ring-1 px-1.5"
+      />
+    </div>
+  )
 }
 
 export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamChange, onRiskChange, onWorkItemsChange, onSaved, defaultTab }: ProjectEditDialogProps) {
@@ -775,6 +798,24 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     }
   }, [project.id, onTeamChange])
 
+  // 設定/清除某成員的報告審核主管（name+email 一併 PUT）
+  const handleSetReviewer = useCallback(async (memberId: string, name: string, email: string) => {
+    setTeamError('')
+    setTeamMembers(prev => prev.map(m =>
+      m.id === memberId ? { ...m, reportReviewerName: name || undefined, reportReviewerEmail: email || undefined } : m
+    ))
+    try {
+      await fetch(`/api/projects/${project.id}/team/${memberId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportReviewerName: name || null, reportReviewerEmail: email || null }),
+      })
+      onTeamChange?.()
+    } catch {
+      setTeamError('更新審核主管失敗')
+    }
+  }, [project.id, onTeamChange])
+
   const handleRemoveMember = useCallback(async (memberId: string) => {
     setTeamError('')
     setTeamLoading(memberId)
@@ -1320,12 +1361,13 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
           <TabsContent value="team" className="flex-1 min-h-0 overflow-y-auto mt-4 space-y-3 px-1">
             <div className="rounded-lg border overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide">
+              <div className="grid grid-cols-[minmax(120px,1.3fr)_72px_72px_92px_1fr_1fr_28px] gap-0 items-center px-3 py-2 bg-muted/60 border-b text-sm font-medium text-muted-foreground tracking-wide">
                 <span>姓名</span>
                 <span className="text-center">職稱</span>
                 <span className="text-center">組織</span>
                 <span className="text-center">角色</span>
                 <span className="pl-1.5">負責工作項目</span>
+                <span className="pl-1.5">報告審核主管</span>
                 <span />
               </div>
 
@@ -1333,7 +1375,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               {teamMembers.map((member) => (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center px-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm"
+                  className="grid grid-cols-[minmax(120px,1.3fr)_72px_72px_92px_1fr_1fr_28px] gap-0 items-center px-3 py-1.5 border-t hover:bg-muted/20 transition-colors text-sm"
                 >
                   {/* Name */}
                   <div className="flex items-center gap-2 pr-2 min-w-0">
@@ -1423,6 +1465,14 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                       placeholder="負責工作項目"
                       className="h-8 border-0 bg-transparent text-sm focus-visible:ring-1 px-1.5"
                       disabled={teamLoading === member.id}
+                    />
+                  </div>
+
+                  {/* 報告審核主管（選填，AD 選人） */}
+                  <div className="px-1 min-w-0">
+                    <ReviewerCell
+                      current={member.reportReviewerName}
+                      onSet={(n, e) => handleSetReviewer(member.id, n, e)}
                     />
                   </div>
 
@@ -1898,7 +1948,7 @@ function TeamMemberAddRow({
   }
 
   return (
-    <div className="grid grid-cols-[1fr_80px_80px_100px_1fr_32px] gap-0 items-center px-3 py-1 border-t">
+    <div className="grid grid-cols-[minmax(120px,1.3fr)_72px_72px_92px_1fr_1fr_28px] gap-0 items-center px-3 py-1 border-t">
       {/* Name with autocomplete */}
       <div className="pr-2">
         <TeamMemberAutocomplete
@@ -1976,6 +2026,11 @@ function TeamMemberAddRow({
             className="h-8 border-0 bg-transparent text-sm text-muted-foreground focus-visible:ring-1 px-1.5"
           />
         )}
+      </div>
+
+      {/* 報告審核主管：新增後於該列設定（此處留空對齊） */}
+      <div className="px-1 flex items-center">
+        {name.trim() && <span className="text-xs text-muted-foreground/50">新增後設定</span>}
       </div>
 
       {/* Add button */}

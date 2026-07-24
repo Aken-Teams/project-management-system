@@ -157,6 +157,8 @@ export function dbProjectToFrontend(
       jobTitle: string
       organization: string
       responsibility: string
+      reportReviewerName?: string | null
+      reportReviewerEmail?: string | null
     }[]
     weeklyUpdates: {
       id: string
@@ -404,6 +406,8 @@ export function dbProjectToFrontend(
       role: tm.role as 'R' | 'A' | 'C' | 'I' | 'P' | 'S',
       responsibility: tm.responsibility,
       isActive: tm.user.isActive,
+      reportReviewerName: tm.reportReviewerName || undefined,
+      reportReviewerEmail: tm.reportReviewerEmail || undefined,
     })),
     milestones: feMilestones,
     baseline: feBaseline,

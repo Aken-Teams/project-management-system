@@ -205,6 +205,8 @@ interface TeamMemberDraft {
   organization?: string
   email?: string
   jobTitle?: string
+  reportReviewerName?: string
+  reportReviewerEmail?: string
 }
 
 interface MilestoneTaskDraft {
@@ -1306,7 +1308,7 @@ export default function NewProjectPage() {
     })
     const teamMembersData = aiTeamDetails
       .filter(m => m.name.trim())
-      .map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility, email: m.email, jobTitle: m.jobTitle, organization: m.organization }))
+      .map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility, email: m.email, jobTitle: m.jobTitle, organization: m.organization, reportReviewerName: m.reportReviewerName, reportReviewerEmail: m.reportReviewerEmail }))
 
     setIsCreating(true)
     try {
@@ -1422,7 +1424,7 @@ export default function NewProjectPage() {
         teamNames.push(m.name)
       }
     })
-    const teamMembersData = manualTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility, email: m.email, jobTitle: m.jobTitle, organization: m.organization }))
+    const teamMembersData = manualTeamDetails.map((m, i) => ({ id: `temp-${i}`, name: m.name, role: m.role, responsibility: m.responsibility, email: m.email, jobTitle: m.jobTitle, organization: m.organization, reportReviewerName: m.reportReviewerName, reportReviewerEmail: m.reportReviewerEmail }))
 
     // Validate budget items before submit
     const budgetErrors = validateBudgetItems(manualBudgetItems)
@@ -2247,6 +2249,7 @@ export default function NewProjectPage() {
                     />
                   </div>
 
+
                   <Separator />
 
                   <div className="space-y-3">
@@ -2803,6 +2806,7 @@ export default function NewProjectPage() {
                       onUpdate={(id, field, value) => setManualTeamDetails(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m))}
                     />
                   </div>
+
 
                   <Separator />
 

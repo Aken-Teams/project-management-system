@@ -33,6 +33,8 @@ interface AddMemberBody {
   jobTitle?: string
   organization?: string
   responsibility?: string
+  reportReviewerName?: string
+  reportReviewerEmail?: string
 }
 
 export async function POST(
@@ -103,6 +105,8 @@ export async function POST(
         jobTitle: body.jobTitle?.trim() || '',
         organization: body.organization?.trim() || '',
         responsibility: body.responsibility?.trim() || '',
+        reportReviewerName: body.reportReviewerName?.trim() || null,
+        reportReviewerEmail: body.reportReviewerEmail?.trim() || null,
       },
       include: { user: true },
     })
@@ -115,6 +119,8 @@ export async function POST(
       organization: member.organization || member.user.organization || '',
       role: body.role,
       responsibility: member.responsibility,
+      reportReviewerName: member.reportReviewerName || undefined,
+      reportReviewerEmail: member.reportReviewerEmail || undefined,
     }, { status: 201 })
   } catch (error) {
     console.error('Failed to add team member:', error)
