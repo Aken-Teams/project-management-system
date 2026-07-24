@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -30,6 +31,7 @@ import {
 import { useAuth } from '@/lib/auth-context'
 import { isSameUser } from '@/lib/user-match'
 import { uploadFile } from '@/lib/upload-file'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
@@ -146,6 +148,18 @@ interface MyTasksProject {
 type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; note?: string | null; createdAt: string; projectId?: string }
 
 // 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
+// R 報告審核主管收件匣型別（督導總覽：每 R 的待審 + 追蹤狀態）
+type ReviewSubmission = {
+  taskId: string; taskTitle: string; weekOf: string | null
+  reportedDone: boolean
+  logs: { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[] }[]
+}
+type Reviewee = {
+  authorId: string; authorName: string; authorEmail: string
+  pending: ReviewSubmission[]; submittedThisWeek: boolean; openTaskCount: number
+}
+type ReviewProject = { projectId: string; projectName: string; reviewees: Reviewee[] }
+
 type ReviewLogRow = { log: TaskLog; srcTitle?: string }
 type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logRows: ReviewLogRow[]; fileCount: number }
 // 依任務樹狀節點
@@ -165,6 +179,10 @@ const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
   cancelled: { label: '取消回報', cls: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400' },
   confirmed: { label: '審核通過', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
   rejected: { label: '退回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
+  // R 報告審核主管流程
+  report_submitted: { label: '送出待審', cls: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400' },
+  report_approved: { label: '主管核准', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
+  report_rejected: { label: '主管駁回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
 }
 
 export default function MyTasksPage() {
@@ -172,6 +190,46 @@ export default function MyTasksPage() {
 
   const [apiProjects, setApiProjects] = useState<MyTasksProject[]>([])
   const [loading, setLoading] = useState(true)
+  // R 報告審核主管收件匣（我要審核的成員報告）
+  const [reviewInbox, setReviewInbox] = useState<ReviewProject[]>([])
+  const [isReviewer, setIsReviewer] = useState(false) // 我是否為任何人的報告審核主管
+  const refetchReviewInbox = useCallback(async () => {
+    if (!user?.email) return
+    try {
+      const res = await fetch(`/api/report-reviews?email=${encodeURIComponent(user.email)}`)
+      if (res.ok) { const d = await res.json(); setReviewInbox(d.projects ?? []); setIsReviewer(!!d.isReviewer) }
+    } catch { /* ignore */ }
+  }, [user?.email])
+  useEffect(() => { refetchReviewInbox() }, [refetchReviewInbox])
+  // 視窗重新聚焦時重抓（Alice 切去別的 session 送報告後切回來）
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') refetchReviewInbox() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible) }
+  }, [refetchReviewInbox])
+  // 審查報告：核准 / 駁回
+  const [reviewBusy, setReviewBusy] = useState<string | null>(null) // submission key 處理中
+  const [rejectTarget, setRejectTarget] = useState<{ projectId: string; authorId: string; authorName: string; sub: ReviewSubmission } | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [reviewDialogProjectId, setReviewDialogProjectId] = useState<string | null>(null)
+  const reviewDialogProject = useMemo(() => reviewInbox.find(p => p.projectId === reviewDialogProjectId) || null, [reviewInbox, reviewDialogProjectId])
+  const subKey = (projectId: string, authorId: string, s: ReviewSubmission) => `${projectId}:${authorId}:${s.taskId}:${s.weekOf ?? '_'}`
+  const doReviewAction = async (projectId: string, authorId: string, s: ReviewSubmission, action: 'approve' | 'reject', note?: string) => {
+    if (!user?.email) return
+    setReviewBusy(subKey(projectId, authorId, s))
+    try {
+      const res = await fetch('/api/report-reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewerEmail: user.email, projectId, taskId: s.taskId, authorId, weekOf: s.weekOf, action, note }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || '操作失敗'); return }
+      toast.success(action === 'approve' ? '已核准，報告進入更新紀錄' : '已駁回，退回成員')
+      await refetchReviewInbox()
+    } catch { toast.error('操作失敗') }
+    finally { setReviewBusy(null) }
+  }
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set())
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -327,6 +385,7 @@ export default function MyTasksPage() {
     C: { label: '諮詢', icon: 'message', desc: '查看專案進度' },
     I: { label: '知會', icon: 'bell', desc: '查看專案進度' },
     S: { label: '審核', icon: 'shield', desc: '審核延期申請' },
+    REVIEW: { label: '審查報告', icon: 'clipboard-check', desc: '審核你負責督導的成員送出的報告' },
   }
 
   const userRolesMap = useMemo(() => {
@@ -346,12 +405,19 @@ export default function MyTasksPage() {
     [apiProjects, user],
   )
 
+  const reviewPendingCount = useMemo(
+    () => reviewInbox.reduce((n, p) => n + p.reviewees.reduce((m, rv) => m + rv.pending.length, 0), 0),
+    [reviewInbox],
+  )
+
   const availableRoles = useMemo(() => {
     // R 改由「我的任務週報(MY)」涵蓋，所以角色頁籤不再列 R
     const order = ['S', 'A', 'P', 'C', 'I']
     const roleTabs = order.filter(r => userRolesMap.has(r))
-    return myReportProjects.length > 0 ? ['MY', ...roleTabs] : roleTabs
-  }, [userRolesMap, myReportProjects])
+    const base = myReportProjects.length > 0 ? ['MY', ...roleTabs] : roleTabs
+    // 我是任何人的報告審核主管 → 常駐「審查報告」頁籤（即使暫無待審）
+    return isReviewer ? [...base, 'REVIEW'] : base
+  }, [userRolesMap, myReportProjects, isReviewer])
 
   // Auto-set initial active role
   useEffect(() => {
@@ -1205,17 +1271,25 @@ export default function MyTasksPage() {
     const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const endDate = new Date(y, m - 1, d + 6)
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
-    const map = new Map<string, boolean>()
+    // 每個任務本填報週的「我的報告」審核狀態：none 未填 / reviewing 審核中 / rejected 被駁回 / published 已通過(進更新紀錄)
+    const map = new Map<string, 'none' | 'reviewing' | 'rejected' | 'published'>()
     for (const group of rActiveGroups) {
       for (const task of group.tasks) {
-        const hasLogs = rReportDialogProject.taskLogs.some(
-          l => l.taskId === task.id && l.logDate >= weekStart && l.logDate <= weekEnd
+        const logs = rReportDialogProject.taskLogs.filter(
+          l => l.taskId === task.id && isSameUser(l.author, user) &&
+            (l.weekOf ? l.weekOf === rReportWeekOf : (l.logDate >= weekStart && l.logDate <= weekEnd))
         )
-        map.set(task.id, hasLogs)
+        let st: 'none' | 'reviewing' | 'rejected' | 'published' = 'none'
+        if (logs.length > 0) {
+          if (logs.some(l => l.reviewerRejectedAt)) st = 'rejected'
+          else if (logs.every(l => l.publishedAt)) st = 'published'
+          else st = 'reviewing'
+        }
+        map.set(task.id, st)
       }
     }
     return map
-  }, [rReportDialogProject, rReportWeekOf, rActiveGroups])
+  }, [rReportDialogProject, rReportWeekOf, rActiveGroups, user])
 
   // Prefill R log rows when task or week changes
   useEffect(() => {
@@ -1227,9 +1301,10 @@ export default function MyTasksPage() {
     const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const endDate = new Date(y, m - 1, d + 6)
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
-    // 只載「自己」填的紀錄；別人的不自動代入
+    // 只載「自己」填的紀錄；別人的不自動代入。依「填報週(weekOf)」對應，舊資料無 weekOf 才退回用 logDate。
     const logs = rReportDialogProject.taskLogs
-      .filter(l => l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd && isSameUser(l.author, user))
+      .filter(l => l.taskId === rSelectedTaskId && isSameUser(l.author, user) &&
+        (l.weekOf ? l.weekOf === rReportWeekOf : (l.logDate >= weekStart && l.logDate <= weekEnd)))
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
     if (logs.length > 0) {
       setRLogRows(logs.map(l => ({
@@ -1247,6 +1322,19 @@ export default function MyTasksPage() {
       setRLogNextWeekPlan('')
     }
   }, [rSelectedTaskId, rReportWeekOf, rReportDialogProject, user?.name])
+
+  // 此任務本填報週的報告是否被 R 主管駁回（顯示原因，讓 R 修改重送）
+  const rRejectedNote = useMemo(() => {
+    if (!rSelectedTaskId || !rReportDialogProject) return null
+    const [y, m, d] = rReportWeekOf.split('-').map(Number)
+    const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const endDate = new Date(y, m - 1, d + 6)
+    const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
+    const rejected = rReportDialogProject.taskLogs.find(l =>
+      l.taskId === rSelectedTaskId && l.logDate >= weekStart && l.logDate <= weekEnd &&
+      isSameUser(l.author, user) && l.reviewerRejectedAt)
+    return rejected?.reviewerNote || null
+  }, [rSelectedTaskId, rReportWeekOf, rReportDialogProject, user])
 
   // R dialog: select a task
   const handleRSelectTask = (taskId: string) => {
@@ -1781,7 +1869,9 @@ export default function MyTasksPage() {
           <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg w-fit">
             {availableRoles.map(role => {
               const cfg = ROLE_TAB_CONFIG[role]
-              const count = role === 'MY' ? myReportProjects.length : (userRolesMap.get(role)?.length || 0)
+              const count = role === 'MY' ? myReportProjects.length
+                : role === 'REVIEW' ? reviewPendingCount
+                : (userRolesMap.get(role)?.length || 0)
               return (
                 <button
                   key={role}
@@ -1793,14 +1883,157 @@ export default function MyTasksPage() {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {role !== 'MY' && <span className="font-bold">{role}</span>}
+                  {role !== 'MY' && role !== 'REVIEW' && <span className="font-bold">{role}</span>}
                   <span>{cfg?.label || role}</span>
-                  <span className="text-xs opacity-60">{count}</span>
+                  {role === 'REVIEW' && count > 0
+                    ? <span className="text-[10px] px-1.5 rounded-full bg-red-500 text-white tabular-nums">{count}</span>
+                    : <span className="text-xs opacity-60">{count}</span>}
                 </button>
               )
             })}
           </div>
         )}
+
+        {/* ═══ 審查報告 Tab — 表格：專案 + 審核報告按鈕（點開對話框審核） ═══ */}
+        {activeRole === 'REVIEW' && (
+          reviewInbox.length === 0 ? (
+            <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">你目前不是任何成員的報告審核主管</CardContent></Card>
+          ) : (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">專案</th>
+                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">督導成員</th>
+                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground">需注意</th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reviewInbox.map(proj => {
+                      const pendN = proj.reviewees.reduce((n, rv) => n + rv.pending.length, 0)
+                      const chaseN = proj.reviewees.filter(rv => rv.pending.length === 0 && !rv.submittedThisWeek && rv.openTaskCount > 0).length
+                      return (
+                        <tr key={proj.projectId} className="border-b last:border-0">
+                          <td className="px-4 py-3 font-medium">{proj.projectName}</td>
+                          <td className="px-4 py-3 text-center text-muted-foreground">{proj.reviewees.length} 位</td>
+                          <td className="px-4 py-3 text-center">
+                            {chaseN > 0 ? <Badge variant="destructive" className="text-xs">{chaseN} 人未送</Badge> : <span className="text-muted-foreground">-</span>}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button size="sm" variant={pendN > 0 ? 'outline' : 'ghost'}
+                              className={cn('h-7 text-xs gap-1', pendN > 0 && 'border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400')}
+                              onClick={() => setReviewDialogProjectId(proj.projectId)}>
+                              <ClipboardList className="h-3 w-3" />審核報告
+                              {pendN > 0 && <Badge className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[10px] ml-0.5">{pendN}</Badge>}
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )
+        )}
+
+        {/* 審核報告對話框：某專案的督導成員 + 待審報告 */}
+        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) setReviewDialogProjectId(null) }}>
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b">
+              <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />審核報告 — {reviewDialogProject?.projectName}</DialogTitle>
+              <DialogDescription className="text-sm">審核成員送出的報告；通過即進入更新紀錄，駁回可填原因退回。紅字為本週尚未送出、需追蹤者。</DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {reviewDialogProject?.reviewees.map(rv => (
+                <div key={rv.authorId} className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">{rv.authorName.charAt(0)}</div>
+                    <span className="text-sm font-medium">{rv.authorName}</span>
+                    {rv.pending.length > 0 ? (
+                      <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{rv.pending.length} 筆待審</Badge>
+                    ) : rv.submittedThisWeek ? (
+                      <Badge className="text-[11px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">本週已送出</Badge>
+                    ) : rv.openTaskCount > 0 ? (
+                      <Badge className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">本週未送出 · {rv.openTaskCount} 個進行中任務（需追）</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[11px] text-muted-foreground">無進行中任務</Badge>
+                    )}
+                  </div>
+                  {rv.pending.map(s => {
+                    const busy = reviewBusy === subKey(reviewDialogProject.projectId, rv.authorId, s)
+                    return (
+                      <div key={subKey(reviewDialogProject.projectId, rv.authorId, s)} className="rounded-lg border p-3 space-y-2 ml-9">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{s.taskTitle}</span>
+                          {s.weekOf && <span className="text-xs text-muted-foreground">填報週 {s.weekOf}</span>}
+                          {s.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">已回報 100% 完成</Badge>}
+                        </div>
+                        <div className="space-y-1.5 rounded-md bg-muted/20 p-2.5">
+                          {s.logs.map(l => (
+                            <div key={l.id} className="text-sm">
+                              <span className="text-xs text-muted-foreground tabular-nums mr-2">{l.logDate}</span>
+                              <span className="text-foreground/80 whitespace-pre-line">{l.content}</span>
+                              {l.attachments?.length > 0 && (
+                                <span className="ml-2 inline-flex gap-1">
+                                  {l.attachments.map((a, ai) => (
+                                    <a key={ai} href={a.url} download={a.name} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline">
+                                      <Paperclip className="h-3 w-3" />{a.name}
+                                    </a>
+                                  ))}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
+                            disabled={busy} onClick={() => { setRejectTarget({ projectId: reviewDialogProject.projectId, authorId: rv.authorId, authorName: rv.authorName, sub: s }); setRejectReason('') }}>
+                            <X className="h-3.5 w-3.5" />駁回
+                          </Button>
+                          <Button size="sm" className="h-7 text-xs gap-1" disabled={busy}
+                            onClick={() => doReviewAction(reviewDialogProject.projectId, rv.authorId, s, 'approve')}>
+                            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}通過
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+              {reviewDialogProject && reviewDialogProject.reviewees.every(rv => rv.pending.length === 0) && (
+                <p className="text-sm text-muted-foreground text-center py-4">目前沒有待審核的報告</p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* 駁回原因對話框 */}
+        <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) setRejectTarget(null) }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>駁回報告</DialogTitle>
+              <DialogDescription>
+                {rejectTarget && `退回「${rejectTarget.authorName}」的「${rejectTarget.sub.taskTitle}」報告，請填寫駁回原因讓成員修正。`}
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="駁回原因..." rows={4} />
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setRejectTarget(null)}>取消</Button>
+              <Button size="sm" variant="destructive" disabled={!rejectReason.trim()}
+                onClick={async () => {
+                  if (!rejectTarget) return
+                  const t = rejectTarget
+                  setRejectTarget(null)
+                  await doReviewAction(t.projectId, t.authorId, t.sub, 'reject', rejectReason.trim())
+                }}>
+                確認駁回
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ═══ 我的任務週報 Tab — 依「被指派任務」(不分角色) ═══ */}
         {activeRole === 'MY' && myReportProjects.length > 0 && (
@@ -2990,8 +3223,9 @@ export default function MyTasksPage() {
                   <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-medium text-muted-foreground">我的任務</span>
                   {(() => {
-                    const total = Array.from(rTaskWeekStatus.values()).length
-                    const filled = Array.from(rTaskWeekStatus.values()).filter(Boolean).length
+                    const vals = [...rTaskWeekStatus.values()]
+                    const total = vals.length
+                    const filled = vals.filter(s => s !== 'none').length
                     return total > 0 ? (
                       <span className={cn(
                         'text-[10px] px-1.5 py-0.5 rounded',
@@ -3074,7 +3308,7 @@ export default function MyTasksPage() {
                       {/* Task items — 只顯示最底層任務名，層級已由標頭麵包屑表達 */}
                       {group.tasks.map(task => {
                         const isSelected = rSelectedTaskId === task.id
-                        const hasLogs = rTaskWeekStatus.get(task.id) || false
+                        const rStat = rTaskWeekStatus.get(task.id) || 'none'
                         const taskStatus = computeTaskStatus(task, rReportDialogProject!.taskLogs)
                         const fmtMD = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 
@@ -3106,9 +3340,17 @@ export default function MyTasksPage() {
                                   <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] px-1.5 py-0 shrink-0" title="你已回報此任務完成／無後續，等待確認">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已回報
                                   </Badge>
-                                ) : hasLogs ? (
-                                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0">
-                                    <Check className="h-2.5 w-2.5 mr-0.5" />已填
+                                ) : rStat === 'rejected' ? (
+                                  <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 text-[10px] px-1.5 py-0 shrink-0" title="報告被審核主管駁回，請修改後重送">
+                                    被駁回
+                                  </Badge>
+                                ) : rStat === 'reviewing' ? (
+                                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[10px] px-1.5 py-0 shrink-0" title="報告已送出，審核中">
+                                    審核中
+                                  </Badge>
+                                ) : rStat === 'published' ? (
+                                  <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[10px] px-1.5 py-0 shrink-0" title="已通過，進入更新紀錄">
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />已通過
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0">
@@ -3146,6 +3388,12 @@ export default function MyTasksPage() {
                                     <span className="text-xs font-medium text-muted-foreground">本周工作紀錄</span>
                                     <span className="text-[10px] text-muted-foreground/60">（不限每天都要填，日期也不限當周）</span>
                                   </div>
+                                  {rRejectedNote && (
+                                    <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 rounded-md px-2.5 py-1.5">
+                                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                      <span><strong>報告被審核主管駁回</strong>：{rRejectedNote}　請修改後重新送出。</span>
+                                    </div>
+                                  )}
                                   {rDuplicateDates.size > 0 && (
                                     <div className="flex items-start gap-1.5 text-[11px] text-destructive bg-destructive/5 border border-destructive/30 rounded-md px-2.5 py-1.5">
                                       <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -3183,12 +3431,19 @@ export default function MyTasksPage() {
                                                   className="w-full text-xs border rounded-md h-[34px] px-1.5 bg-background disabled:opacity-60 disabled:cursor-not-allowed"
                                                 />
                                                 {row.existingLogId && (
-                                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 px-0.5">已有紀錄</span>
-                                                )}
-                                                {row.updatedAt && (
-                                                  <span className="text-[10px] text-muted-foreground/70 block mt-0.5 px-0.5" title={row.lastEditedBy ? `編輯者：${row.lastEditedBy}` : undefined}>
-                                                    最後編輯：{new Date(row.updatedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {new Date(row.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
-                                                  </span>
+                                                  <TooltipProvider delayDuration={100}>
+                                                    <Tooltip>
+                                                      <TooltipTrigger asChild>
+                                                        <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] dark:bg-amber-900/20 dark:text-amber-400 cursor-default">
+                                                          <Info className="h-3 w-3" />已有紀錄
+                                                        </span>
+                                                      </TooltipTrigger>
+                                                      <TooltipContent side="top" className="text-xs">
+                                                        {row.updatedAt && <div>最後編輯：{new Date(row.updatedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {new Date(row.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</div>}
+                                                        {row.lastEditedBy && <div className="text-muted-foreground">編輯者：{row.lastEditedBy}</div>}
+                                                      </TooltipContent>
+                                                    </Tooltip>
+                                                  </TooltipProvider>
                                                 )}
                                                 {attCount > 0 && (
                                                   <div className="flex flex-wrap gap-1 mt-1">
@@ -3207,11 +3462,18 @@ export default function MyTasksPage() {
                                                         </button>
                                                       </div>
                                                     ) : (
-                                                      <div key={ai} className="relative group/att flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted text-[9px]">
-                                                        <a href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-0.5 hover:opacity-80 min-w-0">
-                                                          <Paperclip className="h-2.5 w-2.5 shrink-0" />
-                                                          <span className="truncate max-w-[50px]">{att.name}</span>
-                                                        </a>
+                                                      <div key={ai} className="relative group/att flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-[11px]">
+                                                        <TooltipProvider delayDuration={100}>
+                                                          <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                              <a href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-1 hover:opacity-80 min-w-0">
+                                                                <Paperclip className="h-3 w-3 shrink-0" />
+                                                                <span className="truncate max-w-[90px]">{att.name}</span>
+                                                              </a>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" className="text-xs max-w-[280px] break-all">{att.name}</TooltipContent>
+                                                          </Tooltip>
+                                                        </TooltipProvider>
                                                         <button
                                                           type="button"
                                                           onClick={() => setRPendingDelete({ kind: 'att', rowIdx: idx, attIdx: ai })}

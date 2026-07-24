@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
-import { notifyRecordUploadedToAccountable } from '@/lib/notifications'
+import { notifyRecordUploadedToAccountable, notifyReportReviewNeeded } from '@/lib/notifications'
 import { safeJsonParse } from '@/lib/utils'
 
 type RouteContext = { params: Promise<{ id: string }> }
@@ -72,6 +72,8 @@ export async function POST(
               content: entry.content.trim(),
               logDate: new Date(entry.logDate),
               lastEditedBy: user.name,
+              // 重送 → 清除前次被 R主管駁回的狀態，回到「待審」
+              reviewerRejectedAt: null, reviewerRejectedBy: null, reviewerNote: null,
               ...(body.weekOf ? { weekOf: body.weekOf } : {}),
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
             },
@@ -105,6 +107,7 @@ export async function POST(
               data: {
                 content: entry.content.trim(),
                 lastEditedBy: user.name,
+                reviewerRejectedAt: null, reviewerRejectedBy: null, reviewerNote: null,
                 ...(body.weekOf ? { weekOf: body.weekOf } : {}),
                 ...(mergedAttachmentsJson !== undefined ? { attachments: mergedAttachmentsJson } : {}),
               },
@@ -157,13 +160,27 @@ export async function POST(
     await syncTaskProgressFromLogs([task], allLogs)
     await syncMilestoneStatus(task.milestoneId, id)
 
-    // R（或任何非 A 的成員）送出工作紀錄 → 通知該專案當責 A（去重見 notifyRecordUploadedToAccountable）
+    // 送出後通知：
+    //   有壓 R主管 → 通知 R主管 去審核（新流程，R 為主）
+    //   沒壓 R主管 → fallback 回舊流程，通知當責 A（A 為主）
     if (results.created + results.updated > 0) {
       const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
-      await notifyRecordUploadedToAccountable({
-        projectId: id,
-        projectName: proj?.name || '專案',
+      const projectName = proj?.name || '專案'
+      const authorMember = await prisma.projectTeamMember.findFirst({
+        where: { projectId: id, userId: user.id },
+        select: { reportReviewerEmail: true },
       })
+      if (authorMember?.reportReviewerEmail) {
+        await notifyReportReviewNeeded({
+          projectId: id, projectName,
+          reviewerEmail: authorMember.reportReviewerEmail,
+          rName: user.name, taskTitle: task.title,
+        })
+        // 審視歷程：R 送出報告待審
+        await prisma.taskReviewEvent.create({ data: { taskId: body.taskId, projectId: id, type: 'report_submitted', actor: user.name, note: null } }).catch(() => {})
+      } else {
+        await notifyRecordUploadedToAccountable({ projectId: id, projectName })
+      }
     }
 
     return NextResponse.json({

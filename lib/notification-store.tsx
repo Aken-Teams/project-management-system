@@ -14,6 +14,9 @@ export type NotificationType =
   | 'weekly-upload-missing'
   | 'weekly-report-ready'
   | 'record-uploaded'
+  | 'report-review-needed'
+  | 'report-published'
+  | 'report-done-review'
 
 export interface Notification {
   id: string

@@ -140,6 +140,81 @@ export async function notifyRecordUploadedToAccountable({
   }
 }
 
+// ─── R 報告審核流程 (report_review_needed / report_published / report_done_review) ───
+
+/** R 送出報告 → 通知其報告審核主管(R主管)去審核 */
+export async function notifyReportReviewNeeded({
+  projectId, projectName, reviewerEmail, rName, taskTitle,
+}: {
+  projectId: string
+  projectName: string
+  reviewerEmail: string
+  rName: string
+  taskTitle: string
+}) {
+  const reviewer = await getUserByEmail(reviewerEmail)
+  if (!reviewer) return
+  // 去重：同審核主管、同專案、當日窗，已有一則就不再發
+  const existing = await prisma.notification.findFirst({
+    where: { userId: reviewer.id, projectId, type: 'report_review_needed', createdAt: { gte: todayUtc() } },
+    select: { id: true },
+  })
+  if (existing) return
+  await createNotification({
+    userId: reviewer.id,
+    type: 'report_review_needed',
+    title: '有待審核的報告',
+    message: `「${projectName}」有成員（${rName}）送出報告待你審核`,
+    projectId,
+  })
+}
+
+/** R主管核准 → 通知該專案當責 A：此報告已進更新紀錄 */
+export async function notifyReportPublishedToAccountable({
+  projectId, projectName, rName, taskTitle,
+}: {
+  projectId: string
+  projectName: string
+  rName: string
+  taskTitle: string
+}) {
+  const accountables = await prisma.projectTeamMember.findMany({
+    where: { projectId, role: 'A' }, select: { user: { select: { id: true } } },
+  })
+  for (const a of accountables) {
+    await createNotification({
+      userId: a.user.id,
+      type: 'report_published',
+      title: '報告已進更新紀錄',
+      message: `「${projectName}」${rName} 的「${taskTitle}」報告經審核主管核准，已進更新紀錄`,
+      projectId,
+    })
+  }
+}
+
+/** R 回報100%完成、且已過 R主管核准 → 通知 A 去審核是否完成 */
+export async function notifyReportDoneReviewToAccountable({
+  projectId, projectName, rName, taskTitle,
+}: {
+  projectId: string
+  projectName: string
+  rName: string
+  taskTitle: string
+}) {
+  const accountables = await prisma.projectTeamMember.findMany({
+    where: { projectId, role: 'A' }, select: { user: { select: { id: true } } },
+  })
+  for (const a of accountables) {
+    await createNotification({
+      userId: a.user.id,
+      type: 'report_done_review',
+      title: '有任務待你審核完成',
+      message: `「${projectName}」${rName} 回報「${taskTitle}」已100%完成，待你審核`,
+      projectId,
+    })
+  }
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({

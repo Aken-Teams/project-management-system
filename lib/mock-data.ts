@@ -185,6 +185,8 @@ export interface TaskLog {
   lastEditedBy?: string | null
   publishedAt?: string | null
   weekOf?: string | null
+  reviewerRejectedAt?: string | null // 被 R 報告審核主管駁回的時間
+  reviewerNote?: string | null       // 駁回原因
 }
 
 export interface Risk {

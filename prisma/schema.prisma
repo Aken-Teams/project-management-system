@@ -106,6 +106,9 @@ enum NotificationType {
   weekly_upload_missing
   weekly_report_ready
   record_uploaded
+  report_review_needed   // R 送出報告 → 通知其報告審核主管(R主管)去審核
+  report_published       // R主管核准 → 通知 A：此項報告已進更新紀錄
+  report_done_review     // R 回報100%完成(且已過R主管) → 通知 A 去審核是否完成
 }
 
 // ─── Models ──────────────────────────────────────────────
@@ -340,13 +343,18 @@ model TaskLog {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
   lastEditedBy String? @map("last_edited_by")          // 最後編輯者姓名（建立者見 author）
-  // 由當責 A 審核後「發布」到官方更新紀錄的時間；null = R 尚未經 A 發布（不進更新紀錄）
+  // 「發布」到官方更新紀錄的時間；null = 尚未發布（不進更新紀錄）。
+  //   由 A 撰寫台送出、或（新流程）該 R 的報告審核主管核准時設定。
   publishedAt DateTime? @map("published_at")
   publishedBy String?   @map("published_by")
   // true = A 撰寫的「報告敘述」(進更新紀錄，但不驅動進度；進度由標記完成/延期決定)
   reportOnly  Boolean   @default(false) @map("report_only")
   // 填報週(週一 YYYY-MM-DD)；讓 A 依填報週重新載入編輯，不受 logDate 落點影響
   weekOf      String?   @map("week_of")
+  // R 報告審核主管「駁回」紀錄：有值代表這批報告被駁回、退回 R 重寫。R 重送時清空。
+  reviewerRejectedAt DateTime? @map("reviewer_rejected_at")
+  reviewerRejectedBy String?   @map("reviewer_rejected_by")
+  reviewerNote       String?   @db.Text @map("reviewer_note") // 駁回原因
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
