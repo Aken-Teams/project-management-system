@@ -4,6 +4,9 @@ import { safeJsonParse } from '@/lib/utils'
 import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
 import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable } from '@/lib/notifications'
+import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek } from '@/lib/report-tracking'
+
+const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
 // 本週週一（UTC）YYYY-MM-DD
 function thisWeekMonday(): string {
@@ -50,6 +53,26 @@ export async function GET(request: NextRequest) {
     orderBy: { logDate: 'asc' },
   })
 
+  // 已審核的報告（已發布=通過，或被駁回）— 近 60 天，供「已審核」分頁
+  const sixtyDaysAgo = new Date(); sixtyDaysAgo.setUTCDate(sixtyDaysAgo.getUTCDate() - 60)
+  const reviewedLogs = await prisma.taskLog.findMany({
+    where: {
+      AND: [
+        { OR: pairs },
+        { OR: [{ publishedAt: { not: null } }, { reviewerRejectedAt: { not: null } }] },
+        { updatedAt: { gte: sixtyDaysAgo } },
+      ],
+    },
+    select: {
+      id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
+      logDate: true, content: true, attachments: true, nextPlans: true,
+      publishedAt: true, publishedBy: true, reviewerRejectedAt: true, reviewerNote: true,
+      task: { select: { title: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 300,
+  })
+
   // 本週已送出的報告（用來判斷「本週未送 → 需追」）
   const weekLogs = await prisma.taskLog.findMany({
     where: { OR: pairs, weekOf: monday },
@@ -70,9 +93,53 @@ export async function GET(request: NextRequest) {
     select: { projectId: true, assignee: true },
   })
 
+  // ── 填報追蹤（依 ?week 指定週，預設本週）：每個督導成員在該週「該填卻未填」的任務 ──
+  const trackWeek = request.nextUrl.searchParams.get('week')?.trim() || monday
+  const trackEnd = weekEndOf(trackWeek)
+  const trackStartDate = new Date(trackWeek + 'T00:00:00.000Z')
+  const trackEndExclusive = new Date(trackStartDate); trackEndExclusive.setUTCDate(trackStartDate.getUTCDate() + 7)
+
+  // 追蹤範圍內所有任務（含祖先，用來組階層路徑 ctx）
+  const trackTasks = await prisma.task.findMany({
+    where: { projectId: { in: projectIds } },
+    select: {
+      id: true, projectId: true, title: true, assignee: true, status: true, parentId: true, sortOrder: true,
+      startDate: true, endDate: true, completedAt: true, reportedDoneAt: true,
+      milestone: { select: { name: true } },
+    },
+  })
+  // 該週的報告（用來判斷已填）：weekOf=該週 或 舊資料(無 weekOf)且 logDate 落在該週
+  const trackLogs = await prisma.taskLog.findMany({
+    where: {
+      projectId: { in: projectIds },
+      OR: [
+        { weekOf: trackWeek },
+        { weekOf: null, logDate: { gte: trackStartDate, lt: trackEndExclusive } },
+      ],
+    },
+    select: { taskId: true, authorId: true, weekOf: true, logDate: true },
+  })
+  // 每專案 id→task 索引，供 ctx 祖先鏈
+  const taskIdxByProject = new Map<string, Map<string, (typeof trackTasks)[number]>>()
+  for (const t of trackTasks) {
+    let mp = taskIdxByProject.get(t.projectId)
+    if (!mp) { mp = new Map(); taskIdxByProject.set(t.projectId, mp) }
+    mp.set(t.id, t)
+  }
+  const ctxOf = (t: (typeof trackTasks)[number]) => {
+    const idx = taskIdxByProject.get(t.projectId)
+    const anc: string[] = []
+    let cur = t.parentId ? idx?.get(t.parentId) : undefined
+    while (cur) { anc.unshift(cur.title); cur = cur.parentId ? idx?.get(cur.parentId) : undefined }
+    return [t.milestone?.name, ...anc].filter(Boolean).join(' › ')
+  }
+
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
-  type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[] }[] }
-  type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; submittedThisWeek: boolean; openTaskCount: number }
+  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[] }
+  type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
+  type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
+  type TrackItem = { taskId: string; taskTitle: string; ctx: string; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean }
+  type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
   for (const m of supervised) {
@@ -80,9 +147,26 @@ export async function GET(request: NextRequest) {
     if (!p) { p = { projectId: m.projectId, projectName: m.project.name, reviewees: new Map() }; projMap.set(m.projectId, p) }
     if (!p.reviewees.has(m.userId)) {
       const openTaskCount = openTasks.filter(t => t.projectId === m.projectId && isSameUser(t.assignee, { name: m.user.name, email: m.user.email })).length
+      // 該成員在 trackWeek「該填」的任務 + 是否已填
+      const tracking: TrackItem[] = trackTasks
+        .filter(t => t.projectId === m.projectId
+          && isSameUser(t.assignee, { name: m.user.name, email: m.user.email })
+          && shouldTrackReport(
+            { assignee: t.assignee, status: t.status, startDate: fmt(t.startDate), endDate: fmt(t.endDate), completedAt: t.completedAt ? fmt(t.completedAt) : null },
+            trackWeek, trackEnd,
+          ))
+        .map(t => ({
+          taskId: t.id, taskTitle: t.title, ctx: ctxOf(t),
+          planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
+          overdue: isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
+          reportedDone: !!t.reportedDoneAt,
+          filled: trackLogs.some(l => l.taskId === t.id && l.authorId === m.userId
+            && reportCountsForWeek({ weekOf: l.weekOf, logDate: fmt(l.logDate) }, trackWeek, trackEnd)),
+        }))
+        .sort((a, b) => (a.filled === b.filled ? 0 : a.filled ? 1 : -1))
       p.reviewees.set(m.userId, {
         authorId: m.userId, authorName: m.user.name, authorEmail: m.user.email,
-        pending: [], submittedThisWeek: submittedSet.has(`${m.projectId}:${m.userId}`), openTaskCount,
+        pending: [], reviewed: [], submittedThisWeek: submittedSet.has(`${m.projectId}:${m.userId}`), openTaskCount, tracking,
       })
     }
   }
@@ -110,13 +194,42 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  // 塞入已審核 submissions
+  const reviewedMap = new Map<string, ReviewedSub>()
+  for (const l of reviewedLogs) {
+    const p = projMap.get(l.projectId); if (!p) continue
+    const rv = p.reviewees.get(l.authorId); if (!rv) continue
+    const week = l.weekOf || null
+    const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
+    let s = reviewedMap.get(key)
+    if (!s) {
+      const rejected = !!l.reviewerRejectedAt
+      s = {
+        taskId: l.taskId, taskTitle: l.task.title, weekOf: week,
+        outcome: rejected ? 'rejected' : 'approved',
+        note: l.reviewerNote || null,
+        reviewedAt: (l.reviewerRejectedAt || l.publishedAt || l.logDate).toISOString(),
+        logs: [],
+      }
+      reviewedMap.set(key, s)
+      rv.reviewed.push(s)
+    }
+    s.logs.push({
+      id: l.id,
+      logDate: l.logDate.toISOString().split('T')[0],
+      content: l.content,
+      attachments: safeJsonParse<Att[]>(l.attachments, []),
+      nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
+    })
+  }
+
   const projects = Array.from(projMap.values()).map(p => ({
     projectId: p.projectId,
     projectName: p.projectName,
     reviewees: Array.from(p.reviewees.values()),
   }))
 
-  return NextResponse.json({ isReviewer: true, weekOf: monday, projects })
+  return NextResponse.json({ isReviewer: true, weekOf: monday, trackWeek, projects })
 }
 
 // ─── POST /api/report-reviews — 核准 / 駁回一筆 submission ───
