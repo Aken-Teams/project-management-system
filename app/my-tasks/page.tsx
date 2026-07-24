@@ -1066,7 +1066,7 @@ export default function MyTasksPage() {
   )
   // 成員週報（依所選週別）：同時算出「依成員」與「依任務」兩種視圖。
   // 「本週該做」= 任務有指派、且起訖與本週重疊（未開始/已結束的不算，避免誤判「未填」）。
-  type ReviewWeekTask = { taskId: string; title: string; ctx: string; depth: number; owned: boolean; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[] }
+  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[] }
   const reviewWeekReport = useMemo(() => {
     const empty = {
       memberRows: [] as { name: string; expectedCount: number; filledCount: number; missing: boolean; tasks: ReviewWeekTask[] }[],
@@ -1138,16 +1138,18 @@ export default function MyTasksPage() {
     for (const t of activeTasks) memberNames.add(t.assignee)
     for (const l of weekLogs) memberNames.add(l.author)
     const memberRows = [...memberNames].sort().map(name => {
-      // owned = 該員本週該做(active) ∪ 本週有寫的任務；再往上補結構祖先成樹狀
+      // owned = 該員本週該做(active) ∪ 本週有寫的任務。平面列表呈現，但排序沿用樹狀順序（父在子前、同層依序）。
       const ownedIds = new Set<string>()
       for (const t of activeTasks) if (t.assignee === name) ownedIds.add(t.id)
       for (const l of weekLogs) if (l.author === name) ownedIds.add(l.taskId)
-      const tasks: ReviewWeekTask[] = buildTrackTree(ownedIds, p.tasks).map(({ node, depth, owned }) => {
-        const tid = node.id
-        const t = byId.get(tid)
-        const logs = owned ? (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs) : []
-        return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', depth, owned, active: owned && !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs }
-      })
+      const tasks: ReviewWeekTask[] = buildTrackTree(ownedIds, p.tasks)
+        .filter(n => n.owned) // 只留該員的任務（結構祖先僅用來決定排序，不顯示）
+        .map(({ node }) => {
+          const tid = node.id
+          const t = byId.get(tid)
+          const logs = (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs)
+          return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs }
+        })
       const expectedCount = tasks.filter(ti => ti.active).length
       const filledCount = tasks.filter(ti => ti.active && ti.filled).length
       return { name, expectedCount, filledCount, missing: expectedCount > 0 && filledCount === 0, tasks }
@@ -1214,7 +1216,7 @@ export default function MyTasksPage() {
 
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）
   const renderReviewLogs = (logs: TaskLog[]) => (
-    <div className="max-h-[200px] overflow-y-auto border-t bg-background">
+    <div className="max-h-[200px] overflow-y-auto border-t border-b bg-background">
       <table className="w-full text-xs border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur"><tr className="text-muted-foreground">
           <th className="text-left font-medium px-2 py-1.5 w-[52px] border-b">日期</th>
@@ -4420,33 +4422,38 @@ export default function MyTasksPage() {
                             </div>
                             {mExpanded && (
                               <div className="border-t divide-y">
-                                {row.tasks.map(ti => (
-                                  <div key={ti.taskId}>
-                                    <div className="py-2 pr-3 flex items-start gap-2" style={{ paddingLeft: 12 + ti.depth * 18 }}>
-                                      {ti.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0 mt-0.5">└</span>}
-                                      <div className="flex-1 min-w-0">
-                                        <div className={cn('text-sm', !ti.owned && 'text-muted-foreground')}>{ti.title}</div>
+                                {row.tasks.map(ti => {
+                                  const tKey = `mtask:${row.name}:${ti.taskId}`
+                                  const tExpanded = reviewMemberExpanded.has(tKey)
+                                  const hasLogs = ti.logs.length > 0
+                                  return (
+                                    <div key={ti.taskId}>
+                                      <div
+                                        className={cn('px-3 py-2 flex items-start gap-2', hasLogs && 'cursor-pointer hover:bg-muted/20')}
+                                        onClick={hasLogs ? () => setReviewMemberExpanded(prev => { const n = new Set(prev); if (n.has(tKey)) n.delete(tKey); else n.add(tKey); return n }) : undefined}
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          {ti.ctx && <div className="text-[11px] text-muted-foreground/80 truncate">{ti.ctx}</div>}
+                                          <div className="text-sm">{ti.title}</div>
+                                        </div>
+                                        {renderReviewStatus(ti.reported, ti.reviewed)}
+                                        {ti.active ? (
+                                          ti.filled
+                                            ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
+                                            : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
+                                        ) : (
+                                          <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
+                                            非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
+                                          </Badge>
+                                        )}
+                                        {hasLogs
+                                          ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform mt-0.5', tExpanded && 'rotate-180')} />
+                                          : <span className="w-4 shrink-0" />}
                                       </div>
-                                      {!ti.owned ? (
-                                        <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
-                                      ) : (
-                                        <>
-                                          {renderReviewStatus(ti.reported, ti.reviewed)}
-                                          {ti.active ? (
-                                            ti.filled
-                                              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
-                                              : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
-                                          ) : (
-                                            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
-                                              非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
-                                            </Badge>
-                                          )}
-                                        </>
-                                      )}
+                                      {hasLogs && tExpanded && renderReviewLogs(ti.logs)}
                                     </div>
-                                    {ti.owned && ti.logs.length > 0 && renderReviewLogs(ti.logs)}
-                                  </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             )}
                           </div>
