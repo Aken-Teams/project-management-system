@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth-context'
@@ -38,6 +38,9 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'weekly-upload-missing': AlertCircle,
   'weekly-report-ready': CheckCircle2,
   'record-uploaded': ClipboardList,
+  'report-review-needed': ClipboardList,
+  'report-published': CheckCircle2,
+  'report-done-review': ClipboardList,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -50,6 +53,9 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'weekly-upload-missing': 'text-amber-500',
   'weekly-report-ready': 'text-emerald-500',
   'record-uploaded': 'text-sky-500',
+  'report-review-needed': 'text-amber-500',
+  'report-published': 'text-emerald-500',
+  'report-done-review': 'text-amber-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -62,6 +68,9 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'weekly-upload-missing': '未上傳週報',
   'weekly-report-ready': '週報已寄出',
   'record-uploaded': '工作紀錄',
+  'report-review-needed': '待審核報告',
+  'report-published': '報告已進更新紀錄',
+  'report-done-review': '待審核完成',
 }
 
 const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
@@ -75,6 +84,8 @@ const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
   { value: 'weekly-upload-missing', label: '未上傳週報' },
   { value: 'record-uploaded', label: '工作紀錄' },
   { value: 'weekly-report-ready', label: '週報已寄出' },
+  { value: 'report-review-needed', label: '待審核報告' },
+  { value: 'report-done-review', label: '待審核完成' },
 ]
 
 function formatTime(dateStr: string): string {
@@ -226,20 +237,23 @@ export default function NotificationsPage() {
 
         {/* Type filter tabs */}
         <Tabs value={typeFilter} onValueChange={v => setTypeFilter(v as NotificationType | 'all')}>
-          <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1">
-            {TYPE_TABS.map(tab => {
+          <TabsList className="flex flex-wrap h-auto gap-0.5 bg-muted/50 p-1">
+            {TYPE_TABS.map((tab, i) => {
               const cnt = tab.value === 'all'
                 ? allNotifications.filter(n => !n.read).length
                 : allNotifications.filter(n => n.type === tab.value && !n.read).length
               return (
-                <TabsTrigger key={tab.value} value={tab.value} className="text-sm px-3 py-1.5 gap-1.5">
-                  {tab.label}
-                  {cnt > 0 && (
-                    <span className="rounded-full bg-red-500 text-white text-[11px] font-semibold min-w-[16px] h-4 px-1 inline-flex items-center justify-center leading-none">
-                      {cnt}
-                    </span>
-                  )}
-                </TabsTrigger>
+                <Fragment key={tab.value}>
+                  {i > 0 && <span className="self-center text-border select-none px-0.5" aria-hidden>|</span>}
+                  <TabsTrigger value={tab.value} className="text-sm px-3 py-1.5 gap-1.5">
+                    {tab.label}
+                    {cnt > 0 && (
+                      <span className="rounded-full bg-red-500 text-white text-[11px] font-semibold min-w-[16px] h-4 px-1 inline-flex items-center justify-center leading-none">
+                        {cnt}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </Fragment>
               )
             })}
           </TabsList>
