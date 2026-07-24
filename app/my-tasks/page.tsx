@@ -31,7 +31,7 @@ import {
 import { useAuth } from '@/lib/auth-context'
 import { isSameUser } from '@/lib/user-match'
 import { uploadFile } from '@/lib/upload-file'
-import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek } from '@/lib/report-tracking'
+import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree } from '@/lib/report-tracking'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
@@ -162,7 +162,7 @@ type ReviewedSubmission = {
   logs: ReviewLogItem[]
 }
 type TrackingItem = {
-  taskId: string; taskTitle: string; ctx: string
+  taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null
   planStart: string; planEnd: string
   overdue: boolean; reportedDone: boolean; filled: boolean
 }
@@ -1066,7 +1066,7 @@ export default function MyTasksPage() {
   )
   // 成員週報（依所選週別）：同時算出「依成員」與「依任務」兩種視圖。
   // 「本週該做」= 任務有指派、且起訖與本週重疊（未開始/已結束的不算，避免誤判「未填」）。
-  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[] }
+  type ReviewWeekTask = { taskId: string; title: string; ctx: string; depth: number; owned: boolean; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[] }
   const reviewWeekReport = useMemo(() => {
     const empty = {
       memberRows: [] as { name: string; expectedCount: number; filledCount: number; missing: boolean; tasks: ReviewWeekTask[] }[],
@@ -1138,16 +1138,15 @@ export default function MyTasksPage() {
     for (const t of activeTasks) memberNames.add(t.assignee)
     for (const l of weekLogs) memberNames.add(l.author)
     const memberRows = [...memberNames].sort().map(name => {
-      const taskIds = new Set<string>()
-      for (const t of activeTasks) if (t.assignee === name) taskIds.add(t.id)
-      for (const l of weekLogs) if (l.author === name) taskIds.add(l.taskId)
-      const tasks: ReviewWeekTask[] = [...taskIds].map(tid => {
+      // owned = 該員本週該做(active) ∪ 本週有寫的任務；再往上補結構祖先成樹狀
+      const ownedIds = new Set<string>()
+      for (const t of activeTasks) if (t.assignee === name) ownedIds.add(t.id)
+      for (const l of weekLogs) if (l.author === name) ownedIds.add(l.taskId)
+      const tasks: ReviewWeekTask[] = buildTrackTree(ownedIds, p.tasks).map(({ node, depth, owned }) => {
+        const tid = node.id
         const t = byId.get(tid)
-        const logs = (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs)
-        return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs }
-      }).sort((a, b) => {
-        const rank = (x: ReviewWeekTask) => (x.active && !x.filled ? 0 : x.filled ? 1 : 2)
-        return rank(a) - rank(b)
+        const logs = owned ? (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs) : []
+        return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', depth, owned, active: owned && !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs }
       })
       const expectedCount = tasks.filter(ti => ti.active).length
       const filledCount = tasks.filter(ti => ti.active && ti.filled).length
@@ -1983,7 +1982,7 @@ export default function MyTasksPage() {
                 .sort((a, b) => b.s.reviewedAt.localeCompare(a.s.reviewedAt))
               const pid = reviewDialogProject.projectId
               const keyOf = (authorId: string, taskId: string, weekOf: string | null) => `${pid}:${authorId}:${taskId}:${weekOf ?? '_'}`
-              const trackMiss = reviewDialogProject.reviewees.reduce((n, rv) => n + rv.tracking.filter(t => !t.filled).length, 0)
+              const trackMiss = reviewDialogProject.reviewees.reduce((n, rv) => n + rv.tracking.filter(t => t.owned && !t.filled).length, 0)
               const LogList = ({ logs }: { logs: ReviewLogItem[] }) => (
                 <div className="space-y-2 rounded-md bg-muted/20 p-2.5">
                   {logs.map(l => (
@@ -2040,7 +2039,7 @@ export default function MyTasksPage() {
                         {reviewDialogProject.reviewees.every(rv => rv.tracking.length === 0) ? (
                           <p className="text-sm text-muted-foreground text-center py-8">本週沒有需追蹤的任務</p>
                         ) : reviewDialogProject.reviewees.filter(rv => rv.tracking.length > 0).map(rv => {
-                          const miss = rv.tracking.filter(t => !t.filled).length
+                          const miss = rv.tracking.filter(t => t.owned && !t.filled).length
                           return (
                             <div key={rv.authorId} className="rounded-lg border overflow-hidden">
                               <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b">
@@ -2052,16 +2051,23 @@ export default function MyTasksPage() {
                               </div>
                               <div className="divide-y">
                                 {rv.tracking.map(t => (
-                                  <div key={t.taskId} className="flex items-center gap-2 px-3 py-2">
+                                  <div key={t.taskId} className="flex items-center gap-2 pr-3 py-2" style={{ paddingLeft: 12 + t.depth * 18 }}>
+                                    {t.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0">└</span>}
                                     <div className="min-w-0 flex-1">
-                                      <div className="text-sm truncate">{t.taskTitle}</div>
-                                      <div className="text-[11px] text-muted-foreground truncate">{t.ctx || '—'} · 計畫 {t.planStart} ~ {t.planEnd}</div>
+                                      <div className={cn('text-sm truncate', !t.owned && 'text-muted-foreground')}>{t.taskTitle}</div>
+                                      <div className="text-[11px] text-muted-foreground truncate">{t.depth === 0 && t.msName ? `${t.msName} · ` : ''}計畫 {t.planStart} ~ {t.planEnd}</div>
                                     </div>
-                                    {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
-                                    {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
-                                    {t.filled
-                                      ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
-                                      : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
+                                    {!t.owned ? (
+                                      <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
+                                    ) : (
+                                      <>
+                                        {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
+                                        {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
+                                        {t.filled
+                                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
+                                          : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
+                                      </>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -4416,23 +4422,29 @@ export default function MyTasksPage() {
                               <div className="border-t divide-y">
                                 {row.tasks.map(ti => (
                                   <div key={ti.taskId}>
-                                    <div className="px-3 py-2 flex items-start gap-2">
+                                    <div className="py-2 pr-3 flex items-start gap-2" style={{ paddingLeft: 12 + ti.depth * 18 }}>
+                                      {ti.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0 mt-0.5">└</span>}
                                       <div className="flex-1 min-w-0">
-                                        {ti.ctx && <div className="text-[11px] text-muted-foreground/80 truncate">{ti.ctx}</div>}
-                                        <div className="text-sm">{ti.title}</div>
+                                        <div className={cn('text-sm', !ti.owned && 'text-muted-foreground')}>{ti.title}</div>
                                       </div>
-                                      {renderReviewStatus(ti.reported, ti.reviewed)}
-                                      {ti.active ? (
-                                        ti.filled
-                                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
-                                          : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
+                                      {!ti.owned ? (
+                                        <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
                                       ) : (
-                                        <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
-                                          非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
-                                        </Badge>
+                                        <>
+                                          {renderReviewStatus(ti.reported, ti.reviewed)}
+                                          {ti.active ? (
+                                            ti.filled
+                                              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
+                                              : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
+                                          ) : (
+                                            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
+                                              非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
+                                            </Badge>
+                                          )}
+                                        </>
                                       )}
                                     </div>
-                                    {ti.logs.length > 0 && renderReviewLogs(ti.logs)}
+                                    {ti.owned && ti.logs.length > 0 && renderReviewLogs(ti.logs)}
                                   </div>
                                 ))}
                               </div>

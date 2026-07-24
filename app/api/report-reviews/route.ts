@@ -4,7 +4,7 @@ import { safeJsonParse } from '@/lib/utils'
 import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
 import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable } from '@/lib/notifications'
-import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek } from '@/lib/report-tracking'
+import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree } from '@/lib/report-tracking'
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -102,6 +102,7 @@ export async function GET(request: NextRequest) {
   // 追蹤範圍內所有任務（含祖先，用來組階層路徑 ctx）
   const trackTasks = await prisma.task.findMany({
     where: { projectId: { in: projectIds } },
+    orderBy: { sortOrder: 'asc' },
     select: {
       id: true, projectId: true, title: true, assignee: true, status: true, parentId: true, sortOrder: true,
       startDate: true, endDate: true, completedAt: true, reportedDoneAt: true,
@@ -119,26 +120,12 @@ export async function GET(request: NextRequest) {
     },
     select: { taskId: true, authorId: true, weekOf: true, logDate: true },
   })
-  // 每專案 id→task 索引，供 ctx 祖先鏈
-  const taskIdxByProject = new Map<string, Map<string, (typeof trackTasks)[number]>>()
-  for (const t of trackTasks) {
-    let mp = taskIdxByProject.get(t.projectId)
-    if (!mp) { mp = new Map(); taskIdxByProject.set(t.projectId, mp) }
-    mp.set(t.id, t)
-  }
-  const ctxOf = (t: (typeof trackTasks)[number]) => {
-    const idx = taskIdxByProject.get(t.projectId)
-    const anc: string[] = []
-    let cur = t.parentId ? idx?.get(t.parentId) : undefined
-    while (cur) { anc.unshift(cur.title); cur = cur.parentId ? idx?.get(cur.parentId) : undefined }
-    return [t.milestone?.name, ...anc].filter(Boolean).join(' › ')
-  }
 
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
   type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[] }
   type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
   type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
-  type TrackItem = { taskId: string; taskTitle: string; ctx: string; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean }
+  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean }
   type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
@@ -147,23 +134,26 @@ export async function GET(request: NextRequest) {
     if (!p) { p = { projectId: m.projectId, projectName: m.project.name, reviewees: new Map() }; projMap.set(m.projectId, p) }
     if (!p.reviewees.has(m.userId)) {
       const openTaskCount = openTasks.filter(t => t.projectId === m.projectId && isSameUser(t.assignee, { name: m.user.name, email: m.user.email })).length
-      // 該成員在 trackWeek「該填」的任務 + 是否已填
-      const tracking: TrackItem[] = trackTasks
-        .filter(t => t.projectId === m.projectId
-          && isSameUser(t.assignee, { name: m.user.name, email: m.user.email })
-          && shouldTrackReport(
-            { assignee: t.assignee, status: t.status, startDate: fmt(t.startDate), endDate: fmt(t.endDate), completedAt: t.completedAt ? fmt(t.completedAt) : null },
-            trackWeek, trackEnd,
-          ))
-        .map(t => ({
-          taskId: t.id, taskTitle: t.title, ctx: ctxOf(t),
-          planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
-          overdue: isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
-          reportedDone: !!t.reportedDoneAt,
-          filled: trackLogs.some(l => l.taskId === t.id && l.authorId === m.userId
-            && reportCountsForWeek({ weekOf: l.weekOf, logDate: fmt(l.logDate) }, trackWeek, trackEnd)),
-        }))
-        .sort((a, b) => (a.filled === b.filled ? 0 : a.filled ? 1 : -1))
+      // 該成員在 trackWeek「該填」的任務，以樹狀（含結構祖先）呈現、標記已/未填
+      const projTasks = trackTasks.filter(t => t.projectId === m.projectId)
+      const ownedIds = new Set(
+        projTasks
+          .filter(t => isSameUser(t.assignee, { name: m.user.name, email: m.user.email })
+            && shouldTrackReport(
+              { assignee: t.assignee, status: t.status, startDate: fmt(t.startDate), endDate: fmt(t.endDate), completedAt: t.completedAt ? fmt(t.completedAt) : null },
+              trackWeek, trackEnd,
+            ))
+          .map(t => t.id),
+      )
+      const tracking: TrackItem[] = buildTrackTree(ownedIds, projTasks).map(({ node: t, depth, owned }) => ({
+        taskId: t.id, taskTitle: t.title, depth, owned,
+        msName: depth === 0 ? (t.milestone?.name ?? null) : null,
+        planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
+        overdue: owned && isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
+        reportedDone: !!t.reportedDoneAt,
+        filled: owned && trackLogs.some(l => l.taskId === t.id && l.authorId === m.userId
+          && reportCountsForWeek({ weekOf: l.weekOf, logDate: fmt(l.logDate) }, trackWeek, trackEnd)),
+      }))
       p.reviewees.set(m.userId, {
         authorId: m.userId, authorName: m.user.name, authorEmail: m.user.email,
         pending: [], reviewed: [], submittedThisWeek: submittedSet.has(`${m.projectId}:${m.userId}`), openTaskCount, tracking,

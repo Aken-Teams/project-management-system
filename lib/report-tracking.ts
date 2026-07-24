@@ -49,3 +49,39 @@ export function reportCountsForWeek(log: ReportLogLike, monday: string, weekEnd:
   if (log.weekOf) return log.weekOf === monday
   return log.logDate >= monday && log.logDate <= weekEnd
 }
+
+export interface TreeNodeLike { id: string; parentId?: string | null }
+
+// 由「該成員負責且該追蹤」的任務集合，往上補齊結構祖先，攤平成樹狀順序(DFS)的清單。
+// owned=true 表示該任務本身是要追的（顯示已/未填）；owned=false 為結構祖先（僅提供層級脈絡）。
+// 兄弟排序沿用 orderedTasks 的既有順序（呼叫端已依 sortOrder 排好）。
+export function buildTrackTree<T extends TreeNodeLike>(
+  ownedIds: Set<string>, orderedTasks: T[],
+): { node: T; depth: number; owned: boolean }[] {
+  const byId = new Map(orderedTasks.map(t => [t.id, t]))
+  const order = new Map(orderedTasks.map((t, i) => [t.id, i]))
+  const showIds = new Set<string>()
+  for (const id of ownedIds) {
+    if (!byId.has(id)) continue
+    showIds.add(id)
+    let pid = byId.get(id)!.parentId
+    while (pid && byId.has(pid) && !showIds.has(pid)) { showIds.add(pid); pid = byId.get(pid)!.parentId }
+  }
+  const childrenOf = new Map<string, T[]>()
+  const roots: T[] = []
+  for (const id of showIds) {
+    const t = byId.get(id)!
+    if (t.parentId && showIds.has(t.parentId)) {
+      const arr = childrenOf.get(t.parentId) ?? childrenOf.set(t.parentId, []).get(t.parentId)!
+      arr.push(t)
+    } else roots.push(t)
+  }
+  const byOrder = (a: T, b: T) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)
+  const out: { node: T; depth: number; owned: boolean }[] = []
+  const walk = (t: T, depth: number) => {
+    out.push({ node: t, depth, owned: ownedIds.has(t.id) })
+    ;(childrenOf.get(t.id) ?? []).sort(byOrder).forEach(c => walk(c, depth + 1))
+  }
+  roots.sort(byOrder).forEach(r => walk(r, 0))
+  return out
+}
