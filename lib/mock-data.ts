@@ -187,6 +187,7 @@ export interface TaskLog {
   weekOf?: string | null
   reviewerRejectedAt?: string | null // 被 R 報告審核主管駁回的時間
   reviewerNote?: string | null       // 駁回原因
+  authorReviewerName?: string | null // 作者(R)的報告審核主管(R主管)名稱，供 A 端顯示「主管審核中」
 }
 
 export interface Risk {

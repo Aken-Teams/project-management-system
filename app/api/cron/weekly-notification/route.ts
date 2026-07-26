@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendMail } from '@/lib/send-mail'
 import { isSameUser } from '@/lib/user-match'
-import { notifyProjectOverdueIfNeeded } from '@/lib/notifications'
+import { notifyProjectOverdueIfNeeded, notifyReviewOverdueToAccountable } from '@/lib/notifications'
 
 function replaceVars(template: string, vars: Record<string, string>): string {
   return template.replace(/{{(\w+)}}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -155,6 +155,14 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    // ── R主管審核逾期提醒（每次執行都檢查，與週報頻率脫鉤；彙總+3天去重，不洗版）──
+    //    讓 A 知道「不是 R 沒填，而是 R主管卡著沒審」，才能去追對的人。
+    if (!isPreview) {
+      for (const project of projects) {
+        await notifyReviewOverdueToAccountable({ projectId: project.id, projectName: project.name })
+      }
+    }
 
     // Preview accumulator
     const previewResults: {

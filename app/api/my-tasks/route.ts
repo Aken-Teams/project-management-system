@@ -76,6 +76,9 @@ export async function GET(request: NextRequest) {
           include: { author: true },
           orderBy: { createdAt: 'desc' },
         },
+        teamMembers: {
+          select: { userId: true, reportReviewerName: true, reportReviewerEmail: true },
+        },
         delayRequests: {
           where: { status: 'pending' },
           select: {
@@ -182,6 +185,8 @@ export async function GET(request: NextRequest) {
           weekOf: tl.weekOf || null,
           reviewerRejectedAt: tl.reviewerRejectedAt ? tl.reviewerRejectedAt.toISOString() : null,
           reviewerNote: tl.reviewerNote || null,
+          // 該報告作者(R)在此專案的報告審核主管(R主管)，供 A 端顯示「主管審核中」與追蹤
+          authorReviewerName: (() => { const m = p.teamMembers.find(tm => tm.userId === tl.authorId); return m?.reportReviewerName || m?.reportReviewerEmail || null })(),
           ...(tl.nextPlans ? { nextPlans: safeJsonParse(tl.nextPlans, [] as unknown[]) } : {}),
           ...(tl.attachments ? { attachments: safeJsonParse(tl.attachments, [] as unknown[]) } : {}),
         })),

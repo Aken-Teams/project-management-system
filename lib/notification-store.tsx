@@ -17,6 +17,7 @@ export type NotificationType =
   | 'report-review-needed'
   | 'report-published'
   | 'report-done-review'
+  | 'report-review-overdue'
 
 export interface Notification {
   id: string

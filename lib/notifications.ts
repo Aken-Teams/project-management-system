@@ -215,6 +215,59 @@ export async function notifyReportDoneReviewToAccountable({
   }
 }
 
+/**
+ * R主管遲遲未審核 → 通知該專案當責 A 去追主管。
+ *   逾期定義：報告已送出(pending：未發布、未被駁回) 且送出至今超過 overdueDays 天，
+ *            且該報告作者(R)有指定報告審核主管(R主管)。
+ *   彙總：同專案多份逾期報告合併成「一則」通知；3 天內已通知過就跳過（不洗版）。
+ */
+export async function notifyReviewOverdueToAccountable({
+  projectId,
+  projectName,
+  overdueDays = 3,
+}: {
+  projectId: string
+  projectName: string
+  overdueDays?: number
+}) {
+  const cutoff = new Date(Date.now() - overdueDays * 24 * 60 * 60 * 1000)
+  const pending = await prisma.taskLog.findMany({
+    where: { projectId, publishedAt: null, reviewerRejectedAt: null, createdAt: { lt: cutoff } },
+    select: { authorId: true, taskId: true, weekOf: true },
+  })
+  if (pending.length === 0) return
+
+  // 僅計入「作者有指定 R主管」的報告
+  const members = await prisma.projectTeamMember.findMany({
+    where: { projectId },
+    select: { userId: true, reportReviewerEmail: true },
+  })
+  const hasReviewer = new Set(members.filter(m => m.reportReviewerEmail).map(m => m.userId))
+  const overdueKeys = new Set(
+    pending.filter(p => hasReviewer.has(p.authorId)).map(p => `${p.taskId}:${p.weekOf ?? '_'}`),
+  )
+  if (overdueKeys.size === 0) return
+
+  const accountables = await prisma.projectTeamMember.findMany({
+    where: { projectId, role: 'A' }, select: { user: { select: { id: true } } },
+  })
+  const dedupeSince = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+  for (const a of accountables) {
+    const recent = await prisma.notification.findFirst({
+      where: { userId: a.user.id, projectId, type: 'report_review_overdue', createdAt: { gte: dedupeSince } },
+      select: { id: true },
+    })
+    if (recent) continue
+    await createNotification({
+      userId: a.user.id,
+      type: 'report_review_overdue',
+      title: '報告審核逾期',
+      message: `「${projectName}」有 ${overdueKeys.size} 份報告的審核主管已逾 ${overdueDays} 天未審核，請追蹤主管`,
+      projectId,
+    })
+  }
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({

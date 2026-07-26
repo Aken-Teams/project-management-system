@@ -177,8 +177,25 @@ type ReviewProject = { projectId: string; projectName: string; reviewees: Review
 
 type ReviewLogRow = { log: TaskLog; srcTitle?: string }
 type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logRows: ReviewLogRow[]; fileCount: number }
+
+// A 視角：某任務本週報告的「R主管審核狀態」
+//   none=未填 / pending=主管審核中 / published=已進更新紀錄 / rejected=被主管駁回
+type ReportReviewState = { kind: 'none' | 'pending' | 'published' | 'rejected'; reviewerName: string | null; waitDays: number }
+function computeReportReviewState(logs: TaskLog[]): ReportReviewState {
+  if (logs.length === 0) return { kind: 'none', reviewerName: null, waitDays: 0 }
+  if (logs.some(l => l.publishedAt)) return { kind: 'published', reviewerName: null, waitDays: 0 }
+  const pending = logs.filter(l => !l.publishedAt && !l.reviewerRejectedAt)
+  if (pending.length > 0) {
+    const reviewerName = pending.map(l => l.authorReviewerName).find(Boolean) ?? null
+    const earliest = pending.reduce((min, l) => (l.createdAt < min ? l.createdAt : min), pending[0].createdAt)
+    const waitDays = Math.max(0, Math.floor((Date.now() - new Date(earliest).getTime()) / 86400000))
+    return { kind: 'pending', reviewerName, waitDays }
+  }
+  return { kind: 'rejected', reviewerName: logs.map(l => l.authorReviewerName).find(Boolean) ?? null, waitDays: 0 }
+}
+
 // 依任務樹狀節點
-type ReviewTaskNode = { taskId: string; title: string; assignee: string; depth: number; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; children: ReviewTaskNode[] }
+type ReviewTaskNode = { taskId: string; title: string; assignee: string; depth: number; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; reviewState: ReportReviewState; children: ReviewTaskNode[] }
 
 // 依姓名決定頭像底色（穩定、無隨機）
 const REVIEW_AVATAR_COLORS = ['bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 'bg-amber-600', 'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-orange-600']
@@ -1067,7 +1084,7 @@ export default function MyTasksPage() {
   )
   // 成員週報（依所選週別）：同時算出「依成員」與「依任務」兩種視圖。
   // 「本週該做」= 任務有指派、且起訖與本週重疊（未開始/已結束的不算，避免誤判「未填」）。
-  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[] }
+  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; reviewState: ReportReviewState }
   const reviewWeekReport = useMemo(() => {
     const empty = {
       memberRows: [] as { name: string; expectedCount: number; filledCount: number; missing: boolean; tasks: ReviewWeekTask[] }[],
@@ -1125,6 +1142,7 @@ export default function MyTasksPage() {
       return {
         taskId: t.id, title: t.title, assignee: t.assignee, depth,
         active: !!t.assignee && overlaps(t), filled: logs.length > 0, reported: !!t.reportedDoneAt, reviewed: !!t.reviewedAt, logs,
+        reviewState: computeReportReviewState(logs),
         children: (childrenOf.get(t.id) || []).map(c => buildNode(c, depth + 1)),
       }
     }
@@ -1149,7 +1167,7 @@ export default function MyTasksPage() {
           const tid = node.id
           const t = byId.get(tid)
           const logs = (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs)
-          return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs }
+          return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs, reviewState: computeReportReviewState(logs) }
         })
       const expectedCount = tasks.filter(ti => ti.active).length
       const filledCount = tasks.filter(ti => ti.active && ti.filled).length
@@ -1215,6 +1233,30 @@ export default function MyTasksPage() {
     return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/70 shrink-0">未回報</Badge>
   }
 
+  // A 視角：R主管審核狀態徽章。主管審核中時 hover 可看「是哪位主管、已等幾天」（A 才追得對人）。
+  const renderReportReviewBadge = (st: ReportReviewState, active: boolean, count: number): React.ReactNode => {
+    if (st.kind === 'pending' && st.reviewerName) {
+      return (
+        <HoverCard openDelay={80} closeDelay={100}>
+          <HoverCardTrigger asChild>
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0 cursor-default">主管審核中{st.waitDays > 0 ? ` · ${st.waitDays}天` : ''}</Badge>
+          </HoverCardTrigger>
+          <HoverCardContent align="end" className="w-auto p-2.5 text-xs">
+            <div className="font-medium">審核主管：{st.reviewerName}</div>
+            <div className="text-muted-foreground mt-0.5">已等 {st.waitDays} 天尚未審核</div>
+          </HoverCardContent>
+        </HoverCard>
+      )
+    }
+    if (st.kind === 'published') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已進紀錄</Badge>
+    if (st.kind === 'rejected') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已駁回</Badge>
+    // pending 但無指定主管（fallback 由 A 直接處理）→ 沿用原本 已填/未填/非本週
+    if (active) return st.kind === 'none'
+      ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
+      : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {count}</Badge>
+    return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">非本週{count > 0 ? ` · 已填 ${count}` : ''}</Badge>
+  }
+
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
   const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[] }[]) => (
     <div className="max-h-[200px] overflow-y-auto border-t border-b bg-background">
@@ -1267,13 +1309,7 @@ export default function MyTasksPage() {
             <div className="text-[11px] text-muted-foreground">負責人：{node.assignee || '未指派'}</div>
           </div>
           {renderReviewStatus(node.reported, node.reviewed)}
-          {node.active ? (
-            node.filled
-              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {node.logs.length}</Badge>
-              : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">本週未填</Badge>
-          ) : (
-            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0">非本週</Badge>
-          )}
+          {renderReportReviewBadge(node.reviewState, node.active, node.logs.length)}
           {node.logs.length > 0
             ? <button onClick={() => setReviewMemberExpanded(prev => { const k = 'task:' + node.taskId; const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })} className="shrink-0"><ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></button>
             : <span className="w-4 shrink-0" />}
@@ -4419,15 +4455,7 @@ export default function MyTasksPage() {
                                           <div className="text-sm">{ti.title}</div>
                                         </div>
                                         {renderReviewStatus(ti.reported, ti.reviewed)}
-                                        {ti.active ? (
-                                          ti.filled
-                                            ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {ti.logs.length}</Badge>
-                                            : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
-                                        ) : (
-                                          <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">
-                                            非本週{ti.filled ? ` · 已填 ${ti.logs.length}` : ''}
-                                          </Badge>
-                                        )}
+                                        {renderReportReviewBadge(ti.reviewState, ti.active, ti.logs.length)}
                                         {hasLogs
                                           ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform mt-0.5', tExpanded && 'rotate-180')} />
                                           : <span className="w-4 shrink-0" />}

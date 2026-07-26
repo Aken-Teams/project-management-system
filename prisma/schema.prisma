@@ -109,6 +109,7 @@ enum NotificationType {
   report_review_needed   // R 送出報告 → 通知其報告審核主管(R主管)去審核
   report_published       // R主管核准 → 通知 A：此項報告已進更新紀錄
   report_done_review     // R 回報100%完成(且已過R主管) → 通知 A 去審核是否完成
+  report_review_overdue  // R主管遲遲未審核 → 通知 A 去追主管
 }
 
 // ─── Models ──────────────────────────────────────────────

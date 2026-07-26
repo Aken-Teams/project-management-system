@@ -34,6 +34,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'report-review-needed': ClipboardList,
   'report-published': CheckCircle2,
   'report-done-review': ClipboardList,
+  'report-review-overdue': AlertTriangle,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -49,6 +50,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'report-review-needed': 'text-amber-500',
   'report-published': 'text-emerald-500',
   'report-done-review': 'text-amber-500',
+  'report-review-overdue': 'text-red-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -64,6 +66,7 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'report-review-needed': '待審核報告',
   'report-published': '報告已進更新紀錄',
   'report-done-review': '待審核完成',
+  'report-review-overdue': '審核逾期',
 }
 
 function formatRelativeTime(dateStr: string): string {
