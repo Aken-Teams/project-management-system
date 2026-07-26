@@ -459,7 +459,7 @@ export default function DashboardPage() {
                         <Badge variant="outline" className="text-sm">{risk.projectName}</Badge>
                         <Badge
                           variant="secondary"
-                          className={`text-sm ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}`}
+                          className={`text-sm ${risk.impact === 'high' ? 'bg-destructive text-destructive-foreground hover:bg-destructive' : 'bg-warning text-warning-foreground hover:bg-warning'}`}
                         >
                           {risk.impact === 'high' ? '高' : '中'}
                         </Badge>

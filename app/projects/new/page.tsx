@@ -2271,9 +2271,9 @@ export default function NewProjectPage() {
                               variant="secondary"
                               className={
                                 risk.impact === 'high'
-                                  ? 'bg-destructive text-destructive-foreground'
+                                  ? 'bg-destructive text-destructive-foreground hover:bg-destructive'
                                   : risk.impact === 'medium'
-                                    ? 'bg-warning text-warning-foreground'
+                                    ? 'bg-warning text-warning-foreground hover:bg-warning'
                                     : ''
                               }
                             >

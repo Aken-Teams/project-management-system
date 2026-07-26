@@ -159,13 +159,14 @@ export default function ProjectsPage() {
   }, [currentPage, totalPages])
 
   const getStatusColor = (status: ProjectStatus) => {
+    // hover:bg-* 明確鎖色，否則 secondary 變體的 hover:bg-secondary/80 會在卡片 hover 時把徽章洗成白色
     switch (status) {
       case 'green':
-        return 'bg-success text-success-foreground'
+        return 'bg-success text-success-foreground hover:bg-success'
       case 'yellow':
-        return 'bg-warning text-warning-foreground'
+        return 'bg-warning text-warning-foreground hover:bg-warning'
       case 'red':
-        return 'bg-destructive text-destructive-foreground'
+        return 'bg-destructive text-destructive-foreground hover:bg-destructive'
     }
   }
 
@@ -392,14 +393,14 @@ export default function ProjectsPage() {
             <Link key={project.id} href={`/projects/${project.id}`}>
               <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="p-4 space-y-2.5">
-                  {/* Row 1: Code + Type + Status */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-mono text-muted-foreground">{project.projectCode}</span>
-                      <Badge variant="outline" className="text-sm">
+                  {/* Row 1: Code + Type + Status（單行並排，型別過長時僅截斷型別標籤） */}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs font-mono text-muted-foreground whitespace-nowrap shrink-0">{project.projectCode}</span>
+                      <Badge variant="outline" className="text-xs px-1.5 py-0 min-w-0 shrink truncate">
                         {projectTypes.find(t => t.key === project.projectType)?.label ?? project.projectType}
                       </Badge>
-                      <Badge variant="outline" className={`text-sm font-semibold ${
+                      <Badge variant="outline" className={`text-xs px-1.5 py-0 font-semibold whitespace-nowrap shrink-0 ${
                         project.projectTier === 'T1' ? 'border-blue-400 text-blue-600' :
                         project.projectTier === 'T2' ? 'border-emerald-400 text-emerald-600' :
                         project.projectTier === 'T3' ? 'border-amber-400 text-amber-600' :
@@ -407,7 +408,7 @@ export default function ProjectsPage() {
                       }`}>
                         {project.projectTier}
                       </Badge>
-                      <Badge variant="outline" className={`text-sm ${
+                      <Badge variant="outline" className={`text-xs px-1.5 py-0 whitespace-nowrap shrink-0 ${
                         project.phase === 'draft'
                           ? 'border-amber-400 text-amber-600 bg-amber-50'
                           : 'border-emerald-400 text-emerald-600 bg-emerald-50'
@@ -417,7 +418,7 @@ export default function ProjectsPage() {
                     </div>
                     <Badge
                       variant="secondary"
-                      className={`${getStatusColor(project.status)} shrink-0`}
+                      className={`${getStatusColor(project.status)} text-xs px-1.5 py-0 shrink-0 whitespace-nowrap`}
                     >
                       <span className="flex items-center gap-1">
                         {getStatusIcon(project.status)}

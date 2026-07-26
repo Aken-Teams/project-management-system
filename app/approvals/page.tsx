@@ -464,11 +464,11 @@ export default function ApprovalsPage() {
       <div className="flex items-center gap-2.5 flex-wrap pb-3">
         <Badge variant="outline" className="font-mono text-xs px-2.5 py-0.5">{request.project.projectCode}</Badge>
         {request.supportResolved ? (
-          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2.5 py-0.5">
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-xs px-2.5 py-0.5">
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> 協助已完成
           </Badge>
         ) : (
-          <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-xs px-2.5 py-0.5">
+          <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900 text-xs px-2.5 py-0.5">
             <Clock className="h-3.5 w-3.5 mr-1" /> 待協助
           </Badge>
         )}
@@ -618,21 +618,21 @@ export default function ApprovalsPage() {
               <Clock className="h-3.5 w-3.5 mr-1" /> 待審核
             </Badge>
           ) : request.status === 'approved' ? (
-            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2.5 py-0.5">
+            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-xs px-2.5 py-0.5">
               <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> 延期已核准
             </Badge>
           ) : (
-            <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs px-2.5 py-0.5">
+            <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900 text-xs px-2.5 py-0.5">
               <XCircle className="h-3.5 w-3.5 mr-1" /> 已駁回
             </Badge>
           )}
           {request.status === 'approved' && request.supportNeeded && request.supportNeeded.trim() !== '' && (
             request.supportResolved ? (
-              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs px-2.5 py-0.5">
+              <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-xs px-2.5 py-0.5">
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> 協助已完成
               </Badge>
             ) : (
-              <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-xs px-2.5 py-0.5">
+              <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900 text-xs px-2.5 py-0.5">
                 <Clock className="h-3.5 w-3.5 mr-1" /> 待協助
               </Badge>
             )
@@ -948,7 +948,7 @@ export default function ApprovalsPage() {
               <TabsTrigger value="support" className="border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent rounded-none px-4 py-2.5 gap-1.5">
                 <Wrench className="h-4 w-4" /> 待處理協助
                 {supportAll.length > 0 && (
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[11px] px-1.5 py-0 ml-1">{supportAll.length}</Badge>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900 text-[11px] px-1.5 py-0 ml-1">{supportAll.length}</Badge>
                 )}
               </TabsTrigger>
             )}
@@ -1158,11 +1158,11 @@ export default function ApprovalsPage() {
                           >
                             <td className="px-4 py-3.5">
                               {request.status === 'approved' ? (
-                                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 text-xs">
+                                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-xs">
                                   <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> 已核准
                                 </Badge>
                               ) : (
-                                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs">
+                                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900 text-xs">
                                   <XCircle className="h-3.5 w-3.5 mr-1" /> 已駁回
                                 </Badge>
                               )}

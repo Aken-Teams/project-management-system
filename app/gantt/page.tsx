@@ -59,11 +59,11 @@ export default function GanttPage() {
                           <Badge 
                             variant="secondary"
                             className={
-                              project.status === 'green' 
-                                ? 'bg-success text-success-foreground' 
+                              project.status === 'green'
+                                ? 'bg-success text-success-foreground hover:bg-success'
                                 : project.status === 'yellow'
-                                ? 'bg-warning text-warning-foreground'
-                                : 'bg-destructive text-destructive-foreground'
+                                ? 'bg-warning text-warning-foreground hover:bg-warning'
+                                : 'bg-destructive text-destructive-foreground hover:bg-destructive'
                             }
                           >
                             {project.status === 'green' ? '正常' : project.status === 'yellow' ? '注意' : '風險'}
