@@ -33,6 +33,7 @@ import { isSameUser } from '@/lib/user-match'
 import { uploadFile } from '@/lib/upload-file'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree } from '@/lib/report-tracking'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
 import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
@@ -1214,8 +1215,8 @@ export default function MyTasksPage() {
     return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/70 shrink-0">未回報</Badge>
   }
 
-  // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）
-  const renderReviewLogs = (logs: TaskLog[]) => (
+  // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
+  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[] }[]) => (
     <div className="max-h-[200px] overflow-y-auto border-t border-b bg-background">
       <table className="w-full text-xs border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur"><tr className="text-muted-foreground">
@@ -1230,11 +1231,11 @@ export default function MyTasksPage() {
               <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
               <td className="px-2 py-1.5 text-center">
                 {l.attachments && l.attachments.length > 0 ? (
-                  <Popover>
-                    <PopoverTrigger asChild>
+                  <HoverCard openDelay={80} closeDelay={120}>
+                    <HoverCardTrigger asChild>
                       <button className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:bg-primary/10 rounded px-1.5 py-0.5"><Paperclip className="h-3 w-3" />{l.attachments.length}</button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-60 p-2">
+                    </HoverCardTrigger>
+                    <HoverCardContent align="end" className="w-60 p-2">
                       <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
                         {l.attachments.map((att, ai) => (
                           <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
@@ -1243,8 +1244,8 @@ export default function MyTasksPage() {
                           </a>
                         ))}
                       </div>
-                    </PopoverContent>
-                  </Popover>
+                    </HoverCardContent>
+                  </HoverCard>
                 ) : <span className="text-muted-foreground/30">—</span>}
               </td>
             </tr>
@@ -1985,25 +1986,6 @@ export default function MyTasksPage() {
               const pid = reviewDialogProject.projectId
               const keyOf = (authorId: string, taskId: string, weekOf: string | null) => `${pid}:${authorId}:${taskId}:${weekOf ?? '_'}`
               const trackMiss = reviewDialogProject.reviewees.reduce((n, rv) => n + rv.tracking.filter(t => t.owned && !t.filled).length, 0)
-              const LogList = ({ logs }: { logs: ReviewLogItem[] }) => (
-                <div className="space-y-2 rounded-md bg-muted/20 p-2.5">
-                  {logs.map(l => (
-                    <div key={l.id} className="text-sm">
-                      <span className="text-xs text-muted-foreground tabular-nums mr-2">{l.logDate}</span>
-                      <span className="text-foreground/80 whitespace-pre-line">{l.content}</span>
-                      {l.attachments?.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {l.attachments.map((a, ai) => a.type === 'image' ? (
-                            <a key={ai} href={a.url} download={a.name} target="_blank" rel="noopener noreferrer"><img src={a.url} alt={a.name} className="h-14 w-14 rounded object-cover border hover:opacity-80" /></a>
-                          ) : (
-                            <a key={ai} href={a.url} download={a.name} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline bg-background border rounded px-1.5 py-1"><Paperclip className="h-3 w-3" />{a.name}</a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )
               return (
                 <>
                   {/* Tab bar */}
@@ -2102,7 +2084,7 @@ export default function MyTasksPage() {
                             </button>
                             {open && (
                               <div className="px-3 pb-3 space-y-2 border-t bg-muted/10">
-                                <LogList logs={s.logs} />
+                                {renderReviewLogs(s.logs)}
                                 <div className="flex items-center justify-end gap-2">
                                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
                                     disabled={busy} onClick={() => { setRejectTarget({ projectId: pid, authorId: rv.authorId, authorName: rv.authorName, sub: s }); setRejectReason('') }}>
@@ -2147,7 +2129,7 @@ export default function MyTasksPage() {
                                 {s.outcome === 'rejected' && s.note && (
                                   <div className="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-2 py-1.5">駁回原因：{s.note}</div>
                                 )}
-                                <LogList logs={s.logs} />
+                                {renderReviewLogs(s.logs)}
                               </div>
                             )}
                           </div>
