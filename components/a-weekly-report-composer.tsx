@@ -792,9 +792,13 @@ export function AWeeklyReportComposer({
                         </HoverCard>
                         {/* 前序未完成小標籤（點看細節）*/}
                         {showPrereq && <button type="button" onClick={() => setPrereqOpen(true)} className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0 rounded-full border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 hover:bg-amber-100"><AlertTriangle className="h-3 w-3" />前序未完成 {selPrereqs.length}</button>}
-                        {/* 逾期 / 延期小標籤 */}
-                        {!unassignedParent && pendingDelayTaskIds.has(selectedId) && <Badge variant="outline" className="text-[11px] px-1.5 py-0 border-orange-400 bg-orange-100/60 text-orange-700 dark:text-orange-300">延期待審</Badge>}
-                        {!unassignedParent && !pendingDelayTaskIds.has(selectedId) && selOverdue && <button type="button" onClick={() => openDelay()} className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0 rounded-full border border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400 hover:bg-orange-100"><CalendarClock className="h-3 w-3" />逾期 {selOverdue.diffDays} 天·申請延期</button>}
+                        {/* 延期＝常駐按鈕，由 A 判斷是否要調整規劃時程；逾期只是附帶告知、不強制 */}
+                        {!unassignedParent && (pendingDelayTaskIds.has(selectedId)
+                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0 border-orange-400 bg-orange-100/60 text-orange-700 dark:text-orange-300">延期待審</Badge>
+                          : <button type="button" onClick={() => openDelay()} className={cn('inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0 rounded-full border transition-colors',
+                              selOverdue ? 'border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400 hover:bg-orange-100' : 'border-border text-muted-foreground hover:bg-muted')}>
+                              <CalendarClock className="h-3 w-3" />{selOverdue ? `逾期 ${selOverdue.diffDays} 天 · 申請延期` : '申請延期'}
+                            </button>)}
                       </div>
                     </div>
 
@@ -985,7 +989,7 @@ export function AWeeklyReportComposer({
                 {overdueUnresolved.length > 0 && (
                   <div className="flex items-start gap-2 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-2 text-xs text-orange-800 dark:text-orange-300">
                     <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span>有 <b>{overdueUnresolved.length}</b> 筆填報日超過規劃截止日，該任務已逾期（進度最高到 99%、無法標記完成）。<b>建議送出延期申請</b>調整時程，才能正常完成這些任務。</span>
+                    <span>有 <b>{overdueUnresolved.length}</b> 筆填報日超過規劃截止日。可照常送出；如你判斷需要調整規劃時程，再<b>申請延期</b>即可（非必填）。</span>
                   </div>
                 )}
                 <div className="text-xs text-muted-foreground pt-1">送出後仍可再進來修改。</div>
@@ -1168,18 +1172,18 @@ export function AWeeklyReportComposer({
               <span className="text-[11px] text-muted-foreground">截止日 {selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')}</span>
             </div>
 
-            {/* 只有「實際完成日」超過截止日才要求延期 */}
+            {/* 完成日逾截止日：僅告知，不再強制延期（延期改由 A 判斷是否要調整規劃時程）*/}
             {completeOverdue && (
               <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-2.5 text-xs text-orange-800 dark:text-orange-300 space-y-2">
-                <div className="font-medium flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 shrink-0" />實際完成日已逾截止日</div>
-                <div>須申請延期調整時程後始可結案；如於期限內完成，請改填截止日當日或之前。</div>
-                <Button size="sm" className="w-full h-8 text-xs bg-orange-600 hover:bg-orange-700 gap-1.5" onClick={() => { setCompleteOpen(false); openDelay(completeDate) }}><CalendarClock className="h-3.5 w-3.5" />申請延期</Button>
+                <div className="font-medium flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 shrink-0" />實際完成日已逾原截止日</div>
+                <div>仍可直接標記完成；如你判斷需要<b>同步調整規劃時程</b>，可申請延期（選填）。</div>
+                <Button size="sm" variant="outline" className="w-full h-8 text-xs border-orange-400 text-orange-700 hover:bg-orange-100 dark:text-orange-300 gap-1.5" onClick={() => { setCompleteOpen(false); openDelay(completeDate) }}><CalendarClock className="h-3.5 w-3.5" />申請延期（選填）</Button>
               </div>
             )}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>返回繼續填寫</AlertDialogCancel>
-            <AlertDialogAction disabled={!selHasLog || completeOverdue} onClick={e => { e.preventDefault(); if (selectedId) { setMarkDone(p => ({ ...p, [selectedId]: completeDate })); setCompleteOpen(false) } }} className="bg-green-600 hover:bg-green-700">確認標記完成</AlertDialogAction>
+            <AlertDialogAction disabled={!selHasLog} onClick={e => { e.preventDefault(); if (selectedId) { setMarkDone(p => ({ ...p, [selectedId]: completeDate })); setCompleteOpen(false) } }} className="bg-green-600 hover:bg-green-700">確認標記完成</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
