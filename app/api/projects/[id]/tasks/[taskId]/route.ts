@@ -33,7 +33,8 @@ interface UpdateTaskBody {
   reviewActor?: string
   reviewNote?: string      // 駁回原因等備註
   publishLogs?: boolean    // A 發布此任務紀錄到官方更新紀錄
-  reviewedDone?: boolean   // A 審核通過（設 reviewedAt；不動進度/完成度）
+  reviewedDone?: boolean   // A 審核通過（設 reviewedAt）
+  markComplete?: boolean   // A 審核通過＝確認 100% 完成：一併標記 status=done + completedAt（甘特 100% + 完成區）
 }
 
 export async function PUT(
@@ -107,11 +108,19 @@ export async function PUT(
         data.reviewedBy = null
       }
     }
-    // A 審核通過（認可 R 的報告）— 只設 reviewedAt，「不動 status/progress/completedAt」
+    // A 審核通過（確認 R 回報的 100% 完成）
     if (body.reviewedDone !== undefined) {
       if (body.reviewedDone) {
         data.reviewedAt = new Date()
         data.reviewedBy = body.reviewActor || null
+        // markComplete → 正式標記完成：甘特顯示 100% + 移入完成區 + 觸發里程碑同步
+        if (body.markComplete) {
+          data.status = 'done'
+          data.progress = 100
+          if (!task.completedAt) data.completedAt = new Date()
+          data.completedBy = body.reviewActor || null
+          if (body.completedWeekOf) data.completedWeekOf = body.completedWeekOf
+        }
       } else {
         data.reviewedAt = null
         data.reviewedBy = null

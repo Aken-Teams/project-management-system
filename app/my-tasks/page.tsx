@@ -1049,6 +1049,15 @@ export default function MyTasksPage() {
       for (const t of p.tasks) if (t.parentId) { const a = childrenOf.get(t.parentId); if (a) a.push(t); else childrenOf.set(t.parentId, [t]) }
       for (const t of p.tasks) {
         if (!t.reportedDoneAt || t.completedAt || t.reviewedAt) continue // 已審核通過的離開待審佇列
+        // 循序 gating：R 回報 100% 必須「先過 R主管審核」A 才看得到。
+        //   有指定 R主管(報告有 authorReviewerName)時，要求該任務報告已核准(有 publishedAt)且無待審筆；
+        //   沒指定 R主管則 fallback 直接進 A（舊流程）。
+        const rLogs = p.taskLogs.filter(l => l.taskId === t.id && isSameUser(l.author, { name: t.reportedDoneBy || t.assignee || '' }))
+        if (rLogs.some(l => l.authorReviewerName)) {
+          const hasApproved = rLogs.some(l => l.publishedAt)
+          const hasPending = rLogs.some(l => !l.publishedAt && !l.reviewerRejectedAt)
+          if (!hasApproved || hasPending) continue // 尚未經 R主管核准 → 先不進 A 審核佇列
+        }
         const ms = p.milestones.find(m => m.id === t.milestoneId)
         const anc: string[] = []
         let cur = t.parentId ? byId.get(t.parentId) : undefined
@@ -1216,15 +1225,19 @@ export default function MyTasksPage() {
     if (res.ok) { const data = await res.json(); setApiProjects(data.projects ?? []) }
   }, [user])
 
-  // A 審核通過：認可 R 的報告 + 發布紀錄到更新紀錄。**不動進度/完成度**（避免甘特被誤設 100%）。
+  // A 審核通過＝確認 R 回報的 100% 完成 → 標記完成（甘特 100% + 移入完成區 + 里程碑同步）。
   const reviewConfirm = async (item: ReviewItem) => {
     if (!user) return
     setReviewProcessing(item.task.id)
     try {
+      // 完成歸屬「本週」→ 更新紀錄依此週分組
+      const now = new Date(); const day = now.getDay(); const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+      const mon = new Date(now); mon.setDate(diff)
+      const completedWeekOf = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`
       const res = await fetch(`/api/projects/${item.projectId}/tasks/${item.task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewedDone: true, reviewEvent: 'confirmed', reviewActor: user.name }),
+        body: JSON.stringify({ reviewedDone: true, markComplete: true, completedWeekOf, reviewEvent: 'confirmed', reviewActor: user.name }),
       })
       if (!res.ok) throw new Error()
       await refreshMyTasks()
@@ -4377,7 +4390,13 @@ export default function MyTasksPage() {
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4" />週報審核{reviewShownName ? ` — ${reviewShownName}` : ''}</DialogTitle>
-            <DialogDescription className="text-sm">審核執行者的回報：<b>審核通過</b>＝認可內容並把紀錄發布到「更新紀錄」（<b>不代表任務 100% 完成</b>，完成與否由你在報告中決定）；或駁回退回重做。</DialogDescription>
+            <DialogDescription className="text-sm">
+              {reviewTab === 'pending'
+                ? <>確認執行者回報的完成：<b>審核通過</b>＝確認任務 <b>100% 完成</b>（甘特顯示完成、任務移入完成區、更新里程碑）；或<b>駁回</b>並填原因退回重做。</>
+                : reviewTab === 'members'
+                  ? <>依週別查看所有成員的週報，掌握誰已送出、誰逾期未填。</>
+                  : <>已處理的確認 / 駁回紀錄。</>}
+            </DialogDescription>
           </DialogHeader>
           <div className="px-6 pt-3">
             <div className="flex items-center gap-1 border-b">
