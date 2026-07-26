@@ -7,7 +7,7 @@ import { safeJsonParse } from '@/lib/utils'
 //   只有「該專案的當責 A」或 pm / admin 能寫入。
 
 const keyOf = (projectId: string) => `phase_overview:${projectId}`
-const DEFAULT_CONFIG = { mode: 'separate' as 'separate' | 'merge', hidden: [] as string[] }
+const DEFAULT_CONFIG = { mode: 'separate' as 'separate' | 'merge', hidden: [] as string[], axis: 'fit' as 'fit' | 'timeline' }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -16,6 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({
     mode: cfg.mode === 'merge' ? 'merge' : 'separate',
     hidden: Array.isArray(cfg.hidden) ? cfg.hidden.filter((x): x is string => typeof x === 'string') : [],
+    axis: cfg.axis === 'timeline' ? 'timeline' : 'fit',
   })
 }
 
@@ -38,7 +39,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const body = await request.json().catch(() => ({}))
   const mode = body.mode === 'merge' ? 'merge' : 'separate'
   const hidden = Array.isArray(body.hidden) ? body.hidden.filter((x: unknown): x is string => typeof x === 'string') : []
-  const value = JSON.stringify({ mode, hidden })
+  const axis = body.axis === 'timeline' ? 'timeline' : 'fit'
+  const value = JSON.stringify({ mode, hidden, axis })
 
   await prisma.systemSetting.upsert({
     where: { key: keyOf(id) },

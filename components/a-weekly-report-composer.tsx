@@ -1175,7 +1175,7 @@ export function AWeeklyReportComposer({
           <div className="space-y-2 text-sm">
             {/* 注意事項統一放上面（前序 / 逾期），不再一上一下 */}
             {(!selHasLog || selPrereqs.length > 0 || completeOverdue) && (
-              <div className="rounded-lg border bg-muted/30 px-3 py-2 space-y-1">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/20 px-3 py-2 space-y-1">
                 {!selHasLog && <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />請先填一筆工作紀錄（日期＋內容）再標記完成。</div>}
                 {selPrereqs.length > 0 && <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />前序未完成 {selPrereqs.length} 項（仍可標記）<button type="button" onClick={() => setPrereqOpen(true)} className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200">查看</button></div>}
                 {completeOverdue && <div className="flex items-center gap-1.5 text-xs text-orange-700 dark:text-orange-400 flex-wrap"><CalendarClock className="h-3.5 w-3.5 shrink-0" />完成日已逾原截止日（仍可標記）<button type="button" onClick={() => { setCompleteOpen(false); openDelay(completeDate) }} className="underline underline-offset-2 hover:text-orange-900 dark:hover:text-orange-200">需調整規劃時程？申請延期</button></div>}
