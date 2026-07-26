@@ -135,9 +135,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     if (body.submit && touchedTaskIds.size > 0) {
       const allTasks = await prisma.task.findMany({
         where: { projectId: id },
-        select: { id: true, parentId: true, milestoneId: true, durationDays: true, startDate: true, endDate: true, originalStartDate: true, progress: true, completedAt: true },
+        select: { id: true, parentId: true, milestoneId: true, durationDays: true, startDate: true, endDate: true, originalStartDate: true, progress: true, completedAt: true, assignee: true },
       })
-      const allLogs = await prisma.taskLog.findMany({ where: { projectId: id }, select: { taskId: true, logDate: true } })
+      const allLogs = await prisma.taskLog.findMany({ where: { projectId: id }, select: { taskId: true, logDate: true, author: { select: { name: true } } } })
       await syncTaskProgressFromLogs(allTasks, allLogs)
       const affectedMs = new Set(allTasks.filter(t => touchedTaskIds.has(t.id)).map(t => t.milestoneId))
       for (const msId of affectedMs) await syncMilestoneStatus(msId, id)

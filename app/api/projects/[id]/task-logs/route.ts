@@ -62,7 +62,7 @@ export async function POST(
     // ── Sync task progress & milestone after adding log ──
     const allLogs = await prisma.taskLog.findMany({
       where: { taskId: body.taskId },
-      select: { taskId: true, logDate: true },
+      select: { taskId: true, logDate: true, author: { select: { name: true } } },
     })
     await syncTaskProgressFromLogs([task], allLogs)
     await syncMilestoneStatus(task.milestoneId, id)

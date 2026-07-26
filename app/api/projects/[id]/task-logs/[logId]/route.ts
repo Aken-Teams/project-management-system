@@ -10,13 +10,13 @@ type RouteContext = { params: Promise<{ id: string; logId: string }> }
 async function syncAfterLogChange(taskId: string, projectId: string) {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { id: true, startDate: true, endDate: true, progress: true, completedAt: true, milestoneId: true },
+    select: { id: true, parentId: true, durationDays: true, startDate: true, endDate: true, originalStartDate: true, progress: true, completedAt: true, milestoneId: true, assignee: true },
   })
   if (!task) return
 
   const allLogs = await prisma.taskLog.findMany({
     where: { taskId },
-    select: { taskId: true, logDate: true },
+    select: { taskId: true, logDate: true, author: { select: { name: true } } },
   })
   await syncTaskProgressFromLogs([task], allLogs)
   await syncMilestoneStatus(task.milestoneId, projectId)

@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/db'
 import { todayUtc } from '@/lib/date-utils'
+import { isSameUser } from '@/lib/user-match'
+
+const hasAssignee = (a?: string | null) => !!(a && a.trim() && a.trim() !== '未指派')
 
 /**
  * Weighted progress by durationDays (e.g. A=10d@100% + B=20d@0% → 33%).
@@ -19,6 +22,23 @@ export function computeWeightedProgress(
 }
 
 /**
+ * 里程碑進度聚合：排除「無指派人的父層」(其進度＝子項聚合，純衍生節點；若一起計入會與子項重複加權)。
+ * 計入 = 葉任務 ∪ 有指派人的任務(含有押人父層，其自己的報告是獨立訊號)。
+ */
+export function milestoneCountedTasks<T extends { id: string; parentId?: string | null; assignee?: string | null }>(msTasks: T[]): T[] {
+  const parentIds = new Set(msTasks.map(t => t.parentId).filter(Boolean) as string[])
+  const counted = msTasks.filter(t => !parentIds.has(t.id) || hasAssignee(t.assignee))
+  return counted.length > 0 ? counted : msTasks
+}
+
+/** 里程碑加權進度（已排除無指派人父層，避免重複計）。 */
+export function computeMilestoneProgress(
+  msTasks: { id: string; parentId?: string | null; assignee?: string | null; progress: number; durationDays?: number | null }[],
+): number {
+  return computeWeightedProgress(milestoneCountedTasks(msTasks))
+}
+
+/**
  * Recalculate and update a milestone's status & progress based on its tasks.
  *  - All tasks done    → milestone done
  *  - Any task blocked  → milestone blocked
@@ -31,12 +51,13 @@ export async function syncMilestoneStatus(milestoneId: string, projectId: string
   //   （各看自己進度、依 durationDays 加權），不再只算葉任務。父層自己的報告也計入。
   const msTasks = await prisma.task.findMany({
     where: { milestoneId, projectId },
-    select: { id: true, status: true, progress: true, durationDays: true },
+    select: { id: true, status: true, progress: true, durationDays: true, parentId: true, assignee: true },
   })
   if (msTasks.length === 0) return
 
-  const status = computeMilestoneStatus(msTasks)
-  const progress = computeWeightedProgress(msTasks)
+  const counted = milestoneCountedTasks(msTasks)
+  const status = computeMilestoneStatus(counted)
+  const progress = computeWeightedProgress(counted)
 
   await prisma.milestone.update({
     where: { id: milestoneId },
@@ -196,17 +217,14 @@ export async function autoProgressTasks(
  * Works on in-memory arrays; updates DB + patches objects in place.
  */
 export async function syncTaskProgressFromLogs(
-  tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; originalStartDate?: Date | null; progress: number; completedAt: Date | null }[],
-  taskLogs: { taskId: string; logDate: Date; reportOnly?: boolean }[],
+  tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; originalStartDate?: Date | null; progress: number; completedAt: Date | null; assignee?: string | null }[],
+  taskLogs: { taskId: string; logDate: Date; reportOnly?: boolean; author?: { name?: string | null } | null }[],
 ): Promise<void> {
-  const msPerDay = 1000 * 60 * 60 * 24
-
-  // Group all log dates by taskId (we'll filter per-task by endDate later).
-  // 報告日期→時間推算進度：A 的報告 log 也算（reportOnly 不再被略過）。
-  const logsByTask = new Map<string, Date[]>()
+  // Group logs (date + 作者名) by taskId — 用來依指派人挑「該由誰的報告算進度」。
+  const logsByTask = new Map<string, { date: Date; author: string | null }[]>()
   for (const log of taskLogs) {
     const list = logsByTask.get(log.taskId) || []
-    list.push(log.logDate)
+    list.push({ date: log.logDate, author: log.author?.name ?? null })
     logsByTask.set(log.taskId, list)
   }
 
@@ -231,37 +249,43 @@ export async function syncTaskProgressFromLogs(
     return d
   }
   const ordered = [...tasks].sort((a, b) => depthOf(b) - depthOf(a))
+  const today = todayUtc()
 
   for (const task of ordered) {
     let target: number
     if (task.completedAt) {
       target = 100
     } else {
-      // 新模型：每個任務（含父層）一律以「自己的報告」推算時間進度，不繼承子層。
-      //   父層沒寫自己的報告 → 沒有 log → 0。里程碑才做聚合（見 syncMilestoneStatus）。
-      // IMPORTANT: Only completedAt grants 100%. Auto-calc caps at 99%.
-      // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %。
-      const plannedStart = task.originalStartDate && task.originalStartDate < task.startDate
-        ? task.originalStartDate : task.startDate
-      const allLogs = logsByTask.get(task.id) || []
-      // 客戶決策（2026-07-10）：「有紀錄就有進度」——不管快逾期/已延期，有報告就算，
-      //   不再濾掉逾期紀錄（逾期報告日超過 endDate → 分子>分母 → 封頂 99%）。
-      const logsUpToEnd = allLogs
-      if (logsUpToEnd.length === 0) {
-        target = 0
+      // 進度來源依「有無指派人」分流（客戶決策 2026-07-26）：
+      //   有指派人      → 只算「該指派人(R)」的報告日期覆蓋（A 補充純脈絡，不動進度）。
+      //   無指派人・父層 → 子項加權聚合（A 不用額外寫父層 100%）。
+      //   無指派人・葉    → 算「A 補充報告」的日期覆蓋（該任務的報告本就出自 A）。
+      const assigned = hasAssignee(task.assignee)
+      const children = subtasksByParent.get(task.id) || []
+      if (!assigned && children.length > 0) {
+        target = computeWeightedProgress(children.map(c => ({ progress: c.progress, durationDays: c.durationDays })))
       } else {
-        const earliestLog = logsUpToEnd.reduce((a, b) => (a < b ? a : b))
-        // 進度分子上界壓在「今天」：避免誤填未來日期的 log 讓進度瞬間跳到 99%（A-1）。
-        //   語意＝進度反映「到今天為止經過多少工期」，不是到某個未來報告日。
-        const today = todayUtc()
-        const rawLatest = logsUpToEnd.reduce((a, b) => (a > b ? a : b))
-        const latestLog = rawLatest > today ? today : rawLatest
-        // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %
-        const effStart = earliestLog < plannedStart ? earliestLog : plannedStart
-        const totalSpan = task.endDate.getTime() - effStart.getTime()
-        target = totalSpan <= 0
-          ? 99
-          : Math.min(99, Math.max(0, Math.round(((latestLog.getTime() - effStart.getTime()) / totalSpan) * 100)))
+        const all = logsByTask.get(task.id) || []
+        // 有指派人：只留該指派人寫的 log；無指派人葉：全留（都是 A 的）。
+        const relevant = assigned
+          ? all.filter(l => l.author && isSameUser(task.assignee!, { name: l.author }))
+          : all
+        if (relevant.length === 0) {
+          target = 0
+        } else {
+          // 提前開工：把基準往前拉到實際最早日，用「涵蓋多少工期」推算 %；分子上界壓在今天。
+          const plannedStart = task.originalStartDate && task.originalStartDate < task.startDate
+            ? task.originalStartDate : task.startDate
+          const dates = relevant.map(l => l.date)
+          const earliestLog = dates.reduce((a, b) => (a < b ? a : b))
+          const rawLatest = dates.reduce((a, b) => (a > b ? a : b))
+          const latestLog = rawLatest > today ? today : rawLatest
+          const effStart = earliestLog < plannedStart ? earliestLog : plannedStart
+          const totalSpan = task.endDate.getTime() - effStart.getTime()
+          target = totalSpan <= 0
+            ? 99
+            : Math.min(99, Math.max(0, Math.round(((latestLog.getTime() - effStart.getTime()) / totalSpan) * 100)))
+        }
       }
     }
 

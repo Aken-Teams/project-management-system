@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
+import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress, milestoneCountedTasks } from '@/lib/sync-milestone-status'
 import { dbProjectToFrontend, projectFullInclude } from '@/lib/project-transformer'
 import { isReportVisible } from '@/lib/report-cutoff'
 import {
@@ -44,8 +44,9 @@ export async function GET(
     //   客戶決策(2026-07-10)：里程碑聚合「所有層級任務」(各看自己進度、依 durationDays 加權)，
     //   所有任務完成才 100%，與 syncMilestoneStatus / 甘特一致。
     for (const ms of project.milestones) {
-      const msTasks = project.tasks.filter(t => t.milestoneId === ms.id)
-      if (msTasks.length === 0) continue
+      const allMsTasks = project.tasks.filter(t => t.milestoneId === ms.id)
+      if (allMsTasks.length === 0) continue
+      const msTasks = milestoneCountedTasks(allMsTasks)
       const correctStatus = computeMilestoneStatus(msTasks)
       const correctProgress = computeWeightedProgress(msTasks)
       if (ms.status !== correctStatus || ms.progress !== correctProgress) {

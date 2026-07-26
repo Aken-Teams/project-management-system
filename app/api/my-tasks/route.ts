@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
 import { isReportVisible } from '@/lib/report-cutoff'
-import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress } from '@/lib/sync-milestone-status'
+import { autoProgressTasks, syncTaskProgressFromLogs, computeMilestoneStatus, computeWeightedProgress, milestoneCountedTasks } from '@/lib/sync-milestone-status'
 
 // ─── GET /api/my-tasks — Fetch tasks for the current user ────
 // Returns all projects where the user is a team member, with their
@@ -103,10 +103,11 @@ export async function GET(request: NextRequest) {
       // 2. Auto-progress: check deps, logs, startDate to set in_progress/blocked/todo
       await autoProgressTasks(p.tasks, pPublishedLogs)
 
-      // 3. Re-sync milestone statuses — 聚合「所有層級任務」(所有任務完成才 100%，與 sync/甘特一致)
+      // 3. Re-sync milestone statuses — 聚合任務(排除無指派人純聚合父層，與 syncMilestoneStatus 一致)
       for (const ms of p.milestones) {
-        const msTasks = p.tasks.filter(t => t.milestoneId === ms.id)
-        if (msTasks.length === 0) continue
+        const allMsTasks = p.tasks.filter(t => t.milestoneId === ms.id)
+        if (allMsTasks.length === 0) continue
+        const msTasks = milestoneCountedTasks(allMsTasks)
         const correctStatus = computeMilestoneStatus(msTasks)
         const correctProgress = computeWeightedProgress(msTasks)
         if (ms.status !== correctStatus || ms.progress !== correctProgress) {
