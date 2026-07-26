@@ -1079,7 +1079,18 @@ export function AWeeklyReportComposer({
                   <div className="font-medium flex items-center gap-1"><Info className="h-3.5 w-3.5" />這個日期會造成：</div>
                   <div>• 此任務延後 <b>{delayImpact.extraDays}</b> 天</div>
                   <div>• {delayImpact.milestoneDelta > 0 ? <>里程碑「{delayImpact.msName}」順延至 <b>{new Date(delayImpact.proposedMilestoneDate).toLocaleDateString('zh-TW')}</b>（+{delayImpact.milestoneDelta} 天）</> : <>不影響里程碑「{delayImpact.msName}」的截止日</>}</div>
-                  {delayImpact.extraDays > 0 && subsequentMilestones.length > 0 && <div>• 其後 <b>{subsequentMilestones.length}</b> 個里程碑順延 {delayImpact.extraDays} 天：「{subsequentMilestones.map(m => m.name).join('」「')}」</div>}
+                  {delayImpact.extraDays > 0 && subsequentMilestones.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span>• 其後 <b>{subsequentMilestones.length}</b> 個里程碑一併順延 {delayImpact.extraDays} 天</span>
+                      <HoverCard openDelay={80} closeDelay={80}>
+                        <HoverCardTrigger asChild><button type="button" className="underline underline-offset-2 hover:text-orange-900 dark:hover:text-orange-200">看清單</button></HoverCardTrigger>
+                        <HoverCardContent align="start" className="w-56 p-2 text-xs">
+                          <div className="text-[11px] font-medium text-muted-foreground mb-1">一併順延的里程碑</div>
+                          <div className="space-y-0.5 max-h-[200px] overflow-y-auto">{subsequentMilestones.map(m => <div key={m.name} className="truncate text-foreground/85">{m.name}</div>)}</div>
+                        </HoverCardContent>
+                      </HoverCard>
+                    </div>
+                  )}
                 </div>
               ) : delayDate ? <div className="text-xs text-destructive">新截止日必須晚於目前截止日（{selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')}）</div> : <div className="text-xs text-muted-foreground">請先選擇新的截止日。</div>}
               <div><div className="text-xs font-medium mb-1">延期原因 <span className="text-destructive">*</span></div><Textarea value={delayReason} onChange={e => setDelayReason(e.target.value)} rows={2} placeholder="說明延期原因…" className="text-sm" /></div>
@@ -1161,25 +1172,20 @@ export function AWeeklyReportComposer({
             <AlertDialogTitle className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-green-600" />標記完成 · {sel?.title}</AlertDialogTitle>
             <AlertDialogDescription className="text-xs">請填<b>實際完成日</b>（非填報日）。送出報告時生效、進度變 100%。</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-2.5 text-sm">
-            {!selHasLog && <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-2 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />請先填寫至少一筆工作紀錄（日期＋內容）再標記完成。</div>}
-            {selPrereqs.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-2 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-2"><span className="flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />前序未完成：{selPrereqs.map(p => p.title).join('、')}。仍可標記，但建議先完成前序。</span><Button size="sm" variant="outline" className="h-6 text-[11px] px-2 shrink-0" onClick={() => setPrereqOpen(true)}>查看</Button></div>}
-
-            {/* 一律讓她填實際完成日；以「填的日期」判斷是否逾期，而非填報日 */}
-            <div className="flex items-center gap-2 pt-1">
+          <div className="space-y-2 text-sm">
+            {/* 注意事項統一放上面（前序 / 逾期），不再一上一下 */}
+            {(!selHasLog || selPrereqs.length > 0 || completeOverdue) && (
+              <div className="rounded-lg border bg-muted/30 px-3 py-2 space-y-1">
+                {!selHasLog && <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />請先填一筆工作紀錄（日期＋內容）再標記完成。</div>}
+                {selPrereqs.length > 0 && <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />前序未完成 {selPrereqs.length} 項（仍可標記）<button type="button" onClick={() => setPrereqOpen(true)} className="underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200">查看</button></div>}
+                {completeOverdue && <div className="flex items-center gap-1.5 text-xs text-orange-700 dark:text-orange-400 flex-wrap"><CalendarClock className="h-3.5 w-3.5 shrink-0" />完成日已逾原截止日（仍可標記）<button type="button" onClick={() => { setCompleteOpen(false); openDelay(completeDate) }} className="underline underline-offset-2 hover:text-orange-900 dark:hover:text-orange-200">需調整規劃時程？申請延期</button></div>}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground shrink-0">實際完成日</span>
               <input type="date" value={completeDate} onChange={e => setCompleteDate(e.target.value)} className={cn('text-xs border rounded h-8 px-2 bg-background', completeOverdue && 'border-orange-400')} />
               <span className="text-[11px] text-muted-foreground">截止日 {selTask && new Date(selTask.endDate).toLocaleDateString('zh-TW')}</span>
             </div>
-
-            {/* 完成日逾截止日：僅告知，不再強制延期（延期改由 A 判斷是否要調整規劃時程）*/}
-            {completeOverdue && (
-              <div className="rounded-lg border border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 p-2.5 text-xs text-orange-800 dark:text-orange-300 space-y-2">
-                <div className="font-medium flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 shrink-0" />實際完成日已逾原截止日</div>
-                <div>仍可直接標記完成；如你判斷需要<b>同步調整規劃時程</b>，可申請延期（選填）。</div>
-                <Button size="sm" variant="outline" className="w-full h-8 text-xs border-orange-400 text-orange-700 hover:bg-orange-100 dark:text-orange-300 gap-1.5" onClick={() => { setCompleteOpen(false); openDelay(completeDate) }}><CalendarClock className="h-3.5 w-3.5" />申請延期（選填）</Button>
-              </div>
-            )}
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>返回繼續填寫</AlertDialogCancel>
