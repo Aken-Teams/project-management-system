@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { useNotificationStore, type NotificationType, type Notification } from '@/lib/notification-store'
 import {
   Bell,
@@ -18,6 +17,7 @@ import {
   CheckCheck,
   AlertCircle,
   ArrowRight,
+  ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -94,7 +94,13 @@ function buildSummary(notifications: Notification[]) {
   return Object.entries(counts) as [NotificationType, number][]
 }
 
-export function NotificationBell() {
+export function NotificationBell({
+  side = 'bottom',
+  align = 'end',
+}: {
+  side?: 'top' | 'right' | 'bottom' | 'left'
+  align?: 'start' | 'center' | 'end'
+} = {}) {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotificationStore()
   const [open, setOpen] = useState(false)
   const router = useRouter()
@@ -126,7 +132,7 @@ export function NotificationBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0" sideOffset={8}>
+      <PopoverContent side={side} align={align} collisionPadding={12} className="w-80 p-0" sideOffset={8}>
 
         {/* Header */}
         <div className="px-4 py-3 border-b space-y-2">
@@ -159,7 +165,7 @@ export function NotificationBell() {
                 return (
                   <span
                     key={type}
-                    className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium', color, 'border-current/20 bg-current/5')}
+                    className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium', color, 'border-current/20 bg-current/5')}
                   >
                     <Icon className="h-2.5 w-2.5" />
                     {NOTIFICATION_LABEL[type]} {count}
@@ -178,7 +184,7 @@ export function NotificationBell() {
           </div>
         ) : (
           <>
-            <ScrollArea className="max-h-72">
+            <div className="max-h-72 overflow-y-auto overscroll-contain">
               <div className="divide-y">
                 {recentNotifications.map(notification => {
                   const Icon = NOTIFICATION_ICONS[notification.type]
@@ -189,51 +195,44 @@ export function NotificationBell() {
                     <button
                       key={notification.id}
                       className={cn(
-                        'flex items-start gap-3 w-full px-4 py-3 text-left transition-colors',
-                        !notification.read ? 'bg-primary/[0.03]' : '',
+                        'group relative flex items-start gap-3 w-full pl-4 pr-2.5 py-2.5 text-left transition-colors',
+                        !notification.read ? 'bg-primary/[0.035]' : '',
                         canNavigate ? 'hover:bg-muted/60 cursor-pointer' : 'hover:bg-muted/40',
                       )}
                       onClick={() => handleNotificationClick(notification)}
                     >
-                      {/* Unread dot */}
-                      <div className="flex items-center pt-1.5">
-                        <div className={cn(
-                          'h-1.5 w-1.5 rounded-full shrink-0',
-                          notification.read ? 'bg-transparent' : 'bg-primary'
-                        )} />
-                      </div>
+                      {/* 未讀左側強調條 */}
+                      {!notification.read && <span className="absolute left-0 top-0 h-full w-[3px] bg-primary" />}
 
-                      {/* Icon */}
-                      <div className={cn('mt-0.5 shrink-0', iconColor)}>
+                      {/* Icon（柔色圓底） */}
+                      <div className={cn('mt-0.5 shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-current/10', iconColor)}>
                         <Icon className="h-4 w-4" />
                       </div>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-1">
-                          <p className={cn('text-sm font-semibold leading-snug', !notification.read ? '' : 'text-muted-foreground')}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={cn('text-sm leading-snug', !notification.read ? 'font-semibold' : 'font-medium text-muted-foreground')}>
                             {notification.title}
                           </p>
-                          <span className="text-xs text-muted-foreground/60 shrink-0 mt-0.5">
+                          <span className="text-[11px] text-muted-foreground/60 shrink-0 mt-0.5 whitespace-nowrap">
                             {formatRelativeTime(notification.createdAt)}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
                           {notification.message}
                         </p>
-                        {canNavigate && (
-                          <div className="flex justify-end mt-1.5">
-                            <span className="inline-flex items-center gap-0.5 text-xs text-primary font-medium">
-                              查看專案 <ArrowRight className="h-3 w-3" />
-                            </span>
-                          </div>
-                        )}
                       </div>
+
+                      {/* 可導覽 → 右側箭頭（hover 轉主色） */}
+                      {canNavigate && (
+                        <ChevronRight className="h-4 w-4 shrink-0 self-center text-muted-foreground/30 group-hover:text-primary transition-colors" />
+                      )}
                     </button>
                   )
                 })}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Footer */}
             <div className="border-t px-4 py-2">

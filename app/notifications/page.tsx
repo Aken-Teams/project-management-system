@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import {
   Bell,
@@ -24,6 +25,8 @@ import {
   Search,
   Circle,
   CheckCircle,
+  ChevronDown,
+  Check,
 } from 'lucide-react'
 
 // ─── Constants shared with bell ─────────────────────────────────────────────
@@ -165,6 +168,20 @@ export default function NotificationsPage() {
 
   const filteredUnread = filtered.filter(n => !n.read).length
 
+  // 類型篩選：只把「有未讀」的類型做成一鍵快捷分頁，其餘（有資料但無未讀）收進「更多類型 ▾」下拉，避免一排十幾個。
+  const quickTabs = useMemo(() => {
+    const unreadTypes = new Set(allNotifications.filter(n => !n.read).map(n => n.type))
+    return TYPE_TABS.filter(t => t.value === 'all' || unreadTypes.has(t.value as NotificationType))
+  }, [allNotifications])
+
+  const moreTabs = useMemo(() => {
+    const present = new Set(allNotifications.map(n => n.type))
+    const quickSet = new Set(quickTabs.map(t => t.value))
+    return TYPE_TABS.filter(t => t.value !== 'all' && present.has(t.value as NotificationType) && !quickSet.has(t.value))
+  }, [allNotifications, quickTabs])
+
+  const [moreOpen, setMoreOpen] = useState(false)
+
   // ─── Actions ─────────────────────────────────────────────────────────────
 
   function handleMarkRead(n: Notification) {
@@ -210,18 +227,88 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Search + read filter */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="搜尋通知內容..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-9"
-            />
+        {/* 篩選區塊：含底色與邊框，視覺上獨立成一個群組 */}
+        <div className="rounded-xl border bg-card p-4 space-y-3 shadow-sm">
+        {/* Search（整列） */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="搜尋通知內容..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        {/* Filters：類型（快捷+更多）靠左，讀取狀態靠右填滿整列 */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+          <Tabs value={typeFilter} onValueChange={v => setTypeFilter(v as NotificationType | 'all')}>
+            <TabsList className="flex flex-wrap h-auto gap-0.5 bg-muted/50 p-1">
+              {quickTabs.map((tab, i) => {
+                const cnt = tab.value === 'all'
+                  ? allNotifications.filter(n => !n.read).length
+                  : allNotifications.filter(n => n.type === tab.value && !n.read).length
+                return (
+                  <Fragment key={tab.value}>
+                    {i > 0 && <span className="self-center text-border select-none px-0.5" aria-hidden>|</span>}
+                    <TabsTrigger value={tab.value} className="text-sm px-3 py-1.5 gap-1.5">
+                      {tab.label}
+                      {cnt > 0 && (
+                        <span className="rounded-full bg-red-500 text-white text-[11px] font-semibold min-w-[16px] h-4 px-1 inline-flex items-center justify-center leading-none">
+                          {cnt}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  </Fragment>
+                )
+              })}
+            </TabsList>
+          </Tabs>
+
+          {moreTabs.length > 0 && (() => {
+            const selectedMore = moreTabs.find(t => t.value === typeFilter)
+            return (
+              <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors',
+                      selectedMore ? 'border-primary bg-primary/5 text-primary font-medium' : 'text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    {selectedMore ? selectedMore.label : '更多類型'}
+                    <span className="text-xs text-muted-foreground/70">{moreTabs.length}</span>
+                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', moreOpen && 'rotate-180')} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" collisionPadding={12} className="w-52 p-1 max-h-[min(320px,var(--radix-popover-content-available-height))] overflow-y-auto">
+                  {moreTabs.map(tab => {
+                    const total = allNotifications.filter(n => n.type === tab.value).length
+                    const active = typeFilter === tab.value
+                    return (
+                      <button
+                        key={tab.value}
+                        onClick={() => { setTypeFilter(tab.value as NotificationType | 'all'); setMoreOpen(false) }}
+                        className={cn('w-full flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm text-left transition-colors',
+                          active ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted')}
+                      >
+                        <span className="truncate">{tab.label}</span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-xs text-muted-foreground">{total}</span>
+                          {active && <Check className="h-3.5 w-3.5" />}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </PopoverContent>
+              </Popover>
+            )
+          })()}
           </div>
-          <div className="flex rounded-md border overflow-hidden text-sm">
+
+          {/* 讀取狀態切換：靠右，填滿整列右側 */}
+          <div className="flex rounded-md border overflow-hidden text-sm shrink-0">
             {(['all', 'unread', 'read'] as const).map(v => (
               <button
                 key={v}
@@ -238,30 +325,7 @@ export default function NotificationsPage() {
             ))}
           </div>
         </div>
-
-        {/* Type filter tabs */}
-        <Tabs value={typeFilter} onValueChange={v => setTypeFilter(v as NotificationType | 'all')}>
-          <TabsList className="flex flex-wrap h-auto gap-0.5 bg-muted/50 p-1">
-            {TYPE_TABS.map((tab, i) => {
-              const cnt = tab.value === 'all'
-                ? allNotifications.filter(n => !n.read).length
-                : allNotifications.filter(n => n.type === tab.value && !n.read).length
-              return (
-                <Fragment key={tab.value}>
-                  {i > 0 && <span className="self-center text-border select-none px-0.5" aria-hidden>|</span>}
-                  <TabsTrigger value={tab.value} className="text-sm px-3 py-1.5 gap-1.5">
-                    {tab.label}
-                    {cnt > 0 && (
-                      <span className="rounded-full bg-red-500 text-white text-[11px] font-semibold min-w-[16px] h-4 px-1 inline-flex items-center justify-center leading-none">
-                        {cnt}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                </Fragment>
-              )
-            })}
-          </TabsList>
-        </Tabs>
+        </div>
 
         {/* Result count */}
         <p className="text-sm text-muted-foreground">

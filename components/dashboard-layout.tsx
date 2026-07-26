@@ -168,6 +168,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {/* 收合時仍要看得到通知（含未讀紅點）→ 置於導覽頂端、彈窗往右開 */}
+          {collapsed && (
+            <div className="flex justify-center pb-3 mb-2 border-b border-border/40">
+              <NotificationBell side="right" align="start" />
+            </div>
+          )}
           {visibleNav.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
