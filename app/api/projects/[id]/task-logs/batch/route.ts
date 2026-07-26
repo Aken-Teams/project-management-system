@@ -163,14 +163,18 @@ export async function POST(
     // 送出後通知：
     //   有壓 R主管 → 通知 R主管 去審核（新流程，R 為主）
     //   沒壓 R主管 → fallback 回舊流程，通知當責 A（A 為主）
+    let routedTo: 'reviewer' | 'accountable' = 'accountable'
+    let reviewerName: string | null = null
     if (results.created + results.updated > 0) {
       const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
       const projectName = proj?.name || '專案'
       const authorMember = await prisma.projectTeamMember.findFirst({
         where: { projectId: id, userId: user.id },
-        select: { reportReviewerEmail: true },
+        select: { reportReviewerEmail: true, reportReviewerName: true },
       })
       if (authorMember?.reportReviewerEmail) {
+        routedTo = 'reviewer'
+        reviewerName = authorMember.reportReviewerName || authorMember.reportReviewerEmail
         await notifyReportReviewNeeded({
           projectId: id, projectName,
           reviewerEmail: authorMember.reportReviewerEmail,
@@ -187,6 +191,8 @@ export async function POST(
       success: true,
       created: results.created,
       updated: results.updated,
+      routedTo,
+      reviewerName,
       message: `已儲存 ${results.created + results.updated} 筆工作紀錄`,
     }, { status: 201 })
   } catch (error) {

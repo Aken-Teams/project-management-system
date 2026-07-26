@@ -128,14 +128,14 @@ export async function GET(request: NextRequest) {
         { weekOf: null, logDate: { gte: trackStartDate, lt: trackEndExclusive } },
       ],
     },
-    select: { taskId: true, authorId: true, weekOf: true, logDate: true, publishedAt: true, reviewerRejectedAt: true },
+    select: { id: true, taskId: true, authorId: true, weekOf: true, logDate: true, publishedAt: true, reviewerRejectedAt: true, content: true, attachments: true, nextPlans: true },
   })
 
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
   type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected' }
   type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
   type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
-  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected' }
+  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[] }
   type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
@@ -165,6 +165,17 @@ export async function GET(request: NextRequest) {
           else if (myWeekLogs.some(l => l.publishedAt)) reviewState = 'published'
           else reviewState = 'rejected'
         }
+        const logs: LogItem[] = myWeekLogs
+          .slice()
+          .sort((a, b) => a.logDate.getTime() - b.logDate.getTime())
+          .map(l => ({
+            id: l.id,
+            logDate: fmt(l.logDate),
+            content: l.content,
+            attachments: safeJsonParse<Att[]>(l.attachments, []),
+            nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
+            status: l.publishedAt ? 'approved' : l.reviewerRejectedAt ? 'rejected' : 'pending',
+          }))
         return {
           taskId: t.id, taskTitle: t.title, depth, owned,
           msName: depth === 0 ? (t.milestone?.name ?? null) : null,
@@ -173,6 +184,7 @@ export async function GET(request: NextRequest) {
           reportedDone: !!t.reportedDoneAt,
           filled: myWeekLogs.length > 0,
           reviewState,
+          logs,
         }
       })
       p.reviewees.set(m.userId, {

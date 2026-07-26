@@ -167,6 +167,7 @@ type TrackingItem = {
   planStart: string; planEnd: string
   overdue: boolean; reportedDone: boolean; filled: boolean
   reviewState: 'none' | 'pending' | 'published' | 'rejected'
+  logs: ReviewLogItem[]
 }
 type Reviewee = {
   authorId: string; authorName: string; authorEmail: string
@@ -199,6 +200,21 @@ function computeReportReviewState(logs: TaskLog[]): ReportReviewState {
 
 // 依任務樹狀節點
 type ReviewTaskNode = { taskId: string; title: string; assignee: string; depth: number; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; reviewState: ReportReviewState; children: ReviewTaskNode[] }
+
+// 把填報週(週一 YYYY-MM-DD)格式化成清楚的「2026W30 · 7/20~7/26」，讓 R主管/A 一眼知道是哪一週的報告
+function formatReportWeek(monday: string | null): string | null {
+  if (!monday) return null
+  const [y, m, d] = monday.split('-').map(Number)
+  const start = new Date(y, m - 1, d)
+  const end = new Date(y, m - 1, d + 6)
+  const md = (dt: Date) => `${dt.getMonth() + 1}/${dt.getDate()}`
+  const iso = new Date(Date.UTC(y, m - 1, d))
+  const dayNum = iso.getUTCDay() || 7
+  iso.setUTCDate(iso.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(iso.getUTCFullYear(), 0, 1))
+  const week = Math.ceil(((iso.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  return `${iso.getUTCFullYear()}W${String(week).padStart(2, '0')} · ${md(start)}~${md(end)}`
+}
 
 // 依姓名決定頭像底色（穩定、無隨機）
 const REVIEW_AVATAR_COLORS = ['bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 'bg-amber-600', 'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-orange-600']
@@ -273,6 +289,7 @@ export default function MyTasksPage() {
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || '操作失敗'); return }
       toast.success(action === 'approve' ? '已核准，報告進入更新紀錄' : '已駁回，退回成員')
       await refetchReviewInbox()
+      await refreshMyTasks() // 同步 A 端「成員週報」狀態（核准後應顯示已進紀錄，不再是主管審核中）
     } catch { toast.error('操作失敗') }
     finally { setReviewBusy(null) }
   }
@@ -1569,8 +1586,12 @@ export default function MyTasksPage() {
         }),
       })
       if (!res.ok) throw new Error()
+      const data = await res.json().catch(() => ({}))
       setRDirty(false) // 已提交 → 清除未提交旗標
-      toast.success('週報已提交', { description: '工作紀錄已送出，A 會收到通知' })
+      const desc = data.routedTo === 'reviewer'
+        ? `報告已送出，${data.reviewerName || '審核主管'} 會收到通知去審核`
+        : '工作紀錄已送出，A 會收到通知'
+      toast.success('週報已提交', { description: desc })
       // Refresh task data
       const refreshRes = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
       if (refreshRes.ok) {
@@ -2103,32 +2124,51 @@ export default function MyTasksPage() {
                                   : <Badge className="text-[11px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">全部已填</Badge>}
                               </div>
                               <div className="divide-y">
-                                {rv.tracking.map(t => (
-                                  <div key={t.taskId} className="flex items-center gap-2 pr-3 py-2" style={{ paddingLeft: 12 + t.depth * 18 }}>
-                                    {t.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0">└</span>}
-                                    <div className="min-w-0 flex-1">
-                                      <div className={cn('text-sm truncate', !t.owned && 'text-muted-foreground')}>{t.taskTitle}</div>
-                                      <div className="text-[11px] text-muted-foreground truncate">{t.depth === 0 && t.msName ? `${t.msName} · ` : ''}計畫 {t.planStart} ~ {t.planEnd}</div>
+                                {rv.tracking.map(t => {
+                                  const canExpand = t.owned && t.logs.length > 0
+                                  const tk = `track:${rv.authorId}:${t.taskId}`
+                                  const topen = reportReviewExpanded.has(tk)
+                                  return (
+                                    <div key={t.taskId}>
+                                      <div
+                                        className={cn('flex items-center gap-2 pr-3 py-2', canExpand && 'cursor-pointer hover:bg-muted/30')}
+                                        style={{ paddingLeft: 12 + t.depth * 18 }}
+                                        onClick={canExpand ? () => toggleReportReviewExpand(tk) : undefined}
+                                      >
+                                        {t.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0">└</span>}
+                                        <div className="min-w-0 flex-1">
+                                          <div className={cn('text-sm truncate', !t.owned && 'text-muted-foreground')}>{t.taskTitle}</div>
+                                          <div className="text-[11px] text-muted-foreground truncate">{t.depth === 0 && t.msName ? `${t.msName} · ` : ''}計畫 {t.planStart} ~ {t.planEnd}</div>
+                                        </div>
+                                        {!t.owned ? (
+                                          <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
+                                        ) : (
+                                          <>
+                                            {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
+                                            {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
+                                            {t.reviewState === 'pending'
+                                              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0">審核中</Badge>
+                                              : t.reviewState === 'published'
+                                                ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已通過</Badge>
+                                                : t.reviewState === 'rejected'
+                                                  ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已駁回</Badge>
+                                                  : t.filled
+                                                    ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
+                                                    : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
+                                          </>
+                                        )}
+                                        {canExpand
+                                          ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', topen && 'rotate-180')} />
+                                          : <span className="w-4 shrink-0" />}
+                                      </div>
+                                      {canExpand && topen && (
+                                        <div className="border-t bg-muted/10" style={{ paddingLeft: 12 + t.depth * 18 }}>
+                                          {renderReviewLogs(t.logs)}
+                                        </div>
+                                      )}
                                     </div>
-                                    {!t.owned ? (
-                                      <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
-                                    ) : (
-                                      <>
-                                        {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
-                                        {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
-                                        {t.reviewState === 'pending'
-                                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0">審核中</Badge>
-                                          : t.reviewState === 'published'
-                                            ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已通過</Badge>
-                                            : t.reviewState === 'rejected'
-                                              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已駁回</Badge>
-                                              : t.filled
-                                                ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
-                                                : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
-                                      </>
-                                    )}
-                                  </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             </div>
                           )
@@ -2154,7 +2194,7 @@ export default function MyTasksPage() {
                                 </div>
                                 {!open && <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{brief}</div>}
                               </div>
-                              {s.weekOf && <span className="text-xs text-muted-foreground shrink-0">{s.weekOf}</span>}
+                              {s.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(s.weekOf)}</span>}
                               <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
                             </button>
                             {open && (
@@ -2196,7 +2236,7 @@ export default function MyTasksPage() {
                                 </div>
                                 {!open && <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{s.outcome === 'rejected' && s.note ? `駁回原因：${s.note}` : brief}</div>}
                               </div>
-                              {s.weekOf && <span className="text-xs text-muted-foreground shrink-0">{s.weekOf}</span>}
+                              {s.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(s.weekOf)}</span>}
                               <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
                             </button>
                             {open && (
@@ -3656,21 +3696,6 @@ export default function MyTasksPage() {
                                                   }}
                                                   className="w-full text-xs border rounded-md h-[34px] px-1.5 bg-background disabled:opacity-60 disabled:cursor-not-allowed"
                                                 />
-                                                {row.existingLogId && (
-                                                  <TooltipProvider delayDuration={100}>
-                                                    <Tooltip>
-                                                      <TooltipTrigger asChild>
-                                                        <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] dark:bg-amber-900/20 dark:text-amber-400 cursor-default">
-                                                          <Info className="h-3 w-3" />已有紀錄
-                                                        </span>
-                                                      </TooltipTrigger>
-                                                      <TooltipContent side="top" className="text-xs">
-                                                        {row.updatedAt && <div>最後編輯：{new Date(row.updatedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {new Date(row.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</div>}
-                                                        {row.lastEditedBy && <div className="text-muted-foreground">編輯者：{row.lastEditedBy}</div>}
-                                                      </TooltipContent>
-                                                    </Tooltip>
-                                                  </TooltipProvider>
-                                                )}
                                                 {attCount > 0 && (
                                                   <div className="flex flex-wrap gap-1 mt-1">
                                                     {row.attachments!.map((att, ai) => att.type === 'image' ? (
@@ -3836,9 +3861,19 @@ export default function MyTasksPage() {
                                     <Button
                                       size="sm"
                                       className="gap-1.5 rounded-lg shadow-sm text-sm"
-                                      disabled={rDuplicateDates.size > 0 || !rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
+                                      disabled={
+                                        !rDirty
+                                        || rDuplicateDates.size > 0
+                                        || !rLogRows.every(r => r.content.trim() && r.date)
+                                        || rSubmittingBatch
+                                      }
                                       onClick={() => handleRBatchSubmitLogs()}
-                                      title={rDuplicateDates.size > 0 ? '有重複日期的列，請先合併到同一列再提交' : undefined}
+                                      title={
+                                        rDuplicateDates.size > 0 ? '有重複日期的列，請先合併到同一列再提交'
+                                          : !rLogRows.every(r => r.content.trim() && r.date) ? '每一列都要同時填「日期」與「工作內容」才能送出，空白或只填一半的列請補齊或刪除'
+                                            : !rDirty ? '內容尚未有變更，修改或新增後才能提交'
+                                              : undefined
+                                      }
                                     >
                                       {rSubmittingBatch ? (
                                         <><Loader2 className="h-3.5 w-3.5 animate-spin" />儲存中...</>
@@ -4072,16 +4107,9 @@ export default function MyTasksPage() {
       <AlertDialog open={rResubmitConfirm} onOpenChange={(open) => { if (!open) setRResubmitConfirm(false) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>這週報告先前已通過審核，確定重新送出？</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <div>
-                  這筆報告先前已由審核主管通過並進入更新紀錄。重新送出後，這週的報告會<span className="text-amber-600 dark:text-amber-400 font-medium">回到「審核中」，需要主管重新審核一次</span>。
-                </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Info className="h-3.5 w-3.5 shrink-0" />若只是誤按，請取消。確認是要補充/修正內容再送出。
-                </div>
-              </div>
+            <AlertDialogTitle>已通過的報告要重新送出？</AlertDialogTitle>
+            <AlertDialogDescription>
+              重送後這週報告會<span className="text-amber-600 dark:text-amber-400 font-medium">回到「審核中」，需主管再審一次</span>。若只是誤按請取消。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
