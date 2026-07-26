@@ -151,7 +151,7 @@ type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: s
 
 // 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
 // R 報告審核主管收件匣型別（督導總覽：每 R 的待審 + 已審核 + 追蹤狀態）
-type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[] }
+type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[]; status?: 'pending' | 'approved' | 'rejected' }
 type ReviewSubmission = {
   taskId: string; taskTitle: string; weekOf: string | null
   reportedDone: boolean
@@ -166,6 +166,7 @@ type TrackingItem = {
   taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null
   planStart: string; planEnd: string
   overdue: boolean; reportedDone: boolean; filled: boolean
+  reviewState: 'none' | 'pending' | 'published' | 'rejected'
 }
 type Reviewee = {
   authorId: string; authorName: string; authorEmail: string
@@ -183,7 +184,8 @@ type ReviewItem = { projectId: string; projectName: string; task: Task; path: st
 type ReportReviewState = { kind: 'none' | 'pending' | 'published' | 'rejected'; reviewerName: string | null; waitDays: number }
 function computeReportReviewState(logs: TaskLog[]): ReportReviewState {
   if (logs.length === 0) return { kind: 'none', reviewerName: null, waitDays: 0 }
-  if (logs.some(l => l.publishedAt)) return { kind: 'published', reviewerName: null, waitDays: 0 }
+  // pending 優先：只要有「未審核」的報告（含在已通過報告上重新補充送出），整體就是「審核中」。
+  //   否則 R 重送後，A 會因為週內還有一筆舊的已發布報告而誤顯示「已進紀錄」。
   const pending = logs.filter(l => !l.publishedAt && !l.reviewerRejectedAt)
   if (pending.length > 0) {
     const reviewerName = pending.map(l => l.authorReviewerName).find(Boolean) ?? null
@@ -191,6 +193,7 @@ function computeReportReviewState(logs: TaskLog[]): ReportReviewState {
     const waitDays = Math.max(0, Math.floor((Date.now() - new Date(earliest).getTime()) / 86400000))
     return { kind: 'pending', reviewerName, waitDays }
   }
+  if (logs.some(l => l.publishedAt)) return { kind: 'published', reviewerName: null, waitDays: 0 }
   return { kind: 'rejected', reviewerName: logs.map(l => l.authorReviewerName).find(Boolean) ?? null, waitDays: 0 }
 }
 
@@ -349,6 +352,8 @@ export default function MyTasksPage() {
   const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'done' | 'history'>('active')
   // 回報完成前的確認視窗（按下後 R 不能再編輯此任務週報）
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
+  // 重送「已通過」報告前的確認視窗（避免誤操作，讓主管/A 覺得奇怪）
+  const [rResubmitConfirm, setRResubmitConfirm] = useState(false)
   // 取消回報前的確認視窗（A 正在確認中，避免任務跳來跳去讓 A 困惑）
   const [rConfirmCancel, setRConfirmCancel] = useState<Task | null>(null)
   // 週報有填但尚未提交 → 關閉前提醒（避免使用者關掉後資料消失又怪系統）
@@ -1258,7 +1263,7 @@ export default function MyTasksPage() {
   }
 
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
-  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[] }[]) => (
+  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[]; status?: 'pending' | 'approved' | 'rejected' }[]) => (
     <div className="max-h-[200px] overflow-y-auto border-t border-b bg-background">
       <table className="w-full text-xs border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur"><tr className="text-muted-foreground">
@@ -1269,7 +1274,11 @@ export default function MyTasksPage() {
         <tbody>
           {logs.map(l => (
             <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
-              <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
+              <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap align-top">
+                {new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                {l.status === 'pending' && <span className="ml-1 inline-block rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1 text-[10px] align-middle">待審</span>}
+                {l.status === 'approved' && <span className="ml-1 inline-block rounded bg-muted text-muted-foreground px-1 text-[10px] align-middle">已審</span>}
+              </td>
               <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
               <td className="px-2 py-1.5 text-center">
                 {l.attachments && l.attachments.length > 0 ? (
@@ -1334,26 +1343,35 @@ export default function MyTasksPage() {
 
   // Check which tasks have logs in the selected week (只看待完成任務)
   const rTaskWeekStatus = useMemo(() => {
-    if (!rReportDialogProject) return new Map<string, boolean>()
+    if (!rReportDialogProject) return new Map<string, { status: 'none' | 'reviewing' | 'rejected' | 'published'; reviewerName: string | null; waitDays: number }>()
     const [y, m, d] = rReportWeekOf.split('-').map(Number)
     const weekStart = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const endDate = new Date(y, m - 1, d + 6)
     const weekEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
     // 每個任務本填報週的「我的報告」審核狀態：none 未填 / reviewing 審核中 / rejected 被駁回 / published 已通過(進更新紀錄)
-    const map = new Map<string, 'none' | 'reviewing' | 'rejected' | 'published'>()
+    //   reviewing 時附帶「哪位主管、已等幾天」，讓 R 能去提醒主管審核。
+    type RStat = { status: 'none' | 'reviewing' | 'rejected' | 'published'; reviewerName: string | null; waitDays: number }
+    const map = new Map<string, RStat>()
     for (const group of rActiveGroups) {
       for (const task of group.tasks) {
         const logs = rReportDialogProject.taskLogs.filter(
           l => l.taskId === task.id && isSameUser(l.author, user) &&
             (l.weekOf ? l.weekOf === rReportWeekOf : (l.logDate >= weekStart && l.logDate <= weekEnd))
         )
-        let st: 'none' | 'reviewing' | 'rejected' | 'published' = 'none'
+        let status: RStat['status'] = 'none'
+        let reviewerName: string | null = null
+        let waitDays = 0
         if (logs.length > 0) {
-          if (logs.some(l => l.reviewerRejectedAt)) st = 'rejected'
-          else if (logs.every(l => l.publishedAt)) st = 'published'
-          else st = 'reviewing'
+          const pending = logs.filter(l => !l.publishedAt && !l.reviewerRejectedAt)
+          if (pending.length > 0) {
+            status = 'reviewing'
+            reviewerName = pending.map(l => l.authorReviewerName).find(Boolean) ?? null
+            const earliest = pending.reduce((min, l) => (l.createdAt < min ? l.createdAt : min), pending[0].createdAt)
+            waitDays = Math.max(0, Math.floor((Date.now() - new Date(earliest).getTime()) / 86400000))
+          } else if (logs.some(l => l.reviewerRejectedAt)) status = 'rejected'
+          else status = 'published'
         }
-        map.set(task.id, st)
+        map.set(task.id, { status, reviewerName, waitDays })
       }
     }
     return map
@@ -1507,7 +1525,7 @@ export default function MyTasksPage() {
   }
 
   // R dialog: batch submit logs (same API as Gantt chart)
-  const handleRBatchSubmitLogs = async () => {
+  const handleRBatchSubmitLogs = async (confirmed = false) => {
     if (!rSelectedTaskId || !user || !rReportDialogProject) return
     const entries = rLogRows
       .filter(r => r.content.trim() && r.date)
@@ -1518,6 +1536,12 @@ export default function MyTasksPage() {
         attachments: r.attachments?.length ? r.attachments : undefined,
       }))
     if (entries.length === 0) return
+
+    // 這週報告先前已通過審核 → 重新送出前先確認意圖（可能是誤操作）
+    if (!confirmed && rTaskWeekStatus.get(rSelectedTaskId)?.status === 'published') {
+      setRResubmitConfirm(true)
+      return
+    }
 
     setRSubmittingBatch(true)
     try {
@@ -1588,7 +1612,7 @@ export default function MyTasksPage() {
     setRConfirmDone(null)
     if (!t) return
     if (rSelectedTaskId === t.id && rLogRows.some(r => r.content.trim() && r.date)) {
-      await handleRBatchSubmitLogs() // 先提交這次填寫的工作內容
+      await handleRBatchSubmitLogs(true) // 先提交這次填寫的工作內容（回報完成流程本身已有確認，略過重送確認）
     }
     await handleToggleReportedDone(t.id, true)
   }
@@ -2083,9 +2107,15 @@ export default function MyTasksPage() {
                                       <>
                                         {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
                                         {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
-                                        {t.filled
-                                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
-                                          : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
+                                        {t.reviewState === 'pending'
+                                          ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0">審核中</Badge>
+                                          : t.reviewState === 'published'
+                                            ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已通過</Badge>
+                                            : t.reviewState === 'rejected'
+                                              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已駁回</Badge>
+                                              : t.filled
+                                                ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
+                                                : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
                                       </>
                                     )}
                                   </div>
@@ -3392,7 +3422,7 @@ export default function MyTasksPage() {
                   <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-medium text-muted-foreground">我的任務</span>
                   {(() => {
-                    const vals = [...rTaskWeekStatus.values()]
+                    const vals = [...rTaskWeekStatus.values()].map(v => v.status)
                     const total = vals.length
                     const filled = vals.filter(s => s !== 'none').length
                     return total > 0 ? (
@@ -3477,7 +3507,8 @@ export default function MyTasksPage() {
                       {/* Task items — 只顯示最底層任務名，層級已由標頭麵包屑表達 */}
                       {group.tasks.map(task => {
                         const isSelected = rSelectedTaskId === task.id
-                        const rStat = rTaskWeekStatus.get(task.id) || 'none'
+                        const rStatInfo = rTaskWeekStatus.get(task.id)
+                        const rStat = rStatInfo?.status || 'none'
                         const taskStatus = computeTaskStatus(task, rReportDialogProject!.taskLogs)
                         const fmtMD = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
 
@@ -3514,7 +3545,8 @@ export default function MyTasksPage() {
                                     被駁回
                                   </Badge>
                                 ) : rStat === 'reviewing' ? (
-                                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[11px] px-1.5 py-0 shrink-0" title="報告已送出，審核中">
+                                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[11px] px-1.5 py-0 shrink-0"
+                                    title={rStatInfo?.reviewerName ? `報告已送出，審核主管：${rStatInfo.reviewerName}${rStatInfo.waitDays > 0 ? `（已等 ${rStatInfo.waitDays} 天，可提醒主管審核）` : ''}` : '報告已送出，審核中'}>
                                     審核中
                                   </Badge>
                                 ) : rStat === 'published' ? (
@@ -3780,7 +3812,7 @@ export default function MyTasksPage() {
                                       size="sm"
                                       className="gap-1.5 rounded-lg shadow-sm text-sm"
                                       disabled={rDuplicateDates.size > 0 || !rLogRows.some(r => r.content.trim() && r.date) || rLogRows.some(r => r.content.trim() && !r.date) || rSubmittingBatch}
-                                      onClick={handleRBatchSubmitLogs}
+                                      onClick={() => handleRBatchSubmitLogs()}
                                       title={rDuplicateDates.size > 0 ? '有重複日期的列，請先合併到同一列再提交' : undefined}
                                     >
                                       {rSubmittingBatch ? (
@@ -4006,6 +4038,31 @@ export default function MyTasksPage() {
               onClick={handleConfirmReportDone}
             >
               {rConfirmHasUnsaved ? '提交並回報完成' : '確定回報完成'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* R 重送「已通過」報告 確認視窗（避免誤操作，讓主管/A 覺得奇怪） */}
+      <AlertDialog open={rResubmitConfirm} onOpenChange={(open) => { if (!open) setRResubmitConfirm(false) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>這週報告先前已通過審核，確定重新送出？</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  這筆報告先前已由審核主管通過並進入更新紀錄。重新送出後，這週的報告會<span className="text-amber-600 dark:text-amber-400 font-medium">回到「審核中」，需要主管重新審核一次</span>。
+                </div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Info className="h-3.5 w-3.5 shrink-0" />若只是誤按，請取消。確認是要補充/修正內容再送出。
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setRResubmitConfirm(false); handleRBatchSubmitLogs(true) }}>
+              確定重新送出
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

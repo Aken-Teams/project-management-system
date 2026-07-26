@@ -42,12 +42,22 @@ export async function GET(request: NextRequest) {
 
   const pairs = supervised.map(m => ({ projectId: m.projectId, authorId: m.userId }))
 
-  // 待審報告（尚未發布、未被駁回）
+  // 待審報告（尚未發布、未被駁回）— 用來找出「有待審筆的 任務×填報週」群組
   const pendingLogs = await prisma.taskLog.findMany({
     where: { publishedAt: null, reviewerRejectedAt: null, OR: pairs },
+    select: { projectId: true, authorId: true, taskId: true, weekOf: true },
+  })
+  // 待審群組鍵（同一 任務×作者×填報週 只要有一筆待審，整組都要重審）
+  const pendingKeys = new Set(pendingLogs.map(l => `${l.projectId}:${l.authorId}:${l.taskId}:${l.weekOf ?? '_'}`))
+  // 取這些群組的「整週所有報告」（含先前已通過的），讓 R主管以週報視角看全部、重新審核一次
+  const pendingTaskIds = [...new Set(pendingLogs.map(l => l.taskId))]
+  const pendingAuthorIds = [...new Set(pendingLogs.map(l => l.authorId))]
+  const groupLogs = pendingTaskIds.length === 0 ? [] : await prisma.taskLog.findMany({
+    where: { taskId: { in: pendingTaskIds }, authorId: { in: pendingAuthorIds } },
     select: {
       id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
       logDate: true, content: true, attachments: true, nextPlans: true,
+      publishedAt: true, reviewerRejectedAt: true, updatedAt: true,
       task: { select: { id: true, title: true, reportedDoneAt: true, completedAt: true } },
     },
     orderBy: { logDate: 'asc' },
@@ -118,14 +128,14 @@ export async function GET(request: NextRequest) {
         { weekOf: null, logDate: { gte: trackStartDate, lt: trackEndExclusive } },
       ],
     },
-    select: { taskId: true, authorId: true, weekOf: true, logDate: true },
+    select: { taskId: true, authorId: true, weekOf: true, logDate: true, publishedAt: true, reviewerRejectedAt: true },
   })
 
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
-  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[] }
+  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected' }
   type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
   type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
-  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean }
+  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected' }
   type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
@@ -145,15 +155,26 @@ export async function GET(request: NextRequest) {
             ))
           .map(t => t.id),
       )
-      const tracking: TrackItem[] = buildTrackTree(ownedIds, projTasks).map(({ node: t, depth, owned }) => ({
-        taskId: t.id, taskTitle: t.title, depth, owned,
-        msName: depth === 0 ? (t.milestone?.name ?? null) : null,
-        planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
-        overdue: owned && isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
-        reportedDone: !!t.reportedDoneAt,
-        filled: owned && trackLogs.some(l => l.taskId === t.id && l.authorId === m.userId
-          && reportCountsForWeek({ weekOf: l.weekOf, logDate: fmt(l.logDate) }, trackWeek, trackEnd)),
-      }))
+      const tracking: TrackItem[] = buildTrackTree(ownedIds, projTasks).map(({ node: t, depth, owned }) => {
+        const myWeekLogs = owned ? trackLogs.filter(l => l.taskId === t.id && l.authorId === m.userId
+          && reportCountsForWeek({ weekOf: l.weekOf, logDate: fmt(l.logDate) }, trackWeek, trackEnd)) : []
+        // 審核狀態：有未審筆→pending(審核中)；否則已發布→published；否則被駁回→rejected；無報告→none
+        let reviewState: 'none' | 'pending' | 'published' | 'rejected' = 'none'
+        if (myWeekLogs.length > 0) {
+          if (myWeekLogs.some(l => !l.publishedAt && !l.reviewerRejectedAt)) reviewState = 'pending'
+          else if (myWeekLogs.some(l => l.publishedAt)) reviewState = 'published'
+          else reviewState = 'rejected'
+        }
+        return {
+          taskId: t.id, taskTitle: t.title, depth, owned,
+          msName: depth === 0 ? (t.milestone?.name ?? null) : null,
+          planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
+          overdue: owned && isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
+          reportedDone: !!t.reportedDoneAt,
+          filled: myWeekLogs.length > 0,
+          reviewState,
+        }
+      })
       p.reviewees.set(m.userId, {
         authorId: m.userId, authorName: m.user.name, authorEmail: m.user.email,
         pending: [], reviewed: [], submittedThisWeek: submittedSet.has(`${m.projectId}:${m.userId}`), openTaskCount, tracking,
@@ -161,36 +182,40 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 塞入待審 submissions
+  // 塞入待審 submissions：以「待審群組」為單位，帶出該群組整週所有報告（含已通過的），R主管重審整週
   const subMap = new Map<string, Sub>() // key: project:author:task:week
-  for (const l of pendingLogs) {
+  for (const l of groupLogs) {
+    const week = l.weekOf || null
+    const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
+    if (!pendingKeys.has(key)) continue // 只收「有待審筆」的群組
     if (l.task.completedAt) continue
     const p = projMap.get(l.projectId); if (!p) continue
     const rv = p.reviewees.get(l.authorId); if (!rv) continue
-    const week = l.weekOf || null
-    const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
     let s = subMap.get(key)
     if (!s) {
       s = { taskId: l.taskId, taskTitle: l.task.title, weekOf: week, reportedDone: !!l.task.reportedDoneAt, logs: [] }
       subMap.set(key, s)
       rv.pending.push(s)
     }
+    const status: 'pending' | 'approved' | 'rejected' = l.publishedAt ? 'approved' : l.reviewerRejectedAt ? 'rejected' : 'pending'
     s.logs.push({
       id: l.id,
       logDate: l.logDate.toISOString().split('T')[0],
       content: l.content,
       attachments: safeJsonParse<Att[]>(l.attachments, []),
       nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
+      status,
     })
   }
 
-  // 塞入已審核 submissions
+  // 塞入已審核 submissions（排除「目前又有待審筆」的群組——它已回到待審核，不該同時出現在已審核）
   const reviewedMap = new Map<string, ReviewedSub>()
   for (const l of reviewedLogs) {
     const p = projMap.get(l.projectId); if (!p) continue
     const rv = p.reviewees.get(l.authorId); if (!rv) continue
     const week = l.weekOf || null
     const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
+    if (pendingKeys.has(key)) continue
     let s = reviewedMap.get(key)
     if (!s) {
       const rejected = !!l.reviewerRejectedAt
@@ -210,6 +235,7 @@ export async function GET(request: NextRequest) {
       content: l.content,
       attachments: safeJsonParse<Att[]>(l.attachments, []),
       nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
+      status: l.publishedAt ? 'approved' : 'rejected',
     })
   }
 
