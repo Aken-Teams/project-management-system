@@ -1244,11 +1244,20 @@ export default function MyTasksPage() {
       return (
         <HoverCard openDelay={80} closeDelay={100}>
           <HoverCardTrigger asChild>
-            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0 cursor-default">主管審核中{st.waitDays > 0 ? ` · ${st.waitDays}天` : ''}</Badge>
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0 cursor-help">主管審核中{st.waitDays > 0 ? ` · ${st.waitDays}天` : ''}</Badge>
           </HoverCardTrigger>
-          <HoverCardContent align="end" className="w-auto p-2.5 text-xs">
-            <div className="font-medium">審核主管：{st.reviewerName}</div>
-            <div className="text-muted-foreground mt-0.5">已等 {st.waitDays} 天尚未審核</div>
+          <HoverCardContent align="end" className="w-auto max-w-[220px] p-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 border-b border-blue-100 bg-blue-50 px-2.5 py-1.5 dark:border-blue-900 dark:bg-blue-950/40">
+              <ClipboardList className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-400">報告審核中</span>
+            </div>
+            <div className="space-y-1 px-2.5 py-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">審核主管</span>
+                <span className="font-medium">{st.reviewerName}</span>
+              </div>
+              <div className="text-muted-foreground">已等 {st.waitDays} 天 · 可去追主管審核</div>
+            </div>
           </HoverCardContent>
         </HoverCard>
       )
@@ -3545,10 +3554,26 @@ export default function MyTasksPage() {
                                     被駁回
                                   </Badge>
                                 ) : rStat === 'reviewing' ? (
-                                  <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[11px] px-1.5 py-0 shrink-0"
-                                    title={rStatInfo?.reviewerName ? `報告已送出，審核主管：${rStatInfo.reviewerName}${rStatInfo.waitDays > 0 ? `（已等 ${rStatInfo.waitDays} 天，可提醒主管審核）` : ''}` : '報告已送出，審核中'}>
-                                    審核中
-                                  </Badge>
+                                  <HoverCard openDelay={100} closeDelay={80}>
+                                    <HoverCardTrigger asChild>
+                                      <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-[11px] px-1.5 py-0 shrink-0 cursor-help">審核中</Badge>
+                                    </HoverCardTrigger>
+                                    <HoverCardContent align="end" className="w-auto max-w-[220px] p-0 overflow-hidden">
+                                      <div className="flex items-center gap-1.5 border-b border-blue-100 bg-blue-50 px-2.5 py-1.5 dark:border-blue-900 dark:bg-blue-950/40">
+                                        <ClipboardList className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400">報告已送出，審核中</span>
+                                      </div>
+                                      <div className="space-y-1 px-2.5 py-2 text-xs">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-muted-foreground">審核主管</span>
+                                          <span className="font-medium">{rStatInfo?.reviewerName || '未指定'}</span>
+                                        </div>
+                                        {rStatInfo && rStatInfo.waitDays > 0 && (
+                                          <div className="text-muted-foreground">已等 {rStatInfo.waitDays} 天 · 可提醒主管審核</div>
+                                        )}
+                                      </div>
+                                    </HoverCardContent>
+                                  </HoverCard>
                                 ) : rStat === 'published' ? (
                                   <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[11px] px-1.5 py-0 shrink-0" title="已通過，進入更新紀錄">
                                     <Check className="h-2.5 w-2.5 mr-0.5" />已通過
