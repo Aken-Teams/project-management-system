@@ -562,8 +562,8 @@ export function AWeeklyReportComposer({
     for (const [taskId, rs] of Object.entries(rows)) {
       const task = byId.get(taskId)
       if (!task) continue
-      // 有指派人(A 補充不驅動排程) 或 已完成 → 不納入延期提醒
-      if (task.completedAt || hasAssignee(task.assignee)) continue
+      // 有指派人(A 補充不驅動排程)、已完成、或父層(進度由子項聚合) → 不納入延期提醒
+      if (task.completedAt || hasAssignee(task.assignee) || project.tasks.some(x => x.parentId === taskId)) continue
       const filled = rs.filter(r => r.content.trim() && r.date)
       if (!filled.length) continue
       const latest = filled.map(r => r.date).sort().slice(-1)[0]
@@ -717,7 +717,7 @@ export function AWeeklyReportComposer({
                 const writeArea = (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-muted-foreground">{assigned ? '補充內容（選填，不影響進度）' : '此任務進度以你的報告為準'}</span>
+                      <span className="text-[11px] text-muted-foreground">{assigned ? '補充內容（選填，不影響進度）' : unassignedParent ? '父層補充（選填，不影響進度）' : '此任務進度以你的報告為準'}</span>
                       {selDirty && <button type="button" onClick={() => setClearOpen(true)} className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-0.5"><Eraser className="h-3 w-3" />清空</button>}
                     </div>
                     <div className="rounded-lg border overflow-hidden">
@@ -753,6 +753,8 @@ export function AWeeklyReportComposer({
                           <button onClick={() => { const ds = rowsFor(selectedId).filter(r => r.date).map(r => r.date).sort(); setCompleteDate(ds.length ? ds[ds.length - 1] : ymd(new Date())); setCompleteOpen(true) }} className="inline-flex items-center gap-1 text-xs border border-green-300 text-green-700 rounded px-2.5 py-1 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/30 transition-colors"><CircleCheck className="h-3.5 w-3.5" />標記完成…</button>
                         )}
                       </div>
+                    ) : unassignedParent ? (
+                      <div className="pt-1 border-t text-[11px] text-muted-foreground flex items-start gap-1"><Info className="h-3 w-3 shrink-0 mt-0.5" />完成度由子項自動聚合，不需在此標記完成。</div>
                     ) : (
                       <div className="pt-1 border-t text-[11px] text-muted-foreground flex items-start gap-1"><Info className="h-3 w-3 shrink-0 mt-0.5" />完成由「R 回報 → R主管審核 → 你在『待你確認』確認」處理。</div>
                     )}
@@ -798,7 +800,12 @@ export function AWeeklyReportComposer({
 
                     {/* 內容區 */}
                     {unassignedParent ? (
-                      <div className="px-3 py-5 text-center text-xs text-muted-foreground">此父任務由子項自動聚合，無需填寫。</div>
+                      <div className="p-3 space-y-2">
+                        <div className="rounded-md border border-violet-200 bg-violet-50/60 dark:bg-violet-950/10 dark:border-violet-900 px-3 py-2 text-xs text-violet-800 dark:text-violet-300 flex items-start gap-1.5">
+                          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />進度由子項自動聚合（{sel.progress}%），<b>不需為進度填寫</b>；如要補充父層整體說明，可在下方填寫（<b>不影響進度</b>）。
+                        </div>
+                        {writeArea}
+                      </div>
                     ) : assigned ? (
                       <>
                         <div className="flex border-b bg-background px-3">
