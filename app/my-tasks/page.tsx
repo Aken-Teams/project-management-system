@@ -32,6 +32,7 @@ import { useAuth } from '@/lib/auth-context'
 import { isSameUser } from '@/lib/user-match'
 import { uploadFile } from '@/lib/upload-file'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree } from '@/lib/report-tracking'
+import { isReportVisible } from '@/lib/report-cutoff'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
@@ -367,6 +368,9 @@ export default function MyTasksPage() {
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
   const [rTogglingDone, setRTogglingDone] = useState<string | null>(null)
   const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'done' | 'history'>('active')
+  // 展開任務內的子分頁：write＝撰寫報告(預設)；children＝查看子層報告(僅當選到的任務有子任務時才出現)
+  const [rExpandSubTab, setRExpandSubTab] = useState<'write' | 'children'>('write')
+  const [rChildViewTaskId, setRChildViewTaskId] = useState<string | null>(null)
   // 回報完成前的確認視窗（按下後 R 不能再編輯此任務週報）
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
   // 重送「已通過」報告前的確認視窗（避免誤操作，讓主管/A 覺得奇怪）
@@ -1464,7 +1468,45 @@ export default function MyTasksPage() {
   // R dialog: select a task
   const handleRSelectTask = (taskId: string) => {
     setRSelectedTaskId(prev => prev === taskId ? null : taskId)
+    setRExpandSubTab('write')
+    setRChildViewTaskId(null)
   }
+
+  // 選到的任務底下所有子孫任務（含層級深度）— 有子孫才顯示「查看子層報告」分頁。
+  //   情境：被指派到父層的 R 不一定是子任務的審核主管、看不到子層報告，寫父層報告易失準，故給他唯讀查看。
+  const rSelectedDescendants = useMemo(() => {
+    if (!rSelectedTaskId || !rReportDialogProject) return [] as { task: Task; depth: number }[]
+    const childrenOf = new Map<string, Task[]>()
+    for (const t of rReportDialogProject.tasks) if (t.parentId) {
+      const a = childrenOf.get(t.parentId); if (a) a.push(t); else childrenOf.set(t.parentId, [t])
+    }
+    const out: { task: Task; depth: number }[] = []
+    const walk = (id: string, depth: number) => {
+      for (const c of childrenOf.get(id) || []) { out.push({ task: c, depth }); walk(c.id, depth + 1) }
+    }
+    walk(rSelectedTaskId, 0)
+    return out
+  }, [rSelectedTaskId, rReportDialogProject])
+
+  // 選定子任務的「已進紀錄」週報，依填報週(weekOf；舊資料退回 logDate 當週)分組、新到舊。
+  const rChildWeekGroups = useMemo(() => {
+    if (!rChildViewTaskId || !rReportDialogProject) return [] as { key: string; monday: string; logs: TaskLog[] }[]
+    const mondayOf = (d: string) => {
+      const dt = new Date(d); const day = dt.getDay(); const diff = dt.getDate() - day + (day === 0 ? -6 : 1)
+      const m = new Date(dt); m.setDate(diff)
+      return `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}-${String(m.getDate()).padStart(2, '0')}`
+    }
+    const logs = rReportDialogProject.taskLogs
+      .filter(l => l.taskId === rChildViewTaskId && isReportVisible(l))
+      .sort((a, b) => new Date(a.logDate).getTime() - new Date(b.logDate).getTime())
+    const groups = new Map<string, { key: string; monday: string; logs: TaskLog[] }>()
+    for (const l of logs) {
+      const monday = l.weekOf || mondayOf(l.logDate)
+      const g = groups.get(monday)
+      if (g) g.logs.push(l); else groups.set(monday, { key: monday, monday, logs: [l] })
+    }
+    return [...groups.values()].sort((a, b) => b.monday.localeCompare(a.monday))
+  }, [rChildViewTaskId, rReportDialogProject])
 
   // R dialog: file upload for batch log rows
   const handleRRowFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3646,6 +3688,24 @@ export default function MyTasksPage() {
                             {/* Expanded: log entry form (matching Gantt chart design) */}
                             {isSelected && (
                               <div className="border border-t-0 rounded-b-lg px-4 py-4 space-y-4 bg-background">
+                                {/* 有子任務時：撰寫報告 / 查看子層報告 分頁（讓被指派父層的 R 參考子層週報） */}
+                                {rSelectedDescendants.length > 0 && (
+                                  <div className="flex items-center gap-1 border-b">
+                                    <button type="button" onClick={() => setRExpandSubTab('write')}
+                                      className={cn('inline-flex items-center gap-1 text-xs px-2.5 py-1.5 border-b-2 -mb-px transition-colors',
+                                        rExpandSubTab === 'write' ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                                      <FileText className="h-3.5 w-3.5" />撰寫報告
+                                    </button>
+                                    <button type="button" onClick={() => setRExpandSubTab('children')}
+                                      className={cn('inline-flex items-center gap-1 text-xs px-2.5 py-1.5 border-b-2 -mb-px transition-colors',
+                                        rExpandSubTab === 'children' ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                                      <ListChecks className="h-3.5 w-3.5" />查看子層報告
+                                      <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold">{rSelectedDescendants.length}</span>
+                                    </button>
+                                  </div>
+                                )}
+                                {(rSelectedDescendants.length === 0 || rExpandSubTab === 'write') ? (
+                                <>
                                 {/* 過去週別唯讀提示（避免誤改過去報告） */}
                                 {!rIsCurrentWeek && (
                                   <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border bg-muted/40">
@@ -3894,6 +3954,50 @@ export default function MyTasksPage() {
                                         <><Send className="h-3.5 w-3.5" />提交週報</>
                                       )}
                                     </Button>
+                                  </div>
+                                )}
+                                </>
+                                ) : (
+                                  <div className="space-y-3">
+                                    <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground bg-muted/40 border rounded-md px-2.5 py-1.5">
+                                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                      <span>這是你負責的父任務。以下可查看各子任務的過往每週報告，作為你撰寫報告的參考（唯讀）。</span>
+                                    </div>
+                                    {/* 子任務挑選 */}
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {rSelectedDescendants.map(({ task: c, depth }) => (
+                                        <button
+                                          key={c.id}
+                                          type="button"
+                                          onClick={() => setRChildViewTaskId(c.id)}
+                                          className={cn('inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border max-w-full transition-colors',
+                                            rChildViewTaskId === c.id ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}
+                                          style={{ marginLeft: depth * 10 }}
+                                          title={c.title}
+                                        >
+                                          {depth > 0 && <span className="opacity-50 shrink-0">└</span>}
+                                          <span className="truncate">{c.title}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                    {/* 選定子任務的週報（依填報週分組） */}
+                                    {!rChildViewTaskId ? (
+                                      <p className="text-sm text-muted-foreground text-center py-6">選擇上方子任務，查看它的過往週報</p>
+                                    ) : rChildWeekGroups.length === 0 ? (
+                                      <p className="text-sm text-muted-foreground text-center py-6">此子任務尚無已進紀錄的週報</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {rChildWeekGroups.map(g => (
+                                          <div key={g.key} className="rounded-lg border overflow-hidden">
+                                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted/40 text-xs font-medium text-muted-foreground">
+                                              <CalendarClock className="h-3.5 w-3.5" />
+                                              {formatReportWeek(g.monday) || '（未標填報週）'}
+                                            </div>
+                                            {renderReviewLogs(g.logs)}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
