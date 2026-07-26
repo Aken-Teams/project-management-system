@@ -82,6 +82,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandItem,
+} from '@/components/ui/command'
 
 /** Add one day to a YYYY-MM-DD string */
 function addOneDayStr(dateStr: string) {
@@ -371,6 +378,7 @@ export default function MyTasksPage() {
   // 展開任務內的子分頁：write＝撰寫報告(預設)；children＝查看子層報告(僅當選到的任務有子任務時才出現)
   const [rExpandSubTab, setRExpandSubTab] = useState<'write' | 'children'>('write')
   const [rChildViewTaskId, setRChildViewTaskId] = useState<string | null>(null)
+  const [rChildPickerOpen, setRChildPickerOpen] = useState(false)
   // 回報完成前的確認視窗（按下後 R 不能再編輯此任務週報）
   const [rConfirmDone, setRConfirmDone] = useState<Task | null>(null)
   // 重送「已通過」報告前的確認視窗（避免誤操作，讓主管/A 覺得奇怪）
@@ -1470,6 +1478,7 @@ export default function MyTasksPage() {
     setRSelectedTaskId(prev => prev === taskId ? null : taskId)
     setRExpandSubTab('write')
     setRChildViewTaskId(null)
+    setRChildPickerOpen(false)
   }
 
   // 選到的任務底下所有子孫任務（含層級深度）— 有子孫才顯示「查看子層報告」分頁。
@@ -3963,26 +3972,46 @@ export default function MyTasksPage() {
                                       <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                                       <span>這是你負責的父任務。以下可查看各子任務的過往每週報告，作為你撰寫報告的參考（唯讀）。</span>
                                     </div>
-                                    {/* 子任務挑選 */}
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {rSelectedDescendants.map(({ task: c, depth }) => (
+                                    {/* 子任務挑選：可搜尋下拉，子任務多也好操作 */}
+                                    <Popover open={rChildPickerOpen} onOpenChange={setRChildPickerOpen}>
+                                      <PopoverTrigger asChild>
                                         <button
-                                          key={c.id}
                                           type="button"
-                                          onClick={() => setRChildViewTaskId(c.id)}
-                                          className={cn('inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border max-w-full transition-colors',
-                                            rChildViewTaskId === c.id ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}
-                                          style={{ marginLeft: depth * 10 }}
-                                          title={c.title}
+                                          className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded-md border hover:bg-muted/50 transition-colors"
                                         >
-                                          {depth > 0 && <span className="opacity-50 shrink-0">└</span>}
-                                          <span className="truncate">{c.title}</span>
+                                          <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
+                                          <span className={cn('flex-1 text-left truncate', !rChildViewTaskId && 'text-muted-foreground')}>
+                                            {rSelectedDescendants.find(d => d.task.id === rChildViewTaskId)?.task.title || `選擇子任務（共 ${rSelectedDescendants.length} 個）`}
+                                          </span>
+                                          <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                         </button>
-                                      ))}
-                                    </div>
+                                      </PopoverTrigger>
+                                      <PopoverContent align="start" collisionPadding={12} className="p-0 w-[--radix-popover-trigger-width] min-w-[260px]">
+                                        <Command>
+                                          <CommandInput placeholder="搜尋子任務…" className="text-sm" />
+                                          <CommandList className="max-h-[min(288px,calc(var(--radix-popover-content-available-height)_-_52px))]">
+                                            <CommandEmpty>找不到子任務</CommandEmpty>
+                                            {rSelectedDescendants.map(({ task: c, depth }) => (
+                                              <CommandItem
+                                                key={c.id}
+                                                value={`${c.title} ${c.id}`}
+                                                onSelect={() => { setRChildViewTaskId(c.id); setRChildPickerOpen(false) }}
+                                                className="text-sm gap-2"
+                                              >
+                                                <span className="flex items-center gap-1 min-w-0 flex-1" style={{ paddingLeft: depth * 12 }}>
+                                                  {depth > 0 && <span className="opacity-40 shrink-0">└</span>}
+                                                  <span className="truncate">{c.title}</span>
+                                                </span>
+                                                {rChildViewTaskId === c.id && <Check className="h-4 w-4 text-primary shrink-0" />}
+                                              </CommandItem>
+                                            ))}
+                                          </CommandList>
+                                        </Command>
+                                      </PopoverContent>
+                                    </Popover>
                                     {/* 選定子任務的週報（依填報週分組） */}
                                     {!rChildViewTaskId ? (
-                                      <p className="text-sm text-muted-foreground text-center py-6">選擇上方子任務，查看它的過往週報</p>
+                                      <p className="text-sm text-muted-foreground text-center py-6">選擇子任務，查看它的過往週報</p>
                                     ) : rChildWeekGroups.length === 0 ? (
                                       <p className="text-sm text-muted-foreground text-center py-6">此子任務尚無已進紀錄的週報</p>
                                     ) : (
