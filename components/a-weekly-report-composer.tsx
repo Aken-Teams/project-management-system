@@ -798,27 +798,19 @@ export function AWeeklyReportComposer({
                       </div>
                     </div>
 
-                    {/* 內容區 */}
-                    {unassignedParent ? (
-                      <div className="p-3 space-y-2">
-                        <div className="rounded-md border border-violet-200 bg-violet-50/60 dark:bg-violet-950/10 dark:border-violet-900 px-3 py-2 text-xs text-violet-800 dark:text-violet-300 flex items-start gap-1.5">
-                          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />進度由子項自動聚合（{sel.progress}%），<b>不需為進度填寫</b>；如要補充父層整體說明，可在下方填寫（<b>不影響進度</b>）。
-                        </div>
-                        {writeArea}
-                      </div>
-                    ) : assigned ? (
-                      <>
-                        <div className="flex border-b bg-background px-3">
-                          {([['r', '看 R 報告', selRAll.length, Inbox], ['write', '我的補充', 0, PenLine]] as const).map(([v, label, cnt, Icon]) => (
-                            <button key={v} type="button" onClick={() => setTaskTab(v)} className={cn('px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center gap-1.5', taskTab === v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-                              <Icon className="h-4 w-4" />{label}
-                              {v === 'r' && cnt > 0 && <span className={cn('inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-medium tabular-nums', taskTab === 'r' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>{cnt}</span>}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="p-3">
-                          {taskTab === 'r' ? (
-                            (() => {
+                    {/* 內容區 —— 統一分頁：看 R 報告 / 我的補充(或我的報告) */}
+                    <div className="flex border-b bg-background px-3">
+                      {([['r', '看 R 報告', selRAll.length, Inbox], ['write', (assigned || unassignedParent) ? '我的補充' : '我的報告', 0, PenLine]] as const).map(([v, label, cnt, Icon]) => (
+                        <button key={v} type="button" onClick={() => setTaskTab(v)} className={cn('px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center gap-1.5', taskTab === v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                          <Icon className="h-4 w-4" />{label}
+                          {v === 'r' && cnt > 0 && <span className={cn('inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-medium tabular-nums', taskTab === 'r' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>{cnt}</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="p-3">
+                      {taskTab === 'r' ? (
+                        assigned ? (
+                          (() => {
                               const R_PAGE = 10
                               const pageCount = Math.max(1, Math.ceil(selRAll.length / R_PAGE))
                               const page = Math.min(rPage, pageCount - 1)
@@ -864,12 +856,13 @@ export function AWeeklyReportComposer({
                               </div>
                               )
                             })()
-                          ) : writeArea}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="p-3">{writeArea}</div>
-                    )}
+                        ) : unassignedParent ? (
+                          <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground leading-relaxed">此為<b>聚合父任務</b>，進度由子項自動聚合（{sel.progress}%），<b>不需填寫報告</b>。<br />如要補充父層整體說明，請切到「我的補充」。</div>
+                        ) : (
+                          <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground leading-relaxed">此任務<b>無指派人、沒有 R 報告</b>，進度須由你（A）在「我的報告」填寫。</div>
+                        )
+                      ) : writeArea}
+                    </div>
                   </div>
                   )
                 })()}
