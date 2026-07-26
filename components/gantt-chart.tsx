@@ -95,10 +95,42 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return map
   }, [taskLogs])
 
+  // Latest log date per task（用作「實際結束日」）：未完成的實際條收在「最後一份報告」那天，
+  // 而非延伸到今天——否則進度停擺的任務看起來會一直往今天長，很怪。
+  const latestLogDateMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const log of taskLogs) {
+      if (!isReportVisible(log)) continue
+      const existing = map.get(log.taskId)
+      if (!existing || log.logDate > existing) {
+        map.set(log.taskId, log.logDate)
+      }
+    }
+    return map
+  }, [taskLogs])
+
   // Helper: get actual start date (earliest log) or fall back to planned startDate
   const getActualStart = useCallback((taskId: string, plannedStart: string) => {
     return earliestLogDateMap.get(taskId) || plannedStart
   }, [earliestLogDateMap])
+
+  // Helper: 實際結束日 = 已完成→completedAt；未完成→最後一份報告日（沒有則 null）
+  const getActualEnd = useCallback((taskId: string, completedAt?: string | null) => {
+    return completedAt || latestLogDateMap.get(taskId) || null
+  }, [latestLogDateMap])
+
+  // Helper: 里程碑實際結束日 = 底層所有任務(任意深度)「completedAt / 最後報告日」的最大值
+  const getMilestoneActualEnd = useCallback((msTasks: Task[]) => {
+    if (msTasks.length === 0) return null
+    const msId = msTasks[0].milestoneId
+    let latest: string | null = null
+    for (const t of tasks) {
+      if (t.milestoneId !== msId) continue
+      const e = t.completedAt || latestLogDateMap.get(t.id) || null
+      if (e && (!latest || e > latest)) latest = e
+    }
+    return latest
+  }, [tasks, latestLogDateMap])
 
   // Auto-detect date range from actual data (including actual start/end dates)
   const allDates = [
@@ -107,6 +139,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     ...tasks.filter(t => t.completedAt).map(t => new Date(t.completedAt!).getTime()),
     ...milestones.map(m => new Date(m.dueDate).getTime()),
     ...[...earliestLogDateMap.values()].map(d => new Date(d).getTime()),
+    ...[...latestLogDateMap.values()].map(d => new Date(d).getTime()),
     new Date(startDate).getTime(),
     new Date(endDate).getTime(),
   ]
@@ -396,7 +429,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   {subIsDone && sub.completedAt ? (
                     <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt), top: 24, backgroundColor: subColors.bg }} />
                   ) : earliestLogDateMap.has(sub.id) ? (
-                    <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), todayStr), top: 24, backgroundColor: subColors.bg }} />
+                    <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), getActualEnd(sub.id) || todayStr), top: 24, backgroundColor: subColors.bg }} />
                   ) : null}
                   <span className="absolute text-[11px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 5 }}>
                     <span className="text-muted-foreground">{sub.progress}%</span>
@@ -648,7 +681,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                             style={{
                               ...barStyle(msActualStart, msAllDoneAgg
                                 ? (msTasks.reduce<string>((latest, t) => t.completedAt && t.completedAt > latest ? t.completedAt : latest, msActualStart) || todayStr)
-                                : todayStr),
+                                : (getMilestoneActualEnd(msTasks) || todayStr)),
                               top: 24,
                               backgroundColor: colors.bg,
                             }}
@@ -913,7 +946,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 style={{
                                   ...barStyle(
                                     hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
-                                    todayStr,
+                                    getActualEnd(task.id) || todayStr,
                                   ),
                                   top: 24,
                                   backgroundColor: taskColors.bg,
@@ -1002,6 +1035,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           const actualStartStr = getTaskActualStart(t)
           const actualStart = actualStartStr ? new Date(actualStartStr) : null
           const actualEnd = t.completedAt ? new Date(t.completedAt) : null
+          const lastReportStr = !t.completedAt ? (latestLogDateMap.get(t.id) || null) : null // 未完成→最後一份報告日
           const diffDays = actualEnd
             ? Math.round((plannedEnd.getTime() - actualEnd.getTime()) / (1000 * 60 * 60 * 24))
             : null
@@ -1031,7 +1065,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                     <span>
                       {actualStart ? fmtDate(actualStart) : '—'}
                       {' ~ '}
-                      {actualEnd ? fmtDate(actualEnd) : '進行中'}
+                      {actualEnd ? fmtDate(actualEnd) : lastReportStr ? `${fmtDate(new Date(lastReportStr))}（最後報告）` : '進行中'}
                     </span>
                   </>
                 )}
