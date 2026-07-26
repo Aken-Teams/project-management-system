@@ -415,6 +415,8 @@ export function AWeeklyReportComposer({
   const OVERSHOOT_DAYS = 0
   const selOverdue = useMemo(() => {
     if (!selTask || !selectedId || !selTask.endDate) return null
+    // 有指派人：A 寫的是補充、不驅動進度/排程，延期是 R 的事 → 不提醒；已完成也不需要
+    if (selTask.completedAt || hasAssignee(selTask.assignee)) return null
     const cand: string[] = []
     const md = markDone[selectedId]; if (md) cand.push(md)
     // 只算「有內容」的工作紀錄列，與送出擋控一致（空列不算報告）
@@ -560,6 +562,8 @@ export function AWeeklyReportComposer({
     for (const [taskId, rs] of Object.entries(rows)) {
       const task = byId.get(taskId)
       if (!task) continue
+      // 有指派人(A 補充不驅動排程) 或 已完成 → 不納入延期提醒
+      if (task.completedAt || hasAssignee(task.assignee)) continue
       const filled = rs.filter(r => r.content.trim() && r.date)
       if (!filled.length) continue
       const latest = filled.map(r => r.date).sort().slice(-1)[0]

@@ -780,9 +780,24 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   // 新模型：任務/子任務(含父層)一律顯示「自己的進度」，不聚合子層（只有里程碑聚合）
                   const aggregatedProgress = task.progress
                   const parentAllDone = false
-                  // 甘特「實際條」以手動為主：只看任務自己的報告，不由子層聚合（% 才聚合）
-                  const parentHasActivity = earliestLogDateMap.has(task.id)
-                  const parentActualStart = earliestLogDateMap.get(task.id) || null
+                  // 實際條來源：有指派人(或葉)＝看自己的報告；「無指派人的父層」＝進度靠子項聚合，
+                  //   實際條也要由「所有子孫任務」的活動聚合（否則父層有 22% 卻不畫實際條）。
+                  const isAssigned = !!(task.assignee && task.assignee.trim() && task.assignee.trim() !== '未指派')
+                  const aggParent = hasSubtasks && !isAssigned
+                  let aggStart: string | null = null, aggEnd: string | null = null
+                  if (aggParent) {
+                    const descTasks: typeof tasks = []
+                    const stack = [...subtasks]; const seen = new Set<string>()
+                    while (stack.length) { const c = stack.pop()!; if (seen.has(c.id)) continue; seen.add(c.id); descTasks.push(c); for (const k of tasks) if (k.parentId === c.id) stack.push(k) }
+                    for (const d of descTasks) {
+                      const s = earliestLogDateMap.get(d.id) || d.completedAt || null
+                      if (s && (!aggStart || s < aggStart)) aggStart = s
+                      const e = d.completedAt || latestLogDateMap.get(d.id) || null
+                      if (e && (!aggEnd || e > aggEnd)) aggEnd = e
+                    }
+                  }
+                  const parentHasActivity = aggParent ? (aggStart !== null || task.progress > 0) : earliestLogDateMap.has(task.id)
+                  const parentActualStart = aggParent ? aggStart : (earliestLogDateMap.get(task.id) || null)
                   const parentLatestCompletion = parentAllDone
                     ? subtasks.reduce<string | null>((latest, s) => s.completedAt && (!latest || s.completedAt > latest) ? s.completedAt : latest, null)
                     : null
@@ -946,7 +961,7 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                                 style={{
                                   ...barStyle(
                                     hasSubtasks && parentActualStart ? parentActualStart : getActualStart(task.id, task.startDate),
-                                    getActualEnd(task.id) || todayStr,
+                                    aggParent ? (aggEnd || todayStr) : (getActualEnd(task.id) || todayStr),
                                   ),
                                   top: 24,
                                   backgroundColor: taskColors.bg,
@@ -1032,10 +1047,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
           const isDone = effectiveStatus(t) === 'done'
           const plannedStart = new Date(t.startDate)
           const plannedEnd = new Date(t.endDate)
-          const actualStartStr = getTaskActualStart(t)
+          // 無指派人的父層：實際起訖由「所有子孫任務」聚合（自己沒 log）
+          const tIsAssigned = !!(t.assignee && t.assignee.trim() && t.assignee.trim() !== '未指派')
+          const tSubtasks = tasks.filter(x => x.parentId === t.id)
+          const tAggParent = tSubtasks.length > 0 && !tIsAssigned
+          let tAggStart: string | null = null, tAggEnd: string | null = null
+          if (tAggParent) {
+            const desc: Task[] = []; const stack = [...tSubtasks]; const seen = new Set<string>()
+            while (stack.length) { const c = stack.pop()!; if (seen.has(c.id)) continue; seen.add(c.id); desc.push(c); for (const k of tasks) if (k.parentId === c.id) stack.push(k) }
+            for (const d of desc) {
+              const s = earliestLogDateMap.get(d.id) || d.completedAt || null
+              if (s && (!tAggStart || s < tAggStart)) tAggStart = s
+              const e = d.completedAt || latestLogDateMap.get(d.id) || null
+              if (e && (!tAggEnd || e > tAggEnd)) tAggEnd = e
+            }
+          }
+          const actualStartStr = tAggParent ? tAggStart : getTaskActualStart(t)
           const actualStart = actualStartStr ? new Date(actualStartStr) : null
           const actualEnd = t.completedAt ? new Date(t.completedAt) : null
-          const lastReportStr = !t.completedAt ? (latestLogDateMap.get(t.id) || null) : null // 未完成→最後一份報告日
+          const lastReportStr = !t.completedAt ? (tAggParent ? tAggEnd : (latestLogDateMap.get(t.id) || null)) : null // 未完成→最後活動日
           const diffDays = actualEnd
             ? Math.round((plannedEnd.getTime() - actualEnd.getTime()) / (1000 * 60 * 60 * 24))
             : null
