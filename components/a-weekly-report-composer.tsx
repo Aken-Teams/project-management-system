@@ -75,6 +75,7 @@ export function AWeeklyReportComposer({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [rViewOpen, setRViewOpen] = useState(false)
+  const [taskTab, setTaskTab] = useState<'r' | 'write'>('r') // 每任務分頁：看 R 報告 / 我要寫
   const [clearOpen, setClearOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
@@ -210,10 +211,9 @@ export function AWeeklyReportComposer({
     return out
   }, [selPrereqs, project.tasks, project.milestones, topOrder]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 選任務：若前序未完成，跳出提醒彈窗（守則）
+  // 選任務（預設切到「看 R 報告」分頁；前序/延期改用任務內小標籤提示，不再自動跳窗）
   const chooseTask = (id: string) => {
-    setSelectedId(id); setPickerOpen(false); setSearch('')
-    if (incompletePrereqsOf(id).length > 0) setPrereqOpen(true)
+    setSelectedId(id); setPickerOpen(false); setSearch(''); setTaskTab('r')
   }
 
   // 一鍵把「上游」所有未完成任務標記完成（不含自己/子孫；先暫存草稿避免遺失，再整頁刷新）
@@ -612,7 +612,7 @@ export function AWeeklyReportComposer({
         <DialogContent className="sm:max-w-2xl max-h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" />撰寫本週報告 — {project.name}</DialogTitle>
-            <DialogDescription className="text-sm"><b>有指派人</b>的任務進度以 R 報告為準，你寫的是<b>補充</b>(不影響進度)；<b>無指派人</b>的任務進度以你的報告為準，無指派人的父任務由子項自動聚合、無需填寫。清單有標「指派/無指派人」。</DialogDescription>
+            <DialogDescription className="text-sm">挑選任務填報；每個任務會標示進度計算方式（有指派人以 R 報告為準、無指派人以你的報告為準）。</DialogDescription>
             <div className="pt-2 flex items-end gap-2">
               <div className="flex-1 min-w-0"><WeekPicker value={weekOf} onChange={setWeekOf} /></div>
               <Button variant="outline" className="gap-1.5 shrink-0 h-[38px]" onClick={() => setGanttPreviewOpen(true)}><BarChart3 className="h-4 w-4 text-blue-500" />預覽甘特</Button>
@@ -691,143 +691,132 @@ export function AWeeklyReportComposer({
                   </Popover>
                 </div>
 
-                {/* 選定任務的填寫區 */}
+                {/* 選定任務的填寫區 — 精簡版：小標籤 + 分頁（看 R 報告 / 我要寫）*/}
                 {sel && selTask && (() => {
                 const asg = (selTask.assignee || '').trim()
                 const assigned = hasAssignee(asg)
                 const unassignedParent = !assigned && sel.isParent
-                return (
-                  <div className="border rounded-lg p-3 space-y-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] text-muted-foreground truncate">{sel.path.replace('› ' + sel.title, '')}</div>
-                        <div className="text-sm font-semibold flex items-center gap-1.5 flex-wrap">你正在填：{sel.title}
-                          {sel.isParent && <Badge variant="outline" className="text-[11px] px-1 py-0 text-violet-600 border-violet-300">父任務</Badge>}
-                          {assigned
-                            ? <Badge variant="outline" className="text-[11px] px-1 py-0 text-blue-600 border-blue-300">指派：{asg}</Badge>
-                            : <Badge variant="outline" className="text-[11px] px-1 py-0 text-amber-600 border-amber-300">無指派人</Badge>}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3 shrink-0" />預計 {new Date(selTask.startDate).toLocaleDateString('zh-TW')} ~ {new Date(selTask.endDate).toLocaleDateString('zh-TW')}</div>
-                      </div>
-                      <div className="w-24 shrink-0 flex items-center gap-1.5"><Progress value={sel.progress} className="h-2 flex-1 bg-slate-200 dark:bg-slate-700" /><span className="text-[11px] font-medium text-muted-foreground tabular-nums w-8 text-right">{sel.progress}%</span></div>
+                const showPrereq = !sel.isParent && selPrereqs.length > 0
+                // 我要寫 / 我的報告 區塊（有押人=補充、無押人=正式報告）
+                const writeArea = (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-muted-foreground">{assigned ? '補充內容（選填，不影響進度）' : '此任務進度以你的報告為準'}</span>
+                      {selDirty && <button type="button" onClick={() => setClearOpen(true)} className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-0.5"><Eraser className="h-3 w-3" />清空</button>}
                     </div>
-
-                    {/* 進度來源說明（讓 A 知道這格進度怎麼算、要不要寫）*/}
-                    {assigned ? (
-                      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 px-3 py-2 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
-                        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" /><div>此任務由 <b>{asg}</b> 負責，<b>進度以 R 的報告為準</b>。你在下方的補充只會顯示在更新紀錄，<b>不影響進度</b>。</div>
-                      </div>
-                    ) : unassignedParent ? (
-                      <div className="rounded-md border border-violet-200 bg-violet-50 dark:bg-violet-950/20 dark:border-violet-900 px-3 py-2 text-xs text-violet-800 dark:text-violet-300 flex items-start gap-2">
-                        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" /><div>此父任務<b>無指派人</b>，進度<b>由子項自動聚合</b>（目前 {sel.progress}%），<b>無需填寫</b>。</div>
+                    <div className="rounded-lg border overflow-hidden">
+                      {rs.map((row, ri) => (
+                        <div key={ri} className="flex items-start gap-2 px-2 py-1.5 border-b last:border-b-0">
+                          <input type="date" value={row.date} onChange={e => setRowsFor(selectedId, rs.map((r, i) => i === ri ? { ...r, date: e.target.value } : r))} className="text-xs border rounded h-[32px] px-1.5 bg-background w-[128px] shrink-0" />
+                          <textarea value={row.content} onChange={e => setRowsFor(selectedId, rs.map((r, i) => i === ri ? { ...r, content: e.target.value } : r))} placeholder="工作內容…" rows={1} className="flex-1 text-xs border rounded px-2 py-1.5 resize-y min-h-[32px]" />
+                          {row.attachments?.length ? <div className="mt-1"><AttachmentPill attachments={row.attachments} onRemove={ai => removeAttachment(ri, ai)} /></div> : null}
+                          <button type="button" onClick={() => pickFilesForRow(ri)} disabled={uploadingRow !== null} title="上傳附件" className="text-muted-foreground/60 hover:text-primary text-xs mt-1 shrink-0 h-[24px] w-[24px] inline-flex items-center justify-center rounded hover:bg-primary/10 disabled:opacity-40">
+                            {uploadingRow === ri
+                              ? (uploadRowProgress > 0
+                                  ? <span className="text-[11px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
+                                  : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
+                              : <Paperclip className="h-3.5 w-3.5" />}
+                          </button>
+                          {rs.length > 1 && <button onClick={() => setRowsFor(selectedId, rs.filter((_, i) => i !== ri))} className="text-muted-foreground/50 hover:text-destructive text-xs mt-1.5 shrink-0">✕</button>}
+                        </div>
+                      ))}
+                      <button onClick={() => setRowsFor(selectedId, [...rs, { date: '', content: '' }])} className="w-full text-xs text-primary hover:bg-primary/5 py-1.5">+ 新增一列</button>
+                    </div>
+                    <div className="space-y-1"><div className="text-[11px] font-medium text-muted-foreground">預計下週工作（選填）</div><Textarea value={nextPlan[selectedId] || ''} onChange={e => setNextPlan(p => ({ ...p, [selectedId]: e.target.value }))} rows={1} placeholder="預計下週…" className="text-xs min-h-[36px]" /></div>
+                    {selTask.completedAt ? (
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t"><span className="text-xs text-green-700 dark:text-green-400 inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />已完成 · {selTask.completedAt}</span></div>
+                    ) : !assigned ? (
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t">
+                        {willDone ? (
+                          <>
+                            <span className="text-xs text-green-700 dark:text-green-400 inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />將標記完成</span>
+                            <input type="date" value={willDone} onChange={e => setMarkDone(p => ({ ...p, [selectedId]: e.target.value }))} className="text-xs border rounded h-7 px-1.5 bg-background" />
+                            <button onClick={() => setMarkDone(p => { const n = { ...p }; delete n[selectedId]; return n })} className="text-xs text-muted-foreground hover:text-destructive">取消</button>
+                          </>
+                        ) : (
+                          <button onClick={() => { const ds = rowsFor(selectedId).filter(r => r.date).map(r => r.date).sort(); setCompleteDate(ds.length ? ds[ds.length - 1] : ymd(new Date())); setCompleteOpen(true) }} className="inline-flex items-center gap-1 text-xs border border-green-300 text-green-700 rounded px-2.5 py-1 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/30 transition-colors"><CircleCheck className="h-3.5 w-3.5" />標記完成…</button>
+                        )}
                       </div>
                     ) : (
-                      <div className="rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
-                        <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" /><div>此任務<b>無指派人</b>，<b>進度以你（A）的報告為準</b>。</div>
-                      </div>
+                      <div className="pt-1 border-t text-[11px] text-muted-foreground flex items-start gap-1"><Info className="h-3 w-3 shrink-0 mt-0.5" />完成由「R 回報 → R主管審核 → 你在『待你確認』確認」處理。</div>
                     )}
-
-                    {/* 前序守則：前序任務未完成時提醒（可跳去前序）*/}
-                    {!sel.isParent && selPrereqs.length > 0 && (
-                      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <div className="flex-1">
-                          <div className="font-medium">此任務有上游前序尚未完成（{selPrereqs.length} 項）</div>
-                          <div className="mt-0.5">建議先完成上游：{prereqMilestones.map(m => m.name).join('、')}</div>
+                  </div>
+                )
+                return (
+                  <div className="border rounded-lg overflow-hidden">
+                    {/* 精簡表頭：標題 + 進度 + 一排小標籤 */}
+                    <div className="px-3 pt-2.5 pb-2 bg-muted/20 space-y-1.5">
+                      <div className="text-[11px] text-muted-foreground truncate">{sel.path.replace('› ' + sel.title, '')}</div>
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate">{sel.title}</div>
+                          <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5">{new Date(selTask.startDate).toLocaleDateString('zh-TW')} ~ {new Date(selTask.endDate).toLocaleDateString('zh-TW')}</div>
                         </div>
-                        <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-300 shrink-0" onClick={() => setPrereqOpen(true)}>查看</Button>
+                        <div className="w-24 shrink-0 flex items-center gap-1.5 mt-0.5"><Progress value={sel.progress} className="h-2 flex-1 bg-slate-200 dark:bg-slate-700" /><span className="text-[11px] font-medium text-muted-foreground tabular-nums w-8 text-right">{sel.progress}%</span></div>
                       </div>
-                    )}
-
-                    {/* 延期偵測：日期超過規劃截止日太多 → 撰寫台內申請延期（無指派人父層不需要）*/}
-                    {!unassignedParent && selOverdue && (
-                      <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900 px-3 py-2 text-xs text-orange-800 dark:text-orange-300 flex items-start gap-2">
-                        <CalendarClock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <div className="flex-1">
-                          <div className="font-medium">填報日期比規劃截止日晚了 {selOverdue.diffDays} 天</div>
-                          <div className="mt-0.5">規劃截止 {new Date(selOverdue.end).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}，此任務已逾期（進度最高到 99%、無法標記完成）。<b>建議送出延期申請</b>調整時程。</div>
-                        </div>
-                        {pendingDelayTaskIds.has(selectedId)
-                          ? <Badge variant="outline" className="text-xs px-2.5 py-1 font-medium border-orange-400 bg-orange-100/60 text-orange-700 dark:text-orange-300 shrink-0">已申請延期·待審核</Badge>
-                          : <Button size="sm" variant="outline" className="h-6 text-[11px] px-2 border-orange-400 text-orange-800 hover:bg-orange-100 dark:border-orange-800 dark:text-orange-300 shrink-0" onClick={() => openDelay()}>申請延期</Button>}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {sel.isParent && <Badge variant="outline" className="text-[11px] px-1 py-0 text-violet-600 border-violet-300">父任務</Badge>}
+                        {/* 進度來源小標籤（hover 看細節）*/}
+                        <HoverCard openDelay={80} closeDelay={80}>
+                          <HoverCardTrigger asChild>
+                            <button type="button" className={cn('inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0 rounded-full border cursor-help',
+                              assigned ? 'text-blue-700 border-blue-300 bg-blue-50 dark:bg-blue-950/20 dark:text-blue-300'
+                                : unassignedParent ? 'text-violet-700 border-violet-300 bg-violet-50 dark:bg-violet-950/20 dark:text-violet-300'
+                                  : 'text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:text-emerald-300')}>
+                              <Info className="h-3 w-3" />{assigned ? `指派 ${asg}` : unassignedParent ? '無指派人·子項聚合' : '無指派人·你填報'}
+                            </button>
+                          </HoverCardTrigger>
+                          <HoverCardContent align="start" className="w-64 p-2.5 text-xs">
+                            {assigned ? <>此任務由 <b>{asg}</b> 負責，<b>進度以 R 報告為準</b>；你寫的是補充，不影響進度。</>
+                              : unassignedParent ? <>無指派人的父任務，進度<b>由子項自動聚合</b>（目前 {sel.progress}%），無需填寫。</>
+                                : <>此任務無指派人，<b>進度以你（A）的報告為準</b>。</>}
+                          </HoverCardContent>
+                        </HoverCard>
+                        {/* 前序未完成小標籤（點看細節）*/}
+                        {showPrereq && <button type="button" onClick={() => setPrereqOpen(true)} className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0 rounded-full border border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 hover:bg-amber-100"><AlertTriangle className="h-3 w-3" />前序未完成 {selPrereqs.length}</button>}
+                        {/* 逾期 / 延期小標籤 */}
+                        {!unassignedParent && pendingDelayTaskIds.has(selectedId) && <Badge variant="outline" className="text-[11px] px-1.5 py-0 border-orange-400 bg-orange-100/60 text-orange-700 dark:text-orange-300">延期待審</Badge>}
+                        {!unassignedParent && !pendingDelayTaskIds.has(selectedId) && selOverdue && <button type="button" onClick={() => openDelay()} className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0 rounded-full border border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-400 hover:bg-orange-100"><CalendarClock className="h-3 w-3" />逾期 {selOverdue.diffDays} 天·申請延期</button>}
                       </div>
-                    )}
+                    </div>
 
-                    {/* ── 上：R 的報告（唯讀・全部歷史，不綁 A 的填報週，A 不用切週別就能看）── */}
-                    {assigned && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                          <Inbox className="h-3.5 w-3.5 text-blue-600" />R 的報告（唯讀・全部歷史・進度依此）
-                          {selRAll.length > 0 && <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[10px]">{selRAll.length}</span>}
-                          <span className="flex-1" />
-                          {sel.isParent && selKidLogs.length > 0 && <button type="button" onClick={importKids} className="text-[11px] text-violet-600 hover:underline">帶入子任務報告（{selKidLogs.length}）</button>}
-                        </div>
-                        {selRAll.length === 0 ? (
-                          <div className="rounded-lg border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">此任務尚無 R 報告</div>
-                        ) : (
-                          <div className="space-y-1 max-h-[220px] overflow-y-auto rounded-lg border bg-muted/20 p-2">
-                            {selRAll.map(l => (
-                              <div key={l.id} className="text-xs leading-relaxed flex items-start gap-1.5">
-                                <span className="text-muted-foreground tabular-nums shrink-0 mt-px">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                                {l.weekOf === weekOf && <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shrink-0 mt-px">本週</span>}
-                                <span className="text-foreground/85 whitespace-pre-wrap flex-1 min-w-0">{l.content}</span>
-                                {l.attachments?.length ? <span className="shrink-0"><AttachmentPill attachments={l.attachments} /></span> : null}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── 下：A 補充 / 報告 ── 無指派人父層不用寫 */}
-                    {!unassignedParent && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-[11px] font-medium text-muted-foreground">{assigned ? '我的補充（選填，不影響進度）' : '我的報告（此任務進度依此）'}</div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {selDirty && <button type="button" onClick={() => setClearOpen(true)} className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-0.5"><Eraser className="h-3 w-3" />清空</button>}
-                          </div>
-                        </div>
-                        <div className="rounded-lg border overflow-hidden">
-                          {rs.map((row, ri) => (
-                            <div key={ri} className="flex items-start gap-2 px-2 py-1.5 border-b last:border-b-0">
-                              <input type="date" value={row.date} onChange={e => setRowsFor(selectedId, rs.map((r, i) => i === ri ? { ...r, date: e.target.value } : r))} className="text-xs border rounded h-[32px] px-1.5 bg-background w-[128px] shrink-0" />
-                              <textarea value={row.content} onChange={e => setRowsFor(selectedId, rs.map((r, i) => i === ri ? { ...r, content: e.target.value } : r))} placeholder="工作內容…" rows={1} className="flex-1 text-xs border rounded px-2 py-1.5 resize-y min-h-[32px]" />
-                              {row.attachments?.length ? <div className="mt-1"><AttachmentPill attachments={row.attachments} onRemove={ai => removeAttachment(ri, ai)} /></div> : null}
-                              <button type="button" onClick={() => pickFilesForRow(ri)} disabled={uploadingRow !== null} title="上傳附件" className="text-muted-foreground/60 hover:text-primary text-xs mt-1 shrink-0 h-[24px] w-[24px] inline-flex items-center justify-center rounded hover:bg-primary/10 disabled:opacity-40">
-                                {uploadingRow === ri
-                                  ? (uploadRowProgress > 0
-                                      ? <span className="text-[11px] font-medium tabular-nums leading-none">{uploadRowProgress}%</span>
-                                      : <Loader2 className="h-3.5 w-3.5 animate-spin" />)
-                                  : <Paperclip className="h-3.5 w-3.5" />}
-                              </button>
-                              {rs.length > 1 && <button onClick={() => setRowsFor(selectedId, rs.filter((_, i) => i !== ri))} className="text-muted-foreground/50 hover:text-destructive text-xs mt-1.5 shrink-0">✕</button>}
-                            </div>
+                    {/* 內容區 */}
+                    {unassignedParent ? (
+                      <div className="px-3 py-5 text-center text-xs text-muted-foreground">此父任務由子項自動聚合，無需填寫。</div>
+                    ) : assigned ? (
+                      <>
+                        <div className="flex border-b bg-background px-3">
+                          {([['r', '看 R 報告', selRAll.length], ['write', '我的補充', 0]] as const).map(([v, label, cnt]) => (
+                            <button key={v} type="button" onClick={() => setTaskTab(v)} className={cn('px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5', taskTab === v ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                              {label}
+                              {v === 'r' && cnt > 0 && <span className={cn('inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-medium tabular-nums', taskTab === 'r' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>{cnt}</span>}
+                            </button>
                           ))}
-                          <button onClick={() => setRowsFor(selectedId, [...rs, { date: '', content: '' }])} className="w-full text-xs text-primary hover:bg-primary/5 py-1.5">+ 新增一列</button>
                         </div>
-                        <div className="space-y-1"><div className="text-[11px] font-medium text-muted-foreground">預計下週工作（選填）</div><Textarea value={nextPlan[selectedId] || ''} onChange={e => setNextPlan(p => ({ ...p, [selectedId]: e.target.value }))} rows={1} placeholder="預計下週…" className="text-xs min-h-[36px]" /></div>
-
-                        {selTask.completedAt ? (
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t">
-                            <span className="text-xs text-green-700 dark:text-green-400 inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />已完成 · {selTask.completedAt}</span>
-                          </div>
-                        ) : !assigned ? (
-                          <div className="flex items-center justify-end gap-2 pt-1 border-t">
-                            {willDone ? (
-                              <>
-                                <span className="text-xs text-green-700 dark:text-green-400 inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />將標記完成</span>
-                                <input type="date" value={willDone} onChange={e => setMarkDone(p => ({ ...p, [selectedId]: e.target.value }))} className="text-xs border rounded h-7 px-1.5 bg-background" />
-                                <button onClick={() => setMarkDone(p => { const n = { ...p }; delete n[selectedId]; return n })} className="text-xs text-muted-foreground hover:text-destructive">取消</button>
-                              </>
-                            ) : (
-                              <button onClick={() => { const ds = rowsFor(selectedId).filter(r => r.date).map(r => r.date).sort(); setCompleteDate(ds.length ? ds[ds.length - 1] : ymd(new Date())); setCompleteOpen(true) }} className="inline-flex items-center gap-1 text-xs border border-green-300 text-green-700 rounded px-2.5 py-1 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950/30 transition-colors"><CircleCheck className="h-3.5 w-3.5" />標記完成…</button>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="pt-1 border-t text-[11px] text-muted-foreground flex items-start gap-1"><Info className="h-3 w-3 shrink-0 mt-0.5" />此任務有指派人，完成由「R 回報 → R主管審核 → 你在『待你確認』確認」處理。</div>
-                        )}
-                      </div>
+                        <div className="p-3">
+                          {taskTab === 'r' ? (
+                            <div className="space-y-2">
+                              {selRAll.length === 0 ? (
+                                <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">此任務尚無 R 報告</div>
+                              ) : (
+                                <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                                  {selRAll.map(l => (
+                                    <div key={l.id} className="text-xs leading-relaxed flex items-start gap-1.5 px-1.5 py-1 rounded hover:bg-muted/40">
+                                      <span className="text-muted-foreground tabular-nums shrink-0 mt-px">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
+                                      {l.weekOf === weekOf && <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shrink-0 mt-px">本週</span>}
+                                      <span className="text-foreground/85 whitespace-pre-wrap flex-1 min-w-0">{l.content}</span>
+                                      {l.attachments?.length ? <span className="shrink-0"><AttachmentPill attachments={l.attachments} /></span> : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {sel.isParent && selKidLogs.length > 0 && <div className="text-right"><button type="button" onClick={() => { importKids(); setTaskTab('write') }} className="text-[11px] text-violet-600 hover:underline">帶入子任務報告（{selKidLogs.length}）到我的補充</button></div>}
+                            </div>
+                          ) : writeArea}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="p-3">{writeArea}</div>
                     )}
                   </div>
                   )
