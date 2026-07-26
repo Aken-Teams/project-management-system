@@ -15,7 +15,7 @@ import { GanttChart } from '@/components/gantt-chart'
 import { cn } from '@/lib/utils'
 import { uploadFile } from '@/lib/upload-file'
 import type { Project, Task, TaskLog, TaskLogAttachment } from '@/lib/mock-data'
-import { Loader2, Send, FileText, Info, ChevronDown, CornerDownLeft, CircleCheck, Inbox, Search, Eraser, Paperclip, Save, Check, AlertTriangle, CalendarClock, AlertCircle, BarChart3 } from 'lucide-react'
+import { Loader2, Send, FileText, Info, ChevronDown, CornerDownLeft, CircleCheck, Inbox, Search, Eraser, Paperclip, Save, Check, AlertTriangle, CalendarClock, AlertCircle, BarChart3, ListChecks, PenLine } from 'lucide-react'
 
 // 附件小徽章：hover 展開檔案清單（可捲、可點），檔案多也不雜亂
 // 傳入 onRemove 時，清單每列會出現移除鈕（用於自己編輯中的附件）
@@ -624,10 +624,10 @@ export function AWeeklyReportComposer({
           {/* 頁面級分頁：填任務報告 / 本週彙整（層級高於任務卡內的看R/我要寫）*/}
           <div className="px-6 pt-2 border-b">
             <div className="flex gap-1">
-              {([['summary', '本週彙整'], ['tasks', '填任務報告']] as const).map(([v, label]) => (
+              {([['summary', '本週彙整', FileText], ['tasks', '填任務報告', ListChecks]] as const).map(([v, label, Icon]) => (
                 <button key={v} type="button" onClick={() => setTopTab(v)}
-                  className={cn('px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5', topTab === v ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-                  {label}
+                  className={cn('px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center gap-1.5', topTab === v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                  <Icon className="h-4 w-4" />{label}
                   {v === 'summary' && overall.trim() && <span className="h-1.5 w-1.5 rounded-full bg-green-500" title="已填" />}
                 </button>
               ))}
@@ -798,9 +798,9 @@ export function AWeeklyReportComposer({
                     ) : assigned ? (
                       <>
                         <div className="flex border-b bg-background px-3">
-                          {([['r', '看 R 報告', selRAll.length], ['write', '我的補充', 0]] as const).map(([v, label, cnt]) => (
-                            <button key={v} type="button" onClick={() => setTaskTab(v)} className={cn('px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5', taskTab === v ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-                              {label}
+                          {([['r', '看 R 報告', selRAll.length, Inbox], ['write', '我的補充', 0, PenLine]] as const).map(([v, label, cnt, Icon]) => (
+                            <button key={v} type="button" onClick={() => setTaskTab(v)} className={cn('px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center gap-1.5', taskTab === v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                              <Icon className="h-4 w-4" />{label}
                               {v === 'r' && cnt > 0 && <span className={cn('inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-medium tabular-nums', taskTab === 'r' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>{cnt}</span>}
                             </button>
                           ))}
