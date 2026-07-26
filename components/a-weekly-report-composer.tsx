@@ -75,7 +75,9 @@ export function AWeeklyReportComposer({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [rViewOpen, setRViewOpen] = useState(false)
+  const [topTab, setTopTab] = useState<'tasks' | 'summary'>('tasks') // 頁面級分頁：填任務報告 / 本週彙整
   const [taskTab, setTaskTab] = useState<'r' | 'write'>('r') // 每任務分頁：看 R 報告 / 我要寫
+  const [rPage, setRPage] = useState(0) // R 報告分頁（10 筆/頁）
   const [clearOpen, setClearOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
@@ -213,7 +215,7 @@ export function AWeeklyReportComposer({
 
   // 選任務（預設切到「看 R 報告」分頁；前序/延期改用任務內小標籤提示，不再自動跳窗）
   const chooseTask = (id: string) => {
-    setSelectedId(id); setPickerOpen(false); setSearch(''); setTaskTab('r')
+    setSelectedId(id); setPickerOpen(false); setSearch(''); setTaskTab('r'); setRPage(0)
   }
 
   // 一鍵把「上游」所有未完成任務標記完成（不含自己/子孫；先暫存草稿避免遺失，再整頁刷新）
@@ -619,25 +621,29 @@ export function AWeeklyReportComposer({
             </div>
           </DialogHeader>
 
+          {/* 頁面級分頁：填任務報告 / 本週彙整（層級高於任務卡內的看R/我要寫）*/}
+          <div className="px-6 pt-2 border-b">
+            <div className="flex gap-1">
+              {([['summary', '本週彙整'], ['tasks', '填任務報告']] as const).map(([v, label]) => (
+                <button key={v} type="button" onClick={() => setTopTab(v)}
+                  className={cn('px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5', topTab === v ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
+                  {label}
+                  {v === 'summary' && overall.trim() && <span className="h-1.5 w-1.5 rounded-full bg-green-500" title="已填" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             {loading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
+            ) : topTab === 'summary' ? (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">本週專案彙整說明 <span className="text-[11px] text-muted-foreground font-normal">（選填 · 全專案一則，顯示在更新紀錄最前面）</span></div>
+                <Textarea value={overall} onChange={e => setOverall(e.target.value)} placeholder="這週專案整體進展、重點、風險…" className="text-sm min-h-[280px]" />
+              </div>
             ) : (
               <>
-                {/* 專案彙整說明（收合，不佔版面）*/}
-                <div className="rounded-lg border">
-                  <button onClick={() => setOverallOpen(o => !o)} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/30">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-medium">本週專案彙整說明</span>
-                    {overall.trim() ? <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-green-50 text-green-700 border-green-300">已填</Badge> : <span className="text-[11px] text-muted-foreground">（選填）</span>}
-                    <span className="flex-1" />
-                    <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', overallOpen && 'rotate-180')} />
-                  </button>
-                  {overallOpen && <div className="px-3 pb-3"><Textarea value={overall} onChange={e => setOverall(e.target.value)} rows={2} placeholder="這週專案整體進展、重點、風險…（顯示在更新紀錄最前面）" className="text-sm" /></div>}
-                </div>
-                {/* 淡分隔線：把「彙整說明」與下方選任務區隔開 */}
-                <div className="border-b border-border/40" />
-
                 {/* 選任務（可搜尋樹狀下拉）*/}
                 <div className="space-y-1.5">
                   <div className="text-sm font-medium">選擇要填的項目</div>
@@ -664,9 +670,15 @@ export function AWeeklyReportComposer({
                             </div>
                             {g.tasks.length === 0 ? (
                               <p className="text-[11px] text-muted-foreground/50 px-3 py-1.5">此里程碑底下沒有任務</p>
-                            ) : g.tasks.map(n => (
+                            ) : g.tasks.map(n => {
+                              // A 該填 = 無指派人的葉任務、尚未完成（進度靠 A）；已填則轉綠
+                              const needsA = !hasAssignee(n.assignee) && !n.isParent && !byId.get(n.id)?.completedAt
+                              const aFilled = (rows[n.id] || []).some(r => r.content.trim() && r.date)
+                              return (
                               <button key={n.id} onClick={() => chooseTask(n.id)}
-                                className={cn('w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/60 text-left', n.id === selectedId && 'bg-primary/10')}
+                                className={cn('w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted/60 text-left border-l-[3px] border-l-transparent',
+                                  needsA && (aFilled ? 'border-l-emerald-400' : 'border-l-amber-400'),
+                                  n.id === selectedId ? 'bg-primary/10' : (needsA && !aFilled && 'bg-amber-50/40 dark:bg-amber-950/10'))}
                                 style={{ paddingLeft: 12 + n.depth * 16 }}>
                                 <span className="flex-1 min-w-0 truncate">{n.depth > 0 && <span className="text-muted-foreground/40 mr-1">└</span>}{n.title}{n.isParent && <span className="text-[11px] text-violet-500 ml-1">(父)</span>}{(() => { const bt = byId.get(n.id); return bt ? <span className="text-[11px] text-muted-foreground/70 tabular-nums ml-1.5">{new Date(bt.startDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}~{new Date(bt.endDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span> : null })()}</span>
                                 {pendingDelayTaskIds.has(n.id) && <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-300 shrink-0">延期待審核</Badge>}
@@ -683,7 +695,7 @@ export function AWeeklyReportComposer({
                                       : <Badge variant="outline" className="text-[11px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-300 shrink-0">無人·A填</Badge>)}
                                 <span className="text-[11px] text-muted-foreground tabular-nums w-8 text-right shrink-0">{n.progress}%</span>
                               </button>
-                            ))}
+                            )})}
                           </div>
                         ))}
                       </div>
@@ -795,23 +807,52 @@ export function AWeeklyReportComposer({
                         </div>
                         <div className="p-3">
                           {taskTab === 'r' ? (
-                            <div className="space-y-2">
-                              {selRAll.length === 0 ? (
-                                <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">此任務尚無 R 報告</div>
-                              ) : (
-                                <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                                  {selRAll.map(l => (
-                                    <div key={l.id} className="text-xs leading-relaxed flex items-start gap-1.5 px-1.5 py-1 rounded hover:bg-muted/40">
-                                      <span className="text-muted-foreground tabular-nums shrink-0 mt-px">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</span>
-                                      {l.weekOf === weekOf && <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shrink-0 mt-px">本週</span>}
-                                      <span className="text-foreground/85 whitespace-pre-wrap flex-1 min-w-0">{l.content}</span>
-                                      {l.attachments?.length ? <span className="shrink-0"><AttachmentPill attachments={l.attachments} /></span> : null}
+                            (() => {
+                              const R_PAGE = 10
+                              const pageCount = Math.max(1, Math.ceil(selRAll.length / R_PAGE))
+                              const page = Math.min(rPage, pageCount - 1)
+                              const items = selRAll.slice(page * R_PAGE, (page + 1) * R_PAGE)
+                              return (
+                              <div className="space-y-2">
+                                {selRAll.length === 0 ? (
+                                  <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">此任務尚無 R 報告</div>
+                                ) : (
+                                  <div className="rounded-lg border overflow-hidden">
+                                    <table className="w-full text-xs border-collapse">
+                                      <thead className="bg-muted/60"><tr className="text-muted-foreground">
+                                        <th className="text-left font-medium px-2 py-1.5 w-[60px] border-b">日期</th>
+                                        <th className="text-left font-medium px-2 py-1.5 border-b">工作內容</th>
+                                        <th className="text-center font-medium px-2 py-1.5 w-[44px] border-b">附件</th>
+                                      </tr></thead>
+                                      <tbody>
+                                        {items.map(l => (
+                                          <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                                            <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">
+                                              {new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
+                                              {l.weekOf === weekOf && <span className="ml-1 text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 align-middle">本週</span>}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
+                                            <td className="px-2 py-1.5 text-center">{l.attachments?.length ? <AttachmentPill attachments={l.attachments} /> : <span className="text-muted-foreground/30">—</span>}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between gap-2">
+                                  {pageCount > 1 ? (
+                                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                      <button type="button" disabled={page === 0} onClick={() => setRPage(page - 1)} className="px-1.5 py-0.5 rounded border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">‹</button>
+                                      <span className="tabular-nums">{page + 1} / {pageCount}</span>
+                                      <button type="button" disabled={page >= pageCount - 1} onClick={() => setRPage(page + 1)} className="px-1.5 py-0.5 rounded border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">›</button>
+                                      <span className="text-muted-foreground/70">共 {selRAll.length} 筆</span>
                                     </div>
-                                  ))}
+                                  ) : <span className="text-[11px] text-muted-foreground/70">{selRAll.length > 0 ? `共 ${selRAll.length} 筆` : ''}</span>}
+                                  {sel.isParent && selKidLogs.length > 0 && <button type="button" onClick={() => { importKids(); setTaskTab('write') }} className="text-[11px] text-violet-600 hover:underline shrink-0">帶入子任務報告（{selKidLogs.length}）到我的補充</button>}
                                 </div>
-                              )}
-                              {sel.isParent && selKidLogs.length > 0 && <div className="text-right"><button type="button" onClick={() => { importKids(); setTaskTab('write') }} className="text-[11px] text-violet-600 hover:underline">帶入子任務報告（{selKidLogs.length}）到我的補充</button></div>}
-                            </div>
+                              </div>
+                              )
+                            })()
                           ) : writeArea}
                         </div>
                       </>
