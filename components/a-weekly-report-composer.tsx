@@ -50,6 +50,20 @@ function AttachmentPill({ attachments, onRemove }: { attachments: TaskLogAttachm
 function ymd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 function mondayOf(dateStr: string) { const d = new Date(dateStr); const day = d.getDay(); d.setDate(d.getDate() - day + (day === 0 ? -6 : 1)); return ymd(d) }
 function currentMonday() { return mondayOf(ymd(new Date())) }
+// 由 weekOf（週一）或（舊資料無 weekOf 時）該筆 logDate 推得所屬週，回傳 ISO 週次與日期範圍
+function weekLabelOf(weekOf: string | null | undefined, logDate: string): { wk: string; range: string } {
+  const monday = weekOf || mondayOf(logDate)
+  const [y, mo, dd] = monday.split('-').map(Number)
+  const start = new Date(y, mo - 1, dd)
+  const end = new Date(y, mo - 1, dd + 6)
+  const iso = new Date(Date.UTC(y, mo - 1, dd))
+  const dayNum = iso.getUTCDay() || 7
+  iso.setUTCDate(iso.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(iso.getUTCFullYear(), 0, 1))
+  const wk = Math.ceil(((iso.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  const md = (dt: Date) => `${dt.getMonth() + 1}/${dt.getDate()}`
+  return { wk: `${iso.getUTCFullYear()} W${String(wk).padStart(2, '0')}`, range: `${md(start)}~${md(end)}` }
+}
 
 type Row = { date: string; content: string; attachments?: TaskLogAttachment[] }
 type Node = { id: string; title: string; msId: string; msName: string; depth: number; path: string; isParent: boolean; hasR: boolean; progress: number; assignee: string }
@@ -837,21 +851,31 @@ export function AWeeklyReportComposer({
                                   <div className="rounded-lg border overflow-hidden">
                                     <table className="w-full text-xs border-collapse">
                                       <thead className="bg-muted/60"><tr className="text-muted-foreground">
-                                        <th className="text-left font-medium px-2 py-1.5 w-[60px] border-b">日期</th>
+                                        <th className="text-left font-medium px-2 py-1.5 w-[92px] border-b">填報週</th>
+                                        <th className="text-left font-medium px-2 py-1.5 w-[56px] border-b">日期</th>
                                         <th className="text-left font-medium px-2 py-1.5 border-b">工作內容</th>
                                         <th className="text-center font-medium px-2 py-1.5 w-[44px] border-b">附件</th>
                                       </tr></thead>
                                       <tbody>
-                                        {items.map(l => (
+                                        {items.map(l => {
+                                          const wl = weekLabelOf(l.weekOf, l.logDate)
+                                          return (
                                           <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
-                                            <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">
+                                            <td className="px-2 py-1.5 whitespace-nowrap align-top">
+                                              <div className="flex items-center gap-1">
+                                                <span className="font-medium text-foreground/80 tabular-nums">{wl.wk}</span>
+                                                {l.weekOf === weekOf && <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">本週</span>}
+                                              </div>
+                                              <div className="text-[10px] text-muted-foreground tabular-nums">{wl.range}</div>
+                                            </td>
+                                            <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap align-top">
                                               {new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                              {l.weekOf === weekOf && <span className="ml-1 text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 align-middle">本週</span>}
                                             </td>
                                             <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
                                             <td className="px-2 py-1.5 text-center">{l.attachments?.length ? <AttachmentPill attachments={l.attachments} /> : <span className="text-muted-foreground/30">—</span>}</td>
                                           </tr>
-                                        ))}
+                                          )
+                                        })}
                                       </tbody>
                                     </table>
                                   </div>
