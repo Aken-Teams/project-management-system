@@ -373,33 +373,43 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
           </div>
         </div>
 
-        {/* ④ Actual */}
-        <div className="flex items-center gap-2 mt-1">
-          <div className={cn(LABEL_W, 'shrink-0 text-[11px] font-semibold text-muted-foreground')}>Actual</div>
-          <div className="relative flex-1 h-6 bg-muted/30 rounded">
+        {/* ④ Actual — 依里程碑拆分：已完成=實心綠(整段)、進行中=實心藍(畫到今天)、未開始不畫 */}
+        <div className="flex items-stretch gap-2 mt-1">
+          <div className={cn(LABEL_W, 'shrink-0 flex items-center text-[11px] font-semibold text-muted-foreground')}>Actual</div>
+          <div className="relative flex-1" style={{ height: planH }}>
             <GridLines />
-            {todayPct > 0 && (() => {
-              const projStart = parseDate(project.startDate) ?? today
-              const days = Math.max(0, Math.round((today.getTime() - projStart.getTime()) / 86400000) + 1)
+            {phases.map((p, i) => {
+              const done = p.status === 'done'
+              const started = p.start <= today
+              const active = p.status === 'in-progress' || p.progress > 0
+              // 未開始 / 尚未動工 → 不畫實際段
+              if (!done && !(started && active)) return null
+              const tone = phaseTone(p, today)
+              const aEnd = done ? p.end : today // 已完成畫到規劃結束；進行中畫到今天
+              const left = pct(p.start)
+              const width = Math.max(pct(aEnd) - left, minPlanPct)
+              const clip = arrowClip(i)
+              const days = Math.max(1, Math.round((aEnd.getTime() - p.start.getTime()) / 86400000) + 1)
               return (
-                <Tooltip>
+                <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute top-0 h-6 bg-emerald-500 flex items-center justify-center cursor-default"
-                      style={{ left: '0%', width: `${todayPct}%`, clipPath: ARROW_HEAD }}>
-                      <span className="text-[11px] font-bold text-white px-1 truncate">Actual</span>
+                    <div
+                      className={cn('absolute flex items-center cursor-default', tone.line, i === 0 ? 'pl-2.5' : 'pl-4', 'pr-3')}
+                      style={{ left: `${left}%`, width: `${width}%`, top: p.lane * PLAN_LANE, height: PLAN_SEG, clipPath: clip }}>
+                      <span className="text-[11px] font-bold text-white truncate">{p.name}</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     <div className="space-y-0.5">
-                      <div className="font-semibold">實際進度</div>
-                      <div className="tabular-nums">{fmtDate(projStart)} ~ {fmtDate(today)}（{days} 天）</div>
-                      <div className="text-muted-foreground">整體 {project.progress}%</div>
+                      <div className="font-semibold">{p.name}</div>
+                      <div className="text-muted-foreground">實際：{done ? '已完成' : '進行中'} · {p.progress}%</div>
+                      <div className="tabular-nums">{fmtDate(p.start)} ~ {fmtDate(aEnd)}（{days} 天）</div>
                     </div>
                   </TooltipContent>
                 </Tooltip>
               )
-            })()}
-            <TodayLine height={24} />
+            })}
+            <TodayLine height={planH} />
           </div>
         </div>
       </div>
