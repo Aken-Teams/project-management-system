@@ -10,18 +10,17 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import type { Project, Milestone } from '@/lib/mock-data'
 
-const STATUS_LABEL: Record<string, string> = { done: '已完成', 'in-progress': '進行中', blocked: '受阻', todo: '未開始' }
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '/')
 
-// 階段 hover 卡：名稱 + 起訖日 + 天數 + 狀態/進度
+// 階段 hover 卡：名稱 + 起訖日 + 天數 + 狀態/進度（狀態與顏色一律走 phaseTone，全圖一致）
 function PhaseTip({ p, today }: { p: Phase; today: Date }) {
   const days = Math.round((p.end.getTime() - p.start.getTime()) / 86400000) + 1
-  const overdue = p.status !== 'done' && p.end < today
+  const v = phaseTone(p, today)
   return (
     <div className="space-y-0.5">
       <div className="font-semibold">{p.name}</div>
       <div className="tabular-nums">{fmtDate(p.start)} ~ {fmtDate(p.end)}（{days} 天）</div>
-      <div className="text-muted-foreground">{overdue ? '逾期' : STATUS_LABEL[p.status] || p.status} · {p.progress}%</div>
+      <div className="text-muted-foreground">狀態：{v.label} · 進度 {p.progress}%</div>
     </div>
   )
 }
@@ -49,12 +48,16 @@ type PhaseModel = {
   todayInRange: boolean; todayPct: number
 }
 
+// 單一狀態解析：決定顏色與標籤（全圖 — 階段/Plan/Actual/tooltip/圖例 — 共用，確保口徑一致）。
+//   與詳細甘特圖口徑一致：以「進度」為主 — 有進度即進行中；不把里程碑層級的 blocked 另標「受阻」
+//   （blocked 只是底下有任務卡在相依，里程碑其實仍在推進；受阻細節留在任務層看）。
+//   優先序：已完成 → 逾期 → 進行中(有進度) → 未開始
 function phaseTone(p: Phase, today: Date) {
   const overdue = p.status !== 'done' && p.end < today
-  if (p.status === 'done') return { line: 'bg-emerald-500', soft: 'bg-emerald-50 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-200' }
-  if (overdue) return { line: 'bg-amber-500', soft: 'bg-amber-50 dark:bg-amber-900/40', text: 'text-amber-800 dark:text-amber-200' }
-  if (p.status === 'in-progress' || p.progress > 0) return { line: 'bg-blue-500', soft: 'bg-blue-50 dark:bg-blue-900/40', text: 'text-blue-800 dark:text-blue-200' }
-  return { line: 'bg-slate-400', soft: 'bg-slate-50 dark:bg-slate-800/60', text: 'text-slate-700 dark:text-slate-200' }
+  if (p.status === 'done') return { key: 'done', label: '已完成', line: 'bg-emerald-500', soft: 'bg-emerald-50 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-200' }
+  if (overdue) return { key: 'overdue', label: '逾期', line: 'bg-amber-500', soft: 'bg-amber-50 dark:bg-amber-900/40', text: 'text-amber-800 dark:text-amber-200' }
+  if (p.status === 'in-progress' || p.status === 'blocked' || p.progress > 0) return { key: 'in-progress', label: '進行中', line: 'bg-blue-500', soft: 'bg-blue-50 dark:bg-blue-900/40', text: 'text-blue-800 dark:text-blue-200' }
+  return { key: 'todo', label: '未開始', line: 'bg-slate-400', soft: 'bg-slate-50 dark:bg-slate-800/60', text: 'text-slate-700 dark:text-slate-200' }
 }
 
 export function MilestonePhaseOverview({ project }: { project: Project }) {
@@ -402,8 +405,8 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
                   <TooltipContent side="top" className="text-xs">
                     <div className="space-y-0.5">
                       <div className="font-semibold">{p.name}</div>
-                      <div className="text-muted-foreground">實際：{done ? '已完成' : '進行中'} · {p.progress}%</div>
-                      <div className="tabular-nums">{fmtDate(p.start)} ~ {fmtDate(aEnd)}（{days} 天）</div>
+                      <div className="text-muted-foreground">狀態：{tone.label} · 進度 {p.progress}%</div>
+                      <div className="tabular-nums">實際 {fmtDate(p.start)} ~ {fmtDate(aEnd)}（{days} 天）</div>
                     </div>
                   </TooltipContent>
                 </Tooltip>
