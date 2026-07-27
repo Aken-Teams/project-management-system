@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { toDbEnum } from '@/lib/enum-mappers'
+import { ensureReviewerEmail } from '@/lib/resolve-reviewer-email'
 import type { TeamRole as DbTeamRole } from '@prisma/client'
 
 const AD_URL = process.env.AD_URL!
@@ -97,6 +98,10 @@ export async function POST(
       return NextResponse.json({ error: '該成員已在專案團隊中' }, { status: 409 })
     }
 
+    // 只帶了審核主管名字、沒帶 email（AD 搜尋不含 email）→ server 端補齊
+    const reviewerName = body.reportReviewerName?.trim() || null
+    const reviewerEmail = await ensureReviewerEmail(reviewerName, body.reportReviewerEmail)
+
     const member = await prisma.projectTeamMember.create({
       data: {
         projectId: id,
@@ -105,8 +110,8 @@ export async function POST(
         jobTitle: body.jobTitle?.trim() || '',
         organization: body.organization?.trim() || '',
         responsibility: body.responsibility?.trim() || '',
-        reportReviewerName: body.reportReviewerName?.trim() || null,
-        reportReviewerEmail: body.reportReviewerEmail?.trim() || null,
+        reportReviewerName: reviewerName,
+        reportReviewerEmail: reviewerEmail,
       },
       include: { user: true },
     })

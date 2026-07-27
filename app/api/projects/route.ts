@@ -5,6 +5,7 @@ import {
   projectTierToDb,
   demandSourceToDb,
 } from '@/lib/enum-mappers'
+import { ensureReviewerEmail } from '@/lib/resolve-reviewer-email'
 
 const AD_URL = process.env.AD_URL
 const AD_API = process.env.AD_API
@@ -430,6 +431,10 @@ export async function POST(request: NextRequest) {
             }
           }
 
+          // 只帶了審核主管名字、沒帶 email（AD 搜尋不含 email）→ server 端補齊
+          const reviewerName = tm.reportReviewerName?.trim() || null
+          const reviewerEmail = await ensureReviewerEmail(reviewerName, tm.reportReviewerEmail)
+
           await tx.projectTeamMember.upsert({
             where: {
               projectId_userId: {
@@ -442,8 +447,8 @@ export async function POST(request: NextRequest) {
               jobTitle: tm.jobTitle?.trim() || '',
               organization: tm.organization?.trim() || '',
               responsibility: tm.responsibility || '',
-              reportReviewerName: tm.reportReviewerName?.trim() || null,
-              reportReviewerEmail: tm.reportReviewerEmail?.trim() || null,
+              reportReviewerName: reviewerName,
+              reportReviewerEmail: reviewerEmail,
             },
             create: {
               projectId: proj.id,
@@ -452,8 +457,8 @@ export async function POST(request: NextRequest) {
               jobTitle: tm.jobTitle?.trim() || '',
               organization: tm.organization?.trim() || '',
               responsibility: tm.responsibility || '',
-              reportReviewerName: tm.reportReviewerName?.trim() || null,
-              reportReviewerEmail: tm.reportReviewerEmail?.trim() || null,
+              reportReviewerName: reviewerName,
+              reportReviewerEmail: reviewerEmail,
             },
           })
         }

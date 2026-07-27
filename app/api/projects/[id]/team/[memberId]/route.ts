@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { toDbEnum } from '@/lib/enum-mappers'
+import { resolveReviewerEmail } from '@/lib/resolve-reviewer-email'
 import type { TeamRole as DbTeamRole } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; memberId: string }> }
@@ -44,11 +45,18 @@ export async function PUT(
     if (body.responsibility !== undefined) {
       data.responsibility = body.responsibility.trim()
     }
-    if (body.reportReviewerName !== undefined) {
-      data.reportReviewerName = body.reportReviewerName?.trim() || null
-    }
-    if (body.reportReviewerEmail !== undefined) {
-      data.reportReviewerEmail = body.reportReviewerEmail?.trim() || null
+    // 審核主管：名字/email 任一有更新就一起處理——設了名字但 email 空 → 補齊；清掉名字 → email 也清
+    if (body.reportReviewerName !== undefined || body.reportReviewerEmail !== undefined) {
+      const name = body.reportReviewerName !== undefined
+        ? (body.reportReviewerName?.trim() || null)
+        : member.reportReviewerName
+      let email = body.reportReviewerEmail !== undefined
+        ? (body.reportReviewerEmail?.trim() || null)
+        : member.reportReviewerEmail
+      if (name && !email) email = await resolveReviewerEmail(name)
+      if (!name) email = null
+      data.reportReviewerName = name
+      data.reportReviewerEmail = email
     }
 
     if (Object.keys(data).length === 0) {
