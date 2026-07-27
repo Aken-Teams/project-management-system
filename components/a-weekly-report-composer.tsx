@@ -144,6 +144,8 @@ export function AWeeklyReportComposer({
   const selTask = selectedId ? byId.get(selectedId) : undefined
   const selRLogs = selectedId ? rLogsOf(selectedId) : []
   const selRAll = selectedId ? rAllLogsOf(selectedId) : [] // R 全部歷史（不綁週別），供 A 唯讀參考
+  // 任務全部報告（任何作者、任何週）— 供「無指派人葉任務」顯示既有報告，含早期只有 A 填寫邏輯時 A 直接寫的紀錄
+  const selAnyAll = selectedId ? project.taskLogs.filter(l => l.taskId === selectedId).slice().sort((a, b) => a.logDate.localeCompare(b.logDate)) : []
   const selKidLogs = useMemo(() => selectedId ? project.tasks.filter(t => t.parentId === selectedId).flatMap(k => rLogsOf(k.id).map(l => ({ title: k.title, log: l }))) : [], [selectedId, project.tasks, weekStart, weekEnd, actor]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 頂層祖先（往上走 parentId 到頂）
@@ -712,6 +714,10 @@ export function AWeeklyReportComposer({
                 const asg = (selTask.assignee || '').trim()
                 const assigned = hasAssignee(asg)
                 const unassignedParent = !assigned && sel.isParent
+                const isLeafUnassigned = !assigned && !unassignedParent
+                // 報告檢視清單：有押人→看 R 報告；無押人葉→任務既有全部報告（含早期由 A 直接填寫、跨週）
+                const reportLogs = assigned ? selRAll : (isLeafUnassigned ? selAnyAll : [])
+                const reportLabel = isLeafUnassigned ? '既有報告' : '看 R 報告'
                 const showPrereq = !sel.isParent && selPrereqs.length > 0
                 // 我要寫 / 我的報告 區塊（有押人=補充、無押人=正式報告）
                 const writeArea = (
@@ -804,7 +810,7 @@ export function AWeeklyReportComposer({
 
                     {/* 內容區 —— 統一分頁：看 R 報告 / 我的補充(或我的報告) */}
                     <div className="flex border-b bg-background px-3">
-                      {([['r', '看 R 報告', selRAll.length, Inbox], ['write', (assigned || unassignedParent) ? '我的補充' : '我的報告', 0, PenLine]] as const).map(([v, label, cnt, Icon]) => (
+                      {([['r', reportLabel, reportLogs.length, Inbox], ['write', (assigned || unassignedParent) ? '我的補充' : '我的報告', 0, PenLine]] as const).map(([v, label, cnt, Icon]) => (
                         <button key={v} type="button" onClick={() => setTaskTab(v)} className={cn('px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors flex items-center gap-1.5', taskTab === v ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                           <Icon className="h-4 w-4" />{label}
                           {v === 'r' && cnt > 0 && <span className={cn('inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-medium tabular-nums', taskTab === 'r' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')}>{cnt}</span>}
@@ -813,16 +819,20 @@ export function AWeeklyReportComposer({
                     </div>
                     <div className="p-3">
                       {taskTab === 'r' ? (
-                        assigned ? (
+                        unassignedParent ? (
+                          <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground leading-relaxed">此為<b>聚合父任務</b>，進度由子項自動聚合（{sel.progress}%），<b>不需填寫報告</b>。<br />如要補充父層整體說明，請切到「我的補充」。</div>
+                        ) : reportLogs.length === 0 ? (
+                          <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground leading-relaxed">{assigned ? '此任務尚無 R 報告' : <>此任務<b>無指派人、尚無報告</b>，進度須由你（A）在「我的報告」填寫。</>}</div>
+                        ) : (
                           (() => {
                               const R_PAGE = 10
-                              const pageCount = Math.max(1, Math.ceil(selRAll.length / R_PAGE))
+                              const pageCount = Math.max(1, Math.ceil(reportLogs.length / R_PAGE))
                               const page = Math.min(rPage, pageCount - 1)
-                              const items = selRAll.slice(page * R_PAGE, (page + 1) * R_PAGE)
+                              const items = reportLogs.slice(page * R_PAGE, (page + 1) * R_PAGE)
                               return (
                               <div className="space-y-2">
-                                {selRAll.length === 0 ? (
-                                  <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">此任務尚無 R 報告</div>
+                                {reportLogs.length === 0 ? (
+                                  <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">尚無報告</div>
                                 ) : (
                                   <div className="rounded-lg border overflow-hidden">
                                     <table className="w-full text-xs border-collapse">
@@ -852,18 +862,14 @@ export function AWeeklyReportComposer({
                                       <button type="button" disabled={page === 0} onClick={() => setRPage(page - 1)} className="px-1.5 py-0.5 rounded border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">‹</button>
                                       <span className="tabular-nums">{page + 1} / {pageCount}</span>
                                       <button type="button" disabled={page >= pageCount - 1} onClick={() => setRPage(page + 1)} className="px-1.5 py-0.5 rounded border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">›</button>
-                                      <span className="text-muted-foreground/70">共 {selRAll.length} 筆</span>
+                                      <span className="text-muted-foreground/70">共 {reportLogs.length} 筆</span>
                                     </div>
-                                  ) : <span className="text-[11px] text-muted-foreground/70">{selRAll.length > 0 ? `共 ${selRAll.length} 筆` : ''}</span>}
+                                  ) : <span className="text-[11px] text-muted-foreground/70">{reportLogs.length > 0 ? `共 ${reportLogs.length} 筆` : ''}</span>}
                                   {sel.isParent && selKidLogs.length > 0 && <button type="button" onClick={() => { importKids(); setTaskTab('write') }} className="text-[11px] text-violet-600 hover:underline shrink-0">帶入子任務報告（{selKidLogs.length}）到我的補充</button>}
                                 </div>
                               </div>
                               )
                             })()
-                        ) : unassignedParent ? (
-                          <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground leading-relaxed">此為<b>聚合父任務</b>，進度由子項自動聚合（{sel.progress}%），<b>不需填寫報告</b>。<br />如要補充父層整體說明，請切到「我的補充」。</div>
-                        ) : (
-                          <div className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground leading-relaxed">此任務<b>無指派人、沒有 R 報告</b>，進度須由你（A）在「我的報告」填寫。</div>
                         )
                       ) : writeArea}
                     </div>
