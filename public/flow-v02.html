@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>系統流程說明 v2.0 — 流程圖</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:#1e293b;
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 20px 80px;}
+  .top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  h1{font-size:26px;margin:0;}
+  .ver{background:#0f766e;color:#fff;font-size:13px;font-weight:700;border-radius:999px;padding:3px 12px;}
+  .sub{color:#64748b;margin:6px 0 26px;font-size:14px;}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 24px 26px;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);margin:0 0 26px;}
+  .card h2{font-size:17px;margin:0 0 4px;color:#0f172a;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .card h2 .n{background:#0f766e;color:#fff;font-size:12px;font-weight:700;border-radius:8px;padding:2px 9px;white-space:nowrap;}
+  .card .cap{color:#64748b;font-size:13px;margin:0 0 16px;line-height:1.6;}
+  .mermaid{display:flex;justify-content:center;background:#fafcff;border-radius:12px;padding:18px 8px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:12.5px;color:#475569;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.1);}
+  .note{background:#fffbeb;border:1px dashed #fcd34d;border-radius:12px;padding:12px 16px;margin-top:14px;font-size:13px;color:#92400e;line-height:1.7;}
+  .note b{color:#b45309;}
+  table.mini{border-collapse:collapse;width:100%;margin-top:14px;font-size:13px;}
+  table.mini th,table.mini td{border:1px solid #e2e8f0;padding:7px 10px;text-align:left;}
+  table.mini th{background:#f8fafc;color:#0f172a;}
+  table.mini td b{color:#0f766e;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>系統流程說明 — 流程圖</h1><span class="ver">v2.0</span></div>
+  <p class="sub">每張圖對應《系統流程說明 v02》的〔流程圖 N〕占位，逐張截圖替換即可。</p>
+
+  <!-- 流程圖 1：角色關係（資訊流） -->
+  <div class="card">
+    <h2><span class="n">流程圖 1</span>角色關係：資訊在角色間的流動</h2>
+    <p class="cap">R 填工作紀錄 → 先經其 R主管審核（未設則回退由 A 審），核准才進更新紀錄／推動進度；A 送出正式週報（對有指派人任務為補充）並確認完成；A 與 S 之間處理延期。</p>
+    <div class="mermaid">
+flowchart LR
+    R["R 執行者<br/>填工作紀錄"] -->|"提交"| SUP["R主管<br/>審核"]
+    R -. "未設 R主管：回退" .-> A["A 當責<br/>撰寫/補充・確認完成"]
+    SUP -->|"核准"| REC["更新紀錄 · 進度 · 甘特"]
+    SUP -. "駁回（填原因）" .-> R
+    A -->|"送出正式週報"| REC
+    A <-->|"延期申請 / 審核結果"| S["S 審核"]
+    REC -->|"通知"| ALL["全體團隊"]
+    classDef r fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a;
+    classDef s fill:#fef3c7,stroke:#d97706,color:#92400e;
+    classDef a fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    class R r; class SUP,S s; class A a; class REC,ALL ok;
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#dbeafe"></i>R 執行者</span>
+      <span><i class="dot" style="background:#fef3c7"></i>R主管 / S 審核</span>
+      <span><i class="dot" style="background:#ede9fe"></i>A 當責</span>
+      <span><i class="dot" style="background:#dcfce7"></i>系統結果</span>
+    </div>
+    <div class="note"><b>重點：</b>官方進度來源依「指派人」— 有指派人看該 R 報告（經 R主管核准）、無指派人看 A 報告或子層聚合；R 的原始紀錄未核准前不入帳。</div>
+  </div>
+
+  <!-- 流程圖 2：專案生命週期 -->
+  <div class="card">
+    <h2><span class="n">流程圖 2</span>專案生命週期：建立 → 開案 → 執行 → 完成</h2>
+    <p class="cap">「開案」是由規劃進入執行的節點；開案後計畫日期調整需經延期審核，並開始發送逾期與催繳通知。</p>
+    <div class="mermaid">
+flowchart LR
+    C["建立<br/>（草稿）"] --> O["開案<br/>時程定版"] --> E["執行<br/>每週報告循環"] --> F["完成"]
+    classDef v fill:#f1f5f9,stroke:#94a3b8,color:#334155;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    class C,E v; class O,F ok;
+    </div>
+    <div class="note">草稿階段可自由調整、不催繳、不計逾期；開案後日期調整走延期流程。</div>
+  </div>
+
+  <!-- 流程圖 3：每週報告流程 -->
+  <div class="card">
+    <h2><span class="n">流程圖 3</span>每週報告流程：R 填 → R主管審核 → A 撰寫/補充送出</h2>
+    <p class="cap">R 送出後依是否設 R主管路由；核准進更新紀錄並推動進度。100% 完成的任務再交 A 確認。</p>
+    <div class="mermaid">
+flowchart LR
+    R["R 填工作紀錄"] -->|"提交"| HAS{有設<br/>R主管?}
+    HAS -->|"有"| SUP["R主管審核"]
+    HAS -->|"沒有·回退"| A0["由 A 審"]
+    SUP -->|"核准"| REC["進更新紀錄<br/>＋推動進度"]
+    A0 --> REC
+    REC --> AC["回報 100%？<br/>→ A 確認完成"]
+    AC -->|"通過"| FIN["甘特完成<br/>＋完成區<br/>＋里程碑同步"]
+    classDef r fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a;
+    classDef s fill:#fef3c7,stroke:#d97706,color:#92400e;
+    classDef a fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    class R r; class SUP s; class A0,AC a; class REC,FIN,HAS ok;
+    </div>
+    <div class="note"><b>駁回：</b>R主管或 A 駁回（填原因）→ 退回 R 的「待完成」修改後重送。<b>未達 100%：</b>下一週繼續回報。R主管審查報告分「待審核／已審核／填報追蹤」三分頁。</div>
+  </div>
+
+  <!-- 範例示意圖 -->
+  <div class="card">
+    <h2><span class="n">範例</span>R 三筆紀錄 → R主管核准 → A 彙整/補充</h2>
+    <p class="cap">任務由 R 執行、A 當責。R 本週填三筆紀錄提交 → R主管核准後進更新紀錄；A 於撰寫台看 R 報告並寫「補充」（不影響該任務進度，因已由 R 報告驅動）。</p>
+    <div class="mermaid">
+flowchart LR
+    L1["紀錄1"] --> M["R 三筆本週紀錄"]
+    L2["紀錄2"] --> M
+    L3["紀錄3"] --> M
+    M -->|"提交"| SUP["R主管核准"]
+    SUP --> REC["更新紀錄（R 為主）<br/>進度依 R 報告"]
+    REC --> A["A 撰寫台：看 R 報告＋寫補充"]
+    classDef r fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a;
+    classDef s fill:#fef3c7,stroke:#d97706,color:#92400e;
+    classDef a fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    class L1,L2,L3,M r; class SUP s; class A a; class REC ok;
+    </div>
+  </div>
+
+  <!-- 流程圖 4：進度依指派人 -->
+  <div class="card">
+    <h2><span class="n">流程圖 4</span>進度：依「指派人」分流，里程碑為計入任務加權平均</h2>
+    <p class="cap">A 對「有指派人」任務所寫的是補充，不影響進度。</p>
+    <div class="mermaid">
+flowchart TD
+    T["某任務"] --> Q1{有指派人?}
+    Q1 -- "有" --> R1["以該 R 報告推算<br/>（A 補充不影響）"]
+    Q1 -- "沒有" --> Q2{有子任務?}
+    Q2 -- "無（葉）" --> A1["以 A 報告推算"]
+    Q2 -- "有（父）" --> AGG["子任務加權聚合"]
+    R1 --> CAP["自動最高 99%"]
+    A1 --> CAP
+    CAP --> C100["標記完成 / A 確認完成 → 100%"]
+    classDef q fill:#e0f2fe,stroke:#0284c7,color:#075985;
+    classDef v fill:#f1f5f9,stroke:#94a3b8,color:#334155;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    class Q1,Q2 q; class R1,A1,AGG v; class CAP,C100,T ok;
+    </div>
+    <div class="note">里程碑進度＝其下「計入」任務依天數加權平均；<b>排除無指派人的純聚合父任務</b>避免重複加權。</div>
+  </div>
+
+  <!-- 流程圖 4-1：里程碑階段總覽 -->
+  <div class="card">
+    <h2><span class="n">流程圖 4-1</span>里程碑階段總覽（專案概覽）</h2>
+    <p class="cap">以里程碑為「階段」的時間軸總覽：階段條＋年月軸＋Plan／Actual；Actual 依已發布報告的最後日期繪製。</p>
+    <div class="mermaid">
+flowchart TD
+    OV["里程碑階段總覽"] --> SET["顯示設定（限 A/pm/admin・全域一致）"]
+    SET --> M1["重疊階段：分開 ↔ 合併"]
+    SET --> M2["時間軸寬度：貼合 ↔ 展開時間軸<br/>（長專案可橫向捲動、顯示月份）"]
+    SET --> M3["顯示階段：勾選要顯示哪些里程碑"]
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    classDef v fill:#f1f5f9,stroke:#94a3b8,color:#334155;
+    class OV,SET ok; class M1,M2,M3 v;
+    </div>
+  </div>
+
+  <!-- 流程圖 5：任務狀態 -->
+  <div class="card">
+    <h2><span class="n">流程圖 5</span>五種任務狀態</h2>
+    <p class="cap">狀態燈依 A 已發布的進度判定；「逾期 N 天」以截止日與今日另計。</p>
+    <table class="mini">
+      <tr><th>狀態</th><th>條件</th></tr>
+      <tr><td><b>待辦</b></td><td>尚未發布進度</td></tr>
+      <tr><td><b>進行中</b></td><td>已有進度（&gt;0%）</td></tr>
+      <tr><td><b>逾期未開始</b></td><td>已過截止日、仍無進度</td></tr>
+      <tr><td><b>受阻</b></td><td>前序（上游）未完成</td></tr>
+      <tr><td><b>完成</b></td><td>A 已標記／確認完成（100%）</td></tr>
+    </table>
+  </div>
+
+  <!-- 流程圖 6：延期 -->
+  <div class="card">
+    <h2><span class="n">流程圖 6</span>延期：報告可超截止日，改由 A 判斷</h2>
+    <p class="cap">報告或完成日超過計畫截止日不強制、不再跳出申請；A 認為需改計畫時程時才提延期，經 S 核准才連動。</p>
+    <div class="mermaid">
+flowchart LR
+    OVER["報告/完成日<br/>超過計畫截止日"] --> J{A 判斷需<br/>改計畫時程?}
+    J -- "否" --> KEEP["維持計畫日期<br/>（不強制申請）"]
+    J -- "是" --> APP["A 提延期申請<br/>原因＋新日期"]
+    APP --> LOCK["審核中：時程鎖定<br/>僅可改指派人"]
+    LOCK --> S{S 審核}
+    S -- "全數核准" --> LINK["群組延長＋下游順延"]
+    S -- "任一駁回" --> KEEP2["退回、時程不變"]
+    classDef q fill:#e0f2fe,stroke:#0284c7,color:#075985;
+    classDef a fill:#ede9fe,stroke:#7c3aed,color:#5b21b6;
+    classDef s fill:#fef3c7,stroke:#d97706,color:#92400e;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#166534;
+    class J,S q; class APP a; class LOCK s; class LINK,KEEP,KEEP2,OVER ok;
+    </div>
+  </div>
+
+  <!-- 流程圖 7：通知 -->
+  <div class="card">
+    <h2><span class="n">流程圖 7</span>通知：事件與對應對象（含審核類型）</h2>
+    <p class="cap">v2.0 新增報告審核相關通知；側邊欄收合仍可見未讀數，通知中心可搜尋與依類型篩選。</p>
+    <table class="mini">
+      <tr><th>通知</th><th>觸發</th><th>對象</th><th>類型</th></tr>
+      <tr><td>任務指派</td><td>建立/編輯指派</td><td>被指派者</td><td>即時</td></tr>
+      <tr><td>待審核報告</td><td>R 送出報告</td><td>R主管（未設則 A）</td><td>即時</td></tr>
+      <tr><td>報告已進更新紀錄</td><td>R主管核准</td><td>A</td><td>即時</td></tr>
+      <tr><td>待審核完成</td><td>R 回報完成經核准</td><td>A</td><td>即時</td></tr>
+      <tr><td>週報已送出</td><td>A 送出報告</td><td>全體團隊</td><td>即時</td></tr>
+      <tr><td>延期申請 / 審核結果</td><td>送出 / S 審核</td><td>S / 申請人</td><td>即時</td></tr>
+      <tr><td>逾期提醒</td><td>里程碑逾期</td><td>A</td><td>排程·限已開案</td></tr>
+      <tr><td>審核逾期</td><td>R主管超時未審（&gt;3天）</td><td>A</td><td>排程·限已開案</td></tr>
+      <tr><td>週報催繳</td><td>本週應填未填</td><td>當事 R</td><td>排程·限已開案</td></tr>
+    </table>
+  </div>
+
+</div>
+<script>
+  mermaid.initialize({ startOnLoad:true, theme:'base', flowchart:{ curve:'basis', htmlLabels:true },
+    themeVariables:{ fontFamily:'"Segoe UI","Microsoft JhengHei",sans-serif', fontSize:'13.5px' } });
+</script>
+</body>
+</html>

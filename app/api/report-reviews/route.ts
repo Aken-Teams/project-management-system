@@ -29,9 +29,15 @@ export async function GET(request: NextRequest) {
   const email = request.nextUrl.searchParams.get('email')?.trim()
   if (!email) return NextResponse.json({ isReviewer: false, projects: [] })
 
-  // 我督導的成員（跨專案）
+  // 我督導的成員（跨專案）。相容「只存審核主管名字、沒存 email」的資料：email 或 name 任一對到我都算。
+  const me = await prisma.user.findUnique({ where: { email }, select: { name: true } })
   const supervised = await prisma.projectTeamMember.findMany({
-    where: { reportReviewerEmail: email },
+    where: {
+      OR: [
+        { reportReviewerEmail: email },
+        ...(me?.name ? [{ reportReviewerName: me.name }] : []),
+      ],
+    },
     select: { projectId: true, userId: true, project: { select: { name: true } }, user: { select: { name: true, email: true } } },
   })
   if (supervised.length === 0) return NextResponse.json({ isReviewer: false, projects: [] })
@@ -279,17 +285,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '必填欄位不完整' }, { status: 400 })
     }
 
-    // 授權：呼叫者必須是「該作者(R)在此專案的報告審核主管」
+    // 授權：呼叫者必須是「該作者(R)在此專案的報告審核主管」。
+    //   相容名字-only 資料：email 或 name 任一對到即可。
     const authorMember = await prisma.projectTeamMember.findFirst({
       where: { projectId, userId: authorId },
-      select: { reportReviewerEmail: true },
+      select: { reportReviewerEmail: true, reportReviewerName: true },
     })
-    if (!authorMember?.reportReviewerEmail || authorMember.reportReviewerEmail.toLowerCase() !== reviewerEmail.toLowerCase()) {
-      return NextResponse.json({ error: '你不是該成員的報告審核主管，無權審核' }, { status: 403 })
-    }
-
     const reviewer = await prisma.user.findUnique({ where: { email: reviewerEmail }, select: { name: true } })
     const reviewerName = reviewer?.name || reviewerEmail
+    const emailOk = !!authorMember?.reportReviewerEmail && authorMember.reportReviewerEmail.toLowerCase() === reviewerEmail.toLowerCase()
+    const nameOk = !!authorMember?.reportReviewerName && !!reviewer?.name && authorMember.reportReviewerName === reviewer.name
+    if (!emailOk && !nameOk) {
+      return NextResponse.json({ error: '你不是該成員的報告審核主管，無權審核' }, { status: 403 })
+    }
 
     // 目標：該 submission 中仍待審的 log（同專案/任務/作者/填報週）
     const week = body.weekOf ?? null

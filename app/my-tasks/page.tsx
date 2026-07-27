@@ -491,9 +491,12 @@ export default function MyTasksPage() {
     // R 改由「我的任務週報(MY)」涵蓋，所以角色頁籤不再列 R
     const order = ['S', 'A', 'P', 'C', 'I']
     const roleTabs = order.filter(r => userRolesMap.has(r))
-    const base = myReportProjects.length > 0 ? ['MY', ...roleTabs] : roleTabs
-    // 我是任何人的報告審核主管 → 常駐「審查報告」頁籤（即使暫無待審）
-    return isReviewer ? [...base, 'REVIEW'] : base
+    const tabs: string[] = []
+    if (myReportProjects.length > 0) tabs.push('MY')
+    // 我是任何人的報告審核主管 → 常駐「審查報告」，緊接在「我的任務週報」右邊
+    if (isReviewer) tabs.push('REVIEW')
+    tabs.push(...roleTabs)
+    return tabs
   }, [userRolesMap, myReportProjects, isReviewer])
 
   // Auto-set initial active role

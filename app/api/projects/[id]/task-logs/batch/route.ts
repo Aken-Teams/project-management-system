@@ -172,14 +172,23 @@ export async function POST(
         where: { projectId: id, userId: user.id },
         select: { reportReviewerEmail: true, reportReviewerName: true },
       })
-      if (authorMember?.reportReviewerEmail) {
+      // 相容「只存審核主管名字、沒存 email」的資料：只要設了 email 或 name 就走 R主管流程。
+      if (authorMember?.reportReviewerEmail || authorMember?.reportReviewerName) {
         routedTo = 'reviewer'
         reviewerName = authorMember.reportReviewerName || authorMember.reportReviewerEmail
-        await notifyReportReviewNeeded({
-          projectId: id, projectName,
-          reviewerEmail: authorMember.reportReviewerEmail,
-          rName: user.name, taskTitle: task.title,
-        })
+        // 通知需要 email；只存名字時用名字反查使用者 email
+        let reviewerEmail = authorMember.reportReviewerEmail
+        if (!reviewerEmail && authorMember.reportReviewerName) {
+          const revUser = await prisma.user.findFirst({ where: { name: authorMember.reportReviewerName }, select: { email: true } })
+          reviewerEmail = revUser?.email ?? null
+        }
+        if (reviewerEmail) {
+          await notifyReportReviewNeeded({
+            projectId: id, projectName,
+            reviewerEmail,
+            rName: user.name, taskTitle: task.title,
+          })
+        }
         // 審視歷程：R 送出報告待審
         await prisma.taskReviewEvent.create({ data: { taskId: body.taskId, projectId: id, type: 'report_submitted', actor: user.name, note: null } }).catch(() => {})
       } else {
