@@ -171,7 +171,7 @@ type ReviewedSubmission = {
   logs: ReviewLogItem[]
 }
 type TrackingItem = {
-  taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null
+  taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null
   planStart: string; planEnd: string
   overdue: boolean; reportedDone: boolean; filled: boolean
   reviewState: 'none' | 'pending' | 'published' | 'rejected'
@@ -2329,7 +2329,9 @@ export default function MyTasksPage() {
                                           <div className={cn('text-sm truncate', !t.owned && 'text-muted-foreground')}>{t.taskTitle}</div>
                                           <div className="text-[11px] text-muted-foreground truncate">{t.depth === 0 && t.msName ? `${t.msName} · ` : ''}計畫 {t.planStart} ~ {t.planEnd}</div>
                                         </div>
-                                        {!t.owned ? (
+                                        {t.done ? (
+                                          <Badge className="text-[11px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/30 shrink-0">已完成</Badge>
+                                        ) : !t.owned ? (
                                           <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
                                         ) : (
                                           <>

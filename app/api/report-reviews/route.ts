@@ -4,7 +4,7 @@ import { safeJsonParse } from '@/lib/utils'
 import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
 import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable } from '@/lib/notifications'
-import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree } from '@/lib/report-tracking'
+import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree, isTaskComplete } from '@/lib/report-tracking'
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     orderBy: { sortOrder: 'asc' },
     select: {
       id: true, projectId: true, title: true, assignee: true, status: true, parentId: true, sortOrder: true,
-      startDate: true, endDate: true, completedAt: true, reportedDoneAt: true,
+      startDate: true, endDate: true, completedAt: true, reportedDoneAt: true, milestoneId: true,
       milestone: { select: { name: true } },
     },
   })
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
   type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected' }
   type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
   type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
-  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[] }
+  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[] }
   type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
@@ -152,16 +152,37 @@ export async function GET(request: NextRequest) {
       const openTaskCount = openTasks.filter(t => t.projectId === m.projectId && isSameUser(t.assignee, { name: m.user.name, email: m.user.email })).length
       // 該成員在 trackWeek「該填」的任務，以樹狀（含結構祖先）呈現、標記已/未填
       const projTasks = trackTasks.filter(t => t.projectId === m.projectId)
+      const mine = (t: typeof projTasks[number]) => isSameUser(t.assignee, { name: m.user.name, email: m.user.email })
       const ownedIds = new Set(
         projTasks
-          .filter(t => isSameUser(t.assignee, { name: m.user.name, email: m.user.email })
+          .filter(t => mine(t)
             && shouldTrackReport(
               { assignee: t.assignee, status: t.status, startDate: fmt(t.startDate), endDate: fmt(t.endDate), completedAt: t.completedAt ? fmt(t.completedAt) : null },
               trackWeek, trackEnd,
             ))
           .map(t => t.id),
       )
-      const tracking: TrackItem[] = buildTrackTree(ownedIds, projTasks).map(({ node: t, depth, owned }) => {
+      // 「已在追」的里程碑：只在這些里程碑底下補顯示成員的「已完成」任務，
+      // 讓主管看得出 100% 的項目不是消失、而是完成（避免拉進無關的舊完成里程碑）。
+      const trackedMs = new Set(projTasks.filter(t => ownedIds.has(t.id)).map(t => t.milestoneId ?? '_'))
+      const doneIds = new Set(
+        projTasks
+          .filter(t => {
+            if (!mine(t) || ownedIds.has(t.id)) return false
+            if (!isTaskComplete({ status: t.status, startDate: fmt(t.startDate), completedAt: t.completedAt ? fmt(t.completedAt) : null })) return false
+            if (!trackedMs.has(t.milestoneId ?? '_')) return false
+            // 已完成任務只在「計畫區間與該週重疊」時顯示，離開計畫週就不再出現。
+            // （未完成的任務走 owned/shouldTrackReport，逾期會持續每週追，直到真的完成。）
+            const st = fmt(t.startDate)
+            const en = t.endDate ? fmt(t.endDate) : st
+            return st <= trackEnd && en >= trackWeek
+          })
+          .map(t => t.id),
+      )
+      const showIds = new Set<string>([...ownedIds, ...doneIds])
+      const tracking: TrackItem[] = buildTrackTree(showIds, projTasks).map(({ node: t, depth }) => {
+        const owned = ownedIds.has(t.id)
+        const done = doneIds.has(t.id)
         const myWeekLogs = owned ? trackLogs.filter(l => l.taskId === t.id && l.authorId === m.userId
           && reportCountsForWeek({ weekOf: l.weekOf, logDate: fmt(l.logDate) }, trackWeek, trackEnd)) : []
         // 審核狀態：有未審筆→pending(審核中)；否則已發布→published；否則被駁回→rejected；無報告→none
@@ -183,7 +204,7 @@ export async function GET(request: NextRequest) {
             status: l.publishedAt ? 'approved' : l.reviewerRejectedAt ? 'rejected' : 'pending',
           }))
         return {
-          taskId: t.id, taskTitle: t.title, depth, owned,
+          taskId: t.id, taskTitle: t.title, depth, owned, done,
           msName: depth === 0 ? (t.milestone?.name ?? null) : null,
           planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
           overdue: owned && isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
