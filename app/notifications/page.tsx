@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/dashboard-layout'
 import { useAuth } from '@/lib/auth-context'
 import { useNotificationStore, type NotificationType, type Notification } from '@/lib/notification-store'
+import { notificationHref } from '@/lib/notification-route'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -197,7 +198,8 @@ export default function NotificationsPage() {
 
   function handleNavigate(n: Notification) {
     handleMarkRead(n)
-    if (n.projectId) router.push(`/projects/${n.projectId}`)
+    const href = notificationHref(n)
+    if (href) router.push(href)
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -345,7 +347,7 @@ export default function NotificationsPage() {
             {filtered.map(n => {
               const Icon = NOTIFICATION_ICONS[n.type]
               const iconColor = NOTIFICATION_COLORS[n.type]
-              const canNavigate = !!n.projectId
+              const canNavigate = !!notificationHref(n)
 
               return (
                 <div

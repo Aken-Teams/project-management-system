@@ -85,6 +85,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const { refreshNotifications } = useNotificationStore()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
+  // 分頁受 URL ?tab= 控制（通知深連結用，例如週報已送出 → 更新紀錄）
+  const [activeTab, setActiveTab] = useState('overview')
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t) setActiveTab(t)
+  }, [])
   const [budgetItems, setBudgetItems] = useState<{ id?: string; station: string; vendor: string; equipment: string; quantity: number; unitPrice: number | null; estimatedCost: number | null; actualCost: number | null }[]>([])
   const [roiParams, setRoiParams] = useState<RoiParams | null>(null)
   const [editOpen, setEditOpen] = useState(false)
@@ -466,7 +472,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         </div>
 
         {/* Tabs - Prominent with icons */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <div className="border-b">
             <TabsList className="h-auto p-0 bg-transparent gap-0">
               <TabsTrigger value="overview" className="gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5">

@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useNotificationStore, type NotificationType, type Notification } from '@/lib/notification-store'
+import { notificationHref } from '@/lib/notification-route'
 import {
   Bell,
   ClipboardList,
@@ -111,9 +112,10 @@ export function NotificationBell({
 
   function handleNotificationClick(n: Notification) {
     markAsRead(n.id)
-    if (n.projectId) {
+    const href = notificationHref(n)
+    if (href) {
       setOpen(false)
-      router.push(`/projects/${n.projectId}`)
+      router.push(href)
     }
   }
 
@@ -189,7 +191,7 @@ export function NotificationBell({
                 {recentNotifications.map(notification => {
                   const Icon = NOTIFICATION_ICONS[notification.type]
                   const iconColor = NOTIFICATION_COLORS[notification.type]
-                  const canNavigate = !!notification.projectId
+                  const canNavigate = !!notificationHref(notification)
 
                   return (
                     <button

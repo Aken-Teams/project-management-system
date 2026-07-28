@@ -504,12 +504,25 @@ export default function MyTasksPage() {
     return tabs
   }, [userRolesMap, myReportProjects, isReviewer])
 
+  // 通知深連結：/my-tasks?role=REVIEW|MY|A|… → 開在對應頁籤（僅消化一次，之後可自由切換）
+  const [roleFromUrl, setRoleFromUrl] = useState<string | null>(null)
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get('role')
+    if (r) setRoleFromUrl(r)
+  }, [])
+
   // Auto-set initial active role
   useEffect(() => {
-    if (availableRoles.length > 0 && !availableRoles.includes(activeRole)) {
+    if (availableRoles.length === 0) return
+    if (roleFromUrl && availableRoles.includes(roleFromUrl)) {
+      setActiveRole(roleFromUrl)
+      setRoleFromUrl(null) // 消化一次，避免手動切頁籤時被拉回
+      return
+    }
+    if (!availableRoles.includes(activeRole)) {
       setActiveRole(availableRoles[0])
     }
-  }, [availableRoles, activeRole])
+  }, [availableRoles, activeRole, roleFromUrl])
 
   const roleProjects = useMemo(() => userRolesMap.get(activeRole) || [], [userRolesMap, activeRole])
 
