@@ -13,14 +13,46 @@ import type { Project, Milestone } from '@/lib/mock-data'
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '/')
 
 // 階段 hover 卡：名稱 + 起訖日 + 天數 + 狀態/進度（狀態與顏色一律走 phaseTone，全圖一致）
-function PhaseTip({ p, today }: { p: Phase; today: Date }) {
-  const days = Math.round((p.end.getTime() - p.start.getTime()) / 86400000) + 1
+// hover：一般＝簡版（名稱／期間／狀態·進度）；聚焦(active)的階段＝詳版（進度條＋落後/超前＋截止＋遲交），給主管看
+function PhaseTip({ p, today, isBottleneck, detailed }: { p: Phase; today: Date; isBottleneck?: boolean; detailed?: boolean }) {
+  const dayMs = 86400000
+  const days = Math.round((p.end.getTime() - p.start.getTime()) / dayMs) + 1
   const v = phaseTone(p, today)
+  const done = p.status === 'done'
+  if (!detailed) {
+    return (
+      <div className="space-y-0.5">
+        <div className="flex items-center gap-1.5"><span className="font-semibold">{p.name}</span>{isBottleneck && <span className="text-[10px] px-1 rounded bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400">⚠ 瓶頸</span>}</div>
+        <div className="tabular-nums text-muted-foreground">{fmtDate(p.start)} ~ {fmtDate(p.end)}（{days} 天）</div>
+        <div className="text-muted-foreground">狀態：{v.label} · 進度 {done ? 100 : Math.max(0, Math.min(100, p.progress))}%</div>
+      </div>
+    )
+  }
+  const prog = done ? 100 : Math.max(0, Math.min(100, p.progress))
+  const earnedEnd = p.start.getTime() + (prog / 100) * (p.end.getTime() - p.start.getTime())
+  const varDays = Math.round((today.getTime() - earnedEnd) / dayMs) // >0 落後、<0 超前
+  const late = done && p.actualEnd != null && p.actualEnd.getTime() > p.end.getTime()
+  const lateDays = late ? Math.round((p.actualEnd!.getTime() - p.end.getTime()) / dayMs) : 0
+  const toDeadline = Math.round((p.end.getTime() - today.getTime()) / dayMs) // >0 剩餘、<0 已過
+  const barColor = done ? 'bg-emerald-500' : v.key === 'overdue' ? 'bg-amber-500' : v.key === 'todo' ? 'bg-slate-400' : 'bg-blue-500'
+  const sched = done ? null : varDays > 1 ? { t: `落後約 ${varDays} 天`, c: 'text-amber-600 dark:text-amber-400' } : varDays < -1 ? { t: `超前約 ${-varDays} 天`, c: 'text-emerald-600 dark:text-emerald-400' } : { t: '準時', c: 'text-muted-foreground' }
   return (
-    <div className="space-y-0.5">
-      <div className="font-semibold">{p.name}</div>
-      <div className="tabular-nums">{fmtDate(p.start)} ~ {fmtDate(p.end)}（{days} 天）</div>
-      <div className="text-muted-foreground">狀態：{v.label} · 進度 {p.progress}%</div>
+    <div className="space-y-1.5 min-w-[190px]">
+      <div className="flex items-center gap-1.5">
+        <span className="font-semibold">{p.name}</span>
+        {isBottleneck && <span className="text-[10px] px-1 rounded bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400">⚠ 瓶頸</span>}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className={cn('h-full rounded-full', barColor)} style={{ width: `${prog}%` }} /></div>
+        <span className="tabular-nums text-[11px] font-medium w-8 text-right">{prog}%</span>
+      </div>
+      <div className="text-muted-foreground tabular-nums">規劃 {fmtDate(p.start)} ~ {fmtDate(p.end)}（{days} 天）</div>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span>狀態：{done ? (late ? `已完成 · 遲 ${lateDays} 天` : '已完成') : v.label}</span>
+        {sched && <span className={sched.c}>· {sched.t}</span>}
+      </div>
+      {!done && <div className="text-muted-foreground">截止：{toDeadline >= 0 ? `距今 ${toDeadline} 天` : <span className="text-amber-600 dark:text-amber-400">已逾期 {-toDeadline} 天</span>}</div>}
+      {late && <div className="text-red-600 dark:text-red-400 tabular-nums">實際完成 {fmtDate(p.actualEnd!)}（晚於規劃截止）</div>}
     </div>
   )
 }
@@ -317,6 +349,10 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
   LABEL_W: string; STAGE_LANE: number; STAGE_SEG: number; PLAN_LANE: number; PLAN_SEG: number
 }) {
   const { phases, laneCount, pct, months, years, todayInRange, todayPct, bottleneckId } = model
+  // 點里程碑 → 顯著顯示該階段（其餘變淡）；再點一次或點空白處取消
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const toggleSel = (id: string) => setSelectedId(s => s === id ? null : id)
+  const dimCls = (id: string) => (selectedId && selectedId !== id ? 'opacity-20 saturate-50' : '')
   const stageH = laneCount * STAGE_LANE
   const planH = laneCount * PLAN_LANE
   // 展開時間軸：每月固定像素寬，讓內容超出容器 → 觸發橫向捲動、月份也放得下顯示
@@ -361,7 +397,8 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
                 <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
                     <div
-                      className={cn('absolute cursor-default', tone.line)}
+                      onClick={() => toggleSel(p.id)}
+                      className={cn('absolute cursor-pointer transition-opacity', tone.line, dimCls(p.id), selectedId === p.id && 'z-10')}
                       style={{ left: `${left}%`, width: `${width}%`, top: p.lane * STAGE_LANE, height: STAGE_SEG, clipPath: clip }}>
                       <div className={cn('absolute inset-[2px] flex items-center pr-3', i === 0 ? 'pl-2.5' : 'pl-4', tone.soft, tone.text)} style={{ clipPath: clip }}>
                         {/* 瓶頸只用紅色 ⚠ 標示，保留階段本身的狀態色（P3 仍是進行中藍，與其任務一致）*/}
@@ -370,8 +407,7 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
-                    <PhaseTip p={p} today={today} />
-                    {isBottleneck && <div className="text-red-600 dark:text-red-400 font-medium mt-0.5">⚠ 目前最落後（瓶頸）</div>}
+                    <PhaseTip p={p} today={today} isBottleneck={isBottleneck} detailed={selectedId === p.id} />
                   </TooltipContent>
                 </Tooltip>
               )
@@ -414,14 +450,15 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
                 <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
                     <div
-                      className={cn('absolute cursor-default', tone.line)}
+                      onClick={() => toggleSel(p.id)}
+                      className={cn('absolute cursor-pointer transition-opacity', tone.line, dimCls(p.id), selectedId === p.id && 'z-10')}
                       style={{ left: `${left}%`, width: `${width}%`, top: p.lane * PLAN_LANE, height: PLAN_SEG, clipPath: clip }}>
                       <div className={cn('absolute inset-[1.5px] flex items-center pr-3 bg-background', tone.text, i === 0 ? 'pl-2' : 'pl-4')} style={{ clipPath: clip }}>
                         <span className="text-[11px] font-semibold truncate">{p.name}</span>
                       </div>
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs"><PhaseTip p={p} today={today} /></TooltipContent>
+                  <TooltipContent side="top" className="text-xs"><PhaseTip p={p} today={today} isBottleneck={p.id === bottleneckId} detailed={selectedId === p.id} /></TooltipContent>
                 </Tooltip>
               )
             })}
@@ -467,7 +504,7 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
               return (
                 <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
-                    <div className="absolute cursor-default" style={{ left: 0, right: 0, top, height: PLAN_SEG }}>
+                    <div onClick={() => toggleSel(p.id)} className={cn('absolute cursor-pointer transition-opacity', dimCls(p.id), selectedId === p.id && 'z-10')} style={{ left: 0, right: 0, top, height: PLAN_SEG }}>
                       {segs.map((s, si) => s.kind === 'earned' ? (
                         <div key={si} className={cn('absolute h-full rounded-sm flex items-center', done ? 'bg-emerald-500' : 'bg-blue-500')}
                           style={{ left: `${s.l}%`, width: `${Math.max(s.r - s.l, 0.6)}%` }}>
