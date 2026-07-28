@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>里程碑階段總覽 — 狀態說明</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:#1e293b;
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 80px;}
+  .top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  h1{font-size:25px;margin:0}
+  .ver{background:#0f766e;color:#fff;font-size:13px;font-weight:700;border-radius:999px;padding:3px 12px}
+  .sub{color:#64748b;margin:6px 0 26px;font-size:14px;line-height:1.6}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px 22px 22px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin:0 0 22px}
+  .card h2{font-size:17px;margin:0 0 4px;color:#0f172a;display:flex;align-items:center;gap:8px}
+  .card h2 .n{background:#0f766e;color:#fff;font-size:12px;font-weight:700;border-radius:8px;padding:2px 9px}
+  .card .cap{color:#64748b;font-size:13px;margin:0 0 16px;line-height:1.6}
+  /* mini bars */
+  .bar{height:20px;border-radius:4px;display:inline-flex;align-items:center;color:#fff;font-size:11px;font-weight:700;padding:0 9px;white-space:nowrap}
+  .chev{clip-path:polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%)}
+  .done{background:#10b981}.prog{background:#3b82f6}.overdue{background:#f59e0b}.todo{background:#94a3b8}
+  .outline{background:#fff;border:1.5px solid #3b82f6;color:#1e40af}
+  .hatch-amber{border:1px dashed #f59e0b;background-image:repeating-linear-gradient(45deg,rgba(245,158,11,.28) 0 5px,transparent 5px 10px)}
+  .hatch-green{border:1px dashed #10b981;background-image:repeating-linear-gradient(45deg,rgba(16,185,129,.30) 0 5px,transparent 5px 10px)}
+  .hatch-red{border:1px dashed #ef4444;background-image:repeating-linear-gradient(45deg,rgba(239,68,68,.32) 0 5px,transparent 5px 10px)}
+  /* state table */
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{border:1px solid #e2e8f0;padding:10px 12px;text-align:left;vertical-align:middle}
+  th{background:#f8fafc;color:#0f172a;font-weight:600}
+  td.vis{width:210px}
+  .badge{display:inline-flex;align-items:center;font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px;border:1px solid}
+  .b-behind{background:#fffbeb;color:#b45309;border-color:#fcd34d}
+  .b-ahead{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd}
+  .b-ok{background:#ecfdf5;color:#047857;border-color:#6ee7b7}
+  /* mini timeline mock */
+  .mock{position:relative;height:26px;background:#fafcff;border-radius:6px;border:1px solid #eef2f7}
+  .mock .seg{position:absolute;top:3px;height:20px}
+  .mock .plan{top:3px;height:20px;border:1.5px solid #93c5fd;border-radius:4px;background:#fff}
+  .mock .today{position:absolute;top:-2px;bottom:-2px;width:2px;background:#f43f5e;z-index:3}
+  .mock .lbl{position:absolute;top:-16px;font-size:9px;color:#f43f5e;transform:translateX(-50%)}
+  .warn{color:#dc2626;font-weight:800}
+  .note{background:#fffbeb;border:1px dashed #fcd34d;border-radius:12px;padding:12px 16px;margin-top:14px;font-size:13px;color:#92400e;line-height:1.7}
+  .legendrow td{padding:8px 12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>里程碑階段總覽 — 狀態說明</h1><span class="ver">給主管看</span></div>
+  <p class="sub">總覽有三列：<b>階段</b>（依里程碑狀態上色）、<b>Plan</b>（規劃時程，外框）、<b>Actual</b>（實際 = 完成度% × 規劃區間，端點對比「今天線」判讀落後/超前）。以下說明每個狀態何時觸發、長什麼樣。</p>
+
+  <!-- 1. 階段 / Plan 的狀態色 -->
+  <div class="card">
+    <h2><span class="n">1</span>階段 / Plan 列 — 依里程碑狀態上色</h2>
+    <p class="cap">「階段」與「Plan」兩列的顏色，看該里程碑<b>本身的狀態</b>（跟底下任務一致）。</p>
+    <table>
+      <tr><th class="vis">呈現</th><th>狀態</th><th>觸發條件</th></tr>
+      <tr><td class="vis"><span class="bar chev done">P1 已完成</span></td><td>已完成</td><td>里程碑進度 100%、狀態＝完成。</td></tr>
+      <tr><td class="vis"><span class="bar chev prog">P3 進行中</span></td><td>進行中</td><td>有進度（&gt;0%）且尚未完成。</td></tr>
+      <tr><td class="vis"><span class="bar chev overdue">P4 逾期</span></td><td>逾期</td><td>尚未完成、且<b>今天已超過規劃截止日</b>。</td></tr>
+      <tr><td class="vis"><span class="bar chev todo">P5 未開始</span></td><td>未開始</td><td>進度 0%、尚未動工。</td></tr>
+    </table>
+  </div>
+
+  <!-- 2. Actual 的 earned value 狀態 -->
+  <div class="card">
+    <h2><span class="n">2</span>Actual 列 — 完成度長條（earned value）</h2>
+    <p class="cap">Actual 長度＝<b>完成度% × 規劃區間</b>（把「做了多少」映射到時間軸）。長條端點落在<b>今天線</b>的哪一邊，決定落後/超前；已完成則看是否晚於規劃截止（遲交）。</p>
+    <table>
+      <tr><th style="width:280px">呈現（Plan 外框 · Actual 實際 · │今天）</th><th>狀態</th><th>觸發條件</th></tr>
+
+      <tr><td>
+        <div class="mock">
+          <div class="seg plan" style="left:4%;right:4%"></div>
+          <div class="seg prog" style="left:4%;width:40%;border-radius:4px 0 0 4px"></div>
+          <div class="seg hatch-amber" style="left:44%;width:26%"></div>
+          <div class="today" style="left:70%"></div><div class="lbl" style="left:70%">今天</div>
+        </div>
+      </td><td>落後</td><td>進行中，<b>完成度長條端點在今天線左邊</b>（該做到今天的量、實際還沒到）。缺口用<b>琥珀斜線</b>補到今天。tooltip 顯示「落後約 N 天」。</td></tr>
+
+      <tr><td>
+        <div class="mock">
+          <div class="seg plan" style="left:4%;right:4%"></div>
+          <div class="seg prog" style="left:4%;width:51%;border-radius:4px 0 0 4px"></div>
+          <div class="seg hatch-green" style="left:55%;width:20%"></div>
+          <div class="today" style="left:55%"></div><div class="lbl" style="left:55%">今天</div>
+        </div>
+      </td><td>超前</td><td>進行中，<b>完成度長條端點超過今天線</b>（比進度該有的還多）。超出今天的那段用<b>綠色斜線</b>。tooltip 顯示「超前約 N 天」。</td></tr>
+
+      <tr><td>
+        <div class="mock">
+          <div class="seg plan" style="left:4%;width:56%"></div>
+          <div class="seg done" style="left:4%;width:56%;border-radius:4px"></div>
+          <div class="seg hatch-red" style="left:60%;width:16%"></div>
+          <div class="today" style="left:82%"></div><div class="lbl" style="left:82%">今天</div>
+        </div>
+      </td><td>遲交</td><td>已完成，但<b>實際完成日晚於規劃截止日</b>。綠條畫滿規劃區間，超出截止的那段用<b>紅色斜線</b>＋「遲 N 天」。→ 100% 後仍看得出當初卡住/逾期。</td></tr>
+
+      <tr><td>
+        <div class="mock">
+          <div class="seg plan" style="left:4%;width:56%"></div>
+          <div class="seg done" style="left:4%;width:56%;border-radius:4px"></div>
+          <div class="today" style="left:82%"></div><div class="lbl" style="left:82%">今天</div>
+        </div>
+      </td><td>準時完成</td><td>已完成、且未晚於規劃截止 → 整段實心綠（例：P1、P2）。<b>P3 若做到 100% 也會變這樣。</b></td></tr>
+
+      <tr><td>
+        <div class="mock">
+          <div class="seg plan" style="left:40%;right:4%"></div>
+          <div class="today" style="left:70%"></div><div class="lbl" style="left:70%">今天</div>
+        </div>
+      </td><td>未開始</td><td>完成度 0% → Actual <b>不畫</b>（例：P5）。</td></tr>
+    </table>
+  </div>
+
+  <!-- 3. 特殊標記 -->
+  <div class="card">
+    <h2><span class="n">3</span>特殊標記與整體</h2>
+    <table>
+      <tr><th class="vis">呈現</th><th>項目</th><th>觸發條件</th></tr>
+      <tr><td class="vis"><span class="bar chev prog"><span class="warn" style="margin-right:4px">⚠</span>P3 瓶頸</span></td><td>瓶頸（最落後）</td><td>所有<b>未完成階段中，earned 落後今天最多</b>的那一段。只加<b>紅色 ⚠</b>，<b>不改階段本身的狀態色</b>（進行中仍是藍，與其任務一致）。</td></tr>
+      <tr><td class="vis"><span style="display:inline-block;width:2px;height:26px;background:#f43f5e;vertical-align:middle"></span> <span style="color:#f43f5e;font-size:12px">今天</span></td><td>今天線</td><td>紅色直線標示今天，用來對比 Actual 是落後或超前。</td></tr>
+      <tr class="legendrow"><td class="vis"><span class="badge b-behind">落後約 56 天</span></td><td rowspan="3">整體時程健康徽章（標題列）</td><td>比較<b>整體實際完成%</b> vs <b>依今天時間軸應達%</b>：<br>實際&lt;應達 → <span class="badge b-behind">落後約 N 天</span></td></tr>
+      <tr class="legendrow"><td class="vis"><span class="badge b-ahead">超前約 N 天</span></td><td>實際&gt;應達 → <span class="badge b-ahead">超前約 N 天</span></td></tr>
+      <tr class="legendrow"><td class="vis"><span class="badge b-ok">準時</span></td><td>兩者相當 → <span class="badge b-ok">準時</span></td></tr>
+    </table>
+  </div>
+
+  <!-- 4. 互動 -->
+  <div class="card">
+    <h2><span class="n">4</span>互動（給主管快速聚焦）</h2>
+    <table>
+      <tr><th style="width:180px">操作</th><th>效果</th></tr>
+      <tr><td><b>點某階段</b>（階段/Plan/Actual 任一）</td><td><b>聚焦</b>：該階段在三列維持明亮、其餘變淡；再點一次或點其他階段取消/切換。</td></tr>
+      <tr><td><b>Hover 一般階段</b></td><td>簡版提示：名稱 · 規劃期間 · 狀態·進度%。</td></tr>
+      <tr><td><b>Hover 已聚焦的階段</b></td><td>詳版提示：進度條 · ⚠瓶頸 · 規劃期間 · <b>落後/超前約 N 天</b> · <b>截止倒數/已逾期</b>（＋遲交資訊）。</td></tr>
+    </table>
+    <div class="note"><b>提醒：</b>hover 提示在「點擊選取」當下會被關閉（元件正常行為），聚焦後要把滑鼠移開再移回該階段，才會看到詳版提示。</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -252,6 +252,11 @@ export default function MyTasksPage() {
   // R 報告審核主管收件匣（我要審核的成員報告）
   const [reviewInbox, setReviewInbox] = useState<ReviewProject[]>([])
   const [isReviewer, setIsReviewer] = useState(false) // 我是否為任何人的報告審核主管
+  // 填報追蹤：篩選人（'all' 或某成員 id）＋ 依人收合展開（預設全收合）
+  const [trackPersonFilter, setTrackPersonFilter] = useState<string>('all')
+  const [trackPersonPickerOpen, setTrackPersonPickerOpen] = useState(false)
+  const [trackExpandedPersons, setTrackExpandedPersons] = useState<Set<string>>(new Set())
+  const toggleTrackPerson = (id: string) => setTrackExpandedPersons(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   // 填報追蹤所選週別（週一 YYYY-MM-DD），預設本週
   const [reviewTrackWeek, setReviewTrackWeek] = useState(() => {
     const now = new Date(); const day = now.getDay(); const diff = now.getDate() - day + (day === 0 ? -6 : 1)
@@ -2102,13 +2107,63 @@ export default function MyTasksPage() {
                   <tbody>
                     {reviewInbox.map(proj => {
                       const pendN = proj.reviewees.reduce((n, rv) => n + rv.pending.length, 0)
-                      const chaseN = proj.reviewees.filter(rv => rv.pending.length === 0 && !rv.submittedThisWeek && rv.openTaskCount > 0).length
+                      const chaseList = proj.reviewees.filter(rv => rv.pending.length === 0 && !rv.submittedThisWeek && rv.openTaskCount > 0)
+                      const chaseN = chaseList.length
                       return (
                         <tr key={proj.projectId} className="border-b last:border-0">
                           <td className="px-4 py-3 font-medium">{proj.projectName}</td>
-                          <td className="px-4 py-3 text-center text-muted-foreground">{proj.reviewees.length} 位</td>
+                          <td className="px-4 py-3 text-center text-muted-foreground">
+                            {proj.reviewees.length > 0 ? (
+                              <TooltipProvider delayDuration={100}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button type="button" className="inline-flex items-center gap-1.5 cursor-help align-middle">
+                                      <span className="flex -space-x-1.5">
+                                        {proj.reviewees.slice(0, 3).map(rv => (
+                                          <span key={rv.authorId} className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-foreground ring-2 ring-background">{rv.authorName.charAt(0)}</span>
+                                        ))}
+                                        {proj.reviewees.length > 3 && (
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted-foreground/15 text-[10px] font-semibold text-muted-foreground ring-2 ring-background">+{proj.reviewees.length - 3}</span>
+                                        )}
+                                      </span>
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" align="center" className="p-0">
+                                    <div className="max-h-56 overflow-y-auto overscroll-contain p-2 min-w-[150px]">
+                                      <p className="text-[11px] font-medium text-muted-foreground px-1 pb-1">督導成員（{proj.reviewees.length}）</p>
+                                      {proj.reviewees.map(rv => (
+                                        <div key={rv.authorId} className="flex items-center gap-2 px-1 py-0.5 text-xs">
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold">{rv.authorName.charAt(0)}</span>
+                                          <span className="truncate">{rv.authorName}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : '0 位'}
+                          </td>
                           <td className="px-4 py-3 text-center">
-                            {chaseN > 0 ? <Badge variant="destructive" className="text-xs">{chaseN} 人未送</Badge> : <span className="text-muted-foreground">-</span>}
+                            {chaseN > 0 ? (
+                              <TooltipProvider delayDuration={100}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="destructive" className="text-xs cursor-help">{chaseN} 人未送</Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" align="center" className="p-0">
+                                    <div className="max-h-56 overflow-y-auto overscroll-contain p-2 min-w-[150px]">
+                                      <p className="text-[11px] font-medium text-red-600 dark:text-red-400 px-1 pb-1">未送（{chaseN}）</p>
+                                      {chaseList.map(rv => (
+                                        <div key={rv.authorId} className="flex items-center gap-2 px-1 py-0.5 text-xs">
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px] font-bold">{rv.authorName.charAt(0)}</span>
+                                          <span className="truncate">{rv.authorName}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : <span className="text-muted-foreground">-</span>}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Button size="sm" variant={pendN > 0 ? 'outline' : 'ghost'}
@@ -2168,28 +2223,82 @@ export default function MyTasksPage() {
                         <div className="rounded-md border bg-muted/20 px-3 py-2.5">
                           <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />
                         </div>
-                        {trackMiss > 0 ? (
-                          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />本週有 {trackMiss} 項任務尚未填報（逾期未完成也持續追蹤，直到任務完成）
-                          </div>
-                        ) : (
+                        {trackMiss === 0 && (
                           <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400">
                             <Check className="h-3.5 w-3.5 shrink-0" />本週督導成員皆已完成填報
                           </div>
                         )}
-                        {reviewDialogProject.reviewees.every(rv => rv.tracking.length === 0) ? (
-                          <p className="text-sm text-muted-foreground text-center py-8">本週沒有需追蹤的任務</p>
-                        ) : reviewDialogProject.reviewees.filter(rv => rv.tracking.length > 0).map(rv => {
+                        {(() => {
+                          const trackReviewees = reviewDialogProject.reviewees.filter(rv => rv.tracking.length > 0)
+                          if (trackReviewees.length === 0) return <p className="text-sm text-muted-foreground text-center py-8">本週沒有需追蹤的任務</p>
+                          const shown = trackPersonFilter === 'all' ? trackReviewees : trackReviewees.filter(rv => rv.authorId === trackPersonFilter)
+                          return (
+                          <>
+                            {/* 篩選人：人少用晶片、人多改成可搜尋下拉 */}
+                            {trackReviewees.length > 0 && (
+                              trackReviewees.length <= 6 ? (
+                                <div className="flex items-center gap-2 flex-wrap rounded-md border bg-muted/20 px-3 py-2">
+                                  <span className="text-xs text-muted-foreground shrink-0">篩選人</span>
+                                  <button type="button" onClick={() => setTrackPersonFilter('all')} className={cn('text-xs px-2.5 py-1 rounded-full border transition-colors', trackPersonFilter === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>全部（{trackReviewees.length}）</button>
+                                  {trackReviewees.map(rv => { const m = rv.tracking.filter(t => t.owned && !t.filled).length; return (
+                                    <button key={rv.authorId} type="button" onClick={() => setTrackPersonFilter(rv.authorId)} className={cn('inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors', trackPersonFilter === rv.authorId ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+                                      {rv.authorName}{m > 0 && <span className={cn('text-[10px]', trackPersonFilter === rv.authorId ? 'opacity-90' : 'text-red-600 dark:text-red-400')}>· {m}</span>}
+                                    </button>
+                                  )})}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
+                                  <span className="text-xs text-muted-foreground shrink-0">篩選人</span>
+                                  <Popover open={trackPersonPickerOpen} onOpenChange={setTrackPersonPickerOpen}>
+                                    <PopoverTrigger asChild>
+                                      <button type="button" className="flex-1 inline-flex items-center justify-between gap-2 text-sm px-3 py-1.5 rounded-md border bg-background hover:bg-muted/50 transition-colors">
+                                        <span className="truncate">
+                                          {trackPersonFilter === 'all'
+                                            ? `全部成員（${trackReviewees.length}）`
+                                            : (trackReviewees.find(rv => rv.authorId === trackPersonFilter)?.authorName ?? '全部成員')}
+                                        </span>
+                                        <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                      <Command>
+                                        <CommandInput placeholder="搜尋成員…" className="text-sm" />
+                                        <CommandList>
+                                          <CommandEmpty>找不到成員</CommandEmpty>
+                                          <CommandItem value="全部成員" onSelect={() => { setTrackPersonFilter('all'); setTrackPersonPickerOpen(false) }} className="text-sm">
+                                            全部成員（{trackReviewees.length}）
+                                          </CommandItem>
+                                          {trackReviewees.map(rv => { const m = rv.tracking.filter(t => t.owned && !t.filled).length; return (
+                                            <CommandItem key={rv.authorId} value={rv.authorName} onSelect={() => { setTrackPersonFilter(rv.authorId); setTrackPersonPickerOpen(false) }} className="text-sm flex items-center justify-between gap-2">
+                                              <span className="truncate">{rv.authorName}</span>
+                                              {m > 0 && <span className="text-[11px] text-red-600 dark:text-red-400 shrink-0">{m} 未填</span>}
+                                            </CommandItem>
+                                          )})}
+                                        </CommandList>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
+                                  {trackPersonFilter !== 'all' && (
+                                    <button type="button" onClick={() => setTrackPersonFilter('all')} className="text-xs text-muted-foreground hover:text-foreground shrink-0">清除</button>
+                                  )}
+                                </div>
+                              )
+                            )}
+                            {shown.map(rv => {
                           const miss = rv.tracking.filter(t => t.owned && !t.filled).length
+                          const pOpen = trackExpandedPersons.has(rv.authorId)
                           return (
                             <div key={rv.authorId} className="rounded-lg border overflow-hidden">
-                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b">
+                              {/* 依人收合展開（預設收合）*/}
+                              <button type="button" onClick={() => toggleTrackPerson(rv.authorId)} className={cn('w-full flex items-center gap-2 px-3 py-2 bg-muted/30 text-left hover:bg-muted/50 transition-colors', pOpen && 'border-b')}>
                                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">{rv.authorName.charAt(0)}</div>
                                 <span className="text-sm font-medium flex-1 truncate">{rv.authorName}</span>
                                 {miss > 0
-                                  ? <Badge className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 shrink-0">{miss} 未填</Badge>
-                                  : <Badge className="text-[11px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">全部已填</Badge>}
-                              </div>
+                                  ? <Badge className="text-[11px] bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30 shrink-0">{miss} 未填</Badge>
+                                  : <Badge className="text-[11px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/30 shrink-0">全部已填</Badge>}
+                                <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', pOpen && 'rotate-180')} />
+                              </button>
+                              {pOpen && (
                               <div className="divide-y">
                                 {rv.tracking.map(t => {
                                   const canExpand = t.owned && t.logs.length > 0
@@ -2212,7 +2321,7 @@ export default function MyTasksPage() {
                                         ) : (
                                           <>
                                             {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
-                                            {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
+                                            {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/30 shrink-0">100%</Badge>}
                                             {t.reviewState === 'pending'
                                               ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0">審核中</Badge>
                                               : t.reviewState === 'published'
@@ -2237,9 +2346,13 @@ export default function MyTasksPage() {
                                   )
                                 })}
                               </div>
+                              )}
                             </div>
                           )
                         })}
+                          </>
+                          )
+                        })()}
                       </div>
                     ) : reviewDialogTab === 'pending' ? (
                       pRows.length === 0 ? (
@@ -2257,7 +2370,7 @@ export default function MyTasksPage() {
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium truncate">{rv.authorName}</span>
                                   <span className="text-xs text-muted-foreground truncate">{s.taskTitle}</span>
-                                  {s.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0">100%</Badge>}
+                                  {s.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/30 shrink-0">100%</Badge>}
                                 </div>
                                 {!open && <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{brief}</div>}
                               </div>
@@ -2298,8 +2411,8 @@ export default function MyTasksPage() {
                                   <span className="text-sm font-medium truncate">{rv.authorName}</span>
                                   <span className="text-xs text-muted-foreground truncate">{s.taskTitle}</span>
                                   {s.outcome === 'approved'
-                                    ? <Badge className="text-[11px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">已通過</Badge>
-                                    : <Badge className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 shrink-0">已駁回</Badge>}
+                                    ? <Badge className="text-[11px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/30 shrink-0">已通過</Badge>
+                                    : <Badge className="text-[11px] bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30 shrink-0">已駁回</Badge>}
                                 </div>
                                 {!open && <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{s.outcome === 'rejected' && s.note ? `駁回原因：${s.note}` : brief}</div>}
                               </div>
