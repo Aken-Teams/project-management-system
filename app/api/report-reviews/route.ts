@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     select: {
       id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
       logDate: true, content: true, attachments: true, nextPlans: true,
-      publishedAt: true, reviewerRejectedAt: true, updatedAt: true,
+      publishedAt: true, reviewerRejectedAt: true, createdAt: true, updatedAt: true,
       task: { select: { id: true, title: true, reportedDoneAt: true, completedAt: true } },
     },
     orderBy: { logDate: 'asc' },
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
   })
 
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
-  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected' }
+  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected'; createdAt?: string }
   type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
   type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
   type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[] }
@@ -244,7 +244,18 @@ export async function GET(request: NextRequest) {
       attachments: safeJsonParse<Att[]>(l.attachments, []),
       nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
       status,
+      createdAt: l.createdAt.toISOString(),
     })
+  }
+
+  // 同一待審群組內若有多份「未審(pending)」修改版，只留最新一份給主管審——
+  // R 把「送出」當「儲存」連送多份時，主管佇列不該被 R 的修改歷程洗版。
+  // 已審過的(approved/rejected)保留當脈絡；駁回/核准仍會一次套用整週待審 log。
+  for (const s of subMap.values()) {
+    const pend = s.logs.filter(l => l.status === 'pending')
+    if (pend.length <= 1) continue
+    const latest = pend.reduce((a, b) => (a.createdAt ?? '') >= (b.createdAt ?? '') ? a : b)
+    s.logs = s.logs.filter(l => l.status !== 'pending' || l.id === latest.id)
   }
 
   // 塞入已審核 submissions（排除「目前又有待審筆」的群組——它已回到待審核，不該同時出現在已審核）
@@ -335,6 +346,10 @@ export async function POST(request: NextRequest) {
         where: targetWhere,
         data: { publishedAt: now, publishedBy: reviewerName },
       })
+      // 沒有任何待審 log 被更新 → 這是重複點擊/已審過的 no-op，不再寫歷程、不再重複發通知。
+      if (res.count === 0) {
+        return NextResponse.json({ success: true, published: 0, noop: true })
+      }
       // 審視歷程
       await prisma.taskReviewEvent.create({ data: { taskId, projectId, type: 'report_approved', actor: reviewerName, note: null } }).catch(() => {})
       // 通知：A 知道已進更新紀錄；若該任務已回報100%，另通知 A 審核完成
@@ -357,6 +372,10 @@ export async function POST(request: NextRequest) {
       where: targetWhere,
       data: { reviewerRejectedAt: new Date(), reviewerRejectedBy: reviewerName, reviewerNote: body.note.trim() },
     })
+    // 沒有任何待審 log 被駁回 → 重複點擊/已駁回的 no-op，不再寫一筆「主管駁回」歷程（避免履歷洗版）。
+    if (res.count === 0) {
+      return NextResponse.json({ success: true, rejected: 0, noop: true })
+    }
     await prisma.taskReviewEvent.create({ data: { taskId, projectId, type: 'report_rejected', actor: reviewerName, note: body.note.trim() } }).catch(() => {})
     return NextResponse.json({ success: true, rejected: res.count })
   } catch (error) {

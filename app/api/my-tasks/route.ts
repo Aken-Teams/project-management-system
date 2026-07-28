@@ -196,6 +196,19 @@ export async function GET(request: NextRequest) {
             id: e.id,
             taskId: t.id,
             taskTitle: t.title,
+            // 麵包屑脈絡：里程碑 › 上層任務 › …（同名工站分屬不同實驗/父層，靠這條分辨是哪一個）
+            path: (() => {
+              const parts: string[] = []
+              let cur: typeof p.tasks[number] | undefined = t.parentId ? p.tasks.find(pt => pt.id === t.parentId) : undefined
+              while (cur) {
+                parts.unshift(cur.title)
+                const pid: string | null = cur.parentId
+                cur = pid ? p.tasks.find(pt => pt.id === pid) : undefined
+              }
+              const ms = p.milestones.find(m => m.id === t.milestoneId)
+              if (ms) parts.unshift(ms.name)
+              return parts.length ? parts.join(' › ') : null
+            })(),
             assignee: t.assignee,
             type: e.type,
             actor: e.actor,

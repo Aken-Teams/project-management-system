@@ -155,7 +155,7 @@ interface MyTasksProject {
 }
 
 // 任務審視歷程事件
-type RReviewEvent = { id: string; taskId: string; taskTitle: string; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; note?: string | null; createdAt: string; projectId?: string }
+type RReviewEvent = { id: string; taskId: string; taskTitle: string; path?: string | null; assignee: string; type: 'reported' | 'cancelled' | 'confirmed' | 'rejected' | string; actor: string; note?: string | null; createdAt: string; projectId?: string }
 
 // 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
 // R 報告審核主管收件匣型別（督導總覽：每 R 的待審 + 已審核 + 追蹤狀態）
@@ -300,7 +300,13 @@ export default function MyTasksPage() {
         body: JSON.stringify({ reviewerEmail: user.email, projectId, taskId: s.taskId, authorId, weekOf: s.weekOf, action, note }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || '操作失敗'); return }
-      toast.success(action === 'approve' ? '已核准，報告進入更新紀錄' : '已駁回，退回成員')
+      const d = await res.json().catch(() => ({}))
+      if (d.noop) {
+        // 此報告已被審過（重複點擊）→ 不再記一筆歷程，僅提示並重新整理讓過時項目消失
+        toast.info('此報告已審核過，已為你重新整理')
+      } else {
+        toast.success(action === 'approve' ? '已核准，報告進入更新紀錄' : '已駁回，退回成員')
+      }
       await refetchReviewInbox()
       await refreshMyTasks() // 同步 A 端「成員週報」狀態（核准後應顯示已進紀錄，不再是主管審核中）
     } catch { toast.error('操作失敗') }
@@ -4193,6 +4199,7 @@ export default function MyTasksPage() {
                                     {d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                                   </td>
                                   <td className="px-2 py-1.5 text-foreground/85 break-words">
+                                    {ev.path ? <span className="block text-[11px] text-muted-foreground/80 truncate">{ev.path}</span> : null}
                                     {ev.taskTitle}
                                     {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">退回原因：{ev.note}</span> : null}
                                   </td>
@@ -4900,6 +4907,7 @@ export default function MyTasksPage() {
                             <tr key={ev.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
                               <td className="px-2 py-1.5 text-muted-foreground/80 whitespace-nowrap tabular-nums">{d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} {d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}</td>
                               <td className="px-2 py-1.5 text-foreground/85 break-words">
+                                {ev.path ? <span className="block text-[11px] text-muted-foreground/80 truncate">{ev.path}</span> : null}
                                 {ev.taskTitle}
                                 {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">駁回原因：{ev.note}</span> : null}
                               </td>
