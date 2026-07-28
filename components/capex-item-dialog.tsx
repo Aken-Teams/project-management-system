@@ -212,7 +212,7 @@ export function CapexItemDialog({
                   )}
                 </span>
               </AccordionTrigger>
-              <AccordionContent>
+              <AccordionContent className="px-1.5 pt-1.5">
                 <div className="space-y-3 pt-1">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <Field label="設備類別">
@@ -264,7 +264,7 @@ export function CapexItemDialog({
                   )}
                 </span>
               </AccordionTrigger>
-              <AccordionContent>
+              <AccordionContent className="px-1.5 pt-1.5">
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-3 pt-1">
                   <Field label="單位">
                     <Input className="h-8 text-xs" value={draft.unit} onChange={chInput('unit')} placeholder="SET" />
@@ -306,7 +306,7 @@ export function CapexItemDialog({
                   )}
                 </span>
               </AccordionTrigger>
-              <AccordionContent>
+              <AccordionContent className="px-1.5 pt-1.5">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-1">
                   <Field label="開立日期">
                     <Input className="h-8 text-xs" type="date" value={draft.issueDate ?? ''} onChange={chDate('issueDate')} />
@@ -332,7 +332,7 @@ export function CapexItemDialog({
                   )}
                 </span>
               </AccordionTrigger>
-              <AccordionContent>
+              <AccordionContent className="px-1.5 pt-1.5">
                 <div className="space-y-3 pt-1">
                   <div className="grid grid-cols-3 gap-3">
                     <PaymentBlock
@@ -435,8 +435,8 @@ function PaymentBlock({ title, pct, amount, payDate, paid, onPctChange, onDateCh
         <Input className="h-7 text-xs" type="date" value={payDate ?? ''} onChange={onDateChange} />
       </Field>
       {/* 只壓時間≠已付款：勾了「已付款」才算實際付出、才計入付款% */}
-      <label className="flex items-center gap-1.5 cursor-pointer select-none pt-0.5">
-        <Checkbox checked={paid} onCheckedChange={(c) => onPaidChange(!!c)} className="h-3.5 w-3.5" />
+      <label className="flex items-center gap-1.5 cursor-pointer select-none pt-1">
+        <Checkbox checked={paid} onCheckedChange={(c) => onPaidChange(!!c)} />
         <span className={`text-xs ${paid ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>已付款</span>
       </label>
     </div>
