@@ -47,11 +47,30 @@ export interface CapexItemData {
   acceptancePct: number | null
   depositAmount: number | null
   depositPayDate: string | null
+  depositPaid?: boolean
   deliveryAmount: number | null
   deliveryPayDate: string | null
+  deliveryPaid?: boolean
   acceptanceAmount: number | null
   acceptancePayDate: string | null
+  acceptancePaid?: boolean
   paymentStatus: string
+}
+
+// 某里程碑是否已付：以「已付款」勾選為準（相容舊資料：無勾選欄位時退回看有無付款日）
+export const isDepositPaid = (i: CapexItemData) => i.depositPaid ?? !!i.depositPayDate
+export const isDeliveryPaid = (i: CapexItemData) => i.deliveryPaid ?? !!i.deliveryPayDate
+export const isAcceptancePaid = (i: CapexItemData) => i.acceptancePaid ?? !!i.acceptancePayDate
+
+// 已付金額：某里程碑「已付款」才算已付；金額優先用明確欄位，缺漏時以「訂購總額 × 比例」回推
+//   （相容只填了比例(deposit_pct…)、卻沒填金額(deposit_amount…) 的匯入資料，否則付款%會誤顯示 0%）
+export function capexPaidAmount(item: CapexItemData): number {
+  const order = item.orderAmount ?? 0
+  const part = (paid: boolean, amount: number | null, pct: number | null) =>
+    paid ? (amount ?? (pct != null ? order * pct : 0)) : 0
+  return part(isDepositPaid(item), item.depositAmount, item.depositPct)
+    + part(isDeliveryPaid(item), item.deliveryAmount, item.deliveryPct)
+    + part(isAcceptancePaid(item), item.acceptanceAmount, item.acceptancePct)
 }
 
 export interface BudgetItemRef {
@@ -210,10 +229,7 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
     const totals = new Map<string, number>()
     items.forEach(item => {
       const key = item.budgetItemId || '_unlinked'
-      const paid = (item.depositPayDate ? (item.depositAmount ?? 0) : 0)
-        + (item.deliveryPayDate ? (item.deliveryAmount ?? 0) : 0)
-        + (item.acceptancePayDate ? (item.acceptanceAmount ?? 0) : 0)
-      totals.set(key, (totals.get(key) || 0) + paid)
+      totals.set(key, (totals.get(key) || 0) + capexPaidAmount(item))
     })
     return totals
   }, [items])
@@ -617,9 +633,7 @@ function CapexItemRow({ item, readOnly, onEdit, onDelete }: {
 
 function CapexItemDisplay({ item }: { item: CapexItemData }) {
   const hasPay = item.depositPct != null || item.deliveryPct != null || item.acceptancePct != null
-  const paidTotal = (item.depositPayDate ? (item.depositAmount ?? 0) : 0)
-    + (item.deliveryPayDate ? (item.deliveryAmount ?? 0) : 0)
-    + (item.acceptancePayDate ? (item.acceptanceAmount ?? 0) : 0)
+  const paidTotal = capexPaidAmount(item)
   const payPct = item.orderAmount && item.orderAmount > 0 ? Math.round((paidTotal / item.orderAmount) * 100) : 0
 
   return (
@@ -670,21 +684,12 @@ function CapexItemDisplay({ item }: { item: CapexItemData }) {
               <span className="text-muted-foreground tabular-nums shrink-0">{payPct}%</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
-              {item.depositPct != null && (
-                <span className={item.depositPayDate ? 'text-green-600' : ''}>
-                  訂{fmtPct(item.depositPct)} {item.depositPayDate ? '✓' : '○'}
-                </span>
-              )}
-              {item.deliveryPct != null && (
-                <span className={item.deliveryPayDate ? 'text-green-600' : ''}>
-                  交{fmtPct(item.deliveryPct)} {item.deliveryPayDate ? '✓' : '○'}
-                </span>
-              )}
-              {item.acceptancePct != null && (
-                <span className={item.acceptancePayDate ? 'text-green-600' : ''}>
-                  驗{fmtPct(item.acceptancePct)} {item.acceptancePayDate ? '✓' : '○'}
-                </span>
-              )}
+              {item.depositPct != null && (() => { const paid = isDepositPaid(item); const sched = !paid && !!item.depositPayDate
+                return <span className={paid ? 'text-green-600' : sched ? 'text-amber-600' : ''}>訂{fmtPct(item.depositPct)} {paid ? '✓' : sched ? '排定' : '○'}</span> })()}
+              {item.deliveryPct != null && (() => { const paid = isDeliveryPaid(item); const sched = !paid && !!item.deliveryPayDate
+                return <span className={paid ? 'text-green-600' : sched ? 'text-amber-600' : ''}>交{fmtPct(item.deliveryPct)} {paid ? '✓' : sched ? '排定' : '○'}</span> })()}
+              {item.acceptancePct != null && (() => { const paid = isAcceptancePaid(item); const sched = !paid && !!item.acceptancePayDate
+                return <span className={paid ? 'text-green-600' : sched ? 'text-amber-600' : ''}>驗{fmtPct(item.acceptancePct)} {paid ? '✓' : sched ? '排定' : '○'}</span> })()}
             </div>
           </div>
         )}

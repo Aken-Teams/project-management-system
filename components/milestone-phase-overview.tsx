@@ -376,37 +376,52 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
           </div>
         </div>
 
-        {/* ④ Actual — 依里程碑拆分：已完成=實心綠(整段)、進行中=實心藍(畫到今天)、未開始不畫 */}
+        {/* ④ Actual — 完成度長條（earned value）：長度＝完成度%×規劃區間；端點對比今天線 → 落後(琥珀斜線缺口)/超前(綠) */}
         <div className="flex items-stretch gap-2 mt-1">
           <div className={cn(LABEL_W, 'shrink-0 flex items-center text-[11px] font-semibold text-muted-foreground')}>Actual</div>
           <div className="relative flex-1" style={{ height: planH }}>
             <GridLines />
-            {phases.map((p, i) => {
+            {phases.map((p) => {
               const done = p.status === 'done'
               const started = p.start <= today
-              const active = p.status === 'in-progress' || p.progress > 0
+              const prog = done ? 1 : Math.max(0, Math.min(1, p.progress / 100))
               // 未開始 / 尚未動工 → 不畫實際段
-              if (!done && !(started && active)) return null
-              const tone = phaseTone(p, today)
-              const aEnd = done ? p.end : today // 已完成畫到規劃結束；進行中畫到今天
-              const left = pct(p.start)
-              const width = Math.max(pct(aEnd) - left, minPlanPct)
-              const clip = arrowClip(i)
-              const days = Math.max(1, Math.round((aEnd.getTime() - p.start.getTime()) / 86400000) + 1)
+              if (!done && !(started && prog > 0)) return null
+              const span = Math.max(1, p.end.getTime() - p.start.getTime())
+              const earnedEnd = new Date(p.start.getTime() + prog * span) // 完成度映射到規劃時間軸
+              const top = p.lane * PLAN_LANE
+              const dayMs = 86400000
+              const varDays = Math.round((today.getTime() - earnedEnd.getTime()) / dayMs) // >0 落後、<0 超前
+              const label = done ? '已完成'
+                : varDays > 0 ? `落後約 ${varDays} 天`
+                  : varDays < 0 ? `超前約 ${-varDays} 天` : '準時'
+              // 分段：已完成(藍/綠) + 落後缺口(琥珀斜線) 或 超前段(綠)
+              const solidEnd = done ? p.end : (earnedEnd < today ? earnedEnd : today)
+              const segs: { l: number; r: number; kind: 'earned' | 'behind' | 'ahead' }[] = [
+                { l: pct(p.start), r: pct(solidEnd), kind: 'earned' },
+              ]
+              if (!done && earnedEnd.getTime() > today.getTime()) segs.push({ l: pct(today), r: pct(earnedEnd), kind: 'ahead' })
+              else if (!done && earnedEnd.getTime() < today.getTime()) segs.push({ l: pct(earnedEnd), r: pct(today), kind: 'behind' })
               return (
                 <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
-                    <div
-                      className={cn('absolute flex items-center cursor-default', tone.line, i === 0 ? 'pl-2.5' : 'pl-4', 'pr-3')}
-                      style={{ left: `${left}%`, width: `${width}%`, top: p.lane * PLAN_LANE, height: PLAN_SEG, clipPath: clip }}>
-                      <span className="text-[11px] font-bold text-white truncate">{p.name}</span>
+                    <div className="absolute cursor-default" style={{ left: 0, right: 0, top, height: PLAN_SEG }}>
+                      {segs.map((s, si) => s.kind === 'behind' ? (
+                        <div key={si} className="absolute h-full rounded-sm border border-dashed border-amber-400"
+                          style={{ left: `${s.l}%`, width: `${Math.max(s.r - s.l, 0.4)}%`, backgroundImage: 'repeating-linear-gradient(45deg, rgba(245,158,11,.28) 0 5px, transparent 5px 10px)' }} />
+                      ) : (
+                        <div key={si} className={cn('absolute h-full rounded-sm flex items-center', done ? 'bg-emerald-500' : s.kind === 'ahead' ? 'bg-emerald-500' : 'bg-blue-500')}
+                          style={{ left: `${s.l}%`, width: `${Math.max(s.r - s.l, 0.6)}%` }}>
+                          {si === 0 && <span className="text-[11px] font-bold text-white truncate px-2">{p.name}</span>}
+                        </div>
+                      ))}
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     <div className="space-y-0.5">
                       <div className="font-semibold">{p.name}</div>
-                      <div className="text-muted-foreground">狀態：{tone.label} · 進度 {p.progress}%</div>
-                      <div className="tabular-nums">實際 {fmtDate(p.start)} ~ {fmtDate(aEnd)}（{days} 天）</div>
+                      <div className={cn(varDays > 0 && !done ? 'text-amber-600 dark:text-amber-400 font-medium' : varDays < 0 && !done ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-muted-foreground')}>完成度 {p.progress}% · {label}</div>
+                      <div className="tabular-nums text-muted-foreground">實際完成到 {fmtDate(earnedEnd)}（今天 {fmtDate(today)}）</div>
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -423,6 +438,7 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-blue-500" />進行中</span>
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-500" />逾期</span>
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-400" />未開始</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-amber-400" style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(245,158,11,.28) 0 3px, transparent 3px 6px)' }} />落後（Actual 未達今天）</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-rose-500/70" style={{ clipPath: 'polygon(0 0,100% 50%,0 100%)' }} />今天</span>
       </div>
     </div>

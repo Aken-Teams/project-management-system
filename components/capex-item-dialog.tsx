@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -44,9 +45,9 @@ function emptyItem(budgetItemId?: string | null): CapexItemData {
     quantity: 1, originalPrice: null, twdPrice: null, orderAmount: null,
     deliveryDate: null, bpmAcceptanceDate: null,
     depositPct: null, deliveryPct: null, acceptancePct: null,
-    depositAmount: null, depositPayDate: null,
-    deliveryAmount: null, deliveryPayDate: null,
-    acceptanceAmount: null, acceptancePayDate: null,
+    depositAmount: null, depositPayDate: null, depositPaid: false,
+    deliveryAmount: null, deliveryPayDate: null, deliveryPaid: false,
+    acceptanceAmount: null, acceptancePayDate: null, acceptancePaid: false,
     paymentStatus: '',
   }
 }
@@ -138,6 +139,8 @@ export function CapexItemDialog({
     updateField(field, e.target.value === '' ? null : parseInt(e.target.value) / 100)
   const chDate = (field: keyof CapexItemData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     updateField(field, e.target.value || null)
+  const chBool = (field: keyof CapexItemData) => (checked: boolean) =>
+    updateField(field, checked)
 
   // Accordion trigger summaries
   const basicSummary = [draft.supplier, draft.poNumber].filter(Boolean).join(' · ')
@@ -337,24 +340,30 @@ export function CapexItemDialog({
                       pct={draft.depositPct}
                       amount={draft.depositAmount}
                       payDate={draft.depositPayDate}
+                      paid={!!draft.depositPaid}
                       onPctChange={chPct('depositPct')}
                       onDateChange={chDate('depositPayDate')}
+                      onPaidChange={chBool('depositPaid')}
                     />
                     <PaymentBlock
                       title="交機/完工"
                       pct={draft.deliveryPct}
                       amount={draft.deliveryAmount}
                       payDate={draft.deliveryPayDate}
+                      paid={!!draft.deliveryPaid}
                       onPctChange={chPct('deliveryPct')}
                       onDateChange={chDate('deliveryPayDate')}
+                      onPaidChange={chBool('deliveryPaid')}
                     />
                     <PaymentBlock
                       title="驗收"
                       pct={draft.acceptancePct}
                       amount={draft.acceptanceAmount}
                       payDate={draft.acceptancePayDate}
+                      paid={!!draft.acceptancePaid}
                       onPctChange={chPct('acceptancePct')}
                       onDateChange={chDate('acceptancePayDate')}
+                      onPaidChange={chBool('acceptancePaid')}
                     />
                   </div>
                   <div className="w-40">
@@ -398,13 +407,15 @@ function Field({ label, children, className }: { label: string; children: React.
   )
 }
 
-function PaymentBlock({ title, pct, amount, payDate, onPctChange, onDateChange }: {
+function PaymentBlock({ title, pct, amount, payDate, paid, onPctChange, onDateChange, onPaidChange }: {
   title: string
   pct: number | null
   amount: number | null
   payDate: string | null
+  paid: boolean
   onPctChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onPaidChange: (checked: boolean) => void
 }) {
   return (
     <div className="space-y-2 p-2 bg-muted/30 rounded-md">
@@ -420,9 +431,14 @@ function PaymentBlock({ title, pct, amount, payDate, onPctChange, onDateChange }
           </div>
         </Field>
       </div>
-      <Field label="付款日">
+      <Field label="付款日（排定/實際）">
         <Input className="h-7 text-xs" type="date" value={payDate ?? ''} onChange={onDateChange} />
       </Field>
+      {/* 只壓時間≠已付款：勾了「已付款」才算實際付出、才計入付款% */}
+      <label className="flex items-center gap-1.5 cursor-pointer select-none pt-0.5">
+        <Checkbox checked={paid} onCheckedChange={(c) => onPaidChange(!!c)} className="h-3.5 w-3.5" />
+        <span className={`text-xs ${paid ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>已付款</span>
+      </label>
     </div>
   )
 }

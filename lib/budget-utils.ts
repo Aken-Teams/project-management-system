@@ -8,12 +8,18 @@
 
 export interface CapexBudgetInput {
   orderAmount?: number | null
+  depositPct?: number | null
   depositAmount?: number | null
-  depositPayDate?: unknown // Date | string | null 皆可（只判斷有無付款日）
+  depositPayDate?: unknown // Date | string | null 皆可
+  depositPaid?: boolean | null
+  deliveryPct?: number | null
   deliveryAmount?: number | null
   deliveryPayDate?: unknown
+  deliveryPaid?: boolean | null
+  acceptancePct?: number | null
   acceptanceAmount?: number | null
   acceptancePayDate?: unknown
+  acceptancePaid?: boolean | null
 }
 
 /** 實際採購 = 各明細訂購金額(orderAmount)加總 */
@@ -21,12 +27,17 @@ export function capexPurchaseTotal(items: CapexBudgetInput[]): number {
   return items.reduce((s, i) => s + (i.orderAmount ?? 0), 0)
 }
 
-/** 目前付出 = 訂/交/檢「已有付款日」的分期金額加總 */
+/** 目前付出 = 訂/交/檢「已付款」的分期金額加總（以「已付款」勾選為準；相容舊資料：無勾選欄位時退回看有無付款日）。
+ *  金額欄位缺漏時，以「訂購總額 × 比例」回推（相容只填比例、沒填金額的匯入資料，否則分子誤為 0）。*/
 export function capexPaidTotal(items: CapexBudgetInput[]): number {
-  return items.reduce((s, i) =>
-    s + (i.depositPayDate ? (i.depositAmount ?? 0) : 0)
-      + (i.deliveryPayDate ? (i.deliveryAmount ?? 0) : 0)
-      + (i.acceptancePayDate ? (i.acceptanceAmount ?? 0) : 0), 0)
+  return items.reduce((s, i) => {
+    const order = i.orderAmount ?? 0
+    const part = (paid: boolean, amount: number | null | undefined, pct: number | null | undefined) =>
+      paid ? (amount ?? (pct != null ? order * pct : 0)) : 0
+    return s + part(i.depositPaid ?? !!i.depositPayDate, i.depositAmount, i.depositPct)
+      + part(i.deliveryPaid ?? !!i.deliveryPayDate, i.deliveryAmount, i.deliveryPct)
+      + part(i.acceptancePaid ?? !!i.acceptancePayDate, i.acceptanceAmount, i.acceptancePct)
+  }, 0)
 }
 
 /**

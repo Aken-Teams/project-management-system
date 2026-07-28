@@ -42,6 +42,11 @@ export async function PUT(
     if (body.budgetItemId !== undefined) data.budgetItemId = body.budgetItemId || null
     if (body.sortOrder !== undefined) data.sortOrder = body.sortOrder
 
+    const boolFields = ['depositPaid', 'deliveryPaid', 'acceptancePaid'] as const
+    for (const f of boolFields) {
+      if (body[f] !== undefined) data[f] = !!body[f]
+    }
+
     const dateFields = [
       'issueDate', 'deliveryDate', 'bpmAcceptanceDate',
       'depositPayDate', 'deliveryPayDate', 'acceptancePayDate',
