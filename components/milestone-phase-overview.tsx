@@ -39,13 +39,16 @@ function parseDate(s?: string | null): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
-type Phase = { id: string; name: string; status: Milestone['status']; progress: number; start: Date; end: Date; lane: number }
+type Phase = { id: string; name: string; status: Milestone['status']; progress: number; start: Date; end: Date; lane: number; actualEnd: Date | null }
+
+type Health = { actualPct: number; expectedPct: number; varianceDays: number; status: 'ahead' | 'behind' | 'ontrack' }
 
 type PhaseModel = {
   phases: Phase[]; laneCount: number; pct: (d: Date) => number
   months: { left: number; width: number; label: string; year: number }[]
   years: { left: number; width: number; year: number }[]
   todayInRange: boolean; todayPct: number
+  health: Health; bottleneckId: string | null
 }
 
 // 單一狀態解析：決定顏色與標籤（全圖 — 階段/Plan/Actual/tooltip/圖例 — 共用，確保口徑一致）。
@@ -126,6 +129,15 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
     const ms = project.milestones.filter(m => !hidden.has(m.id))
     if (ms.length === 0) return null
 
+    // 各里程碑「實際完成日」= 其底下已完成任務的最晚 completedAt（用來判斷是否遲交）
+    const actualEndByMs = new Map<string, Date>()
+    for (const t of (project.tasks || [])) {
+      if (!t.completedAt) continue
+      const d = parseDate(t.completedAt); if (!d) continue
+      const cur = actualEndByMs.get(t.milestoneId)
+      if (!cur || d > cur) actualEndByMs.set(t.milestoneId, d)
+    }
+
     const projStart = parseDate(project.startDate) ?? parseDate(ms[0].dueDate)!
     const base: Omit<Phase, 'lane'>[] = []
     for (let i = 0; i < ms.length; i++) {
@@ -135,7 +147,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
       let start = parseDate(m.startDate)
       if (!start) start = base.length > 0 ? base[base.length - 1].end : projStart
       if (start > end) start = end
-      base.push({ id: m.id, name: m.name, status: m.status, progress: m.progress, start, end })
+      base.push({ id: m.id, name: m.name, status: m.status, progress: m.progress, start, end, actualEnd: actualEndByMs.get(m.id) ?? null })
     }
     if (base.length === 0) return null
 
@@ -178,8 +190,32 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
     const todayInRange = today.getTime() >= minT && today.getTime() <= maxT
     const todayPct = today.getTime() >= maxT ? 100 : today.getTime() <= minT ? 0 : pct(today)
 
-    return { phases, laneCount, pct, months, years, todayInRange, todayPct }
-  }, [project.milestones, project.startDate, project.endDate, today, mode, hidden])
+    // 整體時程健康：時間加權比較「實際完成%」vs「依今天時間軸應達%」
+    let totDur = 0, sumProg = 0, sumExp = 0
+    for (const p of phases) {
+      const dur = Math.max(1, p.end.getTime() - p.start.getTime())
+      totDur += dur
+      sumProg += (Math.max(0, Math.min(100, p.progress)) / 100) * dur
+      sumExp += Math.max(0, Math.min(1, (today.getTime() - p.start.getTime()) / dur)) * dur
+    }
+    const actualPct = totDur > 0 ? (sumProg / totDur) * 100 : 0
+    const expectedPct = totDur > 0 ? (sumExp / totDur) * 100 : 0
+    const varianceDays = Math.round(((expectedPct - actualPct) / 100) * (span / 86400000))
+    const hStatus: Health['status'] = actualPct >= expectedPct + 1 ? 'ahead' : actualPct <= expectedPct - 1 ? 'behind' : 'ontrack'
+    const health: Health = { actualPct: Math.round(actualPct), expectedPct: Math.round(expectedPct), varianceDays: Math.abs(varianceDays), status: hStatus }
+
+    // 瓶頸：未完成且已開始的階段中，「earned 落後今天」最多者
+    let bottleneckId: string | null = null, worstSlip = 0
+    for (const p of phases) {
+      if (p.status === 'done' || p.start > today) continue
+      const prog = Math.max(0, Math.min(1, p.progress / 100))
+      const earned = p.start.getTime() + prog * (p.end.getTime() - p.start.getTime())
+      const slip = today.getTime() - earned
+      if (slip > worstSlip) { worstSlip = slip; bottleneckId = p.id }
+    }
+
+    return { phases, laneCount, pct, months, years, todayInRange, todayPct, health, bottleneckId }
+  }, [project.milestones, project.tasks, project.startDate, project.endDate, today, mode, hidden])
 
   const doneCount = model?.phases.filter(p => p.status === 'done').length ?? 0
   const LABEL_W = 'w-14'
@@ -195,6 +231,18 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
           <Flag className="h-4 w-4 text-primary" />
           <span className="font-medium text-sm">里程碑階段總覽</span>
           <span className="text-xs text-muted-foreground">{doneCount}/{model?.phases.length ?? 0} 階段完成 · 整體 {project.progress}%</span>
+          {model && (
+            <span
+              title={`實際完成 ${model.health.actualPct}%，依今天時間軸應達 ${model.health.expectedPct}%`}
+              className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full border',
+                model.health.status === 'behind' ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400'
+                  : model.health.status === 'ahead' ? 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/30 dark:text-blue-400'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-400')}>
+              {model.health.status === 'behind' ? `落後約 ${model.health.varianceDays} 天`
+                : model.health.status === 'ahead' ? `超前約 ${model.health.varianceDays} 天`
+                  : '準時'}
+            </span>
+          )}
         </button>
         {canCurate && (
           <Popover>
@@ -268,7 +316,7 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
   model: PhaseModel; today: Date; project: Project; axis: 'fit' | 'timeline'
   LABEL_W: string; STAGE_LANE: number; STAGE_SEG: number; PLAN_LANE: number; PLAN_SEG: number
 }) {
-  const { phases, laneCount, pct, months, years, todayInRange, todayPct } = model
+  const { phases, laneCount, pct, months, years, todayInRange, todayPct, bottleneckId } = model
   const stageH = laneCount * STAGE_LANE
   const planH = laneCount * PLAN_LANE
   // 展開時間軸：每月固定像素寬，讓內容超出容器 → 觸發橫向捲動、月份也放得下顯示
@@ -308,6 +356,7 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
               const left = pct(p.start)
               const width = Math.max(pct(p.end) - left, minStagePct)
               const clip = arrowClip(i)
+              const isBottleneck = p.id === bottleneckId
               return (
                 <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
@@ -315,11 +364,15 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
                       className={cn('absolute cursor-default', tone.line)}
                       style={{ left: `${left}%`, width: `${width}%`, top: p.lane * STAGE_LANE, height: STAGE_SEG, clipPath: clip }}>
                       <div className={cn('absolute inset-[2px] flex items-center pr-3', i === 0 ? 'pl-2.5' : 'pl-4', tone.soft, tone.text)} style={{ clipPath: clip }}>
-                        <span className="text-xs font-semibold truncate">{p.name}</span>
+                        {/* 瓶頸只用紅色 ⚠ 標示，保留階段本身的狀態色（P3 仍是進行中藍，與其任務一致）*/}
+                        <span className="text-xs font-semibold truncate">{isBottleneck && <span className="text-red-600 dark:text-red-400">⚠ </span>}{p.name}</span>
                       </div>
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs"><PhaseTip p={p} today={today} /></TooltipContent>
+                  <TooltipContent side="top" className="text-xs">
+                    <PhaseTip p={p} today={today} />
+                    {isBottleneck && <div className="text-red-600 dark:text-red-400 font-medium mt-0.5">⚠ 目前最落後（瓶頸）</div>}
+                  </TooltipContent>
                 </Tooltip>
               )
             })}
@@ -391,37 +444,48 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
               const earnedEnd = new Date(p.start.getTime() + prog * span) // 完成度映射到規劃時間軸
               const top = p.lane * PLAN_LANE
               const dayMs = 86400000
+              // 遲交：已完成、且實際完成日晚於規劃截止 → 超出段標紅（100% 後仍看得出當初逾期）
+              const late = done && p.actualEnd != null && p.actualEnd.getTime() > p.end.getTime()
+              const lateDays = late ? Math.round((p.actualEnd!.getTime() - p.end.getTime()) / dayMs) : 0
               const varDays = Math.round((today.getTime() - earnedEnd.getTime()) / dayMs) // >0 落後、<0 超前
-              const label = done ? '已完成'
+              const label = done ? (late ? `已完成 · 遲 ${lateDays} 天` : '已完成')
                 : varDays > 0 ? `落後約 ${varDays} 天`
                   : varDays < 0 ? `超前約 ${-varDays} 天` : '準時'
-              // 分段：已完成(藍/綠) + 落後缺口(琥珀斜線) 或 超前段(綠)
+              // 分段：實心 earned（藍/綠）＋ 落後(琥珀斜線)／超前(綠斜線)／遲交(紅斜線)
               const solidEnd = done ? p.end : (earnedEnd < today ? earnedEnd : today)
-              const segs: { l: number; r: number; kind: 'earned' | 'behind' | 'ahead' }[] = [
+              const segs: { l: number; r: number; kind: 'earned' | 'behind' | 'ahead' | 'late' }[] = [
                 { l: pct(p.start), r: pct(solidEnd), kind: 'earned' },
               ]
-              if (!done && earnedEnd.getTime() > today.getTime()) segs.push({ l: pct(today), r: pct(earnedEnd), kind: 'ahead' })
+              if (done && late) segs.push({ l: pct(p.end), r: pct(p.actualEnd!), kind: 'late' })
+              else if (!done && earnedEnd.getTime() > today.getTime()) segs.push({ l: pct(today), r: pct(earnedEnd), kind: 'ahead' })
               else if (!done && earnedEnd.getTime() < today.getTime()) segs.push({ l: pct(earnedEnd), r: pct(today), kind: 'behind' })
+              const HATCH: Record<'behind' | 'ahead' | 'late', { border: string; bg: string }> = {
+                behind: { border: 'border-amber-400', bg: 'repeating-linear-gradient(45deg, rgba(245,158,11,.28) 0 5px, transparent 5px 10px)' },
+                ahead: { border: 'border-emerald-400', bg: 'repeating-linear-gradient(45deg, rgba(16,185,129,.30) 0 5px, transparent 5px 10px)' },
+                late: { border: 'border-red-400', bg: 'repeating-linear-gradient(45deg, rgba(239,68,68,.32) 0 5px, transparent 5px 10px)' },
+              }
               return (
                 <Tooltip key={p.id}>
                   <TooltipTrigger asChild>
                     <div className="absolute cursor-default" style={{ left: 0, right: 0, top, height: PLAN_SEG }}>
-                      {segs.map((s, si) => s.kind === 'behind' ? (
-                        <div key={si} className="absolute h-full rounded-sm border border-dashed border-amber-400"
-                          style={{ left: `${s.l}%`, width: `${Math.max(s.r - s.l, 0.4)}%`, backgroundImage: 'repeating-linear-gradient(45deg, rgba(245,158,11,.28) 0 5px, transparent 5px 10px)' }} />
-                      ) : (
-                        <div key={si} className={cn('absolute h-full rounded-sm flex items-center', done ? 'bg-emerald-500' : s.kind === 'ahead' ? 'bg-emerald-500' : 'bg-blue-500')}
+                      {segs.map((s, si) => s.kind === 'earned' ? (
+                        <div key={si} className={cn('absolute h-full rounded-sm flex items-center', done ? 'bg-emerald-500' : 'bg-blue-500')}
                           style={{ left: `${s.l}%`, width: `${Math.max(s.r - s.l, 0.6)}%` }}>
                           {si === 0 && <span className="text-[11px] font-bold text-white truncate px-2">{p.name}</span>}
                         </div>
+                      ) : (
+                        <div key={si} className={cn('absolute h-full rounded-sm border border-dashed', HATCH[s.kind].border)}
+                          style={{ left: `${s.l}%`, width: `${Math.max(s.r - s.l, 0.4)}%`, backgroundImage: HATCH[s.kind].bg }} />
                       ))}
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     <div className="space-y-0.5">
                       <div className="font-semibold">{p.name}</div>
-                      <div className={cn(varDays > 0 && !done ? 'text-amber-600 dark:text-amber-400 font-medium' : varDays < 0 && !done ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-muted-foreground')}>完成度 {p.progress}% · {label}</div>
-                      <div className="tabular-nums text-muted-foreground">實際完成到 {fmtDate(earnedEnd)}（今天 {fmtDate(today)}）</div>
+                      <div className={cn(late ? 'text-red-600 dark:text-red-400 font-medium' : varDays > 0 && !done ? 'text-amber-600 dark:text-amber-400 font-medium' : varDays < 0 && !done ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-muted-foreground')}>完成度 {p.progress}% · {label}</div>
+                      {done
+                        ? <div className="tabular-nums text-muted-foreground">{late ? <>實際完成 {fmtDate(p.actualEnd!)}（規劃截止 {fmtDate(p.end)}）</> : <>規劃 {fmtDate(p.start)} ~ {fmtDate(p.end)}</>}</div>
+                        : <div className="tabular-nums text-muted-foreground">實際完成到 {fmtDate(earnedEnd)}（今天 {fmtDate(today)}）</div>}
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -438,7 +502,10 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-blue-500" />進行中</span>
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-amber-500" />逾期</span>
         <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-400" />未開始</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-amber-400" style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(245,158,11,.28) 0 3px, transparent 3px 6px)' }} />落後（Actual 未達今天）</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-amber-400" style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(245,158,11,.28) 0 3px, transparent 3px 6px)' }} />落後（未達今天）</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-emerald-400" style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(16,185,129,.30) 0 3px, transparent 3px 6px)' }} />超前（超過今天）</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-red-400" style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(239,68,68,.32) 0 3px, transparent 3px 6px)' }} />遲交（晚於規劃截止）</span>
+        <span className="inline-flex items-center gap-1"><span className="text-red-600 dark:text-red-400 font-semibold">⚠</span> 瓶頸（最落後）</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-3 bg-rose-500/70" style={{ clipPath: 'polygon(0 0,100% 50%,0 100%)' }} />今天</span>
       </div>
     </div>
