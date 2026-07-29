@@ -77,12 +77,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, loading, logout } = useAuth()
   // 側邊欄徽章：改用 DB 真實數據（取代 localStorage 假資料 #13）
   const [pendingCount, setPendingCount] = useState(0)
-  const [atRiskCount, setAtRiskCount] = useState(0)
+  const [myTaskCount, setMyTaskCount] = useState(0)
   useEffect(() => {
-    if (!user) { setPendingCount(0); setAtRiskCount(0); return }
+    if (!user) { setPendingCount(0); setMyTaskCount(0); return }
     fetch(`/api/sidebar-badges?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) { setPendingCount(d.pendingApprovals || 0); setAtRiskCount(d.atRiskTasks || 0) } })
+      .then(d => { if (d) { setPendingCount(d.pendingApprovals || 0); setMyTaskCount(d.myTasksTotal || 0) } })
       .catch(() => {})
   }, [user])
 
@@ -148,7 +148,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const getBadgeValue = (href: string) => {
     if (href === '/approvals') return pendingCount
-    if (href === '/my-tasks') return atRiskCount
+    if (href === '/my-tasks') return myTaskCount
     return 0
   }
 
