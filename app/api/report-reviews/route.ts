@@ -248,15 +248,8 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // 同一待審群組內若有多份「未審(pending)」修改版，只留最新一份給主管審——
-  // R 把「送出」當「儲存」連送多份時，主管佇列不該被 R 的修改歷程洗版。
-  // 已審過的(approved/rejected)保留當脈絡；駁回/核准仍會一次套用整週待審 log。
-  for (const s of subMap.values()) {
-    const pend = s.logs.filter(l => l.status === 'pending')
-    if (pend.length <= 1) continue
-    const latest = pend.reduce((a, b) => (a.createdAt ?? '') >= (b.createdAt ?? '') ? a : b)
-    s.logs = s.logs.filter(l => l.status !== 'pending' || l.id === latest.id)
-  }
+  // 註：同一填報週內的多筆待審報告是「不同日」的每日工作紀錄（同日同作者後端已去重為一筆），
+  // 都要完整呈現給 R主管逐筆審核，不可只顯示最新一筆，否則會漏掉其他天的更新。
 
   // 塞入已審核 submissions（排除「目前又有待審筆」的群組——它已回到待審核，不該同時出現在已審核）
   const reviewedMap = new Map<string, ReviewedSub>()

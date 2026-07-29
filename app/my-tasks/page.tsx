@@ -424,6 +424,7 @@ export default function MyTasksPage() {
   const [rUploadingRowIdx, setRUploadingRowIdx] = useState<number | null>(null)
   const [rUploadProgress, setRUploadProgress] = useState<number>(0) // 0~100；0 或負值顯示為不確定進度
   const rRowFileInputRef = useRef<HTMLInputElement>(null)
+  const rRowTargetIdx = useRef<number | null>(null) // 開啟檔案選擇器的目標列；取消選檔時不會觸發 onChange，故不能用它顯示 spinner
   // A-tab: R member report dialog
   const [aRReportDialogOpen, setARReportDialogOpen] = useState(false)
   const [aRReportProject, setARReportProject] = useState<MyTasksProject | null>(null)
@@ -1547,10 +1548,12 @@ export default function MyTasksPage() {
   // R dialog: file upload for batch log rows
   const handleRRowFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (!files || files.length === 0 || rUploadingRowIdx === null) return
-    const idx = rUploadingRowIdx
+    const idx = rRowTargetIdx.current
+    // 沒選檔（取消選擇器）或找不到目標列 → 直接離開，不進上傳狀態（避免 spinner 卡住）
+    if (!files || files.length === 0 || idx === null) { e.target.value = ''; return }
     const fileArray = Array.from(files)
     e.target.value = ''
+    setRUploadingRowIdx(idx) // 確認有選檔後才進上傳中狀態
     setRUploadProgress(0)
     try {
       const uploaded: TaskLogAttachment[] = []
@@ -1574,6 +1577,7 @@ export default function MyTasksPage() {
       toast.error(err instanceof Error ? err.message : '上傳失敗，請重試')
     } finally {
       setRUploadingRowIdx(null)
+      rRowTargetIdx.current = null
       setRUploadProgress(0)
     }
   }
@@ -3986,7 +3990,7 @@ export default function MyTasksPage() {
                                                   type="button"
                                                   disabled={rReadonly}
                                                   onClick={() => {
-                                                    setRUploadingRowIdx(idx)
+                                                    rRowTargetIdx.current = idx
                                                     rRowFileInputRef.current?.click()
                                                   }}
                                                   className={cn(
