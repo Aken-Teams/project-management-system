@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>驗收項目說明 — 父任務進度聚合 / 100% 核准流程</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:#1e293b;
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 20px 72px;}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:#64748b;margin:0 0 26px;font-size:14px;line-height:1.6}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 24px 24px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin:0 0 24px}
+  .card h2{font-size:17px;margin:0 0 2px;color:#0f172a;display:flex;align-items:center;gap:10px}
+  .card h2 .n{background:#0f766e;color:#fff;font-size:13px;font-weight:700;border-radius:8px;padding:3px 10px;flex-shrink:0}
+  .cap{color:#475569;font-size:13.5px;margin:6px 0 20px;line-height:1.75}
+  .cap b{color:#0f172a}
+  /* ── item 8: aggregation ── */
+  .tasktree{display:flex;flex-direction:column;gap:10px}
+  .parent{border:2px solid #6366f1;border-radius:12px;padding:12px 16px;background:#eef2ff}
+  .prow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ptitle{font-weight:700;font-size:14.5px;color:#3730a3}
+  .tag{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .tag-noassign{background:#e0e7ff;color:#4338ca;border:1px solid #c7d2fe}
+  .bar{flex:1;min-width:120px;height:16px;border-radius:8px;background:#e2e8f0;overflow:hidden;position:relative}
+  .bar > span{position:absolute;left:0;top:0;bottom:0;border-radius:8px}
+  .pct{font-weight:800;font-size:14px;color:#3730a3;min-width:46px;text-align:right;font-variant-numeric:tabular-nums}
+  .children{margin:12px 0 0 26px;display:flex;flex-direction:column;gap:8px;position:relative}
+  .children::before{content:"";position:absolute;left:-14px;top:-6px;bottom:12px;width:2px;background:#c7d2fe}
+  .child{position:relative;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid #e2e8f0;border-radius:10px;padding:9px 13px;background:#fff}
+  .child::before{content:"";position:absolute;left:-14px;top:50%;width:12px;height:2px;background:#c7d2fe}
+  .ctitle{font-weight:600;font-size:13.5px;min-width:78px}
+  .who{font-size:11.5px;color:#64748b}
+  .wt{font-size:11.5px;font-weight:700;color:#7c3aed;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:999px;padding:2px 8px;white-space:nowrap}
+  .cpct{font-weight:700;font-size:13px;min-width:40px;text-align:right;font-variant-numeric:tabular-nums}
+  .green{background:#10b981}.blue{background:#3b82f6}
+  .calc{margin-top:16px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:13px 16px;font-size:13.5px;line-height:1.9}
+  .calc code{background:#eef2ff;color:#3730a3;border-radius:5px;padding:1px 7px;font-weight:700;font-family:inherit}
+  .keypt{margin-top:14px;display:flex;gap:10px;align-items:flex-start;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:12px 15px;font-size:13.5px;color:#065f46;line-height:1.7}
+  .keypt .ic{font-size:16px;line-height:1.4}
+  /* ── item 13: flow ── */
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 14px 13px;background:#fff;text-align:center;position:relative}
+  .step .icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:19px;margin:0 auto 8px}
+  .step .who2{font-size:11.5px;font-weight:700;letter-spacing:.5px;margin-bottom:3px}
+  .step .act{font-size:13px;color:#334155;line-height:1.5}
+  .step .st{margin-top:8px;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;display:inline-block}
+  .arrow{display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:22px;padding:0 6px;flex:0 0 auto}
+  .s1 .icon{background:#dbeafe;color:#1d4ed8}.s1 .who2{color:#1d4ed8}
+  .s2 .icon{background:#fef3c7;color:#b45309}.s2 .who2{color:#b45309}
+  .s3 .icon{background:#e0e7ff;color:#4338ca}.s3 .who2{color:#4338ca}
+  .s4 .icon{background:#d1fae5;color:#047857}.s4 .who2{color:#047857}
+  .st-blue{background:#dbeafe;color:#1d4ed8}.st-amber{background:#fef3c7;color:#b45309}
+  .st-indigo{background:#e0e7ff;color:#4338ca}.st-green{background:#d1fae5;color:#047857}
+  .gate{margin-top:18px;display:flex;gap:12px;flex-wrap:wrap}
+  .gatebox{flex:1;min-width:230px;border-radius:12px;padding:13px 16px;font-size:13px;line-height:1.7}
+  .gate-no{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+  .gate-yes{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+  .gatebox b{display:block;margin-bottom:3px;font-size:13.5px}
+  .legend{margin-top:8px;color:#94a3b8;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>驗收項目說明</h1>
+  <p class="sub">兩個常被問到的規則，用圖說明「實際會怎麼運作」。</p>
+
+  <!-- ───────── 議題 8 ───────── -->
+  <div class="card">
+    <h2><span class="n">議題 8</span>無指派人的「父任務」進度，由子任務自動加權算出</h2>
+    <p class="cap">
+      有些父任務（大項目）底下拆成幾個子任務，父任務本身<b>沒有指派給誰</b>。
+      這時父任務的完成度<b>不用有人另外填</b>，系統會自動用各子任務的<b>權重</b>（依工作天數／工時佔比）
+      把子任務進度<b>加權平均</b>算出來。<b>當責 A 不必再幫父層寫一次進度或報告。</b>
+    </p>
+
+    <div class="tasktree">
+      <!-- parent -->
+      <div class="parent">
+        <div class="prow">
+          <span class="ptitle">父任務：新產品可行性分析</span>
+          <span class="tag tag-noassign">無指派人</span>
+          <div class="bar"><span class="blue" style="width:80%"></span></div>
+          <span class="pct">80%</span>
+        </div>
+        <!-- children -->
+        <div class="children">
+          <div class="child">
+            <span class="ctitle">子任務 A</span>
+            <span class="who">👤 王小明</span>
+            <span class="wt">權重 60%</span>
+            <div class="bar"><span class="green" style="width:100%"></span></div>
+            <span class="cpct" style="color:#047857">100%</span>
+          </div>
+          <div class="child">
+            <span class="ctitle">子任務 B</span>
+            <span class="who">👤 李大華</span>
+            <span class="wt">權重 40%</span>
+            <div class="bar"><span class="blue" style="width:50%"></span></div>
+            <span class="cpct" style="color:#1d4ed8">50%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc">
+      父任務進度 ＝ <code>子A 100% × 權重60%</code> ＋ <code>子B 50% × 權重40%</code>
+      ＝ 60 ＋ 20 ＝ <code>80%</code>
+    </div>
+    <div class="keypt">
+      <span class="ic">✅</span>
+      <span>子任務進度一有變動，父任務的百分比就<b>自動跟著更新</b>。
+        A 只要顧好子任務，<b>不需要另外去填父任務的進度</b>。</span>
+    </div>
+  </div>
+
+  <!-- ───────── 議題 13 ───────── -->
+  <div class="card">
+    <h2><span class="n">議題 13</span>任務做到 100%，要先過「R主管核准」，A 才會看到「待確認」</h2>
+    <p class="cap">
+      執行者 R 把任務回報 100% 完成後，<b>不會直接</b>跳到當責 A 面前。
+      要先讓 <b>R 的報告審核主管</b>核准，確認內容沒問題，
+      A 這邊才會出現「<b>待確認</b>」讓他做最後確認。這樣可避免半成品／未審核的內容直接進到 A。
+    </p>
+
+    <div class="flow">
+      <div class="step s1">
+        <div class="icon">📝</div>
+        <div class="who2">執行者 R</div>
+        <div class="act">回報任務<br>「100% 完成」</div>
+        <span class="st st-blue">已回報 100%</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s2">
+        <div class="icon">🔍</div>
+        <div class="who2">R 主管</div>
+        <div class="act">審核報告內容<br>核准通過</div>
+        <span class="st st-amber">主管審核中</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s3">
+        <div class="icon">📥</div>
+        <div class="who2">當責 A</div>
+        <div class="act">收到「待確認」<br>做最後確認</div>
+        <span class="st st-indigo">待確認</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step s4">
+        <div class="icon">✔️</div>
+        <div class="who2">完成</div>
+        <div class="act">正式結案<br>進入完成區</div>
+        <span class="st st-green">已完成 100%</span>
+      </div>
+    </div>
+
+    <div class="gate">
+      <div class="gatebox gate-no">
+        <b>✗ R主管還沒核准時</b>
+        A 的畫面<b>看不到</b>這筆「待確認」，任務仍算未結案。（避免未審核的內容直接送到 A）
+      </div>
+      <div class="gatebox gate-yes">
+        <b>✓ R主管核准後</b>
+        A 才會在「待確認」看到它，A 按確認 → 任務正式完成、進度鎖定 100%。
+      </div>
+    </div>
+    <p class="legend">※ 若 R主管駁回，會退回給 R 補充修改後重送，不會進到 A。</p>
+  </div>
+
+</div>
+</body>
+</html>

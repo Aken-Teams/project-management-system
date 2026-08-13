@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
-import { notifyTaskAssigned } from '@/lib/notifications'
+import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> }
@@ -162,6 +162,41 @@ export async function PUT(
       await prisma.taskReviewEvent.create({
         data: { taskId, projectId: id, type: body.reviewEvent, actor: body.reviewActor || '', note: body.reviewNote || null },
       })
+    }
+
+    // 「有主管就必須先過主管」：R 回報 100% 完成、但這位作者對此任務完全沒有任何報告，
+    //   且他有指定報告審核主管時 → 補一筆「完成待審」占位報告，讓 R主管能先審核
+    //   (核准→進 A 待確認；駁回→退回 R)。否則會繞過主管直接跑到 A（先前的漏洞）。
+    if (body.reportedDone === true) {
+      const reporter = await resolveAssignee(body.reportedDoneBy || task.assignee || '')
+      if (reporter) {
+        const member = await prisma.projectTeamMember.findFirst({
+          where: { projectId: id, userId: reporter.id },
+          select: { reportReviewerEmail: true, reportReviewerName: true },
+        })
+        const hasReviewer = !!(member?.reportReviewerEmail || member?.reportReviewerName)
+        const anyLog = await prisma.taskLog.findFirst({ where: { taskId, authorId: reporter.id }, select: { id: true } })
+        if (hasReviewer && !anyLog) {
+          const now = new Date()
+          const day = now.getUTCDay(); const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1)
+          const weekOf = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff)).toISOString().slice(0, 10)
+          await prisma.taskLog.create({
+            data: {
+              taskId, projectId: id, authorId: reporter.id,
+              logDate: now, weekOf,
+              content: '（回報任務已 100% 完成，未另附工作說明，請主管確認）',
+            },
+          }).catch(() => {})
+          // 通知 R主管有待審報告
+          const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+          if (member?.reportReviewerEmail) {
+            await notifyReportReviewNeeded({
+              projectId: id, projectName: proj?.name || '專案',
+              reviewerEmail: member.reportReviewerEmail, rName: reporter.name, taskTitle: updated.title,
+            }).catch(() => {})
+          }
+        }
+      }
     }
 
     // 發布到官方更新紀錄「只由 A 送出自己的週報時觸發」(publishLogs)。
