@@ -38,6 +38,16 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -65,6 +75,7 @@ export interface TimelineTask {
   parentId?: string
   startDate?: string
   manualDates?: boolean
+  completed?: boolean   // 目前是否為完成狀態（新增子任務到已完成父層時要提醒解除）
 }
 
 export interface TimelineTeamMember {
@@ -91,6 +102,8 @@ export interface TimelineTableProps {
   onMilestoneReorder: (oldIndex: number, newIndex: number) => void
   onMilestoneDateChange?: (index: number, field: 'startDate' | 'endDate', value: string) => void
   onTaskAdd: (task: TimelineTask) => void
+  // 新增子任務到「已完成父層」且使用者選擇解除完成時呼叫：立即解除該父層完成並通知父層負責人。
+  onReopenParent?: (parentId: string) => void | Promise<void>
   onTaskRemove: (taskId: string) => void
   onTaskUpdate: (taskId: string, field: keyof TimelineTask, value: string | number) => void
   onTaskReorder: (oldIndex: number, newIndex: number) => void
@@ -756,21 +769,23 @@ function InlineSubtaskInput({
   teamMembers,
   msIndex,
   onAdd,
+  onReopenParent,
   onCancel,
 }: {
   parentTask: TimelineTask
   teamMembers: TimelineTeamMember[]
   msIndex: number
   onAdd: (task: TimelineTask) => void
+  onReopenParent?: (parentId: string) => void | Promise<void>
   onCancel: () => void
 }) {
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
   const [durationDays, setDurationDays] = useState(1)
+  const [reopenPromptOpen, setReopenPromptOpen] = useState(false)
 
-  const handleAdd = () => {
-    if (!title.trim()) return
+  const doAdd = () => {
     onAdd({
       id: `draft-subtask-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       milestoneId: parentTask.milestoneId,
@@ -784,6 +799,13 @@ function InlineSubtaskInput({
     setAssignee('')
     setPriority('medium')
     setDurationDays(1)
+  }
+
+  const handleAdd = () => {
+    if (!title.trim()) return
+    // 新增子任務到「已完成」父層 → 先問要不要解除父層完成（會通知父層負責人）
+    if (parentTask.completed && onReopenParent) { setReopenPromptOpen(true); return }
+    doAdd()
   }
 
   const cyclePriority = () => {
@@ -811,6 +833,7 @@ function InlineSubtaskInput({
   }
 
   return (
+    <>
     <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-100' : 'border-l-amber-100'}`}>
       <div />
 
@@ -907,6 +930,29 @@ function InlineSubtaskInput({
         )}
       </div>
     </div>
+
+    {/* 新增子任務到已完成父層 → 選擇解除完成或維持完成 */}
+    <AlertDialog open={reopenPromptOpen} onOpenChange={setReopenPromptOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>父任務「{parentTask.title}」已完成</AlertDialogTitle>
+          <AlertDialogDescription>
+            在已完成的父任務底下新增子項目，會讓它不再是 100% 完成。要如何處理？
+            <br />
+            <b>解除完成</b>：把父任務標回未完成，並通知其（及上層）負責人重新確認。
+            <br />
+            <b>維持完成</b>：仍新增子項目，父任務暫時維持完成；之後可到任務內用「取消完成」手動處理。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => { setReopenPromptOpen(false); doAdd() }}>維持完成，只新增</AlertDialogCancel>
+          <AlertDialogAction onClick={async () => { setReopenPromptOpen(false); await onReopenParent?.(parentTask.id); doAdd() }}>
+            解除完成並新增
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 
@@ -923,6 +969,7 @@ export function TimelineTable({
   onMilestoneReorder,
   onMilestoneDateChange,
   onTaskAdd,
+  onReopenParent,
   onTaskRemove,
   onTaskUpdate,
   onTaskReorder,
@@ -1121,6 +1168,7 @@ export function TimelineTable({
                 teamMembers={teamMembers}
                 msIndex={msIndex}
                 onAdd={(subtask) => onTaskAdd(subtask)}
+                onReopenParent={onReopenParent}
                 onCancel={() => setAddingSubtaskForId(null)}
               />
             )}

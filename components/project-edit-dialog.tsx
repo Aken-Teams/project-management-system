@@ -989,6 +989,19 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     applyTaskChangeWithBubbleUp([...tlTasks, task])
   }, [tlTasks, applyTaskChangeWithBubbleUp])
 
+  // 新增子任務到「已完成父層」且使用者選擇解除完成 → 立即解除該父層完成並通知其（及上層）負責人，
+  //   同時本地標記為未完成（畫面同步、批次儲存不會又把它變回完成）。
+  const handleReopenParent = useCallback(async (parentId: string) => {
+    try {
+      await fetch(`/api/projects/${project.id}/tasks/${parentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'in_progress', progress: 0, reportedDone: false, reopenNotify: true, reopenActor: user?.name }),
+      })
+    } catch { /* 忽略：即使通知失敗也不擋新增 */ }
+    setTlTasks(prev => prev.map(t => t.id === parentId ? { ...t, completed: false } : t))
+  }, [project.id, user?.name])
+
   const handleTlTaskRemove = useCallback((taskId: string) => {
     const remaining = tlTasks.filter(t => t.id !== taskId && t.parentId !== taskId)
     applyTaskChangeWithBubbleUp(remaining)
@@ -1606,6 +1619,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
               onMilestoneReorder={handleTlMilestoneReorder}
               onMilestoneDateChange={handleTlMilestoneDateChange}
               onTaskAdd={handleTlTaskAdd}
+              onReopenParent={handleReopenParent}
               onTaskRemove={handleTlTaskRemove}
               onTaskUpdate={handleTlTaskUpdate}
               onTaskReorder={handleTlTaskReorder}

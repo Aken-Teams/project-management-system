@@ -269,6 +269,8 @@ interface DbTask {
   endDate: string
   parentId?: string | null
   manualDates?: boolean
+  status?: string
+  completedAt?: string | null
 }
 
 export function dbToTimelineState(
@@ -335,6 +337,8 @@ export function dbToTimelineState(
       ...(t.parentId ? { parentId: t.parentId } : {}),
       // Carry explicit startDate for overlapping tasks
       ...(t.startDate ? { startDate: new Date(t.startDate).toISOString().split('T')[0] } : {}),
+      // 標記此任務目前是否為完成（新增子任務到已完成父層時要提醒/解除）
+      ...((t.completedAt || t.status === 'done') ? { completed: true } : {}),
     }
   })
 
