@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Undo2,
   HelpCircle,
   AlertCircle,
   ArrowRight,
@@ -46,6 +47,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'report-published': CheckCircle2,
   'report-done-review': ClipboardList,
   'report-review-overdue': AlertTriangle,
+  'completion-reopened': Undo2,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -62,6 +64,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'report-published': 'text-emerald-500',
   'report-done-review': 'text-amber-500',
   'report-review-overdue': 'text-red-500',
+  'completion-reopened': 'text-orange-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -78,6 +81,7 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'report-published': '報告已進更新紀錄',
   'report-done-review': '待審核完成',
   'report-review-overdue': '審核逾期',
+  'completion-reopened': '完成被解除',
 }
 
 const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
@@ -94,6 +98,7 @@ const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
   { value: 'report-review-needed', label: '待審核報告' },
   { value: 'report-done-review', label: '待審核完成' },
   { value: 'report-review-overdue', label: '審核逾期' },
+  { value: 'completion-reopened', label: '完成被解除' },
 ]
 
 function formatTime(dateStr: string): string {

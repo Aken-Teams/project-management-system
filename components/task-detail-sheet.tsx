@@ -129,6 +129,7 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
 
   // Progress (for optimistic updates on complete/uncomplete)
   const [editProgress, setEditProgress] = useState<number>(0)
+  const [uncompleteConfirm, setUncompleteConfirm] = useState(false)
 
   // Completion date
   const [completedDate, setCompletedDate] = useState(() => {
@@ -772,7 +773,9 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       const res = await fetch(`/api/projects/${project.id}/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'in_progress', progress: 0 }),
+        // 標回未完成：清完成(status/completedAt)之外，也清「回報完成/審核」狀態，避免又回到 A 待確認；
+        //   並通知此任務負責人＋往上仍為完成的父層負責人（他們的完成已失效）。
+        body: JSON.stringify({ status: 'in_progress', progress: 0, reportedDone: false, reopenNotify: true, reopenActor: user?.name }),
       })
       if (!res.ok) throw new Error()
       // Optimistic: immediately show non-completed state with progress UI
@@ -1072,8 +1075,8 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
                           )}
                         </div>
                       </div>
-                      {!readOnly && !hasSubtasks && (
-                        <Button size="sm" variant="outline" className="gap-1.5 text-muted-foreground" onClick={handleUncompleteTask}>
+                      {!readOnly && (
+                        <Button size="sm" variant="outline" className="gap-1.5 text-muted-foreground" onClick={() => setUncompleteConfirm(true)}>
                           <Undo2 className="h-3.5 w-3.5" />
                           取消完成
                         </Button>
@@ -2370,6 +2373,24 @@ export function TaskDetailSheet({ open, onOpenChange, task, project, nodeMap, on
       </Sheet>
 
       {/* Delete task log confirmation */}
+      {/* 取消完成確認 — 解除完成會通知該任務與上層負責人 */}
+      <AlertDialog open={uncompleteConfirm} onOpenChange={setUncompleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要解除完成？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此任務將標回「未完成」。若它或上層父任務先前已回報／審核完成，系統會通知這些父層負責人，讓他們知道完成已失效、需要重新確認或補報告。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setUncompleteConfirm(false); handleUncompleteTask() }}>
+              解除完成並通知
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!deletingLog} onOpenChange={open => { if (!open) setDeletingLog(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>

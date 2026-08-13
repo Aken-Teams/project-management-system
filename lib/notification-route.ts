@@ -30,6 +30,9 @@ export function notificationHref(n: { type: NotificationType; projectId?: string
     case 'weekly-report-ready':
     case 'report-published':
       return pid ? `/projects/${pid}?tab=updates` : '/my-tasks?role=MY'
+    // 完成被解除 → 該任務所在專案（去看/重新確認）
+    case 'completion-reopened':
+      return pid ? `/projects/${pid}` : '/my-tasks?role=MY'
     // 其餘（任務指派、延期、逾期、支援、工作紀錄）→ 專案詳細
     default:
       return pid ? `/projects/${pid}` : null

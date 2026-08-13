@@ -110,6 +110,7 @@ enum NotificationType {
   report_published       // R主管核准 → 通知 A：此項報告已進更新紀錄
   report_done_review     // R 回報100%完成(且已過R主管) → 通知 A 去審核是否完成
   report_review_overdue  // R主管遲遲未審核 → 通知 A 去追主管
+  completion_reopened    // 已完成的父任務因底下新增工作/子任務被解除完成 → 通知該父層負責人
 }
 
 // ─── Models ──────────────────────────────────────────────

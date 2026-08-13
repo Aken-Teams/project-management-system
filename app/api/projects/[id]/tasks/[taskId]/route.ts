@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
-import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded } from '@/lib/notifications'
+import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded, notifyCompletionReopened } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> }
@@ -35,6 +35,8 @@ interface UpdateTaskBody {
   publishLogs?: boolean    // A 發布此任務紀錄到官方更新紀錄
   reviewedDone?: boolean   // A 審核通過（設 reviewedAt）
   markComplete?: boolean   // A 審核通過＝確認 100% 完成：一併標記 status=done + completedAt（甘特 100% + 完成區）
+  reopenNotify?: boolean   // 解除完成時：通知此任務負責人＋所有仍完成的父層負責人（completion_reopened）
+  reopenActor?: string     // 操作者姓名（避免通知自己）
 }
 
 export async function PUT(
@@ -162,6 +164,15 @@ export async function PUT(
       await prisma.taskReviewEvent.create({
         data: { taskId, projectId: id, type: body.reviewEvent, actor: body.reviewActor || '', note: body.reviewNote || null },
       })
+    }
+
+    // 解除完成 → 通知該任務負責人＋往上仍為完成的父層負責人（他們的完成已失效，需重新確認/補報告）。
+    //   以「更新前」的狀態判斷是否原本已完成，避免對本來就未完成的任務誤發。
+    if (body.reopenNotify && (task.completedAt || task.status === 'done' || task.reportedDoneAt)) {
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyCompletionReopened({
+        projectId: id, projectName: proj?.name || '專案', taskId, actorName: body.reopenActor,
+      }).catch(() => {})
     }
 
     // 「有主管就必須先過主管」：R 回報 100% 完成、但這位作者對此任務完全沒有任何報告，

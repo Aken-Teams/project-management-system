@@ -18,6 +18,7 @@ export type NotificationType =
   | 'report-published'
   | 'report-done-review'
   | 'report-review-overdue'
+  | 'completion-reopened'
 
 export interface Notification {
   id: string

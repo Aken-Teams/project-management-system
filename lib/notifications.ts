@@ -268,6 +268,58 @@ export async function notifyReviewOverdueToAccountable({
   }
 }
 
+// ─── 完成被解除 (completion_reopened) ───────────────────────────────────────
+
+/**
+ * 某任務的「完成」被解除（底下新增子任務/工作，或手動取消完成）→
+ * 通知「被解除的該任務負責人」＋「其往上所有仍為完成、且有指派人的父層負責人」。
+ *   目的：父層負責人（尤其寫過報告、審核通過過的）必須被告知他的完成已失效，需重新確認/補報告。
+ *   actorName：操作者姓名，避免通知操作者自己。
+ */
+export async function notifyCompletionReopened({
+  projectId, projectName, taskId, actorName,
+}: {
+  projectId: string
+  projectName: string
+  taskId: string
+  actorName?: string
+}) {
+  const all = await prisma.task.findMany({
+    where: { projectId },
+    select: { id: true, parentId: true, title: true, assignee: true, completedAt: true, status: true, reportedDoneAt: true },
+  })
+  const byId = new Map(all.map(t => [t.id, t]))
+  const target = byId.get(taskId)
+  if (!target) return
+
+  // 由 target 往上收集鏈：target 自己 + 所有祖先
+  const chain: typeof all = [target]
+  let p = target.parentId ? byId.get(target.parentId) : undefined
+  const seen = new Set<string>([target.id])
+  while (p && !seen.has(p.id)) { chain.push(p); seen.add(p.id); p = p.parentId ? byId.get(p.parentId) : undefined }
+
+  const notifiedUsers = new Set<string>()
+  for (const t of chain) {
+    // target 一定通知（它剛被解除完成）；祖先只在「仍為完成」時通知
+    const wasCompleted = !!(t.completedAt || t.status === 'done' || t.reportedDoneAt)
+    if (t.id !== taskId && !wasCompleted) continue
+    const assignee = (t.assignee || '').trim()
+    if (!assignee || assignee === '未指派') continue
+    const user = await resolveAssignee(assignee)
+    if (!user) continue
+    if (actorName && user.name === actorName) continue // 不通知操作者自己
+    if (notifiedUsers.has(user.id)) continue
+    notifiedUsers.add(user.id)
+    await createNotification({
+      userId: user.id,
+      type: 'completion_reopened',
+      title: '已完成項目被重新開啟',
+      message: `你負責的「${t.title}」因為底下新增或變更了工作，已被重新開啟為未完成，請確認並視需要補上報告（專案：${projectName}）`,
+      projectId,
+    })
+  }
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({

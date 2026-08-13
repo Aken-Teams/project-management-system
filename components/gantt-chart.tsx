@@ -777,12 +777,26 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   const subtasks = tasks.filter(t => t.parentId === task.id)
                   const hasSubtasks = subtasks.length > 0
 
-                  // 新模型：任務/子任務(含父層)一律顯示「自己的進度」，不聚合子層（只有里程碑聚合）
+                  // 有指派人的父層：完成度/狀態看「自己」；無指派人的父層：靠子層聚合。
+                  const isAssigned = !!(task.assignee && task.assignee.trim() && task.assignee.trim() !== '未指派')
                   const aggregatedProgress = task.progress
-                  const parentAllDone = false
+                  // 父層是否「算完成」（決定狀態圓點是否轉綠）：
+                  //   有指派人 → 自己標完成即可；無指派人 → 所有子孫葉任務都完成才算。
+                  const allDescendantsDone = () => {
+                    const stack = [...subtasks]; const seen = new Set<string>()
+                    while (stack.length) {
+                      const cur = stack.pop()!; if (seen.has(cur.id)) continue; seen.add(cur.id)
+                      const kids = tasks.filter(k => k.parentId === cur.id)
+                      if (kids.length) stack.push(...kids)
+                      else if (!(cur.completedAt || cur.status === 'done' || cur.progress >= 100)) return false
+                    }
+                    return true
+                  }
+                  const parentAllDone = hasSubtasks
+                    ? (isAssigned ? effectiveStatus(task) === 'done' : allDescendantsDone())
+                    : false
                   // 實際條來源：有指派人(或葉)＝看自己的報告；「無指派人的父層」＝進度靠子項聚合，
                   //   實際條也要由「所有子孫任務」的活動聚合（否則父層有 22% 卻不畫實際條）。
-                  const isAssigned = !!(task.assignee && task.assignee.trim() && task.assignee.trim() !== '未指派')
                   const aggParent = hasSubtasks && !isAssigned
                   let aggStart: string | null = null, aggEnd: string | null = null
                   if (aggParent) {
