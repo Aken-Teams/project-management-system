@@ -186,8 +186,14 @@ export async function PUT(
           select: { reportReviewerEmail: true, reportReviewerName: true },
         })
         const hasReviewer = !!(member?.reportReviewerEmail || member?.reportReviewerName)
-        const anyLog = await prisma.taskLog.findFirst({ where: { taskId, authorId: reporter.id }, select: { id: true } })
-        if (hasReviewer && !anyLog) {
+        // 「目前有沒有待審(未發布、未駁回)的報告」→ 有就交給主管審那筆；沒有就補占位。
+        //   關鍵：完成被解除後又回報時，舊的「已核准」報告不算待審 → 一樣補占位，強制重新過主管，
+        //   不能吃舊核准直接繞到 A。（涵蓋「完全沒寫」與「只有舊核准報告」兩種情況）
+        const pendingLog = await prisma.taskLog.findFirst({
+          where: { taskId, authorId: reporter.id, publishedAt: null, reviewerRejectedAt: null },
+          select: { id: true },
+        })
+        if (hasReviewer && !pendingLog) {
           const now = new Date()
           const day = now.getUTCDay(); const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1)
           const weekOf = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff)).toISOString().slice(0, 10)
