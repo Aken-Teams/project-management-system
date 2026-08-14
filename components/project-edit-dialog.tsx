@@ -244,6 +244,8 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   )
   const [tlMilestones, setTlMilestones] = useState(tlInit.milestones)
   const [tlTasks, setTlTasks] = useState(tlInit.tasks)
+  // 使用者在編輯器選「解除父層完成」的父任務 id；儲存成功後才真正解除+通知（沒儲存就不生效）
+  const reopenParentIdsRef = useRef<Set<string>>(new Set())
   const [workItemError, setWorkItemError] = useState('')
   const [ganttPreviewOpen, setGanttPreviewOpen] = useState(false)
   // ─── Date change approval state ──────────────────────────
@@ -675,6 +677,16 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     setSaving(true)
     try {
       if (await validateAndSaveAll()) {
+        // 儲存成功後才真正解除父層完成＋通知（使用者取消/沒儲存就不會生效）
+        const toReopen = [...reopenParentIdsRef.current]
+        reopenParentIdsRef.current.clear()
+        for (const pid of toReopen) {
+          await fetch(`/api/projects/${project.id}/tasks/${pid}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'in_progress', progress: 0, reportedDone: false, reopenNotify: true, reopenActor: user?.name }),
+          }).catch(() => {})
+        }
         await onWorkItemsChange?.()
         await onSaved?.()
         // 需求：儲存後不關閉編輯視窗，改跳完成提示並讓使用者繼續編輯。
@@ -989,18 +1001,12 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
     applyTaskChangeWithBubbleUp([...tlTasks, task])
   }, [tlTasks, applyTaskChangeWithBubbleUp])
 
-  // 新增子任務到「已完成父層」且使用者選擇解除完成 → 立即解除該父層完成並通知其（及上層）負責人，
-  //   同時本地標記為未完成（畫面同步、批次儲存不會又把它變回完成）。
-  const handleReopenParent = useCallback(async (parentId: string) => {
-    try {
-      await fetch(`/api/projects/${project.id}/tasks/${parentId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'in_progress', progress: 0, reportedDone: false, reopenNotify: true, reopenActor: user?.name }),
-      })
-    } catch { /* 忽略：即使通知失敗也不擋新增 */ }
+  // 新增子任務到「已完成父層」且使用者選擇解除完成 → 只先「本地標記未完成」＋記下 id，
+  //   真正的解除完成＋通知延到「儲存成功」時才執行（使用者若沒儲存就不會生效）。
+  const handleReopenParent = useCallback((parentId: string) => {
+    reopenParentIdsRef.current.add(parentId)
     setTlTasks(prev => prev.map(t => t.id === parentId ? { ...t, completed: false } : t))
-  }, [project.id, user?.name])
+  }, [])
 
   const handleTlTaskRemove = useCallback((taskId: string) => {
     const remaining = tlTasks.filter(t => t.id !== taskId && t.parentId !== taskId)

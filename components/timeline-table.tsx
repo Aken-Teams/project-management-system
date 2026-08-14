@@ -621,11 +621,15 @@ const TaskRow = memo(function TaskRow({
 // ─── InlineTaskInput ────────────────────────────────────────
 function InlineTaskInput({
   milestoneId,
+  milestoneName,
+  milestoneCompleted,
   teamMembers,
   msIndex,
   onAdd,
 }: {
   milestoneId: string
+  milestoneName?: string
+  milestoneCompleted?: boolean
   teamMembers: TimelineTeamMember[]
   msIndex: number
   onAdd: (task: TimelineTask) => void
@@ -634,9 +638,9 @@ function InlineTaskInput({
   const [durationDays, setDurationDays] = useState(1)
   const [assignee, setAssignee] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
+  const [msPromptOpen, setMsPromptOpen] = useState(false)
 
-  const handleAdd = () => {
-    if (!title.trim()) return
+  const doAdd = () => {
     onAdd({
       id: `draft-task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       milestoneId,
@@ -649,6 +653,13 @@ function InlineTaskInput({
     setDurationDays(1)
     setAssignee('')
     setPriority('medium')
+  }
+
+  const handleAdd = () => {
+    if (!title.trim()) return
+    // 新增任務到已完成(100%)的里程碑 → 先告知它將不再 100%（里程碑無指派人，僅提醒）
+    if (milestoneCompleted) { setMsPromptOpen(true); return }
+    doAdd()
   }
 
   const cyclePriority = () => {
@@ -673,6 +684,7 @@ function InlineTaskInput({
   }
 
   return (
+    <>
     <div className={`${GRID_COLS} px-2 py-0.5 border-l-[3px] ${msIndex % 2 === 0 ? 'border-l-indigo-200' : 'border-l-amber-200'}`}>
       {/* Drag placeholder */}
       <div />
@@ -759,6 +771,27 @@ function InlineTaskInput({
         )}
       </div>
     </div>
+
+    {/* 新增任務到已完成里程碑 → 告知它將不再 100%（里程碑無指派人，僅提醒） */}
+    <AlertDialog open={msPromptOpen} onOpenChange={setMsPromptOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            里程碑{milestoneName ? `「${milestoneName}」` : ''}<span className="text-emerald-600">已完成</span>
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            新增任務後，此里程碑將<span className="font-semibold text-foreground">不再是 100%</span>，會回到進行中。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setMsPromptOpen(false); doAdd() }}>
+            知道了，繼續新增
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 
@@ -1247,7 +1280,11 @@ export function TimelineTable({
                 {!isCollapsed && (
                   <>
                     {msParentTasks.map((task) => renderTaskTree(task, msIndex, 1))}
-                    {!locked && <InlineTaskInput milestoneId={milestone.id} teamMembers={teamMembers} msIndex={msIndex} onAdd={onTaskAdd} />}
+                    {!locked && <InlineTaskInput
+                      milestoneId={milestone.id}
+                      milestoneName={milestone.name}
+                      milestoneCompleted={(() => { const mt = tasks.filter(t => t.milestoneId === milestone.id); return mt.length > 0 && mt.every(t => t.completed) })()}
+                      teamMembers={teamMembers} msIndex={msIndex} onAdd={onTaskAdd} />}
                   </>
                 )}
               </div>
