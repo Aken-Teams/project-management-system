@@ -935,15 +935,17 @@ function InlineSubtaskInput({
     <AlertDialog open={reopenPromptOpen} onOpenChange={setReopenPromptOpen}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>父任務「{parentTask.title}」已完成</AlertDialogTitle>
+          <AlertDialogTitle>
+            父任務「{parentTask.title}」<span className="text-emerald-600">已完成</span>
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            在已完成的父任務底下新增子項目，會讓它不再是 100% 完成。要如何處理？
-            <br />
-            <b>解除完成</b>：把父任務標回未完成，並通知其（及上層）負責人重新確認。
-            <br />
-            <b>維持完成</b>：仍新增子項目，父任務暫時維持完成；之後可到任務內用「取消完成」手動處理。
+            在它底下新增子項目，會讓父任務<span className="font-semibold text-foreground">不再是 100%</span>。
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <div className="space-y-1.5 text-sm">
+          <p><span className="font-semibold text-blue-600">解除完成</span>：標回未完成，並<span className="font-medium">通知父層負責人</span>。</p>
+          <p><span className="font-semibold text-muted-foreground">維持完成</span>：照常新增，父層暫時維持完成。</p>
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={() => { setReopenPromptOpen(false); doAdd() }}>維持完成，只新增</AlertDialogCancel>
           <AlertDialogAction onClick={async () => { setReopenPromptOpen(false); await onReopenParent?.(parentTask.id); doAdd() }}>
