@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>流程說明 — 已完成項目新增工作 / 回報完成必經主管</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:#1e293b;
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 72px;}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:#64748b;margin:0 0 26px;font-size:14px;line-height:1.6}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 24px 26px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin:0 0 24px}
+  .card h2{font-size:17px;margin:0 0 4px;color:#0f172a;display:flex;align-items:center;gap:10px}
+  .card h2 .n{background:#0f766e;color:#fff;font-size:13px;font-weight:700;border-radius:8px;padding:3px 10px;flex-shrink:0}
+  .cap{color:#475569;font-size:13.5px;margin:6px 0 20px;line-height:1.7}
+  .cap b{color:#0f172a}
+
+  /* 起點 */
+  .start{max-width:520px;margin:0 auto;background:#eef2ff;border:1.5px solid #c7d2fe;color:#3730a3;
+    border-radius:12px;padding:12px 18px;text-align:center;font-weight:600;font-size:14px;line-height:1.5}
+  .vArrow{width:0;height:0;margin:6px auto;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid #94a3b8}
+  .splitLabel{text-align:center;font-size:13px;color:#92400e;background:#fffbeb;border:1.5px dashed #fcd34d;
+    border-radius:999px;padding:4px 16px;width:fit-content;margin:0 auto 14px;font-weight:600}
+
+  /* lane 容器 */
+  .lanes{display:flex;gap:18px;justify-content:center;align-items:stretch;flex-wrap:wrap}
+  .lane{flex:1;min-width:300px;max-width:480px;border:1.5px solid #e2e8f0;border-radius:14px;overflow:hidden;background:#fbfcfe;display:flex;flex-direction:column}
+  .lane .lhead{padding:9px 14px;font-size:13.5px;font-weight:700;text-align:center;color:#fff}
+  .lane .lbody{padding:14px;display:flex;flex-direction:column;align-items:center;gap:0;flex:1}
+  .lane-blue .lhead{background:#3b82f6}
+  .lane-slate .lhead{background:#94a3b8}
+  .lane-amber .lhead{background:#f59e0b}
+
+  .step{width:100%;border:1.5px solid #cbd5e1;border-radius:10px;padding:9px 12px;font-size:13px;background:#fff;text-align:center;line-height:1.5}
+  .step.sup{border-color:#fcd34d;background:#fffbeb;color:#92400e}
+  .step.a{border-color:#c7d2fe;background:#eef2ff;color:#3730a3}
+  .step.done{border-color:#6ee7b7;background:#ecfdf5;color:#065f46;font-weight:700}
+  .step.reject{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+  .step.q{border-style:dashed;border-color:#fcd34d;background:#fffbeb;color:#92400e;font-weight:600}
+  .who{display:block;font-size:11px;font-weight:800;letter-spacing:.4px;margin-bottom:1px}
+  .who.r{color:#1d4ed8}.who.sup{color:#b45309}.who.a{color:#4338ca}
+  .sarrow{width:2px;height:14px;background:#cbd5e1;margin:0}
+  .small{font-size:11.5px;color:#64748b;margin-top:6px;text-align:center;line-height:1.5}
+
+  /* 二選一 */
+  .opts{display:flex;gap:10px;width:100%}
+  .opt{flex:1;border-radius:10px;padding:10px 11px;font-size:12.5px;line-height:1.55;border:1.5px solid}
+  .opt .ohead{font-weight:800;font-size:12.5px;margin-bottom:4px;display:inline-block;border-radius:999px;padding:1px 9px}
+  .opt-do{border-color:#93c5fd;background:#eff6ff}
+  .opt-do .ohead{background:#dbeafe;color:#1d4ed8}
+  .opt-keep{border-color:#cbd5e1;background:#f8fafc}
+  .opt-keep .ohead{background:#e2e8f0;color:#475569}
+  .opt-reject{border-color:#fca5a5;background:#fef2f2}
+  .opt-reject .ohead{background:#fee2e2;color:#b91c1c}
+
+  .note{display:flex;gap:9px;align-items:flex-start;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:12px 15px;margin-top:20px;font-size:13px;color:#334155;line-height:1.7}
+  .note b{color:#0f172a}
+  .key{background:#fef3c7;padding:1px 6px;border-radius:5px;font-weight:700;color:#92400e}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>流程說明</h1>
+  <p class="sub">兩個常見情境：①在「已完成」項目底下再加工作；②回報 100% 完成時，一定會先經過主管。</p>
+
+  <!-- ───── 情境 1 ───── -->
+  <div class="card">
+    <h2><span class="n">情境 1</span>在「已完成」的項目底下，又新增了工作</h2>
+    <p class="cap">
+      一個父任務或里程碑已經 100% 完成，事後又在它底下新增子項目，會讓它「不再是 100%」。
+      系統會<b>當場提醒</b>，避免默默失效沒人知道。
+    </p>
+
+    <div class="start">在「已完成」的父任務 / 里程碑底下　新增子任務 / 任務</div>
+    <div class="vArrow"></div>
+    <div class="splitLabel">這個已完成的項目是？</div>
+
+    <div class="lanes">
+      <!-- 父任務 -->
+      <div class="lane lane-blue">
+        <div class="lhead">父任務（有負責人）</div>
+        <div class="lbody">
+          <div class="step q">跳出提示：要如何處理？</div>
+          <div class="sarrow"></div>
+          <div class="opts">
+            <div class="opt opt-do">
+              <span class="ohead">解除完成</span>
+              父任務標回<b>未完成</b>，並<b>通知父層（及上層）負責人</b>重新確認 / 補報告。
+              <div class="small">※ 儲存後才生效，沒儲存不會動</div>
+            </div>
+            <div class="opt opt-keep">
+              <span class="ohead">維持完成</span>
+              照常新增，父層<b>暫時維持完成</b>。
+              <div class="small">之後可用「取消完成」手動處理</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 里程碑 -->
+      <div class="lane lane-slate">
+        <div class="lhead">里程碑（無負責人）</div>
+        <div class="lbody">
+          <div class="step q">跳出告知：新增後將不再 100%</div>
+          <div class="sarrow"></div>
+          <div class="step">確認後繼續新增</div>
+          <div class="sarrow"></div>
+          <div class="step">里程碑自動回到<b>進行中</b></div>
+          <div class="small">里程碑沒有負責人，所以只提醒、不發通知</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── 情境 2 ───── -->
+  <div class="card">
+    <h2><span class="n">情境 2</span>回報「100% 完成」，一定先經過主管</h2>
+    <p class="cap">
+      只要執行者有指定<b>報告審核主管</b>，回報完成後<span class="key">一定先過主管</span>，不會直接跳到當責 A。
+      <b>即使沒寫任何報告、或只有舊的已核准報告</b>（例如完成被解除後又回報），系統都會<b>自動補一筆「完成待審」</b>交給主管，杜絕繞過。
+    </p>
+
+    <div class="start" style="background:#eff6ff;border-color:#93c5fd;color:#1d4ed8">
+      <span class="who r">執行者 R</span>回報任務「100% 完成」
+    </div>
+    <div class="vArrow"></div>
+    <div class="splitLabel">R 有沒有指定主管？</div>
+
+    <div class="lanes">
+      <!-- 有主管 -->
+      <div class="lane lane-amber" style="max-width:560px;flex:1.6">
+        <div class="lhead">有主管 → 必須先過主管</div>
+        <div class="lbody">
+          <div class="step q">目前有沒有「待審的報告」？</div>
+          <div class="sarrow"></div>
+          <div class="opts">
+            <div class="opt opt-keep">
+              <span class="ohead">有寫</span>
+              主管審<b>這份待審報告</b>。
+            </div>
+            <div class="opt opt-keep">
+              <span class="ohead">沒寫 / 只有舊核准</span>
+              系統自動補一筆<b>「完成待審」</b>交給主管。
+            </div>
+          </div>
+          <div class="sarrow"></div>
+          <div class="step sup"><span class="who sup">R 主管</span>審核</div>
+          <div class="sarrow"></div>
+          <div class="opts">
+            <div class="opt opt-do">
+              <span class="ohead">核准</span>
+              → <b>當責 A</b> 看到「待確認」 → A 確認 → <b>任務正式完成</b>。
+            </div>
+            <div class="opt opt-reject">
+              <span class="ohead">駁回</span>
+              退回 R 填原因重送，<b>A 全程看不到</b>。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 沒主管 -->
+      <div class="lane lane-slate" style="max-width:280px">
+        <div class="lhead">沒有主管</div>
+        <div class="lbody">
+          <div class="step a"><span class="who a">當責 A</span>直接看到「待確認」</div>
+          <div class="sarrow"></div>
+          <div class="step done">A 確認 → 完成</div>
+          <div class="small">沒指定主管才會直接進 A</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span>🔒</span>
+      <span><b>重點：</b>只要有主管，<b>不管任務或子任務、也不管有沒有寫內容</b>，回報完成都要先過主管；主管可<b>駁回</b>要求補件，通過後才會到 A —— 杜絕「什麼都沒交代卻直接算完成」。</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

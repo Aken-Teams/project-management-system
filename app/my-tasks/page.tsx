@@ -1302,43 +1302,39 @@ export default function MyTasksPage() {
   }
 
   // 回報狀態徽章：區分「已回報完成（送 A 審核）」與「只是填了工作紀錄、還沒回報」
-  const renderReviewStatus = (reported: boolean, reviewed: boolean): React.ReactNode => {
-    if (reviewed) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已審核</Badge>
-    if (reported) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 shrink-0">已回報待審</Badge>
-    return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/70 shrink-0">未回報</Badge>
-  }
 
-  // A 視角：R主管審核狀態徽章。主管審核中時 hover 可看「是哪位主管、已等幾天」（A 才追得對人）。
-  const renderReportReviewBadge = (st: ReportReviewState, active: boolean, count: number): React.ReactNode => {
-    if (st.kind === 'pending' && st.reviewerName) {
+  // A 視角「單一階段徽章」：把『完成度』與『報告審核』合成一顆。
+  //   記憶法＝看顏色就知道球在誰手上：🟢完成 · 🔵等主管 · 🟠換我(A) · 🔴要催R · ⚪等R(正常)
+  const renderStageBadge = (reported: boolean, reviewed: boolean, st: ReportReviewState, active: boolean, count: number): React.ReactNode => {
+    // 🟢 完成
+    if (reviewed) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已完成</Badge>
+    // 🔵 球在 R主管（報告審核中）→ A 先等，太久可追主管
+    if (st.kind === 'pending') {
       return (
         <HoverCard openDelay={80} closeDelay={100}>
           <HoverCardTrigger asChild>
             <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0 cursor-help">主管審核中{st.waitDays > 0 ? ` · ${st.waitDays}天` : ''}</Badge>
           </HoverCardTrigger>
-          <HoverCardContent align="end" className="w-auto max-w-[220px] p-0 overflow-hidden">
+          <HoverCardContent align="end" className="w-auto max-w-[240px] p-0 overflow-hidden">
             <div className="flex items-center gap-1.5 border-b border-blue-100 bg-blue-50 px-2.5 py-1.5 dark:border-blue-900 dark:bg-blue-950/40">
               <ClipboardList className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span className="text-xs font-medium text-blue-700 dark:text-blue-400">報告審核中</span>
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-400">球在 R 主管{reported ? '（已回報 100%）' : ''}</span>
             </div>
             <div className="space-y-1 px-2.5 py-2 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground">審核主管</span>
-                <span className="font-medium">{st.reviewerName}</span>
-              </div>
-              <div className="text-muted-foreground">已等 {st.waitDays} 天 · 可去追主管審核</div>
+              {st.reviewerName && <div className="flex items-center gap-1.5"><span className="text-muted-foreground">審核主管</span><span className="font-medium">{st.reviewerName}</span></div>}
+              <div className="text-muted-foreground">已等 {st.waitDays} 天 · 太久可去追主管審核</div>
             </div>
           </HoverCardContent>
         </HoverCard>
       )
     }
-    if (st.kind === 'published') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已進紀錄</Badge>
-    if (st.kind === 'rejected') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已駁回</Badge>
-    // pending 但無指定主管（fallback 由 A 直接處理）→ 沿用原本 已填/未填/非本週
-    if (active) return st.kind === 'none'
-      ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>
-      : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已填 {count}</Badge>
-    return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0" title="此任務起訖不在本週（提前/延後填寫）">非本週{count > 0 ? ` · 已填 ${count}` : ''}</Badge>
+    // 🟠 換 A：已報 100% 且已過主管（醒目）
+    if (reported) return <Badge className="text-[11px] px-1.5 py-0.5 bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-300 font-semibold dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/30 shrink-0">待你確認</Badge>
+    // 🔴 要催 R：被主管退回、或本週逾期未交
+    if (st.kind === 'rejected') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已退回 R</Badge>
+    if (active && st.kind === 'none') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">本週未交</Badge>
+    // ⚪ 等 R（正常進行中；含報告已交在跑、非本週）
+    return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0">執行中</Badge>
   }
 
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
@@ -1396,8 +1392,7 @@ export default function MyTasksPage() {
             <div className="text-sm truncate">{node.title}</div>
             <div className="text-[11px] text-muted-foreground">負責人：{node.assignee || '未指派'}</div>
           </div>
-          {renderReviewStatus(node.reported, node.reviewed)}
-          {renderReportReviewBadge(node.reviewState, node.active, node.logs.length)}
+          {renderStageBadge(node.reported, node.reviewed, node.reviewState, node.active, node.logs.length)}
           {node.logs.length > 0
             ? <button onClick={() => setReviewMemberExpanded(prev => { const k = 'task:' + node.taskId; const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })} className="shrink-0"><ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></button>
             : <span className="w-4 shrink-0" />}
@@ -4858,8 +4853,7 @@ export default function MyTasksPage() {
                                           {ti.ctx && <div className="text-[11px] text-muted-foreground/80 truncate">{ti.ctx}</div>}
                                           <div className="text-sm">{ti.title}</div>
                                         </div>
-                                        {renderReviewStatus(ti.reported, ti.reviewed)}
-                                        {renderReportReviewBadge(ti.reviewState, ti.active, ti.logs.length)}
+                                        {renderStageBadge(ti.reported, ti.reviewed, ti.reviewState, ti.active, ti.logs.length)}
                                         {hasLogs
                                           ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform mt-0.5', tExpanded && 'rotate-180')} />
                                           : <span className="w-4 shrink-0" />}
