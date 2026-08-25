@@ -86,10 +86,13 @@ export async function PUT(
         }
         data.progress = 100
       } else if (task.status === 'done') {
-        // Clearing completedAt/completedBy/completedWeekOf when un-completing
+        // 任務從 done 退回 → 清完成欄位；連 A 確認(reviewedAt)一起清，
+        //   避免出現「已 A 確認卻沒正式完成」的不一致（成員週報顯示已完成、甘特卻 99%）。
         data.completedAt = null
         data.completedBy = null
         data.completedWeekOf = null
+        data.reviewedAt = null
+        data.reviewedBy = null
       }
     }
     if (body.progress !== undefined && data.progress === undefined) data.progress = body.progress

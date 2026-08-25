@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>狀態徽章說明 — 成員週報（A 視角）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#f1f5f9;color:#1e293b;
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;}
+  .wrap{max-width:940px;margin:0 auto;padding:32px 20px 72px;}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:#64748b;margin:0 0 26px;font-size:14px;line-height:1.6}
+  .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 24px 26px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin:0 0 24px}
+  .card h2{font-size:17px;margin:0 0 4px;color:#0f172a;display:flex;align-items:center;gap:10px}
+  .card h2 .n{background:#0f766e;color:#fff;font-size:13px;font-weight:700;border-radius:8px;padding:3px 10px;flex-shrink:0}
+  .cap{color:#475569;font-size:13.5px;margin:6px 0 20px;line-height:1.7}
+  .cap b{color:#0f172a}
+
+  /* badge pill（比照 App） */
+  .b{display:inline-flex;align-items:center;font-size:12px;font-weight:600;border-radius:999px;padding:3px 11px;border:1.5px solid;white-space:nowrap}
+  .b-slate{background:#f8fafc;color:#64748b;border-color:#e2e8f0}
+  .b-red{background:#fef2f2;color:#b91c1c;border-color:#fca5a5}
+  .b-blue{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd}
+  .b-amber{background:#fef3c7;color:#92400e;border-color:#fcd34d;font-weight:800}
+  .b-green{background:#ecfdf5;color:#047857;border-color:#6ee7b7}
+
+  /* pipeline */
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin-top:6px}
+  .stage{flex:1;min-width:150px;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 12px;text-align:center;background:#fff;position:relative}
+  .stage .icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 8px}
+  .stage .who{font-size:12px;font-weight:800;letter-spacing:.4px;margin-bottom:8px}
+  .stage .desc{font-size:12px;color:#64748b;margin-top:8px;line-height:1.5}
+  .arrow{display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:20px;padding:0 4px;flex:0 0 auto}
+  .s-r .icon{background:#f1f5f9;color:#475569}.s-r .who{color:#475569}
+  .s-sup .icon{background:#dbeafe;color:#1d4ed8}.s-sup .who{color:#1d4ed8}
+  .s-a .icon{background:#fef3c7;color:#b45309}.s-a .who{color:#b45309}
+  .s-done .icon{background:#d1fae5;color:#047857}.s-done .who{color:#047857}
+
+  /* legend table */
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:4px}
+  th,td{border:1px solid #e2e8f0;padding:11px 13px;text-align:left;vertical-align:middle}
+  th{background:#f8fafc;color:#0f172a;font-weight:600}
+  td.c1{width:170px}td.c2{width:120px;text-align:center}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .d-slate{background:#94a3b8}.d-red{background:#ef4444}.d-blue{background:#3b82f6}.d-amber{background:#f59e0b}.d-green{background:#10b981}
+
+  .rule{margin-top:8px;background:#0f172a;color:#fff;border-radius:14px;padding:16px 20px;font-size:15px;text-align:center;line-height:1.9}
+  .rule .k{display:inline-flex;align-items:center;gap:5px;margin:0 6px;font-weight:700}
+  .rule small{display:block;color:#94a3b8;font-size:12.5px;margin-top:6px;font-weight:400}
+  .kdot{width:11px;height:11px;border-radius:50%;display:inline-block}
+  .note{display:flex;gap:9px;align-items:flex-start;background:#fffbeb;border:1px dashed #fcd34d;border-radius:12px;padding:12px 15px;margin-top:18px;font-size:13px;color:#92400e;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>狀態徽章說明</h1>
+  <p class="sub">「成員週報」每個任務只有<b>一顆</b>狀態徽章，直接告訴當責 A：<b>球現在在誰手上、輪到誰</b>。記憶法很簡單 —— <b>看顏色就知道換誰</b>。</p>
+
+  <!-- 流水線 -->
+  <div class="card">
+    <h2><span class="n">1</span>一件任務會走的四關（顏色 = 球在誰手上）</h2>
+    <p class="cap">任務從 R 執行、交 R 主管審、再到當責 A 確認，最後結案。徽章顯示<b>目前卡在哪一關</b>。</p>
+    <div class="pipe">
+      <div class="stage s-r">
+        <div class="icon">🛠️</div>
+        <div class="who">R 執行者</div>
+        <span class="b b-slate">執行中</span>
+        <div class="desc">還在做 / 交報告中</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="stage s-sup">
+        <div class="icon">🔍</div>
+        <div class="who">R 主管</div>
+        <span class="b b-blue">主管審核中 · 3天</span>
+        <div class="desc">報告在主管手上<br>太久可去追主管</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="stage s-a">
+        <div class="icon">✅</div>
+        <div class="who">當責 A（你）</div>
+        <span class="b b-amber">待你確認</span>
+        <div class="desc">換你了，去確認完成</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="stage s-done">
+        <div class="icon">🎉</div>
+        <div class="who">完成</div>
+        <span class="b b-green">已完成</span>
+        <div class="desc">結案</div>
+      </div>
+    </div>
+    <div class="note">
+      <span>💡</span>
+      <span>過去這裡有<b>兩顆</b>徽章（一顆看 100%、一顆看主管審核），容易搞不清「到底誰在審、換我沒」。現在<b>合成一顆</b>，看顏色就懂。</span>
+    </div>
+  </div>
+
+  <!-- 圖例 -->
+  <div class="card">
+    <h2><span class="n">2</span>五種徽章一覽</h2>
+    <table>
+      <tr><th class="c1">徽章</th><th class="c2">顏色 / 球在誰</th><th>意思 · 你要做什麼</th></tr>
+      <tr>
+        <td class="c1"><span class="b b-slate">執行中</span></td>
+        <td class="c2"><span class="dot d-slate"></span>灰 · 等 R</td>
+        <td>R 還在做、或報告已交正在跑。<b>先等</b>，正常進行中。</td>
+      </tr>
+      <tr>
+        <td class="c1"><span class="b b-red">本週未交</span> <span class="b b-red">已退回R</span></td>
+        <td class="c2"><span class="dot d-red"></span>紅 · 催 R</td>
+        <td>R 本週逾期沒交，或報告被主管退回。<b>去催 R</b>。</td>
+      </tr>
+      <tr>
+        <td class="c1"><span class="b b-blue">主管審核中 · N天</span></td>
+        <td class="c2"><span class="dot d-blue"></span>藍 · 等主管</td>
+        <td>球在 R 主管（<b>hover 看哪位、等幾天</b>）。太久就<b>去追主管</b>。</td>
+      </tr>
+      <tr>
+        <td class="c1"><span class="b b-amber">待你確認</span></td>
+        <td class="c2"><span class="dot d-amber"></span>琥珀 · 換你</td>
+        <td><b>輪到 A（你）</b>：已回報 100% 且已過主管 → <b>去確認完成</b>。</td>
+      </tr>
+      <tr>
+        <td class="c1"><span class="b b-green">已完成</span></td>
+        <td class="c2"><span class="dot d-green"></span>綠 · 結束</td>
+        <td>A 已確認，任務正式完成、結案。</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 一句話 -->
+  <div class="rule">
+    <span class="k"><span class="kdot" style="background:#10b981"></span>完成</span>·
+    <span class="k"><span class="kdot" style="background:#3b82f6"></span>等主管</span>·
+    <span class="k"><span class="kdot" style="background:#f59e0b"></span>換我</span>·
+    <span class="k"><span class="kdot" style="background:#ef4444"></span>催 R</span>·
+    <span class="k"><span class="kdot" style="background:#94a3b8"></span>等 R</span>
+    <small>一句話記住：看顏色 = 換誰。琥珀色（換我）出現，就是 A 該動作的時候。</small>
+  </div>
+
+</div>
+</body>
+</html>

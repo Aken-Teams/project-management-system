@@ -207,7 +207,7 @@ function computeReportReviewState(logs: TaskLog[]): ReportReviewState {
 }
 
 // 依任務樹狀節點
-type ReviewTaskNode = { taskId: string; title: string; assignee: string; depth: number; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; reviewState: ReportReviewState; children: ReviewTaskNode[] }
+type ReviewTaskNode = { taskId: string; title: string; assignee: string; depth: number; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; completed: boolean; logs: TaskLog[]; reviewState: ReportReviewState; children: ReviewTaskNode[] }
 
 // 把填報週(週一 YYYY-MM-DD)格式化成清楚的「2026W30 · 7/20~7/26」，讓 R主管/A 一眼知道是哪一週的報告
 function formatReportWeek(monday: string | null): string | null {
@@ -1155,7 +1155,7 @@ export default function MyTasksPage() {
   )
   // 成員週報（依所選週別）：同時算出「依成員」與「依任務」兩種視圖。
   // 「本週該做」= 任務有指派、且起訖與本週重疊（未開始/已結束的不算，避免誤判「未填」）。
-  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; logs: TaskLog[]; reviewState: ReportReviewState }
+  type ReviewWeekTask = { taskId: string; title: string; ctx: string; active: boolean; filled: boolean; reported: boolean; reviewed: boolean; completed: boolean; logs: TaskLog[]; reviewState: ReportReviewState }
   const reviewWeekReport = useMemo(() => {
     const empty = {
       memberRows: [] as { name: string; expectedCount: number; filledCount: number; missing: boolean; tasks: ReviewWeekTask[] }[],
@@ -1210,10 +1210,13 @@ export default function MyTasksPage() {
     }
     const buildNode = (t: Task, depth: number): ReviewTaskNode => {
       const logs = (logsByTask.get(t.id) || []).slice().sort(sortLogs)
+      // 審核狀態看整個任務的報告（不只本週），與「待你確認」分頁一致
+      const allLogs = p.taskLogs.filter(l => l.taskId === t.id)
       return {
         taskId: t.id, title: t.title, assignee: t.assignee, depth,
-        active: !!t.assignee && overlaps(t), filled: logs.length > 0, reported: !!t.reportedDoneAt, reviewed: !!t.reviewedAt, logs,
-        reviewState: computeReportReviewState(logs),
+        active: !!t.assignee && overlaps(t), filled: logs.length > 0, reported: !!t.reportedDoneAt, reviewed: !!t.reviewedAt,
+        completed: !!(t as { completedAt?: string }).completedAt || t.status === 'done', logs,
+        reviewState: computeReportReviewState(allLogs),
         children: (childrenOf.get(t.id) || []).map(c => buildNode(c, depth + 1)),
       }
     }
@@ -1238,7 +1241,10 @@ export default function MyTasksPage() {
           const tid = node.id
           const t = byId.get(tid)
           const logs = (logsByAuthorTask.get(`${name}|${tid}`) || []).slice().sort(sortLogs)
-          return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, logs, reviewState: computeReportReviewState(logs) }
+          // 審核狀態看「整個任務」的報告（不只本週），與「待你確認」分頁一致：
+          //   別週只要還有一筆待審，就是「主管審核中」，不能因本週沒交就誤標「待你確認」。
+          const allLogs = p.taskLogs.filter(l => l.taskId === tid && l.author === name)
+          return { taskId: tid, title: t?.title || '任務', ctx: t ? ctxOf(tid) : '', active: !!t && t.assignee === name && overlaps(t), filled: logs.length > 0, reported: !!t?.reportedDoneAt, reviewed: !!t?.reviewedAt, completed: !!(t as { completedAt?: string } | undefined)?.completedAt || t?.status === 'done', logs, reviewState: computeReportReviewState(allLogs) }
         })
       const expectedCount = tasks.filter(ti => ti.active).length
       const filledCount = tasks.filter(ti => ti.active && ti.filled).length
@@ -1305,9 +1311,9 @@ export default function MyTasksPage() {
 
   // A 視角「單一階段徽章」：把『完成度』與『報告審核』合成一顆。
   //   記憶法＝看顏色就知道球在誰手上：🟢完成 · 🔵等主管 · 🟠換我(A) · 🔴要催R · ⚪等R(正常)
-  const renderStageBadge = (reported: boolean, reviewed: boolean, st: ReportReviewState, active: boolean, count: number): React.ReactNode => {
-    // 🟢 完成
-    if (reviewed) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已完成</Badge>
+  const renderStageBadge = (reported: boolean, completed: boolean, st: ReportReviewState, active: boolean, count: number): React.ReactNode => {
+    // 🟢 完成：以「實際完成(completedAt/status=done)」為準，與甘特一致（不看 reviewedAt，避免半殘狀態誤顯示）
+    if (completed) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已完成</Badge>
     // 🔵 球在 R主管（報告審核中）→ A 先等，太久可追主管
     if (st.kind === 'pending') {
       return (
@@ -1392,7 +1398,7 @@ export default function MyTasksPage() {
             <div className="text-sm truncate">{node.title}</div>
             <div className="text-[11px] text-muted-foreground">負責人：{node.assignee || '未指派'}</div>
           </div>
-          {renderStageBadge(node.reported, node.reviewed, node.reviewState, node.active, node.logs.length)}
+          {renderStageBadge(node.reported, node.completed, node.reviewState, node.active, node.logs.length)}
           {node.logs.length > 0
             ? <button onClick={() => setReviewMemberExpanded(prev => { const k = 'task:' + node.taskId; const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })} className="shrink-0"><ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></button>
             : <span className="w-4 shrink-0" />}
@@ -4853,7 +4859,7 @@ export default function MyTasksPage() {
                                           {ti.ctx && <div className="text-[11px] text-muted-foreground/80 truncate">{ti.ctx}</div>}
                                           <div className="text-sm">{ti.title}</div>
                                         </div>
-                                        {renderStageBadge(ti.reported, ti.reviewed, ti.reviewState, ti.active, ti.logs.length)}
+                                        {renderStageBadge(ti.reported, ti.completed, ti.reviewState, ti.active, ti.logs.length)}
                                         {hasLogs
                                           ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform mt-0.5', tExpanded && 'rotate-180')} />
                                           : <span className="w-4 shrink-0" />}
