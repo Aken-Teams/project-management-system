@@ -24,3 +24,28 @@ export function isReportVisible(log: {
   if (!log.createdAt) return false
   return new Date(log.createdAt).getTime() < CUTOFF_MS
 }
+
+// ─────────────────────────────────────────────────────────────
+// 駁回追蹤起算點（客戶決策 2026-08-27）
+// 8/26 以前的駁回不納入「待修正」清單、也不發提醒：那批資料產生時還沒有
+// 駁回追蹤與提醒機制，現在才要求 R 回頭補不合理，也會讓清單永遠清不掉。
+export const REJECTION_FOLLOWUP_SINCE = '2026-08-27T00:00:00+08:00'
+const FOLLOWUP_SINCE_MS = new Date(REJECTION_FOLLOWUP_SINCE).getTime()
+
+/** 這筆駁回要不要納入追蹤（待修正清單／逾期提醒）。 */
+export function isRejectionTracked(rejectedAt: string | Date | null | undefined): boolean {
+  if (!rejectedAt) return false
+  return new Date(rejectedAt).getTime() >= FOLLOWUP_SINCE_MS
+}
+
+/** 逾期門檻：超過一週未處理就提醒（週報以週為單位）。 */
+export const FOLLOWUP_OVERDUE_DAYS = 7
+
+/** 撤回時限：超過一個月的動作不能撤回，避免甘特與里程碑無預警倒退。 */
+export const REVOKE_WINDOW_DAYS = 30
+
+/** 這個時間點的動作還在可撤回的期限內嗎？ */
+export function isWithinRevokeWindow(at: string | Date | null | undefined): boolean {
+  if (!at) return false
+  return Date.now() - new Date(at).getTime() <= REVOKE_WINDOW_DAYS * 86400000
+}

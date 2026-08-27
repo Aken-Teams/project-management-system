@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendMail } from '@/lib/send-mail'
 import { isSameUser } from '@/lib/user-match'
-import { notifyProjectOverdueIfNeeded, notifyReviewOverdueToAccountable } from '@/lib/notifications'
+import { notifyProjectOverdueIfNeeded, notifyReviewOverdueToAccountable, notifyRejectionOverdue, notifyUnsubmittedWeeklyDraft } from '@/lib/notifications'
 
 function replaceVars(template: string, vars: Record<string, string>): string {
   return template.replace(/{{(\w+)}}/g, (_, key) => vars[key] ?? `{{${key}}}`)
@@ -161,6 +161,10 @@ export async function POST(request: NextRequest) {
     if (!isPreview) {
       for (const project of projects) {
         await notifyReviewOverdueToAccountable({ projectId: project.id, projectName: project.name })
+        // 被駁回超過 7 天沒重送 → 通知執行者與其審核主管（8/26 以前的舊駁回不追）
+        await notifyRejectionOverdue({ projectId: project.id, projectName: project.name })
+        // 當責寫了草稿卻超過 7 天沒送出 → 通知當責（沒送出的內容不會進更新紀錄）
+        await notifyUnsubmittedWeeklyDraft({ projectId: project.id, projectName: project.name })
       }
     }
 

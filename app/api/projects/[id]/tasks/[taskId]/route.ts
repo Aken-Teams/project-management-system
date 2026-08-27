@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
+import { isWithinRevokeWindow, REVOKE_WINDOW_DAYS } from '@/lib/report-cutoff'
 import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded, notifyCompletionReopened, notifyApprovalRevoked, notifyReportRejected } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
@@ -123,6 +124,13 @@ export async function PUT(
     // 當責撤回完成確認 → 退回「待確認」：清掉 A 的審核與完成，但保留 R 的回報(reportedDoneAt)，
     //   因為 R 並沒有收回他的回報，球只是從「已完成」退回當責手上重新判斷。
     if (body.revokeConfirm) {
+      // 超過一個月的完成確認不能撤——甘特與里程碑無預警倒退的影響太大
+      const decidedAt = task.completedAt ?? task.reviewedAt
+      if (decidedAt && !isWithinRevokeWindow(decidedAt)) {
+        return NextResponse.json({
+          error: `完成確認已超過 ${REVOKE_WINDOW_DAYS} 天，無法撤回。如需重新開啟請調整任務狀態`,
+        }, { status: 409 })
+      }
       data.reviewedAt = null
       data.reviewedBy = null
       data.completedAt = null
@@ -199,6 +207,11 @@ export async function PUT(
         where: { taskId, publishedAt: { not: null } },
         data: { publishedAt: null, publishedBy: null },
       })
+      // 同上：駁回後 R 要重新判斷是否真的完成，清掉他先前的「回報完成」宣告
+      await prisma.task.updateMany({
+        where: { id: taskId, reportedDoneAt: { not: null } },
+        data: { reportedDoneAt: null, reportedDoneBy: null },
+      }).catch(() => {})
       const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
       // 退回主管 → 球在主管手上，他必須知道；執行者也要知道自己的回報被質疑
       await notifyReportRejected({

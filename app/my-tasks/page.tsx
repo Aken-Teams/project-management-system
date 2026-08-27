@@ -31,7 +31,7 @@ import { useAuth } from '@/lib/auth-context'
 import { isSameUser } from '@/lib/user-match'
 import { uploadFile } from '@/lib/upload-file'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree } from '@/lib/report-tracking'
-import { isReportVisible } from '@/lib/report-cutoff'
+import { isReportVisible, isRejectionTracked, isWithinRevokeWindow, REVOKE_WINDOW_DAYS } from '@/lib/report-cutoff'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { type Task, type TaskLog, type TaskLogAttachment, type SubTask, type Project } from '@/lib/mock-data'
@@ -1236,7 +1236,9 @@ export default function MyTasksPage() {
     if (!rReportDialogProject || !user) return []
     const byId = new Map(rReportDialogProject.tasks.map(t => [t.id, t]))
     return rReportDialogProject.taskLogs
-      .filter(l => isSameUser(l.author, user) && l.reviewerRejectedAt && !l.publishedAt)
+      // 只追 8/26 之後的駁回：更早的資料產生時還沒有這套追蹤與提醒，
+      // 現在才要求 R 回頭補不合理，清單也會永遠清不掉。（客戶決策 2026-08-27）
+      .filter(l => isSameUser(l.author, user) && !l.publishedAt && isRejectionTracked(l.reviewerRejectedAt))
       .map(l => {
         const t = byId.get(l.taskId)
         const ms = t ? rReportDialogProject.milestones.find(m => m.id === t.milestoneId) : undefined
@@ -3156,13 +3158,16 @@ export default function MyTasksPage() {
                               ? <>報告已轉給當責審核，須<b className="text-foreground">由當責先駁回</b>才能撤回核准。</>
                               : supSelectedFlow.stage === 'done'
                                 ? <>任務已完成，須<b className="text-foreground">由當責先撤回完成確認</b>才能撤回核准。</>
-                                : undefined
+                                : supSelectedFlow.steps.some(st => st.key === 'supervisor' && st.state === 'done' && !isWithinRevokeWindow(st.at))
+                                  ? <>核准已超過 {REVOKE_WINDOW_DAYS} 天，無法撤回。如需調整請與當責討論。</>
+                                  : undefined
                           }
                           renderRevoke={(step) => {
                             // 撤回必須從最下游開始：球只要已經傳到當責（待 A 審核）或更後面，
                             // 主管就不能自己抽回來——要當責先駁回，球回到主管這裡才輪得到他撤。
                             if (step.key !== 'supervisor' || !supFlowKey || supSelectedFlow.legacy) return null
                             if (supSelectedFlow.stage === 'accountable' || supSelectedFlow.stage === 'done') return null
+                            if (!isWithinRevokeWindow(step.at)) return null
                             const src = supFlows.actionable.get(supFlowKey)
                             const parts = supFlowKey.split(':')
                             const authorId = src?.authorId ?? parts[1]
@@ -5853,6 +5858,8 @@ export default function MyTasksPage() {
                     renderRevoke={(step) => {
                       // 當責只能撤回自己那一棒（確認完成）。流程未走到完成就沒得撤。
                       if (step.key !== 'complete' || reviewSelectedFlow.stage !== 'done') return null
+                      // 超過一個月的完成確認不能撤回——甘特與里程碑無預警倒退的影響太大
+                      if (!isWithinRevokeWindow(step.at)) return null
                       const proj = apiProjects.find(p => p.tasks.some(t => t.id === reviewSelectedFlow.taskId))
                       if (!proj) return null
                       return (
@@ -5924,6 +5931,7 @@ export default function MyTasksPage() {
               {reviewRejectItem && reviewFlowOf(reviewRejectItem.taskId)?.noReviewer
                 ? <>任務「{reviewRejectItem.title}」會退回給執行者的「待完成」。</>
                 : <>「{reviewRejectItem?.title}」的報告會<b>退回審核主管</b>重新審核，由主管決定是否再退給執行者。</>}
+              {' '}執行者先前的「回報完成」會一併取消，需由他重新判斷後再次回報。
               {' '}請填寫原因讓對方知道要改什麼。
             </AlertDialogDescription>
           </AlertDialogHeader>

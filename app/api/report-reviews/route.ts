@@ -5,7 +5,7 @@ import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
 import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable, notifyApprovalRevoked, notifyReportRejected } from '@/lib/notifications'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree, isTaskComplete } from '@/lib/report-tracking'
-import { isReportVisible } from '@/lib/report-cutoff'
+import { isReportVisible, isWithinRevokeWindow, REVOKE_WINDOW_DAYS } from '@/lib/report-cutoff'
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -462,6 +462,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 守衛③：超過一個月的核准不能撤——甘特與里程碑無預警倒退的影響太大
+      const approved = await prisma.taskLog.findFirst({
+        where: { projectId, taskId, authorId, weekOf: week, publishedAt: { not: null } },
+        orderBy: { publishedAt: 'desc' }, select: { publishedAt: true },
+      })
+      if (approved?.publishedAt && !isWithinRevokeWindow(approved.publishedAt)) {
+        return NextResponse.json({
+          error: `核准已超過 ${REVOKE_WINDOW_DAYS} 天，無法撤回。如需調整請與當責討論`,
+        }, { status: 409 })
+      }
+
       const res = await prisma.taskLog.updateMany({
         where: { projectId, taskId, authorId, weekOf: week, publishedAt: { not: null } },
         data: { publishedAt: null, publishedBy: null },
@@ -524,6 +535,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, rejected: 0, noop: true })
     }
     await prisma.taskReviewEvent.create({ data: { taskId, projectId, type: 'report_rejected', actor: reviewerName, note: body.note.trim() } }).catch(() => {})
+
+    // 報告被退 → 一併清掉 R 的「回報完成」宣告。
+    //   曾經送過不代表現在還成立：R 修好報告後要自己重新判斷是真的完成、還是需要再花時間，
+    //   不該由系統替他保留上一次的宣告。（客戶決策 2026-08-27）
+    await prisma.task.updateMany({
+      where: { id: taskId, reportedDoneAt: { not: null } },
+      data: { reportedDoneAt: null, reportedDoneBy: null },
+    }).catch(() => {})
 
     // 通知：被駁回的人一定要知道，否則只能自己回頭翻清單才會發現
     const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })

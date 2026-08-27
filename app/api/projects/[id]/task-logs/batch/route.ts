@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { isReportVisible } from '@/lib/report-cutoff'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 import { notifyRecordUploadedToAccountable, notifyReportReviewNeeded } from '@/lib/notifications'
 import { safeJsonParse } from '@/lib/utils'
@@ -153,10 +154,13 @@ export async function POST(
     })
 
     // Sync task progress & milestone
-    const allLogs = await prisma.taskLog.findMany({
+    const allLogs = (await prisma.taskLog.findMany({
       where: { taskId: body.taskId },
-      select: { taskId: true, logDate: true, author: { select: { name: true } } },
-    })
+      select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+    }))
+      // 與 my-tasks / projects 的算法一致：只有「已核准或 7/12 前的舊資料」才驅動進度。
+      // 不濾的話，R 一送出進度就先跳上去，下次載入又用已核准重算掉回來——進度會來回跳。
+      .filter(isReportVisible)
     await syncTaskProgressFromLogs([task], allLogs)
     await syncMilestoneStatus(task.milestoneId, id)
 

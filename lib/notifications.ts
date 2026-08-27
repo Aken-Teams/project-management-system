@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import type { NotificationType } from '@prisma/client'
 import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
+import { isRejectionTracked, FOLLOWUP_OVERDUE_DAYS } from '@/lib/report-cutoff'
 
 // ─── Core ──────────────────────────────────────────────────────────────────
 
@@ -460,6 +461,109 @@ export async function notifyReportRejected({
       message: `${actorName || '有人'}駁回了「${taskTitle}」，${where}`
         + `${reason ? `。原因：${reason}` : ''}`
         + `（專案：${projectName}）`,
+      projectId,
+    })
+  }
+}
+
+// ─── 駁回未修正 / 草稿未送出 的逾期提醒 ───────────────────────────────────────
+
+/**
+ * 報告被駁回超過 N 天仍未重送 → 通知執行者與其審核主管。
+ *
+ * 沒有這個提醒時，被退件的報告會無限期擱置（實測有擱置 30 天的），
+ * 而且 R 多半改在最新週另寫一筆，原本那週在更新紀錄就永久留白。
+ * 同專案彙總成一則、3 天內不重複發，避免洗版。
+ */
+export async function notifyRejectionOverdue({ projectId, projectName }: { projectId: string; projectName: string }) {
+  const cutoff = new Date(Date.now() - FOLLOWUP_OVERDUE_DAYS * 86400000)
+  const stale = await prisma.taskLog.findMany({
+    where: { projectId, publishedAt: null, reviewerRejectedAt: { not: null, lt: cutoff } },
+    select: { authorId: true, taskId: true, reviewerRejectedAt: true, task: { select: { title: true } } },
+  })
+  // 8/26 以前的駁回不追蹤（客戶決策：舊資料不回頭要求補）
+  const tracked = stale.filter(l => isRejectionTracked(l.reviewerRejectedAt))
+  if (tracked.length === 0) return
+
+  const members = await prisma.projectTeamMember.findMany({
+    where: { projectId },
+    select: { userId: true, reportReviewerEmail: true, reportReviewerName: true, user: { select: { id: true, name: true } } },
+  })
+  const since = new Date(Date.now() - 3 * 86400000) // 3 天內發過就不再發
+
+  // 依作者彙總：一位 R 一則，附帶他被退的筆數
+  const byAuthor = new Map<string, { count: number; titles: Set<string> }>()
+  for (const l of tracked) {
+    const e = byAuthor.get(l.authorId) ?? { count: 0, titles: new Set<string>() }
+    e.count++; e.titles.add(l.task.title)
+    byAuthor.set(l.authorId, e)
+  }
+
+  for (const [authorId, info] of byAuthor) {
+    const m = members.find(x => x.userId === authorId)
+    if (!m) continue
+    const titles = [...info.titles].slice(0, 3).join('、') + (info.titles.size > 3 ? ` 等 ${info.titles.size} 項` : '')
+    const msg = `「${projectName}」你有 ${info.count} 筆報告被駁回超過 ${FOLLOWUP_OVERDUE_DAYS} 天仍未重送（${titles}）。`
+      + `請到「填寫週報 → 待修正」回到原本那一週修改，否則該週在更新紀錄會留白。`
+
+    const recipients: string[] = [m.user.id]
+    // 一併通知其審核主管，讓他知道自己退的件沒有下文
+    const ref = m.reportReviewerEmail || m.reportReviewerName
+    if (ref) {
+      const rev = ref.includes('@')
+        ? await prisma.user.findUnique({ where: { email: ref }, select: { id: true } })
+        : await prisma.user.findFirst({ where: { name: ref }, select: { id: true } })
+      if (rev) recipients.push(rev.id)
+    }
+
+    for (const userId of recipients) {
+      const dup = await prisma.notification.findFirst({
+        where: { userId, projectId, type: 'report_rejected', createdAt: { gte: since } },
+        select: { id: true },
+      })
+      if (dup) continue
+      await createNotification({
+        userId,
+        type: 'report_rejected',
+        title: '有報告被駁回未修正',
+        message: userId === m.user.id ? msg
+          : `「${projectName}」${m.user.name} 有 ${info.count} 筆被你駁回的報告超過 ${FOLLOWUP_OVERDUE_DAYS} 天仍未重送（${titles}）`,
+        projectId,
+      })
+    }
+  }
+}
+
+/**
+ * 當責寫了補充／彙整卻遲遲沒送出週報 → 通知當責本人。
+ * 沒送出的補充不會進更新紀錄，寫了等於沒寫，但目前沒有任何提醒。
+ */
+export async function notifyUnsubmittedWeeklyDraft({ projectId, projectName }: { projectId: string; projectName: string }) {
+  const cutoff = new Date(Date.now() - FOLLOWUP_OVERDUE_DAYS * 86400000)
+  const drafts = await prisma.weeklyReportNote.findMany({
+    where: { projectId, submittedAt: null, updatedAt: { lt: cutoff } },
+    select: { weekOf: true, author: true, updatedAt: true },
+  })
+  if (drafts.length === 0) return
+
+  const accountables = await prisma.projectTeamMember.findMany({
+    where: { projectId, role: 'A' }, select: { user: { select: { id: true, name: true } } },
+  })
+  const weeks = [...new Set(drafts.map(d => d.weekOf))].sort()
+  const since = new Date(Date.now() - 3 * 86400000)
+
+  for (const a of accountables) {
+    const dup = await prisma.notification.findFirst({
+      where: { userId: a.user.id, projectId, type: 'weekly_report_ready', createdAt: { gte: since } },
+      select: { id: true },
+    })
+    if (dup) continue
+    await createNotification({
+      userId: a.user.id,
+      type: 'weekly_report_ready',
+      title: '有週報草稿未送出',
+      message: `「${projectName}」你有 ${weeks.length} 週的報告草稿寫了但還沒送出（${weeks.slice(0, 3).join('、')}${weeks.length > 3 ? ' 等' : ''}）。`
+        + `未送出的內容不會進入更新紀錄。`,
       projectId,
     })
   }
