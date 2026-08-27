@@ -172,14 +172,16 @@ export async function PUT(
       }
     }
 
-    if (Object.keys(data).length === 0) {
+    // 有些動作不改任務本身、只有副作用（例：當責駁回退回主管＝只收回 taskLog 的 publishedAt）。
+    // 這類請求的 data 會是空的，不能當成「沒提供欄位」擋掉。
+    const sideEffectOnly = !!body.rejectToReviewer
+    if (Object.keys(data).length === 0 && !sideEffectOnly) {
       return NextResponse.json({ error: '沒有提供任何更新欄位' }, { status: 400 })
     }
 
-    const updated = await prisma.task.update({
-      where: { id: taskId },
-      data,
-    })
+    const updated = Object.keys(data).length > 0
+      ? await prisma.task.update({ where: { id: taskId }, data })
+      : task
 
     // 審視歷程：記錄 R 回報/取消、A 確認/退回，供追蹤
     if (body.reviewEvent) {

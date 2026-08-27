@@ -579,10 +579,18 @@ export interface SummaryFlowInput {
   logCount?: number
   /** 計畫逾期（僅影響文案，不改變棒次） */
   overdue?: boolean
+  /** 當責姓名，供「下一棒」顯示人名而非只有角色代號 */
+  accountableName?: string | null
+  /**
+   * 指定棒次，覆蓋由 reportKind 推導的結果。
+   * 主管端專用：分桶要回答「本週誰沒交」（週別限定），時間軸要描述「這個任務的報告鏈」
+   * （任務層級）。兩者時間範圍不同，硬用同一份推導會讓已發生的環節被畫成沒發生。
+   */
+  stageOverride?: FlowStage
 }
 
 export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
-  const stage = deriveFlowStage({
+  const stage = i.stageOverride ?? deriveFlowStage({
     completed: i.completed, reportedDone: i.reportedDone, reportKind: i.reportKind,
     activeThisWeek: i.activeThisWeek ?? false, hasReviewer: true,
   })
@@ -598,7 +606,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
       .filter(Boolean).join(' · ') || null,
     reviewerName: i.reviewerName ?? null, decidedAt: i.decidedAt ?? null,
     rejectNote: i.rejectNote ?? null,
-    accountableName: null, reviewedAt: null, reviewedBy: null, reportedDoneAt: null,
+    accountableName: i.accountableName ?? null, reviewedAt: null, reviewedBy: null, reportedDoneAt: null,
     aReject: null, completedAt: null, completedBy: null,
     viewerIsReviewer: true,
   }))

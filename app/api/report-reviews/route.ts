@@ -137,11 +137,24 @@ export async function GET(request: NextRequest) {
     select: { id: true, taskId: true, authorId: true, weekOf: true, logDate: true, publishedAt: true, reviewerRejectedAt: true, content: true, attachments: true, nextPlans: true },
   })
 
+  // 任務層級的報告（不限週別）：流程時間軸要描述「這個任務的報告鏈」，
+  //   只看所選週會把別週已完成的環節畫成沒發生（實際踩過：W30 交並核准，看 W35 全變空心）。
+  const allTaskLogs = await prisma.taskLog.findMany({
+    where: { projectId: { in: projectIds } },
+    select: { taskId: true, authorId: true, createdAt: true, publishedAt: true, publishedBy: true, reviewerRejectedAt: true, reviewerNote: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
   type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected'; createdAt?: string }
   type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
   type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
-  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[] }
+  type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[]
+  // ↓ 任務層級（不限週別），供流程時間軸使用
+  taskReviewState: 'none' | 'pending' | 'published' | 'rejected'
+  taskSubmittedAt: string | null
+  taskDecidedAt: string | null
+  taskRejectNote: string | null }
   type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
@@ -203,8 +216,34 @@ export async function GET(request: NextRequest) {
             nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
             status: l.publishedAt ? 'approved' : l.reviewerRejectedAt ? 'rejected' : 'pending',
           }))
+        // 任務層級：這位成員在此任務的全部報告（不限週別）
+        const myAllLogs = owned ? allTaskLogs.filter(l => l.taskId === t.id && l.authorId === m.userId) : []
+        let taskReviewState: 'none' | 'pending' | 'published' | 'rejected' = 'none'
+        let taskDecidedAt: string | null = null
+        let taskRejectNote: string | null = null
+        if (myAllLogs.length > 0) {
+          const pend = myAllLogs.filter(l => !l.publishedAt && !l.reviewerRejectedAt)
+          if (pend.length > 0) {
+            taskReviewState = 'pending'
+          } else {
+            const pub = myAllLogs.filter(l => l.publishedAt)
+            if (pub.length > 0) {
+              taskReviewState = 'published'
+              taskDecidedAt = pub[pub.length - 1].publishedAt!.toISOString()
+            } else {
+              taskReviewState = 'rejected'
+              const rej = myAllLogs.filter(l => l.reviewerRejectedAt)
+              taskDecidedAt = rej[rej.length - 1].reviewerRejectedAt!.toISOString()
+              taskRejectNote = rej[rej.length - 1].reviewerNote ?? null
+            }
+          }
+        }
+
         return {
           taskId: t.id, taskTitle: t.title, depth, owned, done,
+          taskReviewState,
+          taskSubmittedAt: myAllLogs[0]?.createdAt.toISOString() ?? null,
+          taskDecidedAt, taskRejectNote,
           msName: depth === 0 ? (t.milestone?.name ?? null) : null,
           planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
           overdue: owned && isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
@@ -282,9 +321,19 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  // 各專案的當責(A)姓名——流程圖的「下一棒」要顯示人名，沒有就只剩角色代號
+  const accByProject = new Map<string, string>()
+  for (const a of await prisma.projectTeamMember.findMany({
+    where: { projectId: { in: projectIds }, role: 'A' },
+    select: { projectId: true, user: { select: { name: true } } },
+  })) {
+    if (!accByProject.has(a.projectId)) accByProject.set(a.projectId, a.user.name)
+  }
+
   const projects = Array.from(projMap.values()).map(p => ({
     projectId: p.projectId,
     projectName: p.projectName,
+    accountableName: accByProject.get(p.projectId) ?? null,
     reviewees: Array.from(p.reviewees.values()),
   }))
 

@@ -195,7 +195,13 @@ type TrackingItem = {
   taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null
   planStart: string; planEnd: string
   overdue: boolean; reportedDone: boolean; filled: boolean
+  /** 本週的報告狀態——用來判斷「本週誰沒交」 */
   reviewState: 'none' | 'pending' | 'published' | 'rejected'
+  /** 任務層級的報告狀態（不限週別）——流程時間軸用這個，才會與 A 端一致 */
+  taskReviewState: 'none' | 'pending' | 'published' | 'rejected'
+  taskSubmittedAt: string | null
+  taskDecidedAt: string | null
+  taskRejectNote: string | null
   logs: ReviewLogItem[]
 }
 type Reviewee = {
@@ -204,7 +210,7 @@ type Reviewee = {
   submittedThisWeek: boolean; openTaskCount: number
   tracking: TrackingItem[]
 }
-type ReviewProject = { projectId: string; projectName: string; reviewees: Reviewee[] }
+type ReviewProject = { projectId: string; projectName: string; accountableName?: string | null; reviewees: Reviewee[] }
 
 type ReviewLogRow = { log: TaskLog; srcTitle?: string }
 type ReviewItem = { projectId: string; projectName: string; task: Task; path: string; reporter: string; reportedAt: string; logRows: ReviewLogRow[]; fileCount: number }
@@ -332,12 +338,17 @@ export default function MyTasksPage() {
     for (const rv of proj.reviewees) {
       for (const t of rv.tracking) {
         if (!t.owned) continue // 上層節點只提供層級脈絡，不是待辦
+        // 時間軸用「任務層級」的報告鏈（不限週別），才會跟 A 端看到的一致；
+        // 但分桶仍要回答「本週誰沒交」，所以未填的情況用 stageOverride 強制歸到「待 R 填報告」。
+        const notFiledThisWeek = t.owned && !t.filled && !t.done && !t.reportedDone
         const f = buildFlowFromSummary({
           taskId: t.taskId, title: t.taskTitle, assignee: rv.authorName,
           path: t.msName,
-          reportKind: t.reviewState, reportedDone: t.reportedDone, completed: t.done,
-          activeThisWeek: true, weekOf: reviewTrackWeek, overdue: t.overdue,
-          submittedAt: firstAt(t.logs), reviewerName: user?.name ?? null,
+          reportKind: t.taskReviewState, reportedDone: t.reportedDone, completed: t.done,
+          stageOverride: notFiledThisWeek ? 'unfilled' : undefined,
+          activeThisWeek: notFiledThisWeek, weekOf: reviewTrackWeek, overdue: t.overdue,
+          submittedAt: t.taskSubmittedAt, decidedAt: t.taskDecidedAt, rejectNote: t.taskRejectNote,
+          reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
           attachments: attOf(t.logs), logCount: t.logs.length,
         })
         map.set(`track:${rv.authorId}:${t.taskId}`, f)
@@ -354,7 +365,8 @@ export default function MyTasksPage() {
           taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
           reportKind: 'pending', reportedDone: sub.reportedDone, completed: false,
           activeThisWeek: true, weekOf: sub.weekOf, submittedAt: firstAt(sub.logs),
-          reviewerName: user?.name ?? null, attachments: attOf(sub.logs), logCount: sub.logs.length,
+          reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
+          attachments: attOf(sub.logs), logCount: sub.logs.length,
         }))
       }
       for (const sub of rv.reviewed) {
@@ -365,7 +377,8 @@ export default function MyTasksPage() {
           reportKind: sub.outcome === 'approved' ? 'published' : 'rejected',
           reportedDone: false, completed: false, activeThisWeek: true, weekOf: sub.weekOf,
           submittedAt: firstAt(sub.logs), decidedAt: sub.reviewedAt, rejectNote: sub.note,
-          reviewerName: user?.name ?? null, attachments: attOf(sub.logs), logCount: sub.logs.length,
+          reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
+          attachments: attOf(sub.logs), logCount: sub.logs.length,
         }))
       }
     }
@@ -1900,12 +1913,18 @@ export default function MyTasksPage() {
           ? { rejectToReviewer: true, reviewEvent: 'rejected', reviewActor: user.name, reviewNote: reviewRejectReason.trim() || undefined }
           : { reportedDone: false, reviewEvent: 'rejected', reviewActor: user.name, reviewNote: reviewRejectReason.trim() || undefined }),
       })
-      if (!res.ok) throw new Error()
+      // 帶出後端訊息，不要只丟一句「請稍後再試」讓人無從判斷
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || '')
+      }
       setReviewRejectItem(null); setReviewRejectReason('')
       toast.success(hasReviewerForReject ? '已駁回，報告退回主管重新審核' : '已駁回，任務退回執行者')
       await refreshMyTasks()
       await refetchReviewInbox()
-    } catch { setRErrorMsg('駁回失敗，請稍後再試') } finally { setReviewProcessing(null) }
+    } catch (e) {
+      setRErrorMsg((e as Error).message || '駁回失敗，請稍後再試')
+    } finally { setReviewProcessing(null) }
   }
 
   // 回報狀態徽章：區分「已回報完成（送 A 審核）」與「只是填了工作紀錄、還沒回報」
