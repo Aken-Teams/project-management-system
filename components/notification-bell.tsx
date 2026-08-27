@@ -38,6 +38,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'report-done-review': ClipboardList,
   'report-review-overdue': AlertTriangle,
   'completion-reopened': Undo2,
+  'approval-revoked': Undo2,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -55,6 +56,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'report-done-review': 'text-amber-500',
   'report-review-overdue': 'text-red-500',
   'completion-reopened': 'text-orange-500',
+  'approval-revoked': 'text-orange-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -71,8 +73,16 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'report-published': '報告已進更新紀錄',
   'report-done-review': '待審核完成',
   'completion-reopened': '完成被解除',
+  'approval-revoked': '審核被撤回',
   'report-review-overdue': '審核逾期',
 }
+
+// 查表防呆：後端新增通知型別、前端還沒登記時，回退成通用樣式。
+// （實際踩過：新增 approval_revoked 後 <Icon /> 拿到 undefined，整個通知鈴直接崩潰。）
+const iconOf = (t: NotificationType) => NOTIFICATION_ICONS[t] ?? Bell
+const colorOf = (t: NotificationType) => NOTIFICATION_COLORS[t] ?? 'text-muted-foreground'
+const labelOf = (t: NotificationType) => NOTIFICATION_LABEL[t] ?? '通知'
+
 
 function formatRelativeTime(dateStr: string): string {
   const now = new Date()
@@ -166,15 +176,15 @@ export function NotificationBell({
           {summary.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {summary.map(([type, count]) => {
-                const Icon = NOTIFICATION_ICONS[type]
-                const color = NOTIFICATION_COLORS[type]
+                const Icon = iconOf(type)
+                const color = colorOf(type)
                 return (
                   <span
                     key={type}
                     className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium', color, 'border-current/20 bg-current/5')}
                   >
                     <Icon className="h-2.5 w-2.5" />
-                    {NOTIFICATION_LABEL[type]} {count}
+                    {labelOf(type)} {count}
                   </span>
                 )
               })}
@@ -193,8 +203,8 @@ export function NotificationBell({
             <div className="max-h-72 overflow-y-auto overscroll-contain">
               <div className="divide-y">
                 {recentNotifications.map(notification => {
-                  const Icon = NOTIFICATION_ICONS[notification.type]
-                  const iconColor = NOTIFICATION_COLORS[notification.type]
+                  const Icon = iconOf(notification.type)
+                  const iconColor = colorOf(notification.type)
                   const canNavigate = !!notificationHref(notification)
 
                   return (

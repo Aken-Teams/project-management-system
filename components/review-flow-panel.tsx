@@ -25,11 +25,12 @@ import { Fragment } from 'react'
 import {
   Check, ChevronRight, CircleDot, Clock, FileText, Paperclip,
   Undo2, UserRound, Flag, Circle, MinusCircle, TriangleAlert, X,
-  PanelRightClose, PanelRightOpen, GitBranch,
+  PanelRightClose, PanelRightOpen, GitBranch, Info,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isReportVisible } from '@/lib/report-cutoff'
 import { Badge } from '@/components/ui/badge'
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 
 // ─────────────────────────────────────────────────────────
 // 型別
@@ -679,19 +680,34 @@ export function stageDesc(stage: FlowStage, viewer: FlowViewer): string {
   return viewer === 'supervisor' ? STAGE_META[stage].supDesc : STAGE_META[stage].desc
 }
 
-/** 棒次視角清單頂端的說明條：講清楚這一格裝什麼 */
+/**
+ * 棒次視角清單頂端的說明條。
+ * 定義放在 ⓘ 的 hover 裡而不是常駐——需要的人查得到，不需要的人不必每次都被那兩行佔版面。
+ */
 export function StageLensHeader({ stage, viewer, count }: { stage: FlowStage; viewer: FlowViewer; count: number }) {
   const meta = STAGE_META[stage]
   return (
-    <div className="flex items-start gap-2 border-b bg-muted/30 px-4 py-2">
-      <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', meta.dot)} />
-      <div className="min-w-0">
-        <div className="text-xs font-medium">
-          {stageLabel(stage, viewer)}
-          <span className="ml-1.5 text-muted-foreground tabular-nums font-normal">{count} 件</span>
-        </div>
-        <div className="text-[11px] text-muted-foreground leading-relaxed">{stageDesc(stage, viewer)}</div>
-      </div>
+    <div className="flex items-center gap-1.5 border-b bg-muted/30 px-4 py-1.5">
+      <span className={cn('h-2 w-2 shrink-0 rounded-full', meta.dot)} />
+      <span className="text-xs font-medium">{stageLabel(stage, viewer)}</span>
+      <span className="text-xs text-muted-foreground tabular-nums">{count} 件</span>
+      <HoverCard openDelay={80} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <button type="button" aria-label={`${stageLabel(stage, viewer)}的定義`}
+            className="inline-flex cursor-help items-center rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground">
+            <Info className="h-4 w-4" />
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent align="start" side="bottom" className="w-auto max-w-[280px] p-0 overflow-hidden">
+          <div className={cn('flex items-center gap-1.5 border-b px-2.5 py-1.5', meta.chip)}>
+            <span className={cn('h-2 w-2 rounded-full shrink-0', meta.dot)} />
+            <span className="text-xs font-medium">{stageLabel(stage, viewer)}</span>
+          </div>
+          <p className="px-2.5 py-2 text-xs leading-relaxed text-muted-foreground">
+            {stageDesc(stage, viewer)}
+          </p>
+        </HoverCardContent>
+      </HoverCard>
     </div>
   )
 }

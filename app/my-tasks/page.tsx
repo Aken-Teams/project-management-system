@@ -1488,8 +1488,9 @@ export default function MyTasksPage() {
                     </span>
                   )}
                   <StageChip stage={flow.stage} viewer="accountable" days={flow.stuckDays} />
-                  {/* 已完成就沒有東西要審了，這個提醒只在流程還在跑時才有意義 */}
-                  {flow.noReviewer && flow.stage !== 'done' && (
+                  {/* 只在「真的還有東西要 A 審」時才標。執行中(報告已納入紀錄)與已完成都沒有待辦，
+                      標了只會讓 A 以為自己還有事沒做。 */}
+                  {flow.noReviewer && flow.stage !== 'done' && flow.stage !== 'running' && (
                     <span className="inline-flex items-center gap-0.5 text-[11px] text-orange-700 dark:text-orange-400"
                       title="此成員未設報告審核主管，報告直接由你審核">
                       <AlertTriangle className="h-3 w-3" />由你代審

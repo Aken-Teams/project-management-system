@@ -48,6 +48,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'report-done-review': ClipboardList,
   'report-review-overdue': AlertTriangle,
   'completion-reopened': Undo2,
+  'approval-revoked': Undo2,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -65,6 +66,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'report-done-review': 'text-amber-500',
   'report-review-overdue': 'text-red-500',
   'completion-reopened': 'text-orange-500',
+  'approval-revoked': 'text-orange-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -82,7 +84,15 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'report-done-review': '待審核完成',
   'report-review-overdue': '審核逾期',
   'completion-reopened': '完成被解除',
+  'approval-revoked': '審核被撤回',
 }
+
+// 查表防呆：後端新增通知型別、前端還沒登記時，回退成通用樣式。
+// （實際踩過：新增 approval_revoked 後 <Icon /> 拿到 undefined，整個通知鈴直接崩潰。）
+const iconOf = (t: NotificationType) => NOTIFICATION_ICONS[t] ?? Bell
+const colorOf = (t: NotificationType) => NOTIFICATION_COLORS[t] ?? 'text-muted-foreground'
+const labelOf = (t: NotificationType) => NOTIFICATION_LABEL[t] ?? '通知'
+
 
 const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
   { value: 'all', label: '全部' },
@@ -99,6 +109,7 @@ const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
   { value: 'report-done-review', label: '待審核完成' },
   { value: 'report-review-overdue', label: '審核逾期' },
   { value: 'completion-reopened', label: '完成被解除' },
+  { value: 'approval-revoked', label: '審核被撤回' },
 ]
 
 function formatTime(dateStr: string): string {
@@ -350,8 +361,8 @@ export default function NotificationsPage() {
         ) : (
           <div className="space-y-2">
             {filtered.map(n => {
-              const Icon = NOTIFICATION_ICONS[n.type]
-              const iconColor = NOTIFICATION_COLORS[n.type]
+              const Icon = iconOf(n.type)
+              const iconColor = colorOf(n.type)
               const canNavigate = !!notificationHref(n)
 
               return (
@@ -382,10 +393,10 @@ export default function NotificationsPage() {
                           </span>
                           <span className={cn(
                             'inline-flex items-center rounded-full border px-2 py-0 text-[11px] font-medium',
-                            NOTIFICATION_COLORS[n.type],
+                            colorOf(n.type),
                             'border-current/20 bg-current/5'
                           )}>
-                            {NOTIFICATION_LABEL[n.type]}
+                            {labelOf(n.type)}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed">{n.message}</p>
