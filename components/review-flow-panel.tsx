@@ -427,6 +427,28 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
   return steps
 }
 
+/**
+ * 收斂成單一焦點：流程上只能有一個「現在在這」。
+ * 例：R 沒填本週報告就直接按「回報完成」→「本週未交」與「等當責確認」同時成立，
+ * 但球實際上在最下游那一棒。較早的 current 降級為 todo，說明文字保留。
+ */
+function keepSingleCurrent(steps: FlowStep[]): FlowStep[] {
+  const idxs = steps.map((s, i) => (s.state === 'current' ? i : -1)).filter(i => i >= 0)
+  if (idxs.length <= 1) return steps
+  const keep = idxs[idxs.length - 1]
+  return steps.map((s, i) => (s.state === 'current' && i !== keep ? { ...s, state: 'todo' as const } : s))
+}
+
+/** 「下一棒」的角色名。步驟標題本身已含角色，roleLabel 多半留空，這裡依棒次補回。 */
+const STEP_OWNER: Record<FlowStep['key'], string> = {
+  report: '執行者 R',
+  supervisor: '報告審核主管',
+  'no-reviewer': '當責 A',
+  record: '當責 A',
+  accountable: '當責 A',
+  complete: '系統',
+}
+
 /** 輪到當責時，該給哪一組按鈕：審報告？還是確認完成？ */
 function pendingActionOf(steps: FlowStep[], stage: FlowStage): ReviewFlow['pendingAction'] {
   if (stage !== 'accountable') return null
@@ -444,7 +466,7 @@ function ballOf(steps: FlowStep[], stage: FlowStage, assignee: string): ReviewFl
   // 一律正規化成 null，讓呈現端退回角色名，而不是渲染出「現在在 　 手上」這種空洞。
   const clean = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null)
   if (active.state === 'rejected') return { who: clean(assignee), roleLabel: '執行者 R' }
-  return { who: clean(active.who), roleLabel: active.roleLabel || '下一位審核者' }
+  return { who: clean(active.who), roleLabel: active.roleLabel || STEP_OWNER[active.key] }
 }
 
 export interface BuildFlowInput {
@@ -478,7 +500,7 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
   const weekLabel = formatWeekLabel(sorted.find(l => l.weekOf)?.weekOf)
   const lastReject = [...events].reverse().find(e => e.type === 'rejected')
 
-  const steps = buildSteps({
+  const steps = keepSingleCurrent(buildSteps({
     reportKind: rs.kind, legacy: rs.legacy, hasReviewer, reportedDone, completed, activeThisWeek,
     assignee: sorted[0]?.author || task.assignee || '', stage,
     submittedAt: sorted[0]?.createdAt ?? sorted[0]?.logDate ?? null,
@@ -494,7 +516,7 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
       : null,
     completedAt: task.completedAt ?? null, completedBy: task.completedBy ?? null,
     viewerIsReviewer: false,
-  })
+  }))
 
   const assignee = task.assignee || ''
   return {
@@ -543,7 +565,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
   const weekLabel = formatWeekLabel(i.weekOf)
   const attachments = i.attachments ?? 0
 
-  const steps = buildSteps({
+  const steps = keepSingleCurrent(buildSteps({
     reportKind: i.reportKind, hasReviewer: true, reportedDone: i.reportedDone,
     completed: i.completed, activeThisWeek: i.activeThisWeek ?? false, overdue: i.overdue,
     assignee: i.assignee, stage,
@@ -555,7 +577,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
     accountableName: null, reviewedAt: null, reviewedBy: null, reportedDoneAt: null,
     aReject: null, completedAt: null, completedBy: null,
     viewerIsReviewer: true,
-  })
+  }))
 
   return {
     taskId: i.taskId, title: i.title, path: i.path ?? null, stage,
@@ -917,14 +939,25 @@ export function ReviewFlowTimeline({
                     </p>
                   )}
 
-                  {/* 撤回：長在「已經走過的那一棒」上，語意才清楚——你要收回的是這個動作 */}
-                  {step.state === 'done' && renderRevoke?.(step)}
 
                 </div>
               </li>
             )
           })}
         </ol>
+
+        {/* 撤回：放在流程區右下角。它是例外操作，不該像審核按鈕那樣常駐在顯眼位置，
+            但也不能藏到找不到——右下角是「看得到、要找一下才按得到」的位置。 */}
+        {(() => {
+          if (!renderRevoke) return null
+          const nodes = flow.steps.filter(st => st.state === 'done').map(st => renderRevoke(st)).filter(Boolean)
+          if (nodes.length === 0) return null
+          return (
+            <div className="mt-3 flex justify-end gap-2 border-t pt-2.5">
+              {nodes.map((n, i) => <Fragment key={i}>{n}</Fragment>)}
+            </div>
+          )
+        })()}
       </div>
 
       {/* 操作列：固定在底部、靠最右。時間軸再長也不會把按鈕捲出視野 */}

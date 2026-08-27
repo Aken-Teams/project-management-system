@@ -39,6 +39,9 @@ interface UpdateTaskBody {
   //   撤回是逆流程往回退一棒，只有最下游的當責能發動；上游要撤得等當責先撤。
   revokeConfirm?: boolean
   revokeReason?: string
+  // 當責駁回「退回上一棒（報告審核主管）」：清掉該任務已核准報告的 publishedAt，
+  // 讓報告回到主管的待審清單，由主管決定是否再退給 R。無主管時呼叫端不會帶此旗標。
+  rejectToReviewer?: boolean
   reopenNotify?: boolean   // 解除完成時：通知此任務負責人＋所有仍完成的父層負責人（completion_reopened）
   reopenActor?: string     // 操作者姓名（避免通知自己）
 }
@@ -187,6 +190,21 @@ export async function PUT(
 
     // 解除完成 → 通知該任務負責人＋往上仍為完成的父層負責人（他們的完成已失效，需重新確認/補報告）。
     //   以「更新前」的狀態判斷是否原本已完成，避免對本來就未完成的任務誤發。
+    // 當責駁回 → 退回主管：把已核准的報告收回待審，並通知主管與執行者
+    if (body.rejectToReviewer) {
+      const reason = body.reviewNote?.trim() || null
+      await prisma.taskLog.updateMany({
+        where: { taskId, publishedAt: { not: null } },
+        data: { publishedAt: null, publishedBy: null },
+      })
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyApprovalRevoked({
+        projectId: id, projectName: proj?.name || '專案',
+        taskId, taskTitle: updated.title,
+        stage: 'approval', actorName: body.reviewActor || null, reason,
+      }).catch(() => {})
+    }
+
     // 撤回：寫審計事件 + 通知上下游（執行者、報告審核主管）
     if (body.revokeConfirm) {
       const reason = body.revokeReason?.trim() || null

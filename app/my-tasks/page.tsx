@@ -70,6 +70,7 @@ import {
   ChevronDown,
   ChevronRight,
   PanelRightClose,
+  CalendarDays,
   CheckCircle2,
   Clock,
   AlertCircle,
@@ -253,6 +254,9 @@ const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
   report_submitted: { label: '送出待審', cls: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400' },
   report_approved: { label: '主管核准', cls: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-400' },
   report_rejected: { label: '主管駁回', cls: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400' },
+  // 撤回（流程往回退一棒）
+  confirm_revoked: { label: '撤回確認', cls: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400' },
+  report_approve_revoked: { label: '撤回核准', cls: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/30 dark:text-orange-400' },
 }
 
 export default function MyTasksPage() {
@@ -301,6 +305,10 @@ export default function MyTasksPage() {
   // ── 主管端流程面板：右欄顯示所選項目的完整審核鏈 ──
   const [supFlowKey, setSupFlowKey] = useState<string | null>(null)
   const [supStageFilter, setSupStageFilter] = useState<FlowStage | null>(null)
+  // 待審核／已審核的視角：依成員 或 依任務（週別沿用填報追蹤那組，三個分頁看同一週）
+  const [supViewBy, setSupViewBy] = useState<'member' | 'task'>('member')
+  // 週別篩選：'all' = 不限週別（舊資料多半沒有填報週，預設不濾才不會整片消失）
+  const [supWeekFilter, setSupWeekFilter] = useState<'all' | 'week'>('all')
   const subKey = (projectId: string, authorId: string, s: ReviewSubmission) => `${projectId}:${authorId}:${s.taskId}:${s.weekOf ?? '_'}`
   // 選取鍵：與對話框內 keyOf() 同格式，右欄才對得上左欄那一列
   const supRowKey = (projectId: string, authorId: string, taskId: string, weekOf: string | null) => `${projectId}:${authorId}:${taskId}:${weekOf ?? '_'}`
@@ -1279,25 +1287,45 @@ export default function MyTasksPage() {
       .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
   }, [rFlowTargetId, rReportDialogProject])
 
-  // 主管清單：依成員分組（他督導多人，人名重複才是這邊的雜訊來源）
-  const renderSupRowsByMember = (
+  // 主管清單：先依週別篩選，再依「成員」或「任務」分組。
+  //   週別是篩選條件不是分類軸——同一週內主管想切換的是「誰交了什麼」還是「哪些任務有報告」。
+  const renderSupRows = (
     rows: { rv: Reviewee; s: ReviewSubmission | ReviewedSubmission }[],
     pid: string,
     keyOf: (authorId: string, taskId: string, weekOf: string | null) => string,
+    emptyText: string,
   ) => {
-    const groups: { author: Reviewee; items: typeof rows }[] = []
-    for (const r of rows) {
-      const last = groups[groups.length - 1]
-      if (last && last.author.authorId === r.rv.authorId) last.items.push(r)
-      else groups.push({ author: r.rv, items: [r] })
+    const shown = supWeekFilter === 'week'
+      ? rows.filter(r => r.s.weekOf === reviewTrackWeek)
+      : rows
+    if (shown.length === 0) {
+      return <p className="text-sm text-muted-foreground text-center px-4 py-8">
+        {supWeekFilter === 'week' ? '這一週沒有符合的報告' : emptyText}
+      </p>
     }
+
+    // 分組：依成員＝人名當標題；依任務＝任務名當標題（同任務跨週的報告收在一起）
+    const groups = new Map<string, { title: string; avatar: string | null; items: typeof shown }>()
+    for (const r of shown) {
+      const gk = supViewBy === 'member' ? `m:${r.rv.authorId}` : `t:${r.s.taskId}`
+      const g = groups.get(gk)
+      if (g) g.items.push(r)
+      else groups.set(gk, {
+        title: supViewBy === 'member' ? r.rv.authorName : r.s.taskTitle,
+        avatar: supViewBy === 'member' ? r.rv.authorName : null,
+        items: [r],
+      })
+    }
+
     return (
       <div>
-        {groups.map((g, gi) => (
-          <div key={`${g.author.authorId}#${gi}`}>
+        {[...groups.entries()].map(([gk, g]) => (
+          <div key={gk}>
             <div className="sticky top-0 z-10 flex items-center gap-1.5 border-y bg-muted/85 px-4 py-1.5 backdrop-blur">
-              <FlowAvatar name={g.author.authorName} size={18} />
-              <span className="text-[11px] font-medium text-muted-foreground truncate">{g.author.authorName}</span>
+              {g.avatar
+                ? <FlowAvatar name={g.avatar} size={18} />
+                : <ListChecks className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+              <span className="text-[11px] font-medium text-muted-foreground truncate">{g.title}</span>
               <span className="ml-auto shrink-0 rounded bg-background px-1.5 text-[11px] font-semibold tabular-nums">{g.items.length}</span>
             </div>
             <div className="divide-y divide-border/60">
@@ -1310,14 +1338,27 @@ export default function MyTasksPage() {
                   <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
                     className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
                       supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
-                    <div className="text-sm font-medium truncate">{sub.taskTitle}</div>
+                    <div className="flex items-start gap-2">
+                      {/* 群組已經講過的那一項，列上就不重複 */}
+                      <div className="min-w-0 flex-1 text-sm font-medium truncate">
+                        {supViewBy === 'member' ? sub.taskTitle : rv.authorName}
+                      </div>
+                      {outcome && (
+                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium',
+                          outcome === 'approved'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300')}>
+                          {outcome === 'approved' ? '已核准' : '已駁回'}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>
                       {outcome === 'rejected' && 'note' in sub && sub.note ? `駁回原因：${sub.note}` : brief}
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                       {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
                       {sub.weekOf && (
-                        <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap" title="此報告的填報週">
+                        <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap">
                           {formatReportWeek(sub.weekOf)}
                         </span>
                       )}
@@ -1331,6 +1372,33 @@ export default function MyTasksPage() {
       </div>
     )
   }
+
+  /** 待審核／已審核共用的工具列：週別篩選 + 依成員/依任務 */
+  const renderSupToolbar = () => (
+    <div className="space-y-2 px-4 py-3 border-b">
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit shrink-0">
+          {([['all', '不限週別'], ['week', '指定週別']] as const).map(([v, label]) => (
+            <button key={v} type="button" onClick={() => setSupWeekFilter(v)}
+              className={cn('px-2.5 py-1 text-xs rounded-md transition-colors',
+                supWeekFilter === v ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit shrink-0 ml-auto">
+          {([['member', '依成員'], ['task', '依任務']] as const).map(([v, label]) => (
+            <button key={v} type="button" onClick={() => setSupViewBy(v)}
+              className={cn('px-2.5 py-1 text-xs rounded-md transition-colors',
+                supViewBy === v ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {supWeekFilter === 'week' && <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />}
+    </div>
+  )
 
   // 選取項目時一併決定右欄預設看哪一頁（審核情境看流程、瀏覽情境看內容）
   const selectReviewFlow = (taskId: string, defaultTab: FlowPanelTab = 'flow') => {
@@ -1709,7 +1777,7 @@ export default function MyTasksPage() {
           body: JSON.stringify({ revokeConfirm: true, revokeReason: reason, reviewActor: user.name }),
         })
         if (!res.ok) { toast.error('撤回失敗，請稍後再試'); return }
-        toast.success('已撤回完成確認，任務回到「待你處理」')
+        toast.success('已撤回確認，任務回到「待你處理」')
       } else {
         const res = await fetch('/api/report-reviews', {
           method: 'POST',
@@ -1778,16 +1846,23 @@ export default function MyTasksPage() {
   const reviewDoReject = async () => {
     if (!user || !reviewRejectItem) return
     const it = reviewRejectItem
+    const hasReviewerForReject = !!reviewFlowOf(it.taskId) && !reviewFlowOf(it.taskId)!.noReviewer
     setReviewProcessing(it.taskId)
     try {
       const res = await fetch(`/api/projects/${it.projectId}/tasks/${it.taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportedDone: false, reviewEvent: 'rejected', reviewActor: user.name, reviewNote: reviewRejectReason.trim() || undefined }),
+        // 逐棒回退：有審核主管就退給主管（報告收回待審、保留 R 的回報），
+        // 由主管決定是否再退給 R；沒有主管（當責代審）才直接退回 R。
+        body: JSON.stringify(hasReviewerForReject
+          ? { rejectToReviewer: true, reviewEvent: 'rejected', reviewActor: user.name, reviewNote: reviewRejectReason.trim() || undefined }
+          : { reportedDone: false, reviewEvent: 'rejected', reviewActor: user.name, reviewNote: reviewRejectReason.trim() || undefined }),
       })
       if (!res.ok) throw new Error()
       setReviewRejectItem(null); setReviewRejectReason('')
+      toast.success(hasReviewerForReject ? '已駁回，報告退回主管重新審核' : '已駁回，任務退回執行者')
       await refreshMyTasks()
+      await refetchReviewInbox()
     } catch { setRErrorMsg('駁回失敗，請稍後再試') } finally { setReviewProcessing(null) }
   }
 
@@ -2883,17 +2958,15 @@ export default function MyTasksPage() {
                       (() => {
                         const rows = pRows
                         if (rows.length === 0) {
-                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">目前沒有待審核的報告</p>
                         }
-                        return renderSupRowsByMember(rows, pid, keyOf)
+                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '目前沒有待審核的報告')}</>
                       })()
                     ) : (
                       (() => {
                         const rows = rRows
                         if (rows.length === 0) {
-                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">尚無已審核的報告</p>
                         }
-                        return renderSupRowsByMember(rows, pid, keyOf)
+                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '尚無已審核的報告')}</>
                       })()
                     )}
                     </div>
@@ -2924,7 +2997,7 @@ export default function MyTasksPage() {
                             return (
                               <button type="button"
                                 onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf }) }}
-                                className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
+                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                                 <Undo2 className="h-3 w-3" />撤回核准
                               </button>
                             )
@@ -5229,25 +5302,24 @@ export default function MyTasksPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {revokeTarget?.kind === 'confirm' ? '撤回完成確認？' : '撤回報告核准？'}
+              {revokeTarget?.kind === 'confirm' ? '撤回完成確認？' : '撤回核准？'}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
-                <div>
-                  {revokeTarget?.kind === 'confirm' ? (
-                    <>任務「{revokeTarget.title}」會退回「待你處理」，執行者的回報保留。</>
-                  ) : (
-                    <>「{revokeTarget?.title}」的報告會退回「待審核」，並從更新紀錄移除。</>
-                  )}
-                </div>
-                {revokeTarget?.kind === 'confirm' && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-                    <span className="font-medium">會一併變動：</span>
-                    甘特上此任務不再是完成、移出完成區、所屬里程碑進度重算。
-                    若後續任務已依此開始，時程會如實反映撤回後的結果。
-                  </div>
+                {revokeTarget?.kind === 'confirm' ? (
+                  <>
+                    <div>「{revokeTarget.title}」退回「待你處理」，執行者的回報保留。</div>
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                      甘特、完成區、里程碑進度會一併退回
+                    </div>
+                    <div>會通知執行者與審核主管。</div>
+                  </>
+                ) : (
+                  <>
+                    <div>「{revokeTarget?.title}」的報告退回「待審核」，並從更新紀錄移除。</div>
+                    <div>會通知執行者與當責。</div>
+                  </>
                 )}
-                <div>會通知上下游相關人員（執行者、審核主管、當責）。</div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -5551,8 +5623,8 @@ export default function MyTasksPage() {
                       return (
                         <button type="button"
                           onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'confirm', projectId: proj.id, taskId: reviewSelectedFlow.taskId, title: reviewSelectedFlow.title }) }}
-                          className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
-                          <Undo2 className="h-3 w-3" />撤回完成確認
+                          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
+                          <Undo2 className="h-3 w-3" />撤回確認
                         </button>
                       )
                     }}
@@ -5613,7 +5685,10 @@ export default function MyTasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>駁回並退回重做？</AlertDialogTitle>
             <AlertDialogDescription>
-              任務「{reviewRejectItem?.title}」會退回給執行者的「待完成」，請填寫駁回原因讓對方知道要改什麼。
+              {reviewRejectItem && reviewFlowOf(reviewRejectItem.taskId)?.noReviewer
+                ? <>任務「{reviewRejectItem.title}」會退回給執行者的「待完成」。</>
+                : <>「{reviewRejectItem?.title}」的報告會<b>退回審核主管</b>重新審核，由主管決定是否再退給執行者。</>}
+              {' '}請填寫原因讓對方知道要改什麼。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">
