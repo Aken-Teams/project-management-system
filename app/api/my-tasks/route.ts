@@ -186,6 +186,7 @@ export async function GET(request: NextRequest) {
           publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
           weekOf: tl.weekOf || null,
           reviewerRejectedAt: tl.reviewerRejectedAt ? tl.reviewerRejectedAt.toISOString() : null,
+          reviewerRejectedBy: tl.reviewerRejectedBy || null,
           reviewerNote: tl.reviewerNote || null,
           // 該報告作者(R)在此專案的報告審核主管(R主管)，供 A 端顯示「主管審核中」與追蹤
           authorReviewerName: (() => { const m = p.teamMembers.find(tm => tm.userId === tl.authorId); return m?.reportReviewerName || m?.reportReviewerEmail || null })(),

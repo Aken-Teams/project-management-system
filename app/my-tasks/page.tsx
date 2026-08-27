@@ -496,12 +496,19 @@ export default function MyTasksPage() {
     return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
   })
   const [rSelectedTaskId, setRSelectedTaskId] = useState<string | null>(null)
-  interface RLogRow { date: string; content: string; existingLogId?: string; attachments?: TaskLogAttachment[]; updatedAt?: string; lastEditedBy?: string | null }
+  interface RLogRow {
+    date: string; content: string; existingLogId?: string; attachments?: TaskLogAttachment[]
+    updatedAt?: string; lastEditedBy?: string | null
+    /** 這一列先前被駁回、尚未重送——R 跳回來修正時要一眼看到是哪一列、為什麼 */
+    rejectedAt?: string | null
+    rejectedBy?: string | null
+    rejectNote?: string | null
+  }
   const [rLogRows, setRLogRows] = useState<RLogRow[]>([{ date: '', content: '' }])
   const [rLogNextWeekPlan, setRLogNextWeekPlan] = useState('')
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
   const [rTogglingDone, setRTogglingDone] = useState<string | null>(null)
-  const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'done' | 'history'>('active')
+  const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'fix' | 'done' | 'history'>('active')
   // 展開任務內的子分頁：write＝撰寫報告(預設)；children＝查看子層報告(僅當選到的任務有子任務時才出現)
   const [rExpandSubTab, setRExpandSubTab] = useState<'write' | 'children'>('write')
   const [rChildViewTaskId, setRChildViewTaskId] = useState<string | null>(null)
@@ -1222,6 +1229,41 @@ export default function MyTasksPage() {
     return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([d]) => d))
   }, [rLogRows])
 
+  // 待修正：我被駁回、尚未重送的報告（跨週）。
+  //   被駁回的報告散在各週，R 沒有集中入口就記不得是哪一週被退的，
+  //   實務上多半改在最新週另寫一筆 → 舊那筆永遠停在駁回、該週更新紀錄留白。
+  const rFixItems = useMemo(() => {
+    if (!rReportDialogProject || !user) return []
+    const byId = new Map(rReportDialogProject.tasks.map(t => [t.id, t]))
+    return rReportDialogProject.taskLogs
+      .filter(l => isSameUser(l.author, user) && l.reviewerRejectedAt && !l.publishedAt)
+      .map(l => {
+        const t = byId.get(l.taskId)
+        const ms = t ? rReportDialogProject.milestones.find(m => m.id === t.milestoneId) : undefined
+        return {
+          log: l,
+          taskId: l.taskId,
+          taskTitle: t?.title ?? '任務',
+          path: ms?.name ?? '',
+          weekOf: l.weekOf ?? null,
+          rejectedAt: l.reviewerRejectedAt!,
+          rejectedBy: l.reviewerRejectedBy ?? null,
+          note: l.reviewerNote ?? null,
+          days: Math.max(0, Math.floor((Date.now() - new Date(l.reviewerRejectedAt!).getTime()) / 86400000)),
+        }
+      })
+      .sort((a, b) => b.days - a.days)
+  }, [rReportDialogProject, user])
+
+  // 一鍵回到被駁回的那一週、選取該任務並解鎖編輯——R 不必自己算是哪一週
+  const goFixRejected = (item: { taskId: string; weekOf: string | null }) => {
+    if (item.weekOf) setRReportWeekOf(item.weekOf)
+    setRDialogTab('active')
+    setRSelectedTaskId(item.taskId)
+    // 不自動解鎖編輯：要不要改由 R 自己決定（換週的 effect 也會把解鎖重設，設了也留不住）
+    setRFlowPanelOpen(false)
+  }
+
   // 審視歷程：本專案中指派給我的任務之回報/確認事件，新到舊
   const rReviewEvents = useMemo(() => {
     if (!rReportDialogProject || !user) return [] as RReviewEvent[]
@@ -1318,11 +1360,13 @@ export default function MyTasksPage() {
   }, [rDialogTab, rSelectedTaskId, rDoneExpanded])
   const rSelectedFlow = useMemo(() => (rFlowTargetId ? rFlowOf(rFlowTargetId) : null), [rFlowTargetId, rFlowOf])
   const rSelectedFlowLogs = useMemo(() => {
-    if (!rFlowTargetId || !rReportDialogProject) return []
+    if (!rFlowTargetId || !rReportDialogProject || !user) return []
+    // 只放 R 自己寫的。別人（例如當責）在同一任務上的補充不是他的紀錄，
+    // 混進來會讓他以為自己交過某筆，也對不上他自己的審核鏈（rFlowOf 同樣只看自己的）。
     return rReportDialogProject.taskLogs
-      .filter(l => l.taskId === rFlowTargetId)
+      .filter(l => l.taskId === rFlowTargetId && isSameUser(l.author, user))
       .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
-  }, [rFlowTargetId, rReportDialogProject])
+  }, [rFlowTargetId, rReportDialogProject, user])
 
   // 主管清單：先依週別篩選，再依「成員」或「任務」分組。
   //   週別是篩選條件不是分類軸——同一週內主管想切換的是「誰交了什麼」還是「哪些任務有報告」。
@@ -1960,8 +2004,23 @@ export default function MyTasksPage() {
 
   // 回報狀態徽章：區分「已回報完成（送 A 審核）」與「只是填了工作紀錄、還沒回報」
 
+  // TaskLog → 工作紀錄表格的形狀。狀態與駁回原因要一起帶，右欄才看得到「哪一筆被退、為什麼」。
+  const toLogRows = (logs: TaskLog[]) => logs.map(l => ({
+    id: l.id, logDate: l.logDate, content: l.content, attachments: l.attachments,
+    status: (
+      // 已納入更新紀錄：已發布，或 7/12 前的舊資料（靠寬限顯示）
+      isReportVisible(l) ? 'approved'
+        : l.reviewerRejectedAt ? 'rejected'
+          // 「待審」要有人在審才成立。作者沒有審核主管時（例：當責自己寫的補充），
+          // 沒有任何人在審它，只是還沒被納入紀錄——標成待審會讓人以為卡在某人身上。
+          : l.authorReviewerName ? 'pending' : 'unpublished'
+    ) as 'approved' | 'rejected' | 'pending' | 'unpublished',
+    rejectNote: l.reviewerNote ?? null,
+    rejectedBy: l.reviewerRejectedBy ?? null,
+  }))
+
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
-  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[]; status?: 'pending' | 'approved' | 'rejected' }[]) => (
+  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[]; status?: 'pending' | 'approved' | 'rejected' | 'unpublished'; rejectNote?: string | null; rejectedBy?: string | null }[]) => (
     <div className="max-h-[200px] overflow-y-auto border-t border-b bg-background">
       <table className="w-full text-xs border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur"><tr className="text-muted-foreground">
@@ -1974,9 +2033,11 @@ export default function MyTasksPage() {
             <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
               <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap align-top">
                 {new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                {l.status === 'pending' && <span className="ml-1 inline-block rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 text-[11px] font-medium align-middle">待審</span>}
-                {l.status === 'approved' && <span className="ml-1 inline-block rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-1.5 py-0.5 text-[11px] font-medium align-middle">已審</span>}
-                {l.status === 'rejected' && <span className="ml-1 inline-block rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 text-[11px] font-medium align-middle">已退回</span>}
+                {l.status === 'pending' && <span className="ml-1 inline-block rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 text-[11px] font-medium align-middle" title="已送出，等審核主管核准後才會進入更新紀錄">待主管審</span>}
+                {l.status === 'approved' && <span className="ml-1 inline-block rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-1.5 py-0.5 text-[11px] font-medium align-middle" title="已進入官方更新紀錄">已進紀錄</span>}
+                {l.status === 'unpublished' && <span className="ml-1 inline-block rounded bg-muted text-muted-foreground px-1.5 py-0.5 text-[11px] font-medium align-middle" title="還沒進入更新紀錄。此筆沒有指定審核主管，會在當責送出週報時一併納入">未進紀錄</span>}
+                {l.status === 'rejected' && <span className="ml-1 inline-block rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 text-[11px] font-medium align-middle" title="被駁回，需修改後重新送出">已退回</span>}
+
               </td>
               <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
               <td className="px-2 py-1.5 text-center">
@@ -2108,6 +2169,9 @@ export default function MyTasksPage() {
         attachments: l.attachments?.length ? [...l.attachments] : undefined,
         updatedAt: l.updatedAt,
         lastEditedBy: l.lastEditedBy,
+        rejectedAt: l.publishedAt ? null : (l.reviewerRejectedAt ?? null),
+        rejectedBy: l.reviewerRejectedBy ?? null,
+        rejectNote: l.reviewerNote ?? null,
       })))
       const latestWithPlans = [...logs].reverse().find(l => l.nextPlans?.length)
       setRLogNextWeekPlan(latestWithPlans?.nextPlans?.map(p => p.content).join('\n') || '')
@@ -4408,6 +4472,18 @@ export default function MyTasksPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => { setRDialogTab('fix'); setRSelectedTaskId(null) }}
+                    className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
+                      rDialogTab === 'fix' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                    title="被審核主管或當責駁回、還沒重新送出的報告"
+                  >
+                    待修正
+                    {rFixItems.length > 0 && (
+                      <span className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{rFixItems.length}</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => { setRDialogTab('done'); setRSelectedTaskId(null) }}
                     className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                       rDialogTab === 'done' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
@@ -4597,7 +4673,8 @@ export default function MyTasksPage() {
                                         {rLogRows.map((row, idx) => {
                                           const attCount = row.attachments?.length || 0
                                           return (
-                                            <tr key={idx} className="border-b border-border last:border-b-0">
+                                            <tr key={idx} className={cn('border-b border-border last:border-b-0',
+                                              row.rejectedAt && 'bg-red-50/60 dark:bg-red-950/20')}>
                                               <td className="px-1.5 py-1.5 align-top">
                                                 <input
                                                   type="date"
@@ -4881,7 +4958,7 @@ export default function MyTasksPage() {
                             <tr className="text-muted-foreground">
                               <th className="text-left font-medium px-2 py-1.5 w-[96px] border-b">時間</th>
                               <th className="text-left font-medium px-2 py-1.5 border-b">任務</th>
-                              <th className="text-left font-medium px-2 py-1.5 w-[92px] border-b">事件</th>
+                              <th className="text-left font-medium px-2 py-1.5 w-[104px] border-b">事件</th>
                               <th className="text-left font-medium px-2 py-1.5 w-[76px] border-b">操作人</th>
                             </tr>
                           </thead>
@@ -4900,7 +4977,7 @@ export default function MyTasksPage() {
                                     {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">退回原因：{ev.note}</span> : null}
                                   </td>
                                   <td className="px-2 py-1.5">
-                                    <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5', meta.cls)}>{meta.label}</Badge>
+                                    <Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5 whitespace-nowrap', meta.cls)}>{meta.label}</Badge>
                                   </td>
                                   <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
                                 </tr>
@@ -4912,7 +4989,49 @@ export default function MyTasksPage() {
                     </div>
                   )
                 ) : (
-                  (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).length === 0 ? (
+                  rDialogTab === 'fix' ? (
+                    rFixItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">目前沒有被駁回待修正的報告</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                          <span>要回到<b>原本那一週</b>修改再送出，在別週另寫不會補回該週紀錄。</span>
+                        </div>
+                        {rFixItems.map(item => (
+                          <div key={item.log.id} className="rounded-lg border border-red-200 dark:border-red-900 overflow-hidden">
+                            <div className="px-3 py-2.5 bg-red-50/50 dark:bg-red-950/20">
+                              {item.path && <div className="text-[11px] text-muted-foreground truncate">{item.path}</div>}
+                              <div className="flex items-start gap-2 mt-0.5">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium truncate">{item.taskTitle}</div>
+                                  <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground">
+                                    <span className="rounded bg-muted px-1.5 py-0.5 whitespace-nowrap">
+                                      {item.weekOf ? formatReportWeek(item.weekOf) : '未標填報週'}
+                                    </span>
+                                    {item.rejectedBy && <span>由 {item.rejectedBy} 駁回</span>}
+                                    <span className="tabular-nums text-red-600 dark:text-red-400">已擱置 {item.days} 天</span>
+                                  </div>
+                                </div>
+                                <Button size="sm" className="h-7 text-xs gap-1 shrink-0"
+                                  onClick={() => goFixRejected(item)}>
+                                  <ArrowRight className="h-3.5 w-3.5" />去修正
+                                </Button>
+                              </div>
+                              {item.note && (
+                                <p className="mt-2 rounded border border-red-200 bg-background px-2 py-1.5 text-xs text-red-700 dark:border-red-900 dark:text-red-400">
+                                  <span className="font-medium">駁回原因：</span>{item.note}
+                                </p>
+                              )}
+                              <p className="mt-1.5 text-[11px] text-muted-foreground truncate" title={item.log.content}>
+                                原內容：{item.log.content}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       {rDialogTab === 'pending' ? '目前沒有等待確認的任務' : '目前沒有已完成的任務'}
                     </p>
@@ -5073,7 +5192,7 @@ export default function MyTasksPage() {
                     onTabChange={setRFlowTab}
                     onCollapse={() => setRFlowPanelOpen(false)}
                     logsCount={rSelectedFlowLogs.length}
-                    logs={renderReviewLogs(rSelectedFlowLogs)}
+                    logs={renderReviewLogs(toLogRows(rSelectedFlowLogs))}
                     // 待完成＝本週還沒送出，此時流程講的是上一份報告，顯示出來會讓 R
                     // 誤以為自己已經送出並在被審核。只給工作紀錄當寫報告的參考。
                     hideFlow={rDialogTab === 'active'}
@@ -5675,7 +5794,7 @@ export default function MyTasksPage() {
                       <thead className="bg-muted/60"><tr className="text-muted-foreground">
                         <th className="text-left font-medium px-2 py-1.5 w-[96px] border-b">時間</th>
                         <th className="text-left font-medium px-2 py-1.5 border-b">任務</th>
-                        <th className="text-left font-medium px-2 py-1.5 w-[84px] border-b">事件</th>
+                        <th className="text-left font-medium px-2 py-1.5 w-[104px] border-b">事件</th>
                         <th className="text-left font-medium px-2 py-1.5 w-[72px] border-b">操作人</th>
                       </tr></thead>
                       <tbody>
@@ -5690,7 +5809,7 @@ export default function MyTasksPage() {
                                 {ev.taskTitle}
                                 {ev.note ? <span className="mt-0.5 block text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-1.5 py-0.5">駁回原因：{ev.note}</span> : null}
                               </td>
-                              <td className="px-2 py-1.5"><Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5', meta.cls)}>{meta.label}</Badge></td>
+                              <td className="px-2 py-1.5 align-top"><Badge variant="outline" className={cn('text-[11px] px-1.5 py-0.5 whitespace-nowrap', meta.cls)}>{meta.label}</Badge></td>
                               <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{ev.actor || '—'}</td>
                             </tr>
                           )
@@ -5730,7 +5849,7 @@ export default function MyTasksPage() {
                     onTabChange={setFlowTab}
                     onCollapse={() => setFlowPanelOpen(false)}
                     logsCount={reviewSelectedLogs.length}
-                    logs={renderReviewLogs(reviewSelectedLogs)}
+                    logs={renderReviewLogs(toLogRows(reviewSelectedLogs))}
                     renderRevoke={(step) => {
                       // 當責只能撤回自己那一棒（確認完成）。流程未走到完成就沒得撤。
                       if (step.key !== 'complete' || reviewSelectedFlow.stage !== 'done') return null

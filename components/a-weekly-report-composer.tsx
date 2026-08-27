@@ -13,6 +13,7 @@ import { WeekPicker } from '@/components/ui/week-picker'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { GanttChart } from '@/components/gantt-chart'
 import { cn } from '@/lib/utils'
+import { isReportVisible } from '@/lib/report-cutoff'
 import { uploadFile } from '@/lib/upload-file'
 import type { Project, Task, TaskLog, TaskLogAttachment } from '@/lib/mock-data'
 import { Loader2, Send, FileText, Info, ChevronDown, CornerDownLeft, CircleCheck, Inbox, Search, Eraser, Paperclip, Save, Check, AlertTriangle, CalendarClock, AlertCircle, BarChart3, ListChecks, PenLine } from 'lucide-react'
@@ -124,9 +125,13 @@ export function AWeeklyReportComposer({
 
   const byId = useMemo(() => new Map(project.tasks.map(t => [t.id, t])), [project.tasks])
   // A 依「填報週(weekOf)」看 R 的報告：R 填 W12 就在 W12 看到；舊資料(無 weekOf) fallback 用工作日(logDate)
-  const rLogsOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor && (l.weekOf ? l.weekOf === weekOf : (l.logDate >= weekStart && l.logDate <= weekEnd))).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  const rLogsOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor && isReportVisible(l) && (l.weekOf ? l.weekOf === weekOf : (l.logDate >= weekStart && l.logDate <= weekEnd))).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
   // R 的全部報告(不綁 A 的填報週)：讓 A 寫某週報告時，上方照樣看得到 R 的全部歷史，不用切週別。
-  const rAllLogsOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  //   只列「已通過審核、已進更新紀錄」的——沒過審的讓 A 看到，他會以為可以引用進週報，
+  //   但那些內容隨時可能被駁回或改寫。
+  const rAllLogsOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor && isReportVisible(l)).slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  // 尚未通過審核的筆數——不列內容，但要讓 A 知道「R 還有東西在跑」，不會誤以為他沒交
+  const rPendingCountOf = (id: string) => project.taskLogs.filter(l => l.taskId === id && l.author !== actor && !isReportVisible(l)).length
 
   // 樹狀清單（給下拉）
   const nodes = useMemo<Node[]>(() => {
@@ -889,6 +894,13 @@ export function AWeeklyReportComposer({
                                       <span className="text-muted-foreground/70">共 {reportLogs.length} 筆</span>
                                     </div>
                                   ) : <span className="text-[11px] text-muted-foreground/70">{reportLogs.length > 0 ? `共 ${reportLogs.length} 筆` : ''}</span>}
+                                  {/* 沒過審的不列內容，但要讓 A 知道 R 還有東西在跑，否則會誤以為他沒交 */}
+                                  {assigned && rPendingCountOf(selectedId) > 0 && (
+                                    <span className="text-[11px] text-muted-foreground/70 shrink-0"
+                                      title="尚未通過審核的報告不會出現在這裡，通過後才會列入">
+                                      另有 {rPendingCountOf(selectedId)} 筆審核中／已退回
+                                    </span>
+                                  )}
                                   {sel.isParent && selKidLogs.length > 0 && <button type="button" onClick={() => { importKids(); setTaskTab('write') }} className="text-[11px] text-violet-600 hover:underline shrink-0">帶入子任務報告（{selKidLogs.length}）到我的補充</button>}
                                 </div>
                               </div>
