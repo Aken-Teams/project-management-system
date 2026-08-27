@@ -202,6 +202,11 @@ type TrackingItem = {
   taskSubmittedAt: string | null
   taskDecidedAt: string | null
   taskRejectNote: string | null
+  taskLegacy: boolean
+  reviewedAt: string | null
+  reviewedBy: string | null
+  completedAt: string | null
+  completedBy: string | null
   logs: ReviewLogItem[]
 }
 type Reviewee = {
@@ -338,16 +343,17 @@ export default function MyTasksPage() {
     for (const rv of proj.reviewees) {
       for (const t of rv.tracking) {
         if (!t.owned) continue // 上層節點只提供層級脈絡，不是待辦
-        // 時間軸用「任務層級」的報告鏈（不限週別），才會跟 A 端看到的一致；
-        // 但分桶仍要回答「本週誰沒交」，所以未填的情況用 stageOverride 強制歸到「待 R 填報告」。
-        const notFiledThisWeek = t.owned && !t.filled && !t.done && !t.reportedDone
+        // 全部走任務層級，與 A／R 用同一套推導——同一個任務在三個角色看到的必須是同一條流程。
+        // 「誰本週沒交」不在這裡處理，由「填報追蹤」分頁負責（那本來就是週別限定的視圖）。
         const f = buildFlowFromSummary({
           taskId: t.taskId, title: t.taskTitle, assignee: rv.authorName,
           path: t.msName,
-          reportKind: t.taskReviewState, reportedDone: t.reportedDone, completed: t.done,
-          stageOverride: notFiledThisWeek ? 'unfilled' : undefined,
-          activeThisWeek: notFiledThisWeek, weekOf: reviewTrackWeek, overdue: t.overdue,
+          reportKind: t.taskReviewState, legacy: t.taskLegacy,
+          reportedDone: t.reportedDone, completed: t.done,
+          activeThisWeek: t.owned && !t.filled, weekOf: reviewTrackWeek, overdue: t.overdue,
           submittedAt: t.taskSubmittedAt, decidedAt: t.taskDecidedAt, rejectNote: t.taskRejectNote,
+          reviewedAt: t.reviewedAt, reviewedBy: t.reviewedBy,
+          completedAt: t.completedAt, completedBy: t.completedBy,
           reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
           attachments: attOf(t.logs), logCount: t.logs.length,
         })
@@ -1190,12 +1196,16 @@ export default function MyTasksPage() {
     return {
       // 待完成：純寫報告的地方。R 從「被指派那刻」起才看到 → 指派日 <= 該週結束日。
       // assignedAt 若缺（舊資料）則照舊顯示，不誤藏。
-      rActiveGroups: build(t => !t.completedAt && !t.reportedDoneAt && (!t.assignedAt || t.assignedAt <= weekEnd), false),
-      // 待確認：我送出去、還沒落地的東西。兩種都算——
-      //   ① 報告已送出但尚未進更新紀錄（審核中／被駁回）
+      //   報告被駁回時即使 reportedDoneAt 還在，也要回到這裡——球已退回 R，他必須能重寫報告；
+      //   留在「待確認」等於看得到卻寫不了。
+      rActiveGroups: build(t => !t.completedAt
+        && (!t.reportedDoneAt || hasRejectedReport(t))
+        && (!t.assignedAt || t.assignedAt <= weekEnd), false),
+      // 待確認：我送出去、還在「別人手上」的東西。被駁回的不算——那已經退回我這裡了。
+      //   ① 報告已送出、尚未進更新紀錄（審核中）
       //   ② 已回報任務完成、等當責確認
-      rPendingGroups: build(t => !t.completedAt && !t.reviewedAt && (
-        !!t.reportedDoneAt || hasInFlightReport(t) || hasRejectedReport(t)
+      rPendingGroups: build(t => !t.completedAt && !t.reviewedAt && !hasRejectedReport(t) && (
+        !!t.reportedDoneAt || hasInFlightReport(t)
       ), true),
       // 完成區：A 已審核通過 或 A 已標記 100% 完成
       rDoneGroups: build(t => !!t.completedAt || !!t.reviewedAt, true),

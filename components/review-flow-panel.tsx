@@ -584,16 +584,17 @@ export interface SummaryFlowInput {
   overdue?: boolean
   /** 當責姓名，供「下一棒」顯示人名而非只有角色代號 */
   accountableName?: string | null
-  /**
-   * 指定棒次，覆蓋由 reportKind 推導的結果。
-   * 主管端專用：分桶要回答「本週誰沒交」（週別限定），時間軸要描述「這個任務的報告鏈」
-   * （任務層級）。兩者時間範圍不同，硬用同一份推導會讓已發生的環節被畫成沒發生。
-   */
-  stageOverride?: FlowStage
+  /** 已由當責確認（reviewedAt）／完成（completedAt）的資訊，讓當責那一棒能畫出經手人 */
+  reviewedAt?: string | null
+  reviewedBy?: string | null
+  completedAt?: string | null
+  completedBy?: string | null
+  /** 報告只靠 7/12 寬限而顯示，從未有人核准 */
+  legacy?: boolean
 }
 
 export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
-  const stage = i.stageOverride ?? deriveFlowStage({
+  const stage = deriveFlowStage({
     completed: i.completed, reportedDone: i.reportedDone, reportKind: i.reportKind,
     activeThisWeek: i.activeThisWeek ?? false, hasReviewer: true,
   })
@@ -601,7 +602,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
   const attachments = i.attachments ?? 0
 
   const steps = keepSingleCurrent(buildSteps({
-    reportKind: i.reportKind, hasReviewer: true, reportedDone: i.reportedDone,
+    reportKind: i.reportKind, legacy: i.legacy, hasReviewer: true, reportedDone: i.reportedDone,
     completed: i.completed, activeThisWeek: i.activeThisWeek ?? false, overdue: i.overdue,
     assignee: i.assignee, stage,
     submittedAt: i.submittedAt ?? null,
@@ -609,8 +610,9 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
       .filter(Boolean).join(' · ') || null,
     reviewerName: i.reviewerName ?? null, decidedAt: i.decidedAt ?? null,
     rejectNote: i.rejectNote ?? null,
-    accountableName: i.accountableName ?? null, reviewedAt: null, reviewedBy: null, reportedDoneAt: null,
-    aReject: null, completedAt: null, completedBy: null,
+    accountableName: i.accountableName ?? null,
+    reviewedAt: i.reviewedAt ?? null, reviewedBy: i.reviewedBy ?? null, reportedDoneAt: null,
+    aReject: null, completedAt: i.completedAt ?? null, completedBy: i.completedBy ?? null,
     viewerIsReviewer: true,
   }))
 
@@ -619,7 +621,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, i.assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee: i.assignee || '', noReviewer: false,
-    reportWeekLabel: weekLabel, legacy: false,
+    reportWeekLabel: weekLabel, legacy: !!i.legacy,
     pendingAction: null,
   }
 }

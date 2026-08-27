@@ -5,6 +5,7 @@ import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
 import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable, notifyApprovalRevoked, notifyReportRejected } from '@/lib/notifications'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree, isTaskComplete } from '@/lib/report-tracking'
+import { isReportVisible } from '@/lib/report-cutoff'
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -144,6 +145,12 @@ export async function GET(request: NextRequest) {
     select: { taskId: true, authorId: true, createdAt: true, publishedAt: true, publishedBy: true, reviewerRejectedAt: true, reviewerNote: true },
     orderBy: { createdAt: 'asc' },
   })
+  // 當責那一棒的資訊（誰在何時通過／完成），主管端要畫得出來才會與 A 端一致
+  const taskMeta = await prisma.task.findMany({
+    where: { projectId: { in: projectIds } },
+    select: { id: true, reviewedAt: true, reviewedBy: true, completedAt: true, completedBy: true },
+  })
+  const metaById = new Map(taskMeta.map(t => [t.id, t]))
 
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
   type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected'; createdAt?: string }
@@ -154,7 +161,13 @@ export async function GET(request: NextRequest) {
   taskReviewState: 'none' | 'pending' | 'published' | 'rejected'
   taskSubmittedAt: string | null
   taskDecidedAt: string | null
-  taskRejectNote: string | null }
+  taskRejectNote: string | null
+  /** 只靠 7/12 舊資料寬限而顯示，從未有人核准 → 沒有核准可撤回 */
+  taskLegacy: boolean
+  reviewedAt: string | null
+  reviewedBy: string | null
+  completedAt: string | null
+  completedBy: string | null }
   type Reviewee = { authorId: string; authorName: string; authorEmail: string; pending: Sub[]; reviewed: ReviewedSub[]; submittedThisWeek: boolean; openTaskCount: number; tracking: TrackItem[] }
   const projMap = new Map<string, { projectId: string; projectName: string; reviewees: Map<string, Reviewee> }>()
 
@@ -218,32 +231,41 @@ export async function GET(request: NextRequest) {
           }))
         // 任務層級：這位成員在此任務的全部報告（不限週別）
         const myAllLogs = owned ? allTaskLogs.filter(l => l.taskId === t.id && l.authorId === m.userId) : []
+        // 與前端 reportStateOf() 同一套判定（含 7/12 舊資料寬限），三個角色才會看到同一個狀態
         let taskReviewState: 'none' | 'pending' | 'published' | 'rejected' = 'none'
         let taskDecidedAt: string | null = null
         let taskRejectNote: string | null = null
+        let taskLegacy = false
         if (myAllLogs.length > 0) {
-          const pend = myAllLogs.filter(l => !l.publishedAt && !l.reviewerRejectedAt)
+          const pend = myAllLogs.filter(l => !l.reviewerRejectedAt && !isReportVisible(l))
           if (pend.length > 0) {
             taskReviewState = 'pending'
           } else {
-            const pub = myAllLogs.filter(l => l.publishedAt)
-            if (pub.length > 0) {
+            const visible = myAllLogs.filter(l => isReportVisible(l))
+            if (visible.length > 0) {
               taskReviewState = 'published'
-              taskDecidedAt = pub[pub.length - 1].publishedAt!.toISOString()
+              const realPub = visible.filter(l => l.publishedAt)
+              taskLegacy = realPub.length === 0 // 全靠寬限才顯示 → 沒有人真的按過核准
+              taskDecidedAt = realPub.length > 0 ? realPub[realPub.length - 1].publishedAt!.toISOString() : null
             } else {
               taskReviewState = 'rejected'
               const rej = myAllLogs.filter(l => l.reviewerRejectedAt)
-              taskDecidedAt = rej[rej.length - 1].reviewerRejectedAt!.toISOString()
-              taskRejectNote = rej[rej.length - 1].reviewerNote ?? null
+              taskDecidedAt = rej.length > 0 ? rej[rej.length - 1].reviewerRejectedAt!.toISOString() : null
+              taskRejectNote = rej.length > 0 ? (rej[rej.length - 1].reviewerNote ?? null) : null
             }
           }
         }
+        const meta = metaById.get(t.id)
 
         return {
           taskId: t.id, taskTitle: t.title, depth, owned, done,
-          taskReviewState,
+          taskReviewState, taskLegacy,
           taskSubmittedAt: myAllLogs[0]?.createdAt.toISOString() ?? null,
           taskDecidedAt, taskRejectNote,
+          reviewedAt: meta?.reviewedAt?.toISOString() ?? null,
+          reviewedBy: meta?.reviewedBy ?? null,
+          completedAt: meta?.completedAt?.toISOString() ?? null,
+          completedBy: meta?.completedBy ?? null,
           msName: depth === 0 ? (t.milestone?.name ?? null) : null,
           planStart: fmt(t.startDate), planEnd: fmt(t.endDate),
           overdue: owned && isOverdueForWeek({ startDate: fmt(t.startDate), endDate: fmt(t.endDate) }, trackWeek),
