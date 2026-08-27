@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { visibleReportWhere } from '@/lib/report-cutoff'
 import ExcelJS from 'exceljs'
 
 async function guardAdmin(request: NextRequest) {
@@ -153,7 +154,9 @@ export async function GET(request: NextRequest) {
             select: {
               id: true, title: true, status: true, progress: true, endDate: true,
               taskLogs: {
-                where: hasDateFilter ? { logDate: logDateFilter } : undefined,
+                // 只匯出已核准（或 7/12 前的舊資料）的報告——未過審的內容不該進對外檔案。
+                // 在查詢層過濾而非事後濾：take:3 若先取再濾會湊不滿筆數。
+                where: hasDateFilter ? { logDate: logDateFilter, ...visibleReportWhere } : visibleReportWhere,
                 orderBy: { logDate: 'desc' },
                 take: 3,
                 select: { content: true, logDate: true, nextPlans: true },
@@ -162,7 +165,7 @@ export async function GET(request: NextRequest) {
                 select: {
                   title: true, status: true, progress: true,
                   taskLogs: {
-                    where: hasDateFilter ? { logDate: logDateFilter } : undefined,
+                    where: hasDateFilter ? { logDate: logDateFilter, ...visibleReportWhere } : visibleReportWhere,
                     orderBy: { logDate: 'desc' },
                     take: 2,
                     select: { content: true, logDate: true },

@@ -49,3 +49,14 @@ export function isWithinRevokeWindow(at: string | Date | null | undefined): bool
   if (!at) return false
   return Date.now() - new Date(at).getTime() <= REVOKE_WINDOW_DAYS * 86400000
 }
+
+/**
+ * Prisma where 片段：只取「已進更新紀錄」的報告（已發布，或 7/12 前建檔的舊資料）。
+ * 給需要在查詢層就過濾的地方用——例如帶 take:N 的查詢，事後在 JS 濾會讓筆數不足。
+ */
+export const visibleReportWhere = {
+  OR: [
+    { publishedAt: { not: null } },
+    { createdAt: { lt: new Date(REPORT_LEGACY_CUTOFF) } },
+  ],
+}

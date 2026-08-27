@@ -77,6 +77,7 @@ import { Calendar as CalendarUI } from '@/components/ui/calendar'
 import { zhTW } from 'date-fns/locale'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { isReportVisible } from '@/lib/report-cutoff'
 
 // ── Types ──
 type EmailUser = { username: string; name: string; email: string; organization: string }
@@ -531,6 +532,9 @@ export default function ReportsPage() {
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
     const cutoff = twoWeeksAgo.toISOString().split('T')[0]
     const recentLogs = detailProject.taskLogs
+      // 只列已核准（或 7/12 前的舊資料）的報告。未過審的內容顯示在報告頁，
+      // 讀的人會當成已確認的事實，但它隨時可能被駁回或改寫。
+      .filter(isReportVisible)
       .filter(log => log.logDate >= cutoff)
       .sort((a, b) => a.logDate.localeCompare(b.logDate))
 
