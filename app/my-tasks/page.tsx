@@ -387,7 +387,19 @@ export default function MyTasksPage() {
 
   const supSelectedFlow = supFlowKey ? supFlows.map.get(supFlowKey) ?? null : null
   const supSelectedLogs = supFlowKey ? supFlows.logs.get(supFlowKey) ?? [] : []
-  const supSelectedAction = supFlowKey ? supFlows.actionable.get(supFlowKey) ?? null : null
+  // 可操作的待審項目。棒次視角選到的可能是 track: 鍵（去重時優先保留它，狀態較完整），
+  // 那把鑰匙不在 actionable 裡 → 直接查會找不到，按鈕就消失。改成再用 taskId 回頭找一次。
+  const supSelectedAction = useMemo(() => {
+    if (!supFlowKey) return null
+    const direct = supFlows.actionable.get(supFlowKey)
+    if (direct) return direct
+    const f = supFlows.map.get(supFlowKey)
+    if (!f) return null
+    for (const a of supFlows.actionable.values()) {
+      if (a.sub.taskId === f.taskId) return a
+    }
+    return null
+  }, [supFlowKey, supFlows])
   const doReviewAction = async (projectId: string, authorId: string, s: ReviewSubmission, action: 'approve' | 'reject', note?: string) => {
     if (!user?.email) return
     setReviewBusy(subKey(projectId, authorId, s))
@@ -1310,15 +1322,17 @@ export default function MyTasksPage() {
     keyOf: (authorId: string, taskId: string, weekOf: string | null) => string,
     emptyText: string,
     defaultTab: FlowPanelTab,
+    /** 是否用週別收斂。收件匣（待審核）必須為 false——濾掉待辦等於把工作藏起來。 */
+    withWeek: boolean,
   ) => {
     if (rows.length === 0) {
       return <p className="text-sm text-muted-foreground text-center px-4 py-8">{emptyText}</p>
     }
     // 先收斂到所選週別。沒有填報週的舊資料只在「全部週別」模式出現。
-    const inWeek = supShowAllWeeks ? rows : rows.filter(r => r.s.weekOf === reviewTrackWeek)
+    const inWeek = !withWeek || supShowAllWeeks ? rows : rows.filter(r => r.s.weekOf === reviewTrackWeek)
     const hiddenCount = rows.length - inWeek.length
     // 被濾掉的筆數一定要講出來，否則主管會以為那些報告不存在
-    const weekFooter = hiddenCount > 0 || supShowAllWeeks ? (
+    const weekFooter = withWeek && (hiddenCount > 0 || supShowAllWeeks) ? (
       <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground border-t">
         {supShowAllWeeks
           ? <span>目前顯示全部 {rows.length} 筆</span>
@@ -1414,8 +1428,8 @@ export default function MyTasksPage() {
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                       {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
-                      {/* 已框住單一週別時，每列再標一次週別是多餘的 */}
-                      {supShowAllWeeks && sub.weekOf && (
+                      {/* 已框住單一週別時，每列再標一次週別是多餘的；沒框住就一定要標 */}
+                      {(!withWeek || supShowAllWeeks) && sub.weekOf && (
                         <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap">
                           {formatReportWeek(sub.weekOf)}
                         </span>
@@ -1433,11 +1447,11 @@ export default function MyTasksPage() {
   }
 
   /** 待審核／已審核共用的工具列：週別（範圍）＋ 依成員／依任務（分類軸）。 */
-  const renderSupToolbar = () => (
+  const renderSupToolbar = (withWeek: boolean) => (
     <div className="space-y-2 px-4 py-2.5 border-b">
-      {!supShowAllWeeks && <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />}
+      {withWeek && !supShowAllWeeks && <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />}
       <div className="flex items-center gap-2">
-        {supShowAllWeeks && (
+        {withWeek && supShowAllWeeks && (
           <span className="text-xs text-muted-foreground">顯示全部週別</span>
         )}
         <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit ml-auto">
@@ -1507,6 +1521,12 @@ export default function MyTasksPage() {
                     <span className="inline-flex items-center gap-0.5 text-[11px] text-orange-700 dark:text-orange-400"
                       title="此成員未設報告審核主管，報告直接由你審核">
                       <AlertTriangle className="h-3 w-3" />由你代審
+                    </span>
+                  )}
+                  {/* 這份清單不依週別收斂，所以每列要標出是哪一週的報告 */}
+                  {flow.reportWeekLabel && (
+                    <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap">
+                      {flow.reportWeekLabel}
                     </span>
                   )}
                   {flow.attachments > 0 && (
@@ -1669,10 +1689,11 @@ export default function MyTasksPage() {
       const weekEnd = weekEndOf(reviewReportWeek)
       // 這位執行者在本專案有沒有報告審核主管。沒有 → 流程圖不畫「R主管審核」那一棒，
       // 因為後端送出報告時就已 fallback 通知當責（task-logs/batch: routedTo='accountable'）。
-      // 審核鏈跟著「報告作者」走，不是跟著任務指派人。（實例：Bob 的任務由 Alice 代寫報告，
-      // 該用 Alice 的主管判斷。用指派人會判成「有主管」卻取不到名字，畫面出現空白的經手人。）
-      // 有報告 → 交給 buildReviewFlow 依作者推斷；沒報告 → 才用指派人預測未來的鏈。
-      const taskLogs = p.taskLogs.filter(l => l.taskId === taskId)
+      // 審核鏈是「一位作者一條」——每位作者有自己的審核主管。把任務上所有人的報告混在一起算，
+      // 會算出自相矛盾的狀態（踩過：當責在 R 的任務上補一筆說明，那筆未發布，
+      // 於是 A 看到「主管審核中」，R 卻看到自己的報告「已駁回」）。
+      // 以「任務負責人」的報告為準——那才是驅動這個任務進度的那條鏈。
+      const taskLogs = p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, { name: t.assignee }))
       const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
       return buildReviewFlow({
         task: t,
@@ -3029,14 +3050,14 @@ export default function MyTasksPage() {
                         const rows = pRows
                         if (rows.length === 0) {
                         }
-                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '目前沒有待審核的報告', 'flow')}</>
+                        return <>{renderSupToolbar(false)}{renderSupRows(rows, pid, keyOf, '目前沒有待審核的報告', 'flow', false)}</>
                       })()
                     ) : (
                       (() => {
                         const rows = rRows
                         if (rows.length === 0) {
                         }
-                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '尚無已審核的報告', 'logs')}</>
+                        return <>{renderSupToolbar(true)}{renderSupRows(rows, pid, keyOf, '尚無已審核的報告', 'logs', true)}</>
                       })()
                     )}
                     </div>
@@ -3056,10 +3077,18 @@ export default function MyTasksPage() {
                           onCollapse={() => setFlowPanelOpen(false)}
                           logsCount={supSelectedLogs.length}
                           logs={renderReviewLogs(supSelectedLogs)}
+                          revokeHint={
+                            supSelectedFlow.stage === 'accountable'
+                              ? <>報告已轉給當責審核，須<b className="text-foreground">由當責先駁回</b>才能撤回核准。</>
+                              : supSelectedFlow.stage === 'done'
+                                ? <>任務已完成，須<b className="text-foreground">由當責先撤回完成確認</b>才能撤回核准。</>
+                                : undefined
+                          }
                           renderRevoke={(step) => {
-                            // 只有「我核准過的那一棒」可撤；下游是否動過由後端把關（409）。
-                            // legacy＝靠 7/12 舊資料寬限而顯示，從未有人按過核准，沒有東西可撤。
+                            // 撤回必須從最下游開始：球只要已經傳到當責（待 A 審核）或更後面，
+                            // 主管就不能自己抽回來——要當責先駁回，球回到主管這裡才輪得到他撤。
                             if (step.key !== 'supervisor' || !supFlowKey || supSelectedFlow.legacy) return null
+                            if (supSelectedFlow.stage === 'accountable' || supSelectedFlow.stage === 'done') return null
                             const src = supFlows.actionable.get(supFlowKey)
                             const parts = supFlowKey.split(':')
                             const authorId = src?.authorId ?? parts[1]
@@ -3068,8 +3097,9 @@ export default function MyTasksPage() {
                             return (
                               <button type="button"
                                 onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf }) }}
+                                title="收回你在「R主管審核」做的核准：報告退回「待你審核」，不會動到當責那一棒"
                                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
-                                <Undo2 className="h-3 w-3" />撤回核准
+                                <Undo2 className="h-3 w-3" />撤回我的核准
                               </button>
                             )
                           }}
@@ -5387,7 +5417,8 @@ export default function MyTasksPage() {
                   </>
                 ) : (
                   <>
-                    <div>「{revokeTarget?.title}」的報告退回「待審核」，並從更新紀錄移除。</div>
+                    <div>收回<b>你在「R主管審核」的核准</b>：「{revokeTarget?.title}」的報告退回「待審核」，並從更新紀錄移除。</div>
+                    <div className="text-muted-foreground">不會動到當責那一棒——若要退回當責的確認，需由當責自己操作。</div>
                     <div>會通知執行者與當責。</div>
                   </>
                 )}
@@ -5698,8 +5729,9 @@ export default function MyTasksPage() {
                       return (
                         <button type="button"
                           onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'confirm', projectId: proj.id, taskId: reviewSelectedFlow.taskId, title: reviewSelectedFlow.title }) }}
+                          title="收回你在「完成 100%」做的確認：任務退回「待你處理」，執行者的回報保留"
                           className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
-                          <Undo2 className="h-3 w-3" />撤回確認
+                          <Undo2 className="h-3 w-3" />撤回我的確認
                         </button>
                       )
                     }}

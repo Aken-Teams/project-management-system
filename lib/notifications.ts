@@ -406,6 +406,65 @@ export async function notifyApprovalRevoked({
   }
 }
 
+// ─── 駁回 (report_rejected) ─────────────────────────────────────────────────
+
+/**
+ * 駁回通知。收件人依「退到哪一棒」決定：
+ *   routedTo='reviewer' 當責駁回、退回報告審核主管 → 通知主管（球在他手上）+ 執行者
+ *   routedTo='executor' 主管駁回、或無主管時當責直接退回 → 通知執行者 + 當責（知情）
+ *
+ * 被駁回的人若沒收到通知，只能靠自己回頭翻清單才會發現——那等於沒有駁回。
+ */
+export async function notifyReportRejected({
+  projectId, projectName, taskId, taskTitle, actorName, reason, routedTo,
+}: {
+  projectId: string
+  projectName: string
+  taskId: string
+  taskTitle: string
+  actorName?: string | null
+  reason?: string | null
+  routedTo: 'reviewer' | 'executor'
+}) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { assignee: true } })
+  const members = await prisma.projectTeamMember.findMany({
+    where: { projectId },
+    select: {
+      userId: true, role: true, reportReviewerName: true, reportReviewerEmail: true,
+      user: { select: { id: true, name: true, email: true } },
+    },
+  })
+  const executor = task?.assignee ? await resolveAssignee(task.assignee) : null
+  const accountables = members.filter(m => m.role === 'A').map(m => m.user)
+  const execMember = executor ? members.find(m => m.userId === executor.id) : null
+  const reviewerRef = execMember?.reportReviewerEmail || execMember?.reportReviewerName || null
+  const reviewer = reviewerRef
+    ? (reviewerRef.includes('@')
+      ? await prisma.user.findUnique({ where: { email: reviewerRef }, select: { id: true, name: true } })
+      : await prisma.user.findFirst({ where: { name: reviewerRef }, select: { id: true, name: true } }))
+    : null
+
+  const targets = routedTo === 'reviewer' ? [reviewer, executor] : [executor, ...accountables]
+  const where = routedTo === 'reviewer' ? '已退回報告審核主管重新審核' : '已退回執行者重新處理'
+
+  const seen = new Set<string>()
+  for (const t of targets) {
+    if (!t) continue
+    if (seen.has(t.id)) continue
+    if (actorName && t.name === actorName) continue // 不通知操作者自己
+    seen.add(t.id)
+    await createNotification({
+      userId: t.id,
+      type: 'report_rejected',
+      title: '報告被駁回',
+      message: `${actorName || '有人'}駁回了「${taskTitle}」，${where}`
+        + `${reason ? `。原因：${reason}` : ''}`
+        + `（專案：${projectName}）`,
+      projectId,
+    })
+  }
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({

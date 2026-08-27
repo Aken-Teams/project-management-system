@@ -112,6 +112,7 @@ enum NotificationType {
   report_review_overdue  // R主管遲遲未審核 → 通知 A 去追主管
   completion_reopened    // 已完成的父任務因底下新增工作/子任務被解除完成 → 通知該父層負責人
   approval_revoked       // 審核被撤回（A 撤回確認 / R主管撤回核准 / R 取消回報）→ 通知上下游
+  report_rejected        // 報告/回報被駁回（主管駁回 / 當責駁回）→ 通知被退回的人與相關方
 }
 
 // ─── Models ──────────────────────────────────────────────

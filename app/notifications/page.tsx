@@ -49,6 +49,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'report-review-overdue': AlertTriangle,
   'completion-reopened': Undo2,
   'approval-revoked': Undo2,
+  'report-rejected': XCircle,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -67,6 +68,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'report-review-overdue': 'text-red-500',
   'completion-reopened': 'text-orange-500',
   'approval-revoked': 'text-orange-500',
+  'report-rejected': 'text-red-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -85,6 +87,7 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'report-review-overdue': '審核逾期',
   'completion-reopened': '完成被解除',
   'approval-revoked': '審核被撤回',
+  'report-rejected': '報告被駁回',
 }
 
 // 查表防呆：後端新增通知型別、前端還沒登記時，回退成通用樣式。
@@ -110,6 +113,7 @@ const TYPE_TABS: { value: NotificationType | 'all'; label: string }[] = [
   { value: 'report-review-overdue', label: '審核逾期' },
   { value: 'completion-reopened', label: '完成被解除' },
   { value: 'approval-revoked', label: '審核被撤回' },
+  { value: 'report-rejected', label: '報告被駁回' },
 ]
 
 function formatTime(dateStr: string): string {

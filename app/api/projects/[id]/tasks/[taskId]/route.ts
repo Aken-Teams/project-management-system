@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
-import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded, notifyCompletionReopened, notifyApprovalRevoked } from '@/lib/notifications'
+import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded, notifyCompletionReopened, notifyApprovalRevoked, notifyReportRejected } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> }
@@ -200,10 +200,22 @@ export async function PUT(
         data: { publishedAt: null, publishedBy: null },
       })
       const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
-      await notifyApprovalRevoked({
+      // 退回主管 → 球在主管手上，他必須知道；執行者也要知道自己的回報被質疑
+      await notifyReportRejected({
         projectId: id, projectName: proj?.name || '專案',
         taskId, taskTitle: updated.title,
-        stage: 'approval', actorName: body.reviewActor || null, reason,
+        actorName: body.reviewActor || null, reason, routedTo: 'reviewer',
+      }).catch(() => {})
+    }
+
+    // 當責駁回、且該成員沒有審核主管 → 直接退回執行者（沒有中間那一棒）
+    if (body.reviewEvent === 'rejected' && body.reportedDone === false && !body.rejectToReviewer) {
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyReportRejected({
+        projectId: id, projectName: proj?.name || '專案',
+        taskId, taskTitle: updated.title,
+        actorName: body.reviewActor || null, reason: body.reviewNote?.trim() || null,
+        routedTo: 'executor',
       }).catch(() => {})
     }
 
@@ -223,8 +235,9 @@ export async function PUT(
       await syncMilestoneStatus(updated.milestoneId, id).catch(() => {})
     }
 
-    // R 取消回報完成 → 通知報告審核主管（無主管則通知當責），別讓他們白等一份不存在的審核
-    if (body.reportedDone === false && task.reportedDoneAt) {
+    // R 取消回報完成 → 通知報告審核主管（無主管則通知當責），別讓他們白等一份不存在的審核。
+    //   排除「當責駁回」——那條路徑上面已經用 notifyReportRejected 通知過了，不要重複發。
+    if (body.reportedDone === false && task.reportedDoneAt && body.reviewEvent !== 'rejected') {
       const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
       await notifyApprovalRevoked({
         projectId: id, projectName: proj?.name || '專案',

@@ -290,9 +290,12 @@ export function deriveFlowStage(opts: {
   hasReviewer: boolean
 }): FlowStage {
   if (opts.completed) return 'done'
+  // 被駁回優先於其他判斷：報告一旦被退，球就回到執行者，不管他先前有沒有按過「回報完成」。
+  //   （踩過：R 已回報完成 + 報告被主管駁回 → 若先看 reportedDone 會判成「待當責確認」，
+  //     畫面就會同時出現「已駁回」和「當責 A 確認 · 現在在這」，自相矛盾。）
+  if (opts.reportKind === 'rejected') return 'unfilled'
   if (opts.reportKind === 'pending') return opts.hasReviewer ? 'supervisor' : 'accountable'
   if (opts.reportedDone) return 'accountable'
-  if (opts.reportKind === 'rejected') return 'unfilled'
   if (opts.activeThisWeek && opts.reportKind === 'none') return 'unfilled'
   return 'running'
 }
@@ -834,7 +837,7 @@ const STEP_STYLE: Record<FlowStepState, { icon: typeof Check; iconCls: string; n
 export type FlowPanelTab = 'flow' | 'logs'
 
 export function ReviewFlowTimeline({
-  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, className,
+  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, revokeHint, className,
 }: {
   flow: ReviewFlow
   viewer: FlowViewer
@@ -851,6 +854,8 @@ export function ReviewFlowTimeline({
    * 判斷「誰能撤、下游動過沒」屬於業務規則，交給呼叫端決定，元件只負責呈現。
    */
   renderRevoke?: (step: FlowStep) => React.ReactNode
+  /** 不能撤回時的說明（例：球已傳到下游，要下游先退回）。與 renderRevoke 互斥呈現。 */
+  revokeHint?: React.ReactNode
   /**
    * 隱藏審核流程，只留工作紀錄。
    * 用於「本週報告尚未送出」的情境——此時流程講的是上一份報告，顯示出來會讓人
@@ -1016,12 +1021,26 @@ export function ReviewFlowTimeline({
         {/* 撤回：放在流程區右下角。它是例外操作，不該像審核按鈕那樣常駐在顯眼位置，
             但也不能藏到找不到——右下角是「看得到、要找一下才按得到」的位置。 */}
         {(() => {
-          if (!renderRevoke) return null
-          const nodes = flow.steps.filter(st => st.state === 'done').map(st => renderRevoke(st)).filter(Boolean)
-          if (nodes.length === 0) return null
+          const nodes = renderRevoke
+            ? flow.steps.filter(st => st.state === 'done').map(st => renderRevoke(st)).filter(Boolean)
+            : []
+          // 不能撤回時，說清楚原因與該找誰——比什麼都不顯示有用
+          if (nodes.length === 0) {
+            return revokeHint ? (
+              <div className="mt-3 border-t pt-2.5 text-xs leading-relaxed text-muted-foreground">{revokeHint}</div>
+            ) : null
+          }
+          const owners = flow.steps.filter(st => st.state === 'done' && renderRevoke!(st)).map(st => st.label)
           return (
-            <div className="mt-3 flex justify-end gap-2 border-t pt-2.5">
-              {nodes.map((n, i) => <Fragment key={i}>{n}</Fragment>)}
+            <div className="mt-3 flex items-center gap-2 border-t pt-2.5">
+              {owners.length > 0 && (
+                <span className="text-xs text-muted-foreground truncate">
+                  收回你在「{owners.join('」「')}」做的動作
+                </span>
+              )}
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                {nodes.map((n, i) => <Fragment key={i}>{n}</Fragment>)}
+              </div>
             </div>
           )
         })()}

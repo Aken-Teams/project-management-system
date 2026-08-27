@@ -39,6 +39,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, typeof Bell> = {
   'report-review-overdue': AlertTriangle,
   'completion-reopened': Undo2,
   'approval-revoked': Undo2,
+  'report-rejected': XCircle,
 }
 
 const NOTIFICATION_COLORS: Record<NotificationType, string> = {
@@ -57,6 +58,7 @@ const NOTIFICATION_COLORS: Record<NotificationType, string> = {
   'report-review-overdue': 'text-red-500',
   'completion-reopened': 'text-orange-500',
   'approval-revoked': 'text-orange-500',
+  'report-rejected': 'text-red-500',
 }
 
 const NOTIFICATION_LABEL: Record<NotificationType, string> = {
@@ -74,6 +76,7 @@ const NOTIFICATION_LABEL: Record<NotificationType, string> = {
   'report-done-review': '待審核完成',
   'completion-reopened': '完成被解除',
   'approval-revoked': '審核被撤回',
+  'report-rejected': '報告被駁回',
   'report-review-overdue': '審核逾期',
 }
 

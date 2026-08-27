@@ -20,6 +20,7 @@ export type NotificationType =
   | 'report-review-overdue'
   | 'completion-reopened'
   | 'approval-revoked'
+  | 'report-rejected'
 
 export interface Notification {
   id: string

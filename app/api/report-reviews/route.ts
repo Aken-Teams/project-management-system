@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { safeJsonParse } from '@/lib/utils'
 import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
-import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable, notifyApprovalRevoked } from '@/lib/notifications'
+import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable, notifyApprovalRevoked, notifyReportRejected } from '@/lib/notifications'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree, isTaskComplete } from '@/lib/report-tracking'
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
@@ -409,13 +409,21 @@ export async function POST(request: NextRequest) {
     if (action === 'revoke') {
       const task = await prisma.task.findUnique({
         where: { id: taskId },
-        select: { title: true, reviewedAt: true, completedAt: true },
+        select: { title: true, reviewedAt: true, completedAt: true, reportedDoneAt: true },
       })
 
-      // 守衛①：當責已經往下走了（確認完成）→ 不能由上游自己撤，要當責先撤回
+      // 守衛①：當責已確認完成 → 要當責先撤回
       if (task?.reviewedAt || task?.completedAt) {
         return NextResponse.json({
-          error: '當責已確認此任務完成，請先請當責撤回完成確認，才能撤回報告核准',
+          error: '任務已完成，須由當責先撤回完成確認才能撤回核准',
+        }, { status: 409 })
+      }
+
+      // 守衛②：球已經傳到當責手上（執行者已回報完成、等當責確認）→ 一樣不能由上游抽回。
+      //   撤回必須從最下游開始：當責要先駁回，球回到主管手上，才輪得到主管撤回自己的核准。
+      if (task?.reportedDoneAt) {
+        return NextResponse.json({
+          error: '報告已轉給當責審核，須由當責先駁回才能撤回核准',
         }, { status: 409 })
       }
 
@@ -494,6 +502,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, rejected: 0, noop: true })
     }
     await prisma.taskReviewEvent.create({ data: { taskId, projectId, type: 'report_rejected', actor: reviewerName, note: body.note.trim() } }).catch(() => {})
+
+    // 通知：被駁回的人一定要知道，否則只能自己回頭翻清單才會發現
+    const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
+    const rejTask = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true } })
+    await notifyReportRejected({
+      projectId, projectName: proj?.name || '專案',
+      taskId, taskTitle: rejTask?.title || '任務',
+      actorName: reviewerName, reason: body.note.trim(), routedTo: 'executor',
+    }).catch(() => {})
+
     return NextResponse.json({ success: true, rejected: res.count })
   } catch (error) {
     console.error('report-review action failed:', error)
