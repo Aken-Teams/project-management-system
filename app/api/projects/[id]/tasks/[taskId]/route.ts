@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { syncMilestoneStatus } from '@/lib/sync-milestone-status'
-import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded, notifyCompletionReopened } from '@/lib/notifications'
+import { notifyTaskAssigned, resolveAssignee, notifyReportReviewNeeded, notifyCompletionReopened, notifyApprovalRevoked } from '@/lib/notifications'
 import type { Priority, TaskStatus } from '@prisma/client'
 
 type RouteContext = { params: Promise<{ id: string; taskId: string }> }
@@ -35,6 +35,10 @@ interface UpdateTaskBody {
   publishLogs?: boolean    // A 發布此任務紀錄到官方更新紀錄
   reviewedDone?: boolean   // A 審核通過（設 reviewedAt）
   markComplete?: boolean   // A 審核通過＝確認 100% 完成：一併標記 status=done + completedAt（甘特 100% + 完成區）
+  // 當責撤回完成確認：任務退回「待確認」（保留 R 的回報），並通知上下游。
+  //   撤回是逆流程往回退一棒，只有最下游的當責能發動；上游要撤得等當責先撤。
+  revokeConfirm?: boolean
+  revokeReason?: string
   reopenNotify?: boolean   // 解除完成時：通知此任務負責人＋所有仍完成的父層負責人（completion_reopened）
   reopenActor?: string     // 操作者姓名（避免通知自己）
 }
@@ -113,6 +117,18 @@ export async function PUT(
         data.reviewedBy = null
       }
     }
+    // 當責撤回完成確認 → 退回「待確認」：清掉 A 的審核與完成，但保留 R 的回報(reportedDoneAt)，
+    //   因為 R 並沒有收回他的回報，球只是從「已完成」退回當責手上重新判斷。
+    if (body.revokeConfirm) {
+      data.reviewedAt = null
+      data.reviewedBy = null
+      data.completedAt = null
+      data.completedBy = null
+      data.completedWeekOf = null
+      data.status = 'in_progress'
+      // 進度交給既有的報告推算重算（syncTaskProgressFromLogs 會在 completedAt 為空時重算）
+    }
+
     // A 審核通過（確認 R 回報的 100% 完成）
     if (body.reviewedDone !== undefined) {
       if (body.reviewedDone) {
@@ -171,6 +187,33 @@ export async function PUT(
 
     // 解除完成 → 通知該任務負責人＋往上仍為完成的父層負責人（他們的完成已失效，需重新確認/補報告）。
     //   以「更新前」的狀態判斷是否原本已完成，避免對本來就未完成的任務誤發。
+    // 撤回：寫審計事件 + 通知上下游（執行者、報告審核主管）
+    if (body.revokeConfirm) {
+      const reason = body.revokeReason?.trim() || null
+      await prisma.taskReviewEvent.create({
+        data: { taskId, projectId: id, type: 'confirm_revoked', actor: body.reviewActor || '', note: reason },
+      }).catch(() => {})
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyApprovalRevoked({
+        projectId: id, projectName: proj?.name || '專案',
+        taskId, taskTitle: updated.title,
+        stage: 'confirm', actorName: body.reviewActor || null, reason,
+      }).catch(() => {})
+      // 完成被撤回 → 里程碑進度要跟著退回來
+      await syncMilestoneStatus(updated.milestoneId, id).catch(() => {})
+    }
+
+    // R 取消回報完成 → 通知報告審核主管（無主管則通知當責），別讓他們白等一份不存在的審核
+    if (body.reportedDone === false && task.reportedDoneAt) {
+      const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
+      await notifyApprovalRevoked({
+        projectId: id, projectName: proj?.name || '專案',
+        taskId, taskTitle: updated.title,
+        stage: 'reported', actorName: body.reportedDoneBy || body.reviewActor || null,
+        reason: body.revokeReason?.trim() || null,
+      }).catch(() => {})
+    }
+
     if (body.reopenNotify && (task.completedAt || task.status === 'done' || task.reportedDoneAt)) {
       const proj = await prisma.project.findUnique({ where: { id }, select: { name: true } })
       await notifyCompletionReopened({

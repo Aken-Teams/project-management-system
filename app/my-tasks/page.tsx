@@ -502,6 +502,14 @@ export default function MyTasksPage() {
   const [aReportBusy, setAReportBusy] = useState<string | null>(null)
   const [aReportReject, setAReportReject] = useState<{ taskId: string; title: string } | null>(null)
   const [aReportRejectReason, setAReportRejectReason] = useState('')
+  // 撤回：kind 決定撤哪一棒（當責撤回完成確認 / 主管撤回報告核准）
+  const [revokeTarget, setRevokeTarget] = useState<
+    { kind: 'confirm'; projectId: string; taskId: string; title: string }
+    | { kind: 'approval'; projectId: string; authorId: string; taskId: string; title: string; weekOf: string | null }
+    | null
+  >(null)
+  const [revokeReason, setRevokeReason] = useState('')
+  const [revokeBusy, setRevokeBusy] = useState(false)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -1605,6 +1613,12 @@ export default function MyTasksPage() {
     const ids = new Set<string>()
     for (const r of reviewWeekReport.memberRows) for (const t of r.tasks) ids.add(t.taskId)
     for (const it of reviewShownItems) ids.add(it.task.id)
+    // 已完成的任務也要進母體。追蹤用的 shouldTrackReport() 對完成任務回 false（完成了就不用再催填報），
+    // 但「已完成」這一棒若永遠是 0，A 就走不到完成的任務，也就找不到撤回完成確認的入口。
+    const proj = apiProjects.find(p => p.id === reviewProjectId)
+    for (const t of proj?.tasks ?? []) {
+      if (t.completedAt || t.status === 'done') ids.add(t.id)
+    }
     for (const id of ids) {
       const f = reviewFlowOf(id)
       if (!f) continue
@@ -1612,7 +1626,7 @@ export default function MyTasksPage() {
       byTask.set(id, f)
     }
     return { counts, byTask }
-  }, [reviewWeekReport, reviewShownItems, reviewFlowOf])
+  }, [reviewWeekReport, reviewShownItems, reviewFlowOf, apiProjects, reviewProjectId])
 
   // 任務在專案中的固定排序位置。清單一律照這個順序呈現，使用者才對得上甘特／看板。
   const taskOrderIndex = useMemo(() => {
@@ -1680,6 +1694,45 @@ export default function MyTasksPage() {
     const res = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
     if (res.ok) { const data = await res.json(); setApiProjects(data.projects ?? []) }
   }, [user])
+
+  // 撤回：把流程往回退一棒。必填原因——被撤回的人若不知道為什麼，只會回頭來問。
+  const doRevoke = async () => {
+    const t = revokeTarget
+    const reason = revokeReason.trim()
+    if (!t || !reason || !user) return
+    setRevokeBusy(true)
+    try {
+      if (t.kind === 'confirm') {
+        const res = await fetch(`/api/projects/${t.projectId}/tasks/${t.taskId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ revokeConfirm: true, revokeReason: reason, reviewActor: user.name }),
+        })
+        if (!res.ok) { toast.error('撤回失敗，請稍後再試'); return }
+        toast.success('已撤回完成確認，任務回到「待你處理」')
+      } else {
+        const res = await fetch('/api/report-reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reviewerEmail: user.email, projectId: t.projectId, taskId: t.taskId,
+            authorId: t.authorId, weekOf: t.weekOf, action: 'revoke', note: reason,
+          }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          // 409＝下游已經動過，必須由下游先撤（後端回的訊息已說明該找誰）
+          toast.error(d.error || '撤回失敗，請稍後再試')
+          return
+        }
+        toast.success('已撤回核准，報告退回待審')
+      }
+      setRevokeTarget(null); setRevokeReason('')
+      await refreshMyTasks()
+      await refetchReviewInbox()
+    } catch { toast.error('撤回失敗，請稍後再試') }
+    finally { setRevokeBusy(false) }
+  }
 
   // A 代審報告：該成員未設報告審核主管時，由當責直接核准／駁回。
   //   走的是 R主管 同一支 API（/api/report-reviews），後端授權已放行「無主管時由當責代審」。
@@ -2860,6 +2913,22 @@ export default function MyTasksPage() {
                           onCollapse={() => setFlowPanelOpen(false)}
                           logsCount={supSelectedLogs.length}
                           logs={renderReviewLogs(supSelectedLogs)}
+                          renderRevoke={(step) => {
+                            // 只有「我核准過的那一棒」可撤；下游是否動過由後端把關（409）
+                            if (step.key !== 'supervisor' || !supFlowKey) return null
+                            const src = supFlows.actionable.get(supFlowKey)
+                            const parts = supFlowKey.split(':')
+                            const authorId = src?.authorId ?? parts[1]
+                            const weekOf = parts[3] === '_' ? null : parts[3]
+                            if (!authorId) return null
+                            return (
+                              <button type="button"
+                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf }) }}
+                                className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
+                                <Undo2 className="h-3 w-3" />撤回核准
+                              </button>
+                            )
+                          }}
                           actions={supSelectedAction ? (
                             <div className="flex items-center gap-2">
                               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
@@ -5155,6 +5224,53 @@ export default function MyTasksPage() {
         />
       )}
 
+      {/* 撤回確認：必填原因。文案一律以「後來發現沒做完」的語氣，不要求人承認按錯。 */}
+      <AlertDialog open={!!revokeTarget} onOpenChange={(o) => { if (!o) { setRevokeTarget(null); setRevokeReason('') } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {revokeTarget?.kind === 'confirm' ? '撤回完成確認？' : '撤回報告核准？'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  {revokeTarget?.kind === 'confirm' ? (
+                    <>任務「{revokeTarget.title}」會退回「待你處理」，執行者的回報保留。</>
+                  ) : (
+                    <>「{revokeTarget?.title}」的報告會退回「待審核」，並從更新紀錄移除。</>
+                  )}
+                </div>
+                {revokeTarget?.kind === 'confirm' && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                    <span className="font-medium">會一併變動：</span>
+                    甘特上此任務不再是完成、移出完成區、所屬里程碑進度重算。
+                    若後續任務已依此開始，時程會如實反映撤回後的結果。
+                  </div>
+                )}
+                <div>會通知上下游相關人員（執行者、審核主管、當責）。</div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium flex items-center gap-1">
+              撤回原因 <span className="text-destructive">*</span>
+              {!revokeReason.trim() && <span className="text-[11px] text-destructive font-normal">（必填）</span>}
+            </label>
+            <Textarea value={revokeReason} onChange={e => setRevokeReason(e.target.value)} rows={3}
+              placeholder="例：後來發現還有項目沒做完、驗收未通過…" className="text-sm" autoFocus />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600 disabled:opacity-50 disabled:pointer-events-none"
+              disabled={!revokeReason.trim() || revokeBusy}
+              onClick={(e) => { e.preventDefault(); doRevoke() }}>
+              {revokeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}確認撤回
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* A 代審報告的駁回原因（該成員未設主管時） */}
       <AlertDialog open={!!aReportReject} onOpenChange={(o) => { if (!o) setAReportReject(null) }}>
         <AlertDialogContent>
@@ -5427,6 +5543,19 @@ export default function MyTasksPage() {
                     onCollapse={() => setFlowPanelOpen(false)}
                     logsCount={reviewSelectedLogs.length}
                     logs={renderReviewLogs(reviewSelectedLogs)}
+                    renderRevoke={(step) => {
+                      // 當責只能撤回自己那一棒（確認完成）。流程未走到完成就沒得撤。
+                      if (step.key !== 'complete' || reviewSelectedFlow.stage !== 'done') return null
+                      const proj = apiProjects.find(p => p.tasks.some(t => t.id === reviewSelectedFlow.taskId))
+                      if (!proj) return null
+                      return (
+                        <button type="button"
+                          onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'confirm', projectId: proj.id, taskId: reviewSelectedFlow.taskId, title: reviewSelectedFlow.title }) }}
+                          className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
+                          <Undo2 className="h-3 w-3" />撤回完成確認
+                        </button>
+                      )
+                    }}
                     actions={
                       // 代主管審報告：通過即納入更新紀錄（不代表任務完成）
                       reviewSelectedFlow.pendingAction === 'review-report' && reviewSelectedReport ? (

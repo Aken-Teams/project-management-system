@@ -320,6 +320,92 @@ export async function notifyCompletionReopened({
   }
 }
 
+// ─── 審核撤回 (approval_revoked) ────────────────────────────────────────────
+
+/**
+ * 撤回審核 —— 通知「上下游」兩邊。
+ *
+ * 撤回是逆著流程往回退一棒，會同時影響兩種人：
+ *   上游＝把東西交給我的人（他的成果被退回，要重做或重審）
+ *   下游＝原本要接手的人（他的前提沒了，別再往下處理）
+ * 兩邊都通知，才不會有人拿著過期的認知繼續動作。
+ *
+ * stage 指「被撤回的是哪一棒」：
+ *   reported   R 取消回報完成      → 通知 R主管（無主管則當責）
+ *   approval   R主管撤回核准       → 通知 R（作者）+ 當責
+ *   confirm    當責撤回完成確認     → 通知 R（負責人）+ R主管
+ */
+export async function notifyApprovalRevoked({
+  projectId, projectName, taskId, taskTitle, stage, actorName, reason,
+}: {
+  projectId: string
+  projectName: string
+  taskId: string
+  taskTitle: string
+  stage: 'reported' | 'approval' | 'confirm'
+  actorName?: string | null
+  reason?: string | null
+}) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { assignee: true },
+  })
+  const members = await prisma.projectTeamMember.findMany({
+    where: { projectId },
+    select: {
+      userId: true, role: true, reportReviewerName: true, reportReviewerEmail: true,
+      user: { select: { id: true, name: true, email: true } },
+    },
+  })
+
+  const executor = task?.assignee ? await resolveAssignee(task.assignee) : null
+  const accountables = members.filter(m => m.role === 'A').map(m => m.user)
+  // 執行者的報告審核主管（名字或 email 任一對到即可，相容只存名字的舊資料）
+  const execMember = executor ? members.find(m => m.userId === executor.id) : null
+  const reviewerRef = execMember?.reportReviewerEmail || execMember?.reportReviewerName || null
+  const reviewer = reviewerRef
+    ? (reviewerRef.includes('@')
+      ? await prisma.user.findUnique({ where: { email: reviewerRef }, select: { id: true, name: true, email: true } })
+      : await prisma.user.findFirst({ where: { name: reviewerRef }, select: { id: true, name: true, email: true } }))
+    : null
+
+  type Target = { id: string; name: string } | null
+  let targets: Target[]
+  let what: string
+  switch (stage) {
+    case 'reported':
+      // 沒有審核主管時，報告本來就直接落到當責 → 撤回也通知當責
+      targets = reviewer ? [reviewer] : accountables
+      what = '取消了「已完成」的回報'
+      break
+    case 'approval':
+      targets = [executor, ...accountables]
+      what = '撤回了報告核准'
+      break
+    case 'confirm':
+      targets = [executor, reviewer]
+      what = '撤回了任務完成確認'
+      break
+  }
+
+  const seen = new Set<string>()
+  for (const t of targets) {
+    if (!t) continue
+    if (seen.has(t.id)) continue
+    if (actorName && t.name === actorName) continue // 不通知操作者自己
+    seen.add(t.id)
+    await createNotification({
+      userId: t.id,
+      type: 'approval_revoked',
+      title: '審核已被撤回',
+      message: `${actorName || '有人'}${what}：「${taskTitle}」`
+        + `${reason ? `，原因：${reason}` : ''}`
+        + `（專案：${projectName}）`,
+      projectId,
+    })
+  }
+}
+
 // ─── 任務指派 (task_assigned) ───────────────────────────────────────────────
 
 export async function notifyTaskAssigned({

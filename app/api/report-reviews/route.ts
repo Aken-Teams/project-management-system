@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { safeJsonParse } from '@/lib/utils'
 import { isSameUser } from '@/lib/user-match'
 import { todayUtc } from '@/lib/date-utils'
-import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable } from '@/lib/notifications'
+import { notifyReportPublishedToAccountable, notifyReportDoneReviewToAccountable, notifyApprovalRevoked } from '@/lib/notifications'
 import { weekEndOf, shouldTrackReport, isOverdueForWeek, reportCountsForWeek, buildTrackTree, isTaskComplete } from '@/lib/report-tracking'
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10)
@@ -298,7 +298,7 @@ interface ActionBody {
   taskId: string
   authorId: string
   weekOf?: string | null
-  action: 'approve' | 'reject'
+  action: 'approve' | 'reject' | 'revoke'
   note?: string
 }
 
@@ -354,6 +354,58 @@ export async function POST(request: NextRequest) {
       weekOf: week,
       publishedAt: null,
       reviewerRejectedAt: null,
+    }
+
+    // ── 撤回核准：把已核准的報告退回「待審」──
+    if (action === 'revoke') {
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { title: true, reviewedAt: true, completedAt: true },
+      })
+
+      // 守衛①：當責已經往下走了（確認完成）→ 不能由上游自己撤，要當責先撤回
+      if (task?.reviewedAt || task?.completedAt) {
+        return NextResponse.json({
+          error: '當責已確認此任務完成，請先請當責撤回完成確認，才能撤回報告核准',
+        }, { status: 409 })
+      }
+
+      // 守衛②：該週的週報已由當責送出 → 報告已對外發布，抽掉會讓已發出的內容憑空消失
+      if (week) {
+        const submittedNote = await prisma.weeklyReportNote.findFirst({
+          where: { projectId, weekOf: week, submittedAt: { not: null } },
+          select: { id: true },
+        })
+        if (submittedNote) {
+          return NextResponse.json({
+            error: `此報告已納入 ${week} 當週已送出的週報，不能直接撤回。請聯繫當責處理`,
+          }, { status: 409 })
+        }
+      }
+
+      const res = await prisma.taskLog.updateMany({
+        where: { projectId, taskId, authorId, weekOf: week, publishedAt: { not: null } },
+        data: { publishedAt: null, publishedBy: null },
+      })
+      if (res.count === 0) {
+        return NextResponse.json({ success: true, revoked: 0, noop: true })
+      }
+
+      await prisma.taskReviewEvent.create({
+        data: {
+          taskId, projectId, type: 'report_approve_revoked',
+          actor: reviewerName, note: body.note?.trim() || null,
+        },
+      }).catch(() => {})
+
+      const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
+      await notifyApprovalRevoked({
+        projectId, projectName: proj?.name || '專案',
+        taskId, taskTitle: task?.title || '任務',
+        stage: 'approval', actorName: reviewerName, reason: body.note?.trim() || null,
+      }).catch(() => {})
+
+      return NextResponse.json({ success: true, revoked: res.count })
     }
 
     if (action === 'approve') {

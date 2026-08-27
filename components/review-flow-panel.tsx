@@ -745,7 +745,7 @@ const STEP_STYLE: Record<FlowStepState, { icon: typeof Check; iconCls: string; n
 export type FlowPanelTab = 'flow' | 'logs'
 
 export function ReviewFlowTimeline({
-  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, className,
+  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, className,
 }: {
   flow: ReviewFlow
   viewer: FlowViewer
@@ -757,6 +757,11 @@ export function ReviewFlowTimeline({
   onTabChange?: (t: FlowPanelTab) => void
   /** 收合整個右欄 */
   onCollapse?: () => void
+  /**
+   * 針對某一棒提供「撤回」動作。回傳 null 代表該棒不可撤回。
+   * 判斷「誰能撤、下游動過沒」屬於業務規則，交給呼叫端決定，元件只負責呈現。
+   */
+  renderRevoke?: (step: FlowStep) => React.ReactNode
   /**
    * 隱藏審核流程，只留工作紀錄。
    * 用於「本週報告尚未送出」的情境——此時流程講的是上一份報告，顯示出來會讓人
@@ -911,6 +916,9 @@ export function ReviewFlowTimeline({
                       <span className="font-medium">原因：</span>{step.note}
                     </p>
                   )}
+
+                  {/* 撤回：長在「已經走過的那一棒」上，語意才清楚——你要收回的是這個動作 */}
+                  {step.state === 'done' && renderRevoke?.(step)}
 
                 </div>
               </li>
