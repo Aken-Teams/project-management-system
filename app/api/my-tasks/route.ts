@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
           orderBy: { createdAt: 'desc' },
         },
         teamMembers: {
-          select: { userId: true, reportReviewerName: true, reportReviewerEmail: true },
+          select: { userId: true, reportReviewerName: true, reportReviewerEmail: true, user: { select: { name: true } } },
         },
         delayRequests: {
           where: { status: 'pending' },
@@ -177,6 +177,7 @@ export async function GET(request: NextRequest) {
           taskId: tl.taskId,
           projectId: p.id,
           author: tl.author.name,
+          authorId: tl.authorId,
           logDate: tl.logDate.toISOString().split('T')[0],
           content: tl.content,
           createdAt: tl.createdAt.toISOString(),
@@ -190,6 +191,12 @@ export async function GET(request: NextRequest) {
           authorReviewerName: (() => { const m = p.teamMembers.find(tm => tm.userId === tl.authorId); return m?.reportReviewerName || m?.reportReviewerEmail || null })(),
           ...(tl.nextPlans ? { nextPlans: safeJsonParse(tl.nextPlans, [] as unknown[]) } : {}),
           ...(tl.attachments ? { attachments: safeJsonParse(tl.attachments, [] as unknown[]) } : {}),
+        })),
+        // 每位成員在此專案的報告審核主管（null = 未指定 → 後端送出時 fallback 由當責 A 代審）。
+        // 前端流程圖靠它決定「要不要畫 R主管審核那一棒」，避免把沒有主管的報告標成「主管審核中」卡死。
+        memberReviewers: p.teamMembers.map(tm => ({
+          name: tm.user.name,
+          reviewer: tm.reportReviewerName || tm.reportReviewerEmail || null,
         })),
         reviewEvents: p.tasks.flatMap(t =>
           ((t as Record<string, unknown>).reviewEvents as Array<{ id: string; type: string; actor: string; note: string | null; createdAt: Date }> || []).map(e => ({

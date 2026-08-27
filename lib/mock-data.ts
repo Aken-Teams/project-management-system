@@ -176,6 +176,8 @@ export interface TaskLog {
   taskId: string
   projectId: string
   author: string
+  /** 作者的 user id；A 代審報告時要帶給 /api/report-reviews */
+  authorId?: string
   logDate: string
   content: string
   nextPlans?: NextPlanItem[]

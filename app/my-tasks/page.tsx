@@ -6,7 +6,6 @@ import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -40,6 +39,20 @@ import { VoiceInputButton } from '@/components/voice-input-button'
 import { ProjectEditDialog, type ProjectEditData } from '@/components/project-edit-dialog'
 import { WeekPicker } from '@/components/ui/week-picker'
 import {
+  buildReviewFlow,
+  buildFlowFromSummary,
+  ReviewPipelineBar,
+  ReviewFlowTimeline,
+  ReviewFlowEmpty,
+  ReviewFlowCollapsed,
+  StageChip,
+  FlowAvatar,
+  type FlowStage,
+  type FlowPanelTab,
+  type PipelineCounts,
+  type ReviewFlow,
+} from '@/components/review-flow-panel'
+import {
   computeTaskStatus,
   getStatusLabel,
   getStatusColor,
@@ -55,6 +68,8 @@ import {
   CircleCheck,
   Undo2,
   ChevronDown,
+  ChevronRight,
+  PanelRightClose,
   CheckCircle2,
   Clock,
   AlertCircle,
@@ -150,6 +165,8 @@ interface MyTasksProject {
   tasks: Task[]
   taskLogs: TaskLog[]
   reviewEvents?: RReviewEvent[]
+  // 每位成員在此專案的報告審核主管；reviewer=null 代表未指定 → 後端 fallback 由當責代審
+  memberReviewers?: { name: string; reviewer: string | null }[]
   pendingDelayMilestoneIds?: string[]
   pendingDelayProposedDates?: Record<string, string>
 }
@@ -159,7 +176,7 @@ type RReviewEvent = { id: string; taskId: string; taskTitle: string; path?: stri
 
 // 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
 // R 報告審核主管收件匣型別（督導總覽：每 R 的待審 + 已審核 + 追蹤狀態）
-type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[]; status?: 'pending' | 'approved' | 'rejected' }
+type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[]; status?: 'pending' | 'approved' | 'rejected'; createdAt?: string }
 type ReviewSubmission = {
   taskId: string; taskTitle: string; weekOf: string | null
   reportedDone: boolean
@@ -224,14 +241,6 @@ function formatReportWeek(monday: string | null): string | null {
   return `${iso.getUTCFullYear()}W${String(week).padStart(2, '0')} · ${md(start)}~${md(end)}`
 }
 
-// 依姓名決定頭像底色（穩定、無隨機）
-const REVIEW_AVATAR_COLORS = ['bg-blue-600', 'bg-emerald-600', 'bg-violet-600', 'bg-amber-600', 'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-orange-600']
-function avatarColorFor(name: string) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
-  return REVIEW_AVATAR_COLORS[h % REVIEW_AVATAR_COLORS.length]
-}
-
 // 審視事件顯示樣式（不綁角色，操作者由「操作人」欄呈現）
 const REVIEW_EVENT_META: Record<string, { label: string; cls: string }> = {
   reported: { label: '回報完成', cls: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400' },
@@ -287,9 +296,73 @@ export default function MyTasksPage() {
   const [reviewDialogProjectId, setReviewDialogProjectId] = useState<string | null>(null)
   const reviewDialogProject = useMemo(() => reviewInbox.find(p => p.projectId === reviewDialogProjectId) || null, [reviewInbox, reviewDialogProjectId])
   const [reviewDialogTab, setReviewDialogTab] = useState<'pending' | 'reviewed' | 'tracking'>('pending')
-  const [reportReviewExpanded, setReportReviewExpanded] = useState<Set<string>>(new Set())
-  const toggleReportReviewExpand = (k: string) => setReportReviewExpanded(prev => { const s = new Set(prev); s.has(k) ? s.delete(k) : s.add(k); return s })
+  // ── 主管端流程面板：右欄顯示所選項目的完整審核鏈 ──
+  const [supFlowKey, setSupFlowKey] = useState<string | null>(null)
+  const [supStageFilter, setSupStageFilter] = useState<FlowStage | null>(null)
   const subKey = (projectId: string, authorId: string, s: ReviewSubmission) => `${projectId}:${authorId}:${s.taskId}:${s.weekOf ?? '_'}`
+  // 選取鍵：與對話框內 keyOf() 同格式，右欄才對得上左欄那一列
+  const supRowKey = (projectId: string, authorId: string, taskId: string, weekOf: string | null) => `${projectId}:${authorId}:${taskId}:${weekOf ?? '_'}`
+
+  // 主管端：把「待審核 / 已審核 / 填報追蹤」三份資料統一成同一條四棒流程。
+  // 管線計數以「填報追蹤」為母體（它才是本週該追的完整清單），待審/已審只是同一批任務的不同切面。
+  const supFlows = useMemo(() => {
+    const map = new Map<string, ReviewFlow>()
+    const logs = new Map<string, ReviewLogItem[]>()
+    // 右欄「通過／駁回」按鈕需要的原始待審項目
+    const actionable = new Map<string, { authorId: string; authorName: string; sub: ReviewSubmission }>()
+    const counts: PipelineCounts = { unfilled: 0, supervisor: 0, accountable: 0, done: 0, running: 0 }
+    const proj = reviewDialogProject
+    if (!proj) return { map, counts, logs, actionable }
+    const attOf = (logs: ReviewLogItem[]) => logs.reduce((n, l) => n + (l.attachments?.length ?? 0), 0)
+    const firstAt = (logs: ReviewLogItem[]) =>
+      logs.reduce<string | null>((min, l) => { const t = l.createdAt ?? l.logDate; return !min || t < min ? t : min }, null)
+
+    for (const rv of proj.reviewees) {
+      for (const t of rv.tracking) {
+        if (!t.owned) continue // 上層節點只提供層級脈絡，不是待辦
+        const f = buildFlowFromSummary({
+          taskId: t.taskId, title: t.taskTitle, assignee: rv.authorName,
+          path: [t.msName, `計畫 ${t.planStart} ~ ${t.planEnd}`].filter(Boolean).join(' · '),
+          reportKind: t.reviewState, reportedDone: t.reportedDone, completed: t.done,
+          activeThisWeek: true, weekOf: reviewTrackWeek, overdue: t.overdue,
+          submittedAt: firstAt(t.logs), reviewerName: user?.name ?? null,
+          attachments: attOf(t.logs), logCount: t.logs.length,
+        })
+        map.set(`track:${rv.authorId}:${t.taskId}`, f)
+        logs.set(`track:${rv.authorId}:${t.taskId}`, t.logs)
+        counts[f.stage]++
+      }
+      for (const sub of rv.pending) {
+        const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf)
+        logs.set(k, sub.logs)
+        actionable.set(k, { authorId: rv.authorId, authorName: rv.authorName, sub })
+        // 追蹤母體只涵蓋所選週；別週送來、仍待你審的報告要另計，否則「待你審核」會少算
+        if (!map.has(`track:${rv.authorId}:${sub.taskId}`)) counts.supervisor++
+        map.set(k, buildFlowFromSummary({
+          taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
+          reportKind: 'pending', reportedDone: sub.reportedDone, completed: false,
+          activeThisWeek: true, weekOf: sub.weekOf, submittedAt: firstAt(sub.logs),
+          reviewerName: user?.name ?? null, attachments: attOf(sub.logs), logCount: sub.logs.length,
+        }))
+      }
+      for (const sub of rv.reviewed) {
+        const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf)
+        logs.set(k, sub.logs)
+        map.set(k, buildFlowFromSummary({
+          taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
+          reportKind: sub.outcome === 'approved' ? 'published' : 'rejected',
+          reportedDone: false, completed: false, activeThisWeek: true, weekOf: sub.weekOf,
+          submittedAt: firstAt(sub.logs), decidedAt: sub.reviewedAt, rejectNote: sub.note,
+          reviewerName: user?.name ?? null, attachments: attOf(sub.logs), logCount: sub.logs.length,
+        }))
+      }
+    }
+    return { map, counts, logs, actionable }
+  }, [reviewDialogProject, reviewTrackWeek, user])
+
+  const supSelectedFlow = supFlowKey ? supFlows.map.get(supFlowKey) ?? null : null
+  const supSelectedLogs = supFlowKey ? supFlows.logs.get(supFlowKey) ?? [] : []
+  const supSelectedAction = supFlowKey ? supFlows.actionable.get(supFlowKey) ?? null : null
   const doReviewAction = async (projectId: string, authorId: string, s: ReviewSubmission, action: 'approve' | 'reject', note?: string) => {
     if (!user?.email) return
     setReviewBusy(subKey(projectId, authorId, s))
@@ -403,7 +476,6 @@ export default function MyTasksPage() {
   const [reviewCenterOpen, setReviewCenterOpen] = useState(false)
   const [reviewTab, setReviewTab] = useState<'pending' | 'members' | 'history'>('pending')
   const [reviewProcessing, setReviewProcessing] = useState<string | null>(null)
-  const [reviewExpanded, setReviewExpanded] = useState<Set<string>>(new Set())
   const [reviewRejectItem, setReviewRejectItem] = useState<{ projectId: string; taskId: string; title: string } | null>(null)
   const [reviewRejectReason, setReviewRejectReason] = useState('')
   const [reviewProjectId, setReviewProjectId] = useState<string | null>(null)
@@ -415,6 +487,16 @@ export default function MyTasksPage() {
   })
   const [reviewMemberExpanded, setReviewMemberExpanded] = useState<Set<string>>(new Set())
   const [reviewMemberView, setReviewMemberView] = useState<'member' | 'task'>('member')
+  // ── 流程面板：右側顯示所選任務的完整審核鏈；管線列可依「卡在哪一棒」篩選 ──
+  const [reviewFlowTaskId, setReviewFlowTaskId] = useState<string | null>(null)
+  const [reviewStageFilter, setReviewStageFilter] = useState<FlowStage | null>(null)
+  // 右欄：分頁（審核流程／工作紀錄）與收合狀態，兩個對話框共用同一組偏好
+  const [flowTab, setFlowTab] = useState<FlowPanelTab>('flow')
+  const [flowPanelOpen, setFlowPanelOpen] = useState(true)
+  // A 代審報告（該成員未設主管）：處理中的 taskId、以及駁回原因對話框
+  const [aReportBusy, setAReportBusy] = useState<string | null>(null)
+  const [aReportReject, setAReportReject] = useState<{ taskId: string; title: string } | null>(null)
+  const [aReportRejectReason, setAReportRejectReason] = useState('')
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
   // 過去週報預設唯讀，需按「編輯」才解鎖（避免誤改過去報告）
@@ -1130,14 +1212,83 @@ export default function MyTasksPage() {
     return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [apiProjects])
 
+  // 選取項目時一併決定右欄預設看哪一頁（審核情境看流程、瀏覽情境看內容）
+  const selectReviewFlow = (taskId: string, defaultTab: FlowPanelTab = 'flow') => {
+    setReviewFlowTaskId(taskId)
+    setFlowTab(defaultTab)
+  }
+  const selectSupFlow = (key: string, defaultTab: FlowPanelTab = 'flow') => {
+    setSupFlowKey(key)
+    setFlowTab(defaultTab)
+  }
+
+  // 左欄清單：群組標題（麵包屑）+ 群組內項目。兩處清單（分頁／棒次視角）共用。
+  const renderFlowGroups = (groups: { path: string; rows: ReviewFlow[] }[]) => (
+    <div>
+      {groups.map(g => (
+        <div key={g.path}>
+          <div className="sticky top-0 z-10 border-b border-t bg-muted/85 px-4 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur truncate"
+            title={g.path}>
+            {g.path}
+          </div>
+          <div className="divide-y divide-border/60">
+            {g.rows.map(flow => (
+              <button key={flow.taskId} type="button" onClick={() => selectReviewFlow(flow.taskId, 'flow')}
+                className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
+                  reviewFlowTaskId === flow.taskId ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
+                {/* 工作類型固定在右上角：它是「這一列要你做什麼」，該和標題同高、位置一致，
+                    混在下排的中繼資料裡會隨著徽章數量左右飄移。 */}
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1 text-sm font-medium truncate">{flow.title}</div>
+                  {flow.pendingAction && (
+                    <span
+                      title={flow.pendingAction === 'review-report'
+                        ? '你要審這份週報。通過後報告進入更新紀錄，任務仍在進行。'
+                        : '執行者已回報 100% 完成，你要確認。通過後任務標記完成、甘特與里程碑同步。'}
+                      className={cn('shrink-0 text-[11px] rounded px-1.5 py-0.5 font-medium cursor-help',
+                        flow.pendingAction === 'review-report'
+                          ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300')}>
+                      {flow.pendingAction === 'review-report' ? '要審週報' : '要確認完成'}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                  {flow.assignee && (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <FlowAvatar name={flow.assignee} size={16} />{flow.assignee}
+                    </span>
+                  )}
+                  <StageChip stage={flow.stage} viewer="accountable" days={flow.stuckDays} />
+                  {flow.noReviewer && (
+                    <span className="inline-flex items-center gap-0.5 text-[11px] text-orange-700 dark:text-orange-400"
+                      title="此成員未設報告審核主管，報告直接由你審核">
+                      <AlertTriangle className="h-3 w-3" />由你代審
+                    </span>
+                  )}
+                  {flow.attachments > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                      <Paperclip className="h-3 w-3" />{flow.attachments}
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   // 開啟某專案的週報審核
   const openReviewForProject = (projectId: string) => {
     setReviewProjectId(projectId)
     setReviewTab('pending')
-    setReviewExpanded(new Set())
     setReviewMemberExpanded(new Set())
     setReviewHistoryPage(0)
     setReviewReportWeek(rCurrentMonday)
+    setReviewFlowTaskId(null)
+    setReviewStageFilter(null)
     setReviewCenterOpen(true)
   }
   // 依所選專案過濾（從專案列開啟時只看該專案）
@@ -1256,6 +1407,149 @@ export default function MyTasksPage() {
   }, [apiProjects, reviewProjectId, reviewReportWeek])
   const reviewMissingCount = reviewMemberView === 'task' ? reviewWeekReport.missingTasks : reviewWeekReport.missingMembers
 
+  // ── 流程面板（右欄）──────────────────────────────────────
+  // 由 taskId 組出完整的四棒流程鏈。報告刻意取「整個任務」的（不限本週）：
+  // 別週還卡在主管手上時，A 在本週視圖也要看得到，才不會誤以為球在自己這。
+  //
+  // 註：舊的「成員週報」badge 會再依 author 過濾（l.author === name）。這裡刻意不濾——
+  //     流程是任務層級的性質，任務中途換人時，前手還卡在主管那邊的報告也該讓 A 看見，
+  //     否則新負責人的列會顯示「本週未交」而掩蓋掉真正卡住的那一棒。
+  const reviewFlowOf = useCallback((taskId: string): ReviewFlow | null => {
+    for (const p of apiProjects) {
+      const t = p.tasks.find(tt => tt.id === taskId)
+      if (!t) continue
+      const byId = new Map(p.tasks.map(x => [x.id, x]))
+      const ms = p.milestones.find(m => m.id === t.milestoneId)
+      const anc: string[] = []
+      let cur = t.parentId ? byId.get(t.parentId) : undefined
+      while (cur) { anc.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
+      const weekEnd = weekEndOf(reviewReportWeek)
+      // 這位執行者在本專案有沒有報告審核主管。沒有 → 流程圖不畫「R主管審核」那一棒，
+      // 因為後端送出報告時就已 fallback 通知當責（task-logs/batch: routedTo='accountable'）。
+      const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
+      return buildReviewFlow({
+        task: t,
+        hasReviewer: !!mr?.reviewer,
+        logs: p.taskLogs.filter(l => l.taskId === taskId),
+        events: (p.reviewEvents ?? []).filter(e => e.taskId === taskId),
+        activeThisWeek: shouldTrackReport(
+          { assignee: t.assignee, status: t.status, startDate: t.startDate, endDate: t.endDate, completedAt: t.completedAt ?? null },
+          reviewReportWeek, weekEnd,
+        ),
+        path: [ms?.name, ...anc].filter(Boolean).join(' › ') || null,
+        accountableName: user?.name ?? null,
+      })
+    }
+    return null
+  }, [apiProjects, reviewReportWeek, user])
+
+  // 本專案有幾位成員沒設報告審核主管（＝其報告會直接落到當責身上）
+  const reviewNoReviewerCount = useMemo(() => {
+    const p = apiProjects.find(pp => pp.id === reviewProjectId)
+    if (!p?.memberReviewers) return 0
+    return p.memberReviewers.filter(m => !m.reviewer).length
+  }, [apiProjects, reviewProjectId])
+
+  const reviewSelectedFlow = useMemo(
+    () => (reviewFlowTaskId ? reviewFlowOf(reviewFlowTaskId) : null),
+    [reviewFlowTaskId, reviewFlowOf],
+  )
+  // 右欄若正輪到 A，動作按鈕需要對應的待審項目
+  // A 代審時的目標：該任務目前「未發布、未被駁回」的那批報告（同作者、同填報週）
+  const reviewSelectedReport = useMemo(() => {
+    if (!reviewFlowTaskId) return null
+    for (const p of apiProjects) {
+      const pending = p.taskLogs
+        .filter(l => l.taskId === reviewFlowTaskId && !l.publishedAt && !l.reviewerRejectedAt)
+        .sort((a, b) => (a.createdAt ?? a.logDate).localeCompare(b.createdAt ?? b.logDate))
+      if (pending.length === 0) continue
+      const first = pending[0]
+      if (!first.authorId) return null // 舊 payload 沒有 authorId 就不給操作，避免打錯對象
+      return { projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId, weekOf: first.weekOf ?? null }
+    }
+    return null
+  }, [apiProjects, reviewFlowTaskId])
+
+  const reviewSelectedItem = useMemo(
+    () => reviewPendingItems.find(i => i.task.id === reviewFlowTaskId) ?? null,
+    [reviewPendingItems, reviewFlowTaskId],
+  )
+  // 右欄底部的工作紀錄
+  const reviewSelectedLogs = useMemo(() => {
+    if (!reviewFlowTaskId) return []
+    return apiProjects.flatMap(p => p.taskLogs)
+      .filter(l => l.taskId === reviewFlowTaskId)
+      .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  }, [apiProjects, reviewFlowTaskId])
+
+  // 管線列計數：以「本週該追蹤 ∪ 待你確認」的任務為母體，逐一歸棒
+  const reviewPipeline = useMemo(() => {
+    const counts: PipelineCounts = { unfilled: 0, supervisor: 0, accountable: 0, done: 0, running: 0 }
+    const byTask = new Map<string, ReviewFlow>()
+    const ids = new Set<string>()
+    for (const r of reviewWeekReport.memberRows) for (const t of r.tasks) ids.add(t.taskId)
+    for (const it of reviewShownItems) ids.add(it.task.id)
+    for (const id of ids) {
+      const f = reviewFlowOf(id)
+      if (!f) continue
+      counts[f.stage]++
+      byTask.set(id, f)
+    }
+    return { counts, byTask }
+  }, [reviewWeekReport, reviewShownItems, reviewFlowOf])
+
+  // 任務在專案中的固定排序位置。清單一律照這個順序呈現，使用者才對得上甘特／看板。
+  const taskOrderIndex = useMemo(() => {
+    const m = new Map<string, number>()
+    let base = 0
+    for (const p of apiProjects) {
+      const msIdx = new Map(p.milestones.map((ms, i) => [ms.id, i]))
+      p.tasks.forEach((t, i) => {
+        m.set(t.id, base + (msIdx.get(t.milestoneId) ?? 9_999) * 10_000 + i)
+      })
+      base += 100_000_000
+    }
+    return m
+  }, [apiProjects])
+  const byProjectOrder = useCallback(
+    (a: ReviewFlow, b: ReviewFlow) =>
+      (taskOrderIndex.get(a.taskId) ?? Number.MAX_SAFE_INTEGER) - (taskOrderIndex.get(b.taskId) ?? Number.MAX_SAFE_INTEGER),
+    [taskOrderIndex],
+  )
+
+  // 依麵包屑把連續同路徑的項目收成群組，讓群組標題名副其實
+  const groupByPath = useCallback((rows: ReviewFlow[]) => {
+    const out: { path: string; rows: ReviewFlow[] }[] = []
+    for (const f of rows) {
+      const path = f.path || '（未分類）'
+      const last = out[out.length - 1]
+      if (last && last.path === path) last.rows.push(f)
+      else out.push({ path, rows: [f] })
+    }
+    return out
+  }, [])
+
+  // 球在 A 手上的全部項目：代主管審報告 + 確認 100% 完成。「待你處理」分頁用這份，
+  // 與 accountable 棒次同一個資料來源，兩邊不會再對不起來。
+  const reviewActionableRows = useMemo(() => {
+    const rows: ReviewFlow[] = []
+    for (const [, f] of reviewPipeline.byTask) {
+      if (f.stage === 'accountable') rows.push(f)
+    }
+    return groupByPath(rows.sort(byProjectOrder))
+  }, [reviewPipeline, byProjectOrder, groupByPath])
+
+  // 選了棒次時，左欄改看這份跨分頁的扁平清單（卡最久的排前面）
+  const reviewStageRows = useMemo(() => {
+    if (!reviewStageFilter) return []
+    const rows: ReviewFlow[] = []
+    for (const [, f] of reviewPipeline.byTask) {
+      if (f.stage === reviewStageFilter) rows.push(f)
+    }
+    return groupByPath(rows.sort(byProjectOrder))
+  }, [reviewStageFilter, reviewPipeline, byProjectOrder, groupByPath])
+
+
   // 履歷分頁（一頁 10 筆）
   const REVIEW_HISTORY_PAGE_SIZE = 10
   const reviewHistoryPageCount = Math.max(1, Math.ceil(reviewShownHistory.length / REVIEW_HISTORY_PAGE_SIZE))
@@ -1270,6 +1564,27 @@ export default function MyTasksPage() {
     const res = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
     if (res.ok) { const data = await res.json(); setApiProjects(data.projects ?? []) }
   }, [user])
+
+  // A 代審報告：該成員未設報告審核主管時，由當責直接核准／駁回。
+  //   走的是 R主管 同一支 API（/api/report-reviews），後端授權已放行「無主管時由當責代審」。
+  const aReviewReport = async (action: 'approve' | 'reject', note?: string) => {
+    const t = reviewSelectedReport
+    if (!t || !user?.email) return
+    setAReportBusy(t.taskId)
+    try {
+      const res = await fetch('/api/report-reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewerEmail: user.email, ...t, action, note }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || '操作失敗'); return }
+      const d = await res.json().catch(() => ({}))
+      if (d.noop) toast.info('此報告已審核過，已為你重新整理')
+      else toast.success(action === 'approve' ? '已通過，報告進入更新紀錄' : '已駁回，退回執行者')
+      await refreshMyTasks()
+    } catch { toast.error('操作失敗') }
+    finally { setAReportBusy(null) }
+  }
 
   // A 審核通過＝確認 R 回報的 100% 完成 → 標記完成（甘特 100% + 移入完成區 + 里程碑同步）。
   const reviewConfirm = async (item: ReviewItem) => {
@@ -1308,40 +1623,6 @@ export default function MyTasksPage() {
   }
 
   // 回報狀態徽章：區分「已回報完成（送 A 審核）」與「只是填了工作紀錄、還沒回報」
-
-  // A 視角「單一階段徽章」：把『完成度』與『報告審核』合成一顆。
-  //   記憶法＝看顏色就知道球在誰手上：🟢完成 · 🔵等主管 · 🟠換我(A) · 🔴要催R · ⚪等R(正常)
-  const renderStageBadge = (reported: boolean, completed: boolean, st: ReportReviewState, active: boolean, count: number): React.ReactNode => {
-    // 🟢 完成：以「實際完成(completedAt/status=done)」為準，與甘特一致（不看 reviewedAt，避免半殘狀態誤顯示）
-    if (completed) return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400 shrink-0">已完成</Badge>
-    // 🔵 球在 R主管（報告審核中）→ A 先等，太久可追主管
-    if (st.kind === 'pending') {
-      return (
-        <HoverCard openDelay={80} closeDelay={100}>
-          <HoverCardTrigger asChild>
-            <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0 cursor-help">主管審核中{st.waitDays > 0 ? ` · ${st.waitDays}天` : ''}</Badge>
-          </HoverCardTrigger>
-          <HoverCardContent align="end" className="w-auto max-w-[240px] p-0 overflow-hidden">
-            <div className="flex items-center gap-1.5 border-b border-blue-100 bg-blue-50 px-2.5 py-1.5 dark:border-blue-900 dark:bg-blue-950/40">
-              <ClipboardList className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span className="text-xs font-medium text-blue-700 dark:text-blue-400">球在 R 主管{reported ? '（已回報 100%）' : ''}</span>
-            </div>
-            <div className="space-y-1 px-2.5 py-2 text-xs">
-              {st.reviewerName && <div className="flex items-center gap-1.5"><span className="text-muted-foreground">審核主管</span><span className="font-medium">{st.reviewerName}</span></div>}
-              <div className="text-muted-foreground">已等 {st.waitDays} 天 · 太久可去追主管審核</div>
-            </div>
-          </HoverCardContent>
-        </HoverCard>
-      )
-    }
-    // 🟠 換 A：已報 100% 且已過主管（醒目）
-    if (reported) return <Badge className="text-[11px] px-1.5 py-0.5 bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-300 font-semibold dark:bg-amber-900/30 dark:text-amber-300 dark:hover:bg-amber-900/30 shrink-0">待你確認</Badge>
-    // 🔴 要催 R：被主管退回、或本週逾期未交
-    if (st.kind === 'rejected') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已退回 R</Badge>
-    if (active && st.kind === 'none') return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">本週未交</Badge>
-    // ⚪ 等 R（正常進行中；含報告已交在跑、非本週）
-    return <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground shrink-0">執行中</Badge>
-  }
 
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
   const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[]; status?: 'pending' | 'approved' | 'rejected' }[]) => (
@@ -1389,21 +1670,31 @@ export default function MyTasksPage() {
 
   // 依任務樹狀節點（遞迴，縮排呈現階層）
   const renderReviewTaskNode = (node: ReviewTaskNode): React.ReactNode => {
-    const expanded = reviewMemberExpanded.has('task:' + node.taskId)
     return (
       <div key={node.taskId}>
-        <div className="flex items-center gap-2 py-2 pr-3 border-b border-border/40 hover:bg-muted/20" style={{ paddingLeft: 12 + node.depth * 18 }}>
+        <div
+          className={cn('flex items-center gap-2 py-2 pr-3 border-b border-border/40 cursor-pointer transition-colors border-l-2',
+            reviewFlowTaskId === node.taskId ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}
+          style={{ paddingLeft: 12 + node.depth * 18 }}
+          onClick={() => selectReviewFlow(node.taskId, 'logs')}
+        >
           {node.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0">└</span>}
           <div className="flex-1 min-w-0">
             <div className="text-sm truncate">{node.title}</div>
             <div className="text-[11px] text-muted-foreground">負責人：{node.assignee || '未指派'}</div>
           </div>
-          {renderStageBadge(node.reported, node.completed, node.reviewState, node.active, node.logs.length)}
-          {node.logs.length > 0
-            ? <button onClick={() => setReviewMemberExpanded(prev => { const k = 'task:' + node.taskId; const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n })} className="shrink-0"><ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></button>
-            : <span className="w-4 shrink-0" />}
+          {(() => {
+            const f = reviewPipeline.byTask.get(node.taskId)
+            if (!f) return null
+            return (
+              <span className="flex items-center gap-1 shrink-0">
+                <StageChip stage={f.stage} viewer="accountable" days={f.stuckDays} />
+                {f.noReviewer && <AlertTriangle className="h-3 w-3 text-orange-600 dark:text-orange-400 shrink-0" aria-label="未設審核主管，由當責代審" />}
+              </span>
+            )
+          })()}
+          <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
         </div>
-        {expanded && node.logs.length > 0 && renderReviewLogs(node.logs)}
         {node.children.map(renderReviewTaskNode)}
       </div>
     )
@@ -2208,11 +2499,11 @@ export default function MyTasksPage() {
         )}
 
         {/* 審核報告對話框：分頁（待審核 / 已審核）+ 點列展開完整內容 */}
-        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) { setReviewDialogProjectId(null); setReportReviewExpanded(new Set()) } }}>
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) { setReviewDialogProjectId(null); setSupFlowKey(null); setSupStageFilter(null) } }}>
+          <DialogContent className="sm:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
             <DialogHeader className="px-5 pt-5 pb-3">
               <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />審核報告 — {reviewDialogProject?.projectName}</DialogTitle>
-              <DialogDescription className="text-sm">點任一列展開看完整內容與附件。通過即進入更新紀錄；駁回可填原因退回成員。</DialogDescription>
+              <DialogDescription className="text-sm">點棒次篩選；點左側任一列看完整流程。</DialogDescription>
             </DialogHeader>
             {(() => {
               if (!reviewDialogProject) return null
@@ -2225,13 +2516,13 @@ export default function MyTasksPage() {
               return (
                 <>
                   {/* Tab bar */}
-                  <div className="px-5 flex gap-1 border-b">
+                  <div className={cn('px-5 flex gap-1 border-b', supStageFilter && 'opacity-40 pointer-events-none')}>
                     {([
                       { val: 'pending', label: '待審核', cnt: pRows.length, tone: 'amber' },
                       { val: 'reviewed', label: '已審核', cnt: rRows.length, tone: 'muted' },
                       { val: 'tracking', label: '填報追蹤', cnt: trackMiss, tone: 'red' },
                     ] as const).map(({ val, label, cnt, tone }) => (
-                      <button key={val} onClick={() => setReviewDialogTab(val)}
+                      <button key={val} onClick={() => { setReviewDialogTab(val); setSupFlowKey(null) }}
                         className={cn('px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
                           reviewDialogTab === val ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                         {label}
@@ -2241,9 +2532,63 @@ export default function MyTasksPage() {
                     ))}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
-                    {reviewDialogTab === 'tracking' ? (
-                      <div className="space-y-3">
+                  {/* 流程總覽列（主管視角） */}
+                  <div className="px-5 py-2.5 border-b bg-muted/20">
+                    <ReviewPipelineBar
+                      counts={supFlows.counts}
+                      value={supStageFilter}
+                      onChange={(next) => { setSupStageFilter(next); setSupFlowKey(null) }}
+                      viewer="supervisor"
+                    />
+                  </div>
+
+                  <div className="flex-1 flex min-h-0 overflow-hidden">
+                    {/* ── 左欄：清單 ── */}
+                    <div className={cn('overflow-y-auto border-r min-w-0',
+                      flowPanelOpen ? 'w-[57%] shrink-0' : 'flex-1')}>
+                    {supStageFilter ? (
+                      /* 棒次視角：與 A 端同一套群組樣式，依專案順序排 */
+                      (() => {
+                        const entries = [...supFlows.map.entries()].filter(([, f]) => f.stage === supStageFilter)
+                        if (entries.length === 0) {
+                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">這一棒目前沒有項目</p>
+                        }
+                        const keyOfFlow = new Map(entries.map(([k, f]) => [f, k]))
+                        const groups = groupByPath(entries.map(([, f]) => f).sort(byProjectOrder))
+                        return (
+                          <div>
+                            {groups.map(g => (
+                              <div key={g.path}>
+                                <div className="sticky top-0 z-10 border-y bg-muted/85 px-4 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur truncate" title={g.path}>
+                                  {g.path}
+                                </div>
+                                <div className="divide-y divide-border/60">
+                                  {g.rows.map(f => {
+                                    const k = keyOfFlow.get(f)!
+                                    return (
+                                      <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
+                                        className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
+                                          supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
+                                        <div className="text-sm font-medium truncate">{f.title}</div>
+                                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                          {f.assignee && (
+                                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                              <FlowAvatar name={f.assignee} size={16} />{f.assignee}
+                                            </span>
+                                          )}
+                                          <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />
+                                        </div>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()
+                    ) : reviewDialogTab === 'tracking' ? (
+                      <div className="space-y-3 px-4 py-3">
                         <div className="rounded-md border bg-muted/20 px-3 py-2.5">
                           <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />
                         </div>
@@ -2325,49 +2670,34 @@ export default function MyTasksPage() {
                               {pOpen && (
                               <div className="divide-y">
                                 {rv.tracking.map(t => {
-                                  const canExpand = t.owned && t.logs.length > 0
                                   const tk = `track:${rv.authorId}:${t.taskId}`
-                                  const topen = reportReviewExpanded.has(tk)
+                                  const f = supFlows.map.get(tk)
                                   return (
                                     <div key={t.taskId}>
                                       <div
-                                        className={cn('flex items-center gap-2 pr-3 py-2', canExpand && 'cursor-pointer hover:bg-muted/30')}
+                                        className={cn('flex items-center gap-2 pr-3 py-2 transition-colors border-l-2',
+                                          t.owned && 'cursor-pointer',
+                                          supFlowKey === tk ? 'border-l-primary bg-primary/5' : cn('border-l-transparent', t.owned && 'hover:bg-muted/40'))}
                                         style={{ paddingLeft: 12 + t.depth * 18 }}
-                                        onClick={canExpand ? () => toggleReportReviewExpand(tk) : undefined}
+                                        onClick={t.owned ? () => selectSupFlow(tk, 'logs') : undefined}
                                       >
                                         {t.depth > 0 && <span className="text-muted-foreground/40 text-xs select-none shrink-0">└</span>}
                                         <div className="min-w-0 flex-1">
                                           <div className={cn('text-sm truncate', !t.owned && 'text-muted-foreground')}>{t.taskTitle}</div>
                                           <div className="text-[11px] text-muted-foreground truncate">{t.depth === 0 && t.msName ? `${t.msName} · ` : ''}計畫 {t.planStart} ~ {t.planEnd}</div>
                                         </div>
-                                        {t.done ? (
-                                          <Badge className="text-[11px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/30 shrink-0">已完成</Badge>
-                                        ) : !t.owned ? (
+                                        {!t.owned ? (
                                           <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 text-muted-foreground/60 shrink-0">上層</Badge>
                                         ) : (
                                           <>
-                                            {t.overdue && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
-                                            {t.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/30 shrink-0">100%</Badge>}
-                                            {t.reviewState === 'pending'
-                                              ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 shrink-0">審核中</Badge>
-                                              : t.reviewState === 'published'
-                                                ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已通過</Badge>
-                                                : t.reviewState === 'rejected'
-                                                  ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">已駁回</Badge>
-                                                  : t.filled
-                                                    ? <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 shrink-0">已填</Badge>
-                                                    : <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 shrink-0">未填</Badge>}
+                                            {t.overdue && !t.done && <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 shrink-0">逾期</Badge>}
+                                            {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
                                           </>
                                         )}
-                                        {canExpand
-                                          ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', topen && 'rotate-180')} />
+                                        {t.owned
+                                          ? <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                                           : <span className="w-4 shrink-0" />}
                                       </div>
-                                      {canExpand && topen && (
-                                        <div className="border-t bg-muted/10" style={{ paddingLeft: 12 + t.depth * 18 }}>
-                                          {renderReviewLogs(t.logs)}
-                                        </div>
-                                      )}
                                     </div>
                                   )
                                 })}
@@ -2381,81 +2711,118 @@ export default function MyTasksPage() {
                         })()}
                       </div>
                     ) : reviewDialogTab === 'pending' ? (
-                      pRows.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">目前沒有待審核的報告</p>
-                      ) : pRows.map(({ rv, s }) => {
-                        const k = keyOf(rv.authorId, s.taskId, s.weekOf)
-                        const open = reportReviewExpanded.has(k)
-                        const busy = reviewBusy === subKey(pid, rv.authorId, s)
-                        const brief = s.logs.map(l => l.content).join('；')
-                        return (
-                          <div key={k} className="rounded-lg border overflow-hidden">
-                            <button onClick={() => toggleReportReviewExpand(k)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">{rv.authorName.charAt(0)}</div>
+                      (() => {
+                        const rows = pRows
+                        if (rows.length === 0) {
+                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">目前沒有待審核的報告</p>
+                        }
+                        return <div className="divide-y divide-border/70">{rows.map(({ rv, s: sub }) => {
+                          const k = keyOf(rv.authorId, sub.taskId, sub.weekOf)
+                          const f = supFlows.map.get(k)
+                          const brief = sub.logs.map(l => l.content).join('；')
+                          return (
+                            <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
+                              className={cn('w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors border-l-2',
+                                supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
+                              <FlowAvatar name={rv.authorName} size={26} />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium truncate">{rv.authorName}</span>
-                                  <span className="text-xs text-muted-foreground truncate">{s.taskTitle}</span>
-                                  {s.reportedDone && <Badge className="text-[11px] bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/30 shrink-0">100%</Badge>}
+                                  <span className="text-xs text-muted-foreground truncate">{sub.taskTitle}</span>
                                 </div>
-                                {!open && <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{brief}</div>}
+                                <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{brief}</div>
+                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                  {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
+                                  {sub.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(sub.weekOf)}</span>}
+                                </div>
                               </div>
-                              {s.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(s.weekOf)}</span>}
-                              <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
+                              <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                             </button>
-                            {open && (
-                              <div className="px-3 pb-3 space-y-2 border-t bg-muted/10">
-                                {renderReviewLogs(s.logs)}
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
-                                    disabled={busy} onClick={() => { setRejectTarget({ projectId: pid, authorId: rv.authorId, authorName: rv.authorName, sub: s }); setRejectReason('') }}>
-                                    <X className="h-3.5 w-3.5" />駁回
-                                  </Button>
-                                  <Button size="sm" className="h-7 text-xs gap-1" disabled={busy}
-                                    onClick={() => doReviewAction(pid, rv.authorId, s, 'approve')}>
-                                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}通過
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })
+                          )
+                        })}</div>
+                      })()
                     ) : (
-                      rRows.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-8">尚無已審核的報告</p>
-                      ) : rRows.map(({ rv, s }) => {
-                        const k = keyOf(rv.authorId, s.taskId, s.weekOf)
-                        const open = reportReviewExpanded.has(k)
-                        const brief = s.logs.map(l => l.content).join('；')
-                        return (
-                          <div key={k} className="rounded-lg border overflow-hidden">
-                            <button onClick={() => toggleReportReviewExpand(k)} className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold">{rv.authorName.charAt(0)}</div>
+                      (() => {
+                        const rows = rRows
+                        if (rows.length === 0) {
+                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">尚無已審核的報告</p>
+                        }
+                        return <div className="divide-y divide-border/70">{rows.map(({ rv, s: sub }) => {
+                          const k = keyOf(rv.authorId, sub.taskId, sub.weekOf)
+                          const f = supFlows.map.get(k)
+                          const brief = sub.logs.map(l => l.content).join('；')
+                          return (
+                            <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
+                              className={cn('w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors border-l-2',
+                                supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
+                              <FlowAvatar name={rv.authorName} size={26} />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium truncate">{rv.authorName}</span>
-                                  <span className="text-xs text-muted-foreground truncate">{s.taskTitle}</span>
-                                  {s.outcome === 'approved'
-                                    ? <Badge className="text-[11px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/30 shrink-0">已通過</Badge>
-                                    : <Badge className="text-[11px] bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30 shrink-0">已駁回</Badge>}
+                                  <span className="text-xs text-muted-foreground truncate">{sub.taskTitle}</span>
                                 </div>
-                                {!open && <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{s.outcome === 'rejected' && s.note ? `駁回原因：${s.note}` : brief}</div>}
+                                <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>
+                                  {sub.outcome === 'rejected' && sub.note ? `駁回原因：${sub.note}` : brief}
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                  {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
+                                  {sub.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(sub.weekOf)}</span>}
+                                </div>
                               </div>
-                              {s.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(s.weekOf)}</span>}
-                              <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', open && 'rotate-180')} />
+                              <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
                             </button>
-                            {open && (
-                              <div className="px-3 pb-3 space-y-2 border-t bg-muted/10">
-                                {s.outcome === 'rejected' && s.note && (
-                                  <div className="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded px-2 py-1.5">駁回原因：{s.note}</div>
-                                )}
-                                {renderReviewLogs(s.logs)}
-                              </div>
-                            )}
+                          )
+                        })}</div>
+                      })()
+                    )}
+                    </div>
+
+                    {/* ── 右欄：所選項目的完整審核流程 ── */}
+                    {!flowPanelOpen && <ReviewFlowCollapsed onExpand={() => setFlowPanelOpen(true)} />}
+                    {flowPanelOpen && (
+                    <div className="flex-1 min-w-0 flex flex-col bg-muted/10">
+                      {supSelectedFlow ? (
+                        <ReviewFlowTimeline
+                          key={supFlowKey}
+                          className="animate-in fade-in slide-in-from-right-4 duration-200"
+                          flow={supSelectedFlow}
+                          viewer="supervisor"
+                          tab={flowTab}
+                          onTabChange={setFlowTab}
+                          onCollapse={() => setFlowPanelOpen(false)}
+                          logsCount={supSelectedLogs.length}
+                          logs={renderReviewLogs(supSelectedLogs)}
+                          actions={supSelectedAction ? (
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
+                                disabled={reviewBusy === subKey(pid, supSelectedAction.authorId, supSelectedAction.sub)}
+                                onClick={() => { setRejectTarget({ projectId: pid, authorId: supSelectedAction.authorId, authorName: supSelectedAction.authorName, sub: supSelectedAction.sub }); setRejectReason('') }}>
+                                <X className="h-3.5 w-3.5" />駁回
+                              </Button>
+                              <Button size="sm" className="h-7 text-xs gap-1"
+                                disabled={reviewBusy === subKey(pid, supSelectedAction.authorId, supSelectedAction.sub)}
+                                onClick={() => doReviewAction(pid, supSelectedAction.authorId, supSelectedAction.sub, 'approve')}>
+                                {reviewBusy === subKey(pid, supSelectedAction.authorId, supSelectedAction.sub)
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <Check className="h-3.5 w-3.5" />}通過
+                              </Button>
+                            </div>
+                          ) : undefined}
+                        />
+                      ) : (
+                        <div className="flex h-full min-h-0 flex-col">
+                          <div className="flex justify-end border-b px-2 py-1.5 shrink-0">
+                            <button type="button" onClick={() => setFlowPanelOpen(false)} title="收合右欄"
+                              className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                              <PanelRightClose className="h-4 w-4" />
+                            </button>
                           </div>
-                        )
-                      })
+                          <div className="flex-1 min-h-0">
+                            <ReviewFlowEmpty counts={supFlows.counts} viewer="supervisor" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     )}
                   </div>
                 </>
@@ -4661,145 +5028,118 @@ export default function MyTasksPage() {
         />
       )}
 
+      {/* A 代審報告的駁回原因（該成員未設主管時） */}
+      <AlertDialog open={!!aReportReject} onOpenChange={(o) => { if (!o) setAReportReject(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>駁回報告並退回重寫？</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{aReportReject?.title}」的本週報告會退回給執行者重寫，不會進入更新紀錄。請填寫原因讓對方知道要改什麼。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium flex items-center gap-1">
+              駁回原因 <span className="text-destructive">*</span>
+              {!aReportRejectReason.trim() && <span className="text-[11px] text-destructive font-normal">（必填）</span>}
+            </label>
+            <Textarea value={aReportRejectReason} onChange={e => setAReportRejectReason(e.target.value)} rows={3}
+              placeholder="會記錄在審視歷程，並讓對方知道要改什麼…" className="text-sm" autoFocus />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600 disabled:opacity-50 disabled:pointer-events-none"
+              disabled={!aReportRejectReason.trim()}
+              onClick={async () => {
+                const note = aReportRejectReason.trim()
+                setAReportReject(null); setAReportRejectReason('')
+                await aReviewReport('reject', note)
+              }}>
+              確認駁回
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── 審核中心（當責 A）── */}
       <Dialog open={reviewCenterOpen} onOpenChange={setReviewCenterOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogContent className="sm:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4" />週報審核{reviewShownName ? ` — ${reviewShownName}` : ''}</DialogTitle>
             <DialogDescription className="text-sm">
-              {reviewTab === 'pending'
-                ? <>確認執行者回報的完成：<b>審核通過</b>＝確認任務 <b>100% 完成</b>（甘特顯示完成、任務移入完成區、更新里程碑）；或<b>駁回</b>並填原因退回重做。</>
-                : reviewTab === 'members'
-                  ? <>依週別查看所有成員的週報，掌握誰已送出、誰逾期未填。</>
-                  : <>已處理的確認 / 駁回紀錄。</>}
+              {reviewTab === 'history'
+                ? <>已處理的確認 / 駁回紀錄。</>
+                : <>點棒次篩選；點左側任一列看完整流程。</>}
             </DialogDescription>
           </DialogHeader>
           <div className="px-6 pt-3">
-            <div className="flex items-center gap-1 border-b">
-              <button type="button" onClick={() => setReviewTab('pending')}
+            <div className={cn('flex items-center gap-1 border-b', reviewStageFilter && 'opacity-40 pointer-events-none')}>
+              <button type="button" onClick={() => { setReviewTab('pending'); setReviewFlowTaskId(null) }}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                   reviewTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
-                待你確認
-                {reviewShownItems.length > 0 && <span className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewShownItems.length}</span>}
+                待你處理
+                {reviewPipeline.counts.accountable > 0 && <span className="text-[11px] bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full px-1.5 py-0.5">{reviewPipeline.counts.accountable}</span>}
               </button>
-              <button type="button" onClick={() => setReviewTab('members')}
+              <button type="button" onClick={() => { setReviewTab('members'); setReviewFlowTaskId(null) }}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                   reviewTab === 'members' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
                 title="依週別查看所有人的週報，並看出誰沒送出">
                 成員週報
                 {reviewMissingCount > 0 && <span className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{reviewMissingCount}</span>}
               </button>
-              <button type="button" onClick={() => setReviewTab('history')}
+              <button type="button" onClick={() => { setReviewTab('history'); setReviewFlowTaskId(null) }}
                 className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors',
                   reviewTab === 'history' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                 已處理履歷
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {reviewTab === 'pending' ? (
-              reviewShownItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">目前沒有待你確認的項目</p>
-              ) : (
-                <div className="space-y-2.5">
-                  {reviewShownItems.map(item => {
-                    const expanded = reviewExpanded.has(item.task.id)
-                    const busy = reviewProcessing === item.task.id
-                    return (
-                      <div key={item.task.id} className="border rounded-lg overflow-hidden">
-                        <div className="px-3 py-2.5 bg-muted/20">
-                          {!reviewProjectId && <div className="text-[11px] text-muted-foreground/70 truncate">{item.projectName}</div>}
-                          <div className="text-[11px] text-muted-foreground truncate">{item.path}</div>
-                          <div className="flex items-start gap-2 mt-0.5">
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold truncate">{item.task.title}</div>
-                              <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                                <span className="inline-flex items-center gap-1">
-                                  <Avatar className="h-5 w-5"><AvatarFallback className={cn('text-[11px] text-white', avatarColorFor(item.reporter || '?'))}>{(item.reporter || '?').split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
-                                  <span className="text-xs text-foreground/80">{item.reporter || '執行者'}</span>
-                                </span>
-                                <Badge variant="outline" className="text-[11px] px-1.5 py-0 gap-1 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700">
-                                  <Check className="h-3 w-3" />回報完成 {new Date(item.reportedAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                                </Badge>
-                                {item.fileCount > 0 && (
-                                  <Badge variant="outline" className="text-[11px] px-1.5 py-0 gap-1 text-muted-foreground">
-                                    <Paperclip className="h-3 w-3" />{item.fileCount} 個附件
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 shrink-0"
-                              onClick={() => setReviewExpanded(prev => { const n = new Set(prev); if (n.has(item.task.id)) n.delete(item.task.id); else n.add(item.task.id); return n })}>
-                              <FileText className="h-3.5 w-3.5" />看紀錄<ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
-                            </Button>
-                          </div>
-                          <div className="flex items-center justify-end gap-2 mt-2">
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
-                              disabled={busy} onClick={() => { setReviewRejectReason(''); setReviewRejectItem({ projectId: item.projectId, taskId: item.task.id, title: item.task.title }) }}>
-                              <Undo2 className="h-3.5 w-3.5" />駁回
-                            </Button>
-                            <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
-                              disabled={busy} onClick={() => reviewConfirm(item)}>
-                              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}審核通過
-                            </Button>
-                          </div>
-                        </div>
-                        {expanded && (
-                          <div className="border-t bg-background">
-                            {item.logRows.length === 0 ? (
-                              <p className="text-xs text-muted-foreground/60 px-3 py-3 text-center">此任務尚無工作紀錄</p>
-                            ) : (
-                              <div className="max-h-[240px] overflow-y-auto">
-                                <table className="w-full text-xs border-collapse">
-                                  <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur"><tr className="text-muted-foreground">
-                                    <th className="text-left font-medium px-2 py-1.5 w-[56px] border-b">日期</th>
-                                    <th className="text-left font-medium px-2 py-1.5 w-[76px] border-b">填寫人</th>
-                                    <th className="text-left font-medium px-2 py-1.5 border-b">工作內容</th>
-                                    <th className="text-center font-medium px-2 py-1.5 w-[44px] border-b">附件</th>
-                                  </tr></thead>
-                                  <tbody>
-                                    {item.logRows.map(({ log: l, srcTitle }) => (
-                                      <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
-                                        <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
-                                        <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.author}</td>
-                                        <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">
-                                          {srcTitle && <Badge variant="outline" className="text-[11px] px-1 py-0 mr-1 align-middle text-amber-600 border-amber-300">子：{srcTitle}</Badge>}
-                                          {l.content}
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center">
-                                          {l.attachments && l.attachments.length > 0 ? (
-                                            <Popover>
-                                              <PopoverTrigger asChild>
-                                                <button className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:bg-primary/10 rounded px-1.5 py-0.5"><Paperclip className="h-3 w-3" />{l.attachments.length}</button>
-                                              </PopoverTrigger>
-                                              <PopoverContent align="end" className="w-60 p-2">
-                                                <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
-                                                  {l.attachments.map((att, ai) => (
-                                                    <a key={ai} href={att.url} download={att.name} target="_blank" rel="noopener" className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted text-xs">
-                                                      {att.type === 'image' ? <img src={att.url} alt={att.name} className="h-8 w-8 rounded object-cover border shrink-0" /> : <span className="h-8 w-8 rounded border bg-muted flex items-center justify-center shrink-0"><Paperclip className="h-3.5 w-3.5 text-muted-foreground" /></span>}
-                                                      <span className="truncate flex-1">{att.name}</span>
-                                                    </a>
-                                                  ))}
-                                                </div>
-                                              </PopoverContent>
-                                            </Popover>
-                                          ) : <span className="text-muted-foreground/30">—</span>}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+
+          {/* 流程總覽列：四棒各積了幾件，點一棒＝只看卡在那棒的項目 */}
+          {reviewTab !== 'history' && (
+            <div className="px-6 py-2.5 border-b bg-muted/20">
+              {reviewNoReviewerCount > 0 && (
+                <div className="mb-2 flex items-start gap-1.5 rounded-md border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-[11px] text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-300">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                  <span>
+                    <b>{reviewNoReviewerCount}</b> 位成員未設「報告審核主管」，報告直接由你審核。可到專案「團隊」指定。
+                  </span>
                 </div>
+              )}
+              <ReviewPipelineBar
+                counts={reviewPipeline.counts}
+                value={reviewStageFilter}
+                onChange={(next) => { setReviewStageFilter(next); setReviewFlowTaskId(null) }}
+                viewer="accountable"
+              />
+            </div>
+          )}
+
+          <div className="flex-1 flex min-h-0 overflow-hidden">
+            {/* ── 左欄：清單 ── */}
+            <div className={cn(
+              // 流程清單自己貼齊四邊：容器不能有垂直內距，否則 sticky 群組標題上方
+              // 會留一條蓋不到的縫，列會從那裡穿過去。
+              'overflow-y-auto min-w-0',
+              reviewTab === 'history' ? 'flex-1 px-6 py-4'
+                : flowPanelOpen ? 'w-[57%] shrink-0 border-r'
+                  : 'flex-1 border-r',
+            )}>
+            {reviewStageFilter ? (
+              /* 棒次視角：跨分頁的扁平清單 */
+              reviewStageRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center px-4 py-8">這一棒目前沒有項目</p>
+              ) : (
+                renderFlowGroups(reviewStageRows)
+              )
+            ) : reviewTab === 'pending' ? (
+              reviewActionableRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center px-4 py-8">目前沒有待你處理的項目</p>
+              ) : (
+                renderFlowGroups(reviewActionableRows)
               )
             ) : reviewTab === 'members' ? (
-              <div className="space-y-3">
+              <div className="space-y-3 px-4 py-3">
                 <WeekPicker value={reviewReportWeek} onChange={setReviewReportWeek} />
                 {/* 依成員 / 依任務 切換 */}
                 <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit">
@@ -4830,7 +5170,7 @@ export default function MyTasksPage() {
                           <div key={row.name} className="border rounded-lg overflow-hidden">
                             <div className={cn('px-3 py-2 flex items-center gap-2 cursor-pointer', row.missing ? 'bg-red-50 dark:bg-red-950/20' : 'bg-muted/20')}
                               onClick={() => setReviewMemberExpanded(prev => { const n = new Set(prev); if (n.has(row.name)) n.delete(row.name); else n.add(row.name); return n })}>
-                              <Avatar className="h-6 w-6"><AvatarFallback className={cn('text-[11px] text-white', avatarColorFor(row.name))}>{row.name.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                              <FlowAvatar name={row.name} size={24} />
                               <span className="text-sm font-medium flex-1 truncate">{row.name}</span>
                               {row.missing ? (
                                 <Badge variant="outline" className="text-[11px] px-1.5 py-0.5 bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400">未送出週報</Badge>
@@ -4846,25 +5186,29 @@ export default function MyTasksPage() {
                             {mExpanded && (
                               <div className="border-t divide-y">
                                 {row.tasks.map(ti => {
-                                  const tKey = `mtask:${row.name}:${ti.taskId}`
-                                  const tExpanded = reviewMemberExpanded.has(tKey)
-                                  const hasLogs = ti.logs.length > 0
                                   return (
                                     <div key={ti.taskId}>
                                       <div
-                                        className={cn('px-3 py-2 flex items-start gap-2', hasLogs && 'cursor-pointer hover:bg-muted/20')}
-                                        onClick={hasLogs ? () => setReviewMemberExpanded(prev => { const n = new Set(prev); if (n.has(tKey)) n.delete(tKey); else n.add(tKey); return n }) : undefined}
+                                        className={cn('px-3 py-2 flex items-start gap-2 cursor-pointer transition-colors border-l-2',
+                                          reviewFlowTaskId === ti.taskId ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}
+                                        onClick={() => selectReviewFlow(ti.taskId, 'logs')}
                                       >
                                         <div className="flex-1 min-w-0">
                                           {ti.ctx && <div className="text-[11px] text-muted-foreground/80 truncate">{ti.ctx}</div>}
                                           <div className="text-sm">{ti.title}</div>
                                         </div>
-                                        {renderStageBadge(ti.reported, ti.completed, ti.reviewState, ti.active, ti.logs.length)}
-                                        {hasLogs
-                                          ? <ChevronDown className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform mt-0.5', tExpanded && 'rotate-180')} />
-                                          : <span className="w-4 shrink-0" />}
+                                        {(() => {
+                                          const f = reviewPipeline.byTask.get(ti.taskId)
+                                          if (!f) return null
+                                          return (
+                                            <span className="flex items-center gap-1 shrink-0">
+                                              <StageChip stage={f.stage} viewer="accountable" days={f.stuckDays} />
+                                              {f.noReviewer && <AlertTriangle className="h-3 w-3 text-orange-600 dark:text-orange-400 shrink-0" aria-label="未設審核主管，由當責代審" />}
+                                            </span>
+                                          )
+                                        })()}
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 mt-0.5" />
                                       </div>
-                                      {hasLogs && tExpanded && renderReviewLogs(ti.logs)}
                                     </div>
                                   )
                                 })}
@@ -4936,6 +5280,72 @@ export default function MyTasksPage() {
                   )}
                 </div>
               )
+            )}
+            </div>
+
+            {/* ── 右欄：所選項目的完整審核流程 ── */}
+            {reviewTab !== 'history' && !flowPanelOpen && (
+              <ReviewFlowCollapsed onExpand={() => setFlowPanelOpen(true)} />
+            )}
+            {reviewTab !== 'history' && flowPanelOpen && (
+              <div className="flex-1 min-w-0 flex flex-col bg-muted/10">
+                {reviewSelectedFlow ? (
+                  <ReviewFlowTimeline
+                    key={reviewSelectedFlow.taskId}
+                    className="animate-in fade-in slide-in-from-right-4 duration-200"
+                    flow={reviewSelectedFlow}
+                    viewer="accountable"
+                    tab={flowTab}
+                    onTabChange={setFlowTab}
+                    onCollapse={() => setFlowPanelOpen(false)}
+                    logsCount={reviewSelectedLogs.length}
+                    logs={renderReviewLogs(reviewSelectedLogs)}
+                    actions={
+                      // 代主管審報告：通過即納入更新紀錄（不代表任務完成）
+                      reviewSelectedFlow.pendingAction === 'review-report' && reviewSelectedReport ? (
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+                            disabled={aReportBusy === reviewSelectedFlow.taskId}
+                            onClick={() => { setAReportRejectReason(''); setAReportReject({ taskId: reviewSelectedFlow.taskId, title: reviewSelectedFlow.title }) }}>
+                            <Undo2 className="h-3.5 w-3.5" />駁回報告
+                          </Button>
+                          <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                            disabled={aReportBusy === reviewSelectedFlow.taskId}
+                            onClick={() => aReviewReport('approve')}>
+                            {aReportBusy === reviewSelectedFlow.taskId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}通過並納入紀錄
+                          </Button>
+                        </div>
+                      // 確認 R 回報的 100% 完成
+                      ) : reviewSelectedFlow.pendingAction === 'confirm-done' && reviewSelectedItem ? (
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
+                            disabled={reviewProcessing === reviewSelectedItem.task.id}
+                            onClick={() => { setReviewRejectReason(''); setReviewRejectItem({ projectId: reviewSelectedItem.projectId, taskId: reviewSelectedItem.task.id, title: reviewSelectedItem.task.title }) }}>
+                            <Undo2 className="h-3.5 w-3.5" />駁回
+                          </Button>
+                          <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                            disabled={reviewProcessing === reviewSelectedItem.task.id}
+                            onClick={() => reviewConfirm(reviewSelectedItem)}>
+                            {reviewProcessing === reviewSelectedItem.task.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}審核通過
+                          </Button>
+                        </div>
+                      ) : undefined
+                    }
+                  />
+                ) : (
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="flex justify-end border-b px-2 py-1.5 shrink-0">
+                      <button type="button" onClick={() => setFlowPanelOpen(false)} title="收合右欄"
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                        <PanelRightClose className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                      <ReviewFlowEmpty counts={reviewPipeline.counts} viewer="accountable" />
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </DialogContent>

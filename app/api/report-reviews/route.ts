@@ -320,8 +320,31 @@ export async function POST(request: NextRequest) {
     const reviewerName = reviewer?.name || reviewerEmail
     const emailOk = !!authorMember?.reportReviewerEmail && authorMember.reportReviewerEmail.toLowerCase() === reviewerEmail.toLowerCase()
     const nameOk = !!authorMember?.reportReviewerName && !!reviewer?.name && authorMember.reportReviewerName === reviewer.name
-    if (!emailOk && !nameOk) {
-      return NextResponse.json({ error: '你不是該成員的報告審核主管，無權審核' }, { status: 403 })
+    let authorized = emailOk || nameOk
+
+    // 該作者未指定報告審核主管 → 由本專案的當責(A)代審。
+    //   這與報告送出時的既有行為一致（task-logs/batch 在沒有主管時 routedTo='accountable'、
+    //   直接通知當責），差別只在於此處把「審核權」也一併給 A，讓 A 不必再繞到撰寫台納入。
+    const hasReviewer = !!(authorMember?.reportReviewerEmail || authorMember?.reportReviewerName)
+    let viaAccountable = false
+    if (!authorized && !hasReviewer) {
+      const me = await prisma.user.findUnique({ where: { email: reviewerEmail }, select: { id: true } })
+      if (me) {
+        const acc = await prisma.projectTeamMember.findFirst({
+          where: { projectId, userId: me.id, role: 'A' },
+          select: { userId: true },
+        })
+        viaAccountable = !!acc
+        authorized = viaAccountable
+      }
+    }
+
+    if (!authorized) {
+      return NextResponse.json({
+        error: hasReviewer
+          ? '你不是該成員的報告審核主管，無權審核'
+          : '該成員未設報告審核主管，僅本專案的當責(A)可代為審核',
+      }, { status: 403 })
     }
 
     // 目標：該 submission 中仍待審的 log（同專案/任務/作者/填報週）
