@@ -191,6 +191,12 @@ export interface TaskLog {
   reviewerRejectedBy?: string | null // 駁回者姓名
   reviewerNote?: string | null       // 駁回原因
   authorReviewerName?: string | null // 作者(R)的報告審核主管(R主管)名稱，供 A 端顯示「主管審核中」
+  /**
+   * true = 這筆是當責在撰寫台「我的補充」寫的，不是執行者交的報告。
+   * 補充完全不走「R 填報 → R主管審核 → 當責確認」，送出後直接進更新紀錄，
+   * 所以所有審核相關的清單與流程都要用這個旗標排除它。
+   */
+  reportOnly?: boolean
 }
 
 export interface Risk {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
+import { isReportVisible } from '@/lib/report-cutoff'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
 import { notifyWeeklyReportReady } from '@/lib/notifications'
 
@@ -93,7 +94,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           await prisma.taskLog.update({
             where: { id: existing.id },
             data: {
-              content: e.content.trim(), lastEditedBy: body.actor || '', weekOf: body.weekOf,
+              // 從撰寫台寫的一律標記——不論是新建還是改既有那筆。漏標的話它會被當成
+              // 執行者交的報告，跑進「待審」而永遠沒人審。
+              content: e.content.trim(), lastEditedBy: body.actor || '', weekOf: body.weekOf, reportOnly: true,
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               ...(nowPublish ? { publishedAt: nowPublish, publishedBy: body.actor || '' } : {}),
             },
@@ -137,7 +140,13 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         where: { projectId: id },
         select: { id: true, parentId: true, milestoneId: true, durationDays: true, startDate: true, endDate: true, originalStartDate: true, progress: true, completedAt: true, assignee: true },
       })
-      const allLogs = await prisma.taskLog.findMany({ where: { projectId: id }, select: { taskId: true, logDate: true, author: { select: { name: true } } } })
+      // 與 task-logs / my-tasks / projects 一致：只有已核准（或 7/12 前的舊資料）才驅動進度。
+      //   不濾的話，當責在撰寫台按「儲存草稿」，那筆還沒送出的補充就會先把進度推上去，
+      //   下次載入又用已核准重算掉回來——進度會來回跳。
+      const allLogs = (await prisma.taskLog.findMany({
+        where: { projectId: id },
+        select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+      })).filter(isReportVisible)
       await syncTaskProgressFromLogs(allTasks, allLogs)
       const affectedMs = new Set(allTasks.filter(t => touchedTaskIds.has(t.id)).map(t => t.milestoneId))
       for (const msId of affectedMs) await syncMilestoneStatus(msId, id)

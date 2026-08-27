@@ -1,0 +1,151 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>審核與撤回流程說明</title>
+<!--[if gte mso 9]><xml>
+<w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument>
+</xml><![endif]-->
+<style>
+@page { size: A4; margin: 2cm; }
+body { font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif; font-size: 11pt; line-height: 1.7; color: #1a1a1a; }
+h1 { font-size: 18pt; border-bottom: 2px solid #2563eb; padding-bottom: 6pt; margin-bottom: 4pt; }
+h2 { font-size: 14pt; color: #1e40af; margin-top: 20pt; margin-bottom: 8pt; border-left: 4px solid #2563eb; padding-left: 8pt; }
+h3 { font-size: 12pt; margin-top: 14pt; margin-bottom: 6pt; }
+p { margin: 6pt 0; }
+table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 10.5pt; }
+th, td { border: 1px solid #cbd5e1; padding: 5pt 7pt; vertical-align: top; }
+th { background: #eff6ff; font-weight: bold; text-align: left; }
+.sub { color: #64748b; font-size: 9.5pt; }
+
+/* 流程圖：用儲存格本身當方框。Word 對表格框線支援完整，對 div 框線則不然。 */
+table.flow { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+table.flow td { border: none; padding: 0 2pt; text-align: center; vertical-align: middle; }
+table.flow td.step { border: 1.2pt solid #2563eb; background: #eff6ff; padding: 8pt 4pt; font-weight: bold; font-size: 10pt; }
+table.flow td.done { border: 1.2pt solid #16a34a; background: #f0fdf4; padding: 8pt 4pt; font-weight: bold; font-size: 10pt; }
+table.flow td.back { border: 1.2pt solid #dc2626; background: #fef2f2; padding: 8pt 4pt; font-weight: bold; font-size: 10pt; color: #b91c1c; }
+table.flow td.go { color: #2563eb; font-weight: bold; font-size: 12pt; padding: 0; }
+.who { font-weight: normal; font-size: 8.5pt; color: #475569; }
+.act { display: block; font-weight: normal; font-size: 8.5pt; color: #b91c1c; line-height: 1.3; }
+
+.note { background: #fffbeb; border-left: 3pt solid #f59e0b; padding: 7pt 10pt; margin: 8pt 0; font-size: 10.5pt; }
+.shot { border: 1pt dashed #94a3b8; background: #f8fafc; color: #94a3b8; text-align: center; padding: 22pt; margin: 8pt 0; font-size: 10pt; }
+ul { margin: 4pt 0 4pt 18pt; padding: 0; }
+li { margin: 3pt 0; }
+</style>
+</head>
+<body>
+
+<h1>審核與撤回流程說明</h1>
+<p class="sub">專案管理系統｜版本 v01｜2026 年 8 月</p>
+
+<p>本次更新的重點是把「週報從填寫到結案」的完整流程<b>視覺化</b>，讓每位參與者一眼看出目前進行到哪一棒、下一棒該由誰處理；同時新增<b>撤回機制</b>，讓審核錯誤可以循流程回退。</p>
+
+<h2>一、審核流程</h2>
+
+<h3>三個角色</h3>
+<table>
+<tr><th style="width:22%">角色</th><th style="width:26%">職責</th><th>在流程中做什麼</th></tr>
+<tr><td><b>R　執行者</b></td><td>填寫週報</td><td>每週填報工作紀錄；工作完成時另行「回報完成」</td></tr>
+<tr><td><b>R主管　報告審核主管</b></td><td>審核報告內容</td><td>核准後報告才進入官方更新紀錄；內容不足可駁回</td></tr>
+<tr><td><b>A　當責</b></td><td>確認任務完成</td><td>確認執行者回報的完成，通過即代表任務 100% 完成</td></tr>
+</table>
+
+<h3>情境一：一般週報（工作尚未完成）</h3>
+<table class="flow">
+<tr>
+  <td class="step" width="28%">① R 填寫週報<br><span class="who">執行者</span></td>
+  <td class="go" width="8%">&#9654;</td>
+  <td class="step" width="28%">② R主管審核<br><span class="who">報告審核主管</span></td>
+  <td class="go" width="8%">&#9654;</td>
+  <td class="done" width="28%">③ 納入更新紀錄<br><span class="who">本週流程結束</span></td>
+</tr>
+</table>
+<p>報告經主管核准後即進入更新紀錄，本週流程結束。任務持續進行，下週繼續填報，<b>不需要當責確認</b>。</p>
+
+<h3>情境二：執行者回報完成</h3>
+<table class="flow">
+<tr>
+  <td class="step" width="21%">① R 填寫週報<br><span class="who">執行者</span></td>
+  <td class="go" width="5%">&#9654;</td>
+  <td class="step" width="21%">② R主管審核<br><span class="who">報告審核主管</span></td>
+  <td class="go" width="5%">&#9654;</td>
+  <td class="step" width="21%">③ 當責確認<br><span class="who">當責</span></td>
+  <td class="go" width="5%">&#9654;</td>
+  <td class="done" width="22%">④ 完成 100%<br><span class="who">系統自動同步</span></td>
+</tr>
+</table>
+<p>當責確認通過後，系統會自動<b>將任務標記完成、移入完成區、更新甘特圖與里程碑進度</b>。</p>
+
+<div class="note">
+<b>特殊情況：成員未指定報告審核主管</b><br>
+此時第 ② 棒不存在，報告直接由當責審核（流程圖會標示「當責 A 審核報告」並提示設定缺漏）。可於專案「團隊」設定中指定主管。
+</div>
+
+<h3>流程視覺化</h3>
+<p>三個角色都能在各自的畫面看到<b>同一條流程</b>：每一棒由誰經手、什麼時候、目前卡了幾天、下一棒該給誰。</p>
+<ul>
+<li><b>執行者</b>：填寫週報頁面可展開查看，得知自己的報告目前在誰手上</li>
+<li><b>報告審核主管</b>：審核報告頁面，並可依「棒次」篩選追蹤誰未填報</li>
+<li><b>當責</b>：週報審核頁面，可直接處理輪到自己的項目</li>
+</ul>
+<div class="shot">〔此處插入截圖：審核流程時間軸〕</div>
+
+<h2>二、撤回流程</h2>
+
+<h3>核心原則：從最下游往上退，不可跳棒</h3>
+<p>撤回是<b>把流程往回退一棒</b>，並非刪除紀錄。每個人只能收回<b>自己做過的動作</b>；下游若已接手，必須由下游先退回。</p>
+
+<table class="flow">
+<tr>
+  <td class="done" width="20%">完成 100%</td>
+  <td class="go" width="15%">&#9664;<span class="act">當責<br>撤回確認</span></td>
+  <td class="step" width="17%">當責確認</td>
+  <td class="go" width="14%">&#9664;<span class="act">當責<br>駁回</span></td>
+  <td class="step" width="17%">R主管審核</td>
+  <td class="go" width="14%">&#9664;<span class="act">主管<br>駁回</span></td>
+  <td class="back" width="17%">R 重新處理</td>
+</tr>
+</table>
+
+<h3>三種回退動作</h3>
+<table>
+<tr><th style="width:20%">動作</th><th style="width:16%">操作者</th><th style="width:28%">退到哪裡</th><th>通知對象</th></tr>
+<tr><td><b>撤回完成確認</b></td><td>當責</td><td>任務回到「待處理」，甘特與里程碑同步退回</td><td>執行者、審核主管</td></tr>
+<tr><td><b>撤回核准</b></td><td>報告審核主管</td><td>報告退回「待審核」，並從更新紀錄移除</td><td>執行者、當責</td></tr>
+<tr><td><b>駁回</b></td><td>當責 / 主管</td><td>當責駁回退給主管；主管駁回退給執行者</td><td>上下游雙方</td></tr>
+</table>
+
+<h3>限制條件</h3>
+<table>
+<tr><th style="width:30%">限制</th><th>說明</th></tr>
+<tr><td><b>下游未接手</b></td><td>報告已轉給當責、或任務已完成時，主管不能自行撤回核准，須由當責先退回</td></tr>
+<tr><td><b>期限一個月</b></td><td>超過 30 天的核准或完成確認不可撤回，避免甘特圖與里程碑無預警倒退</td></tr>
+<tr><td><b>必填原因</b></td><td>所有撤回與駁回都必須填寫原因，並記錄於審視歷程供日後追溯</td></tr>
+<tr><td><b>重新回報</b></td><td>報告被駁回時，執行者先前的「回報完成」一併取消，由其重新判斷後再次回報</td></tr>
+</table>
+
+<div class="shot">〔此處插入截圖：撤回確認視窗〕</div>
+
+<h2>三、配套機制</h2>
+
+<h3>待修正清單</h3>
+<p>執行者的填寫週報頁面新增「<b>待修正</b>」分頁，集中列出所有被駁回、尚未重送的報告（跨週次），顯示駁回原因、駁回者與擱置天數，並提供「<b>去修正</b>」一鍵跳轉至原本的週次。</p>
+<div class="note">
+<b>請注意：</b>報告須回到<b>原本被駁回的那一週</b>修改後重送。若在其他週次另寫新報告，原本那一週在更新紀錄中仍會留白。
+</div>
+
+<h3>逾期提醒（每週）</h3>
+<table>
+<tr><th style="width:36%">情況</th><th style="width:20%">門檻</th><th>通知對象</th></tr>
+<tr><td>報告被駁回未重新送出</td><td>超過 7 天</td><td>執行者、其報告審核主管</td></tr>
+<tr><td>週報草稿撰寫後未送出</td><td>超過 7 天</td><td>當責</td></tr>
+</table>
+<p class="sub">※ 為避免對既有資料造成困擾，2026 年 8 月 26 日以前的駁回紀錄不納入追蹤與提醒。</p>
+
+<h3>資料呈現原則</h3>
+<p>未經審核通過的報告內容，<b>不會</b>出現在報告頁、Excel 匯出、當責的週報撰寫台與甘特圖中，避免被誤認為已確認的內容。</p>
+
+</body>
+</html>

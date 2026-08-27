@@ -337,10 +337,18 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
   const steps: FlowStep[] = []
 
   // ① R 填報週報
+  //   「已回報完成卻一筆報告都沒有」是真實會發生的狀態（R 直接按回報完成）。
+  //   用空心待辦表達會變成「①② 未做、③ 進行中」，讀起來像流程壞掉 → 標成「略過」並說明。
+  const doneWithoutReport = i.reportKind === 'none' && (i.reportedDone || i.completed)
   steps.push(i.reportKind !== 'none'
     ? {
       key: 'report', label: 'R 填報週報', roleLabel: '', state: 'done',
       who: i.assignee || null, at: i.submittedAt, detail: i.reportDetail,
+    }
+    : doneWithoutReport
+    ? {
+      key: 'report', label: 'R 填報週報', roleLabel: '', state: 'skipped',
+      who: i.assignee || null, warn: '未填報告', detail: '執行者未填寫報告即回報完成',
     }
     : {
       key: 'report', label: 'R 填報週報', roleLabel: '',
@@ -381,6 +389,11 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
       key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'rejected',
       who: i.reviewerName, at: i.decidedAt, note: i.rejectNote,
       detail: '已退回重寫',
+    })
+  } else if (doneWithoutReport) {
+    steps.push({
+      key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'skipped',
+      who: null, detail: '沒有報告可審，此棒略過',
     })
   } else {
     steps.push({

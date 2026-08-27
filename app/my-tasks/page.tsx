@@ -1291,7 +1291,7 @@ export default function MyTasksPage() {
         // 循序 gating：R 回報 100% 必須「先過 R主管審核」A 才看得到。
         //   有指定 R主管(報告有 authorReviewerName)時，要求該任務報告已核准(有 publishedAt)且無待審筆；
         //   沒指定 R主管則 fallback 直接進 A（舊流程）。
-        const rLogs = p.taskLogs.filter(l => l.taskId === t.id && isSameUser(l.author, { name: t.reportedDoneBy || t.assignee || '' }))
+        const rLogs = p.taskLogs.filter(l => l.taskId === t.id && !l.reportOnly)
         if (rLogs.some(l => l.authorReviewerName)) {
           const hasApproved = rLogs.some(l => l.publishedAt)
           const hasPending = rLogs.some(l => !l.publishedAt && !l.reviewerRejectedAt)
@@ -1655,7 +1655,10 @@ export default function MyTasksPage() {
       weekStart, weekEnd,
     )
     const activeTasks = p.tasks.filter(overlaps)
-    const weekLogs = p.taskLogs.filter(l => reportCountsForWeek({ weekOf: l.weekOf, logDate: l.logDate }, weekStart, weekEnd))
+    // 排除當責在撰寫台寫的補充（reportOnly）。補充不走審核流程，送出後直接進更新紀錄，
+    //   不該出現在成員名單、任務清單、筆數或未填判定裡。在源頭濾掉，下游就全部一致。
+    const weekLogs = p.taskLogs.filter(l =>
+      !l.reportOnly && reportCountsForWeek({ weekOf: l.weekOf, logDate: l.logDate }, weekStart, weekEnd))
     const logsByTask = new Map<string, TaskLog[]>()
     const logsByAuthorTask = new Map<string, TaskLog[]>()
     for (const l of weekLogs) {
@@ -1697,8 +1700,11 @@ export default function MyTasksPage() {
     const missingTasks = activeTasks.filter(t => !(logsByTask.get(t.id)?.length)).length
 
     // 依成員：每人本週「該做的任務」(active) ∪「本週有寫的任務」，逐一標已填/未填
+    // 「成員週報」列的是執行者的填報狀況。weekLogs 已在源頭濾成「負責人自己的報告」，
+    //   所以這裡不會混進當責的補充。
     const memberNames = new Set<string>()
-    for (const t of activeTasks) memberNames.add(t.assignee)
+    // 未指派的任務沒有「這一列該由誰填」可言，列出來只會是一列空名字
+    for (const t of activeTasks) if (t.assignee?.trim()) memberNames.add(t.assignee)
     for (const l of weekLogs) memberNames.add(l.author)
     const memberRows = [...memberNames].sort().map(name => {
       // owned = 該員本週該做(active) ∪ 本週有寫的任務。平面列表呈現，但排序沿用樹狀順序（父在子前、同層依序）。
@@ -1745,11 +1751,10 @@ export default function MyTasksPage() {
       const weekEnd = weekEndOf(reviewReportWeek)
       // 這位執行者在本專案有沒有報告審核主管。沒有 → 流程圖不畫「R主管審核」那一棒，
       // 因為後端送出報告時就已 fallback 通知當責（task-logs/batch: routedTo='accountable'）。
-      // 審核鏈是「一位作者一條」——每位作者有自己的審核主管。把任務上所有人的報告混在一起算，
-      // 會算出自相矛盾的狀態（踩過：當責在 R 的任務上補一筆說明，那筆未發布，
+      // 只算真正走審核的報告。當責在撰寫台寫的補充帶 reportOnly，它不進審核、送出直接進更新紀錄，
+      // 混進來會算出自相矛盾的狀態（踩過：當責在 R 的任務上補一筆說明，那筆未發布，
       // 於是 A 看到「主管審核中」，R 卻看到自己的報告「已駁回」）。
-      // 以「任務負責人」的報告為準——那才是驅動這個任務進度的那條鏈。
-      const taskLogs = p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, { name: t.assignee }))
+      const taskLogs = p.taskLogs.filter(l => l.taskId === taskId && !l.reportOnly)
       const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
       return buildReviewFlow({
         task: t,
@@ -1771,7 +1776,11 @@ export default function MyTasksPage() {
   const reviewNoReviewerCount = useMemo(() => {
     const p = apiProjects.find(pp => pp.id === reviewProjectId)
     if (!p?.memberReviewers) return 0
-    return p.memberReviewers.filter(m => !m.reviewer).length
+    // 只算「會交報告的人」＝身上有任務的人。團隊裡的當責自己、以及不背任務的角色
+    //   本來就不會送報告給人審，把他們算進來會變成永遠消不掉的假警告
+    //   （實際踩過：專案只有當責自己未設，畫面就一直掛著「1 位成員未設」）。
+    const assignees = new Set(p.tasks.map(t => (t.assignee || '').trim()).filter(Boolean))
+    return p.memberReviewers.filter(m => !m.reviewer && [...assignees].some(a => isSameUser(a, { name: m.name }))).length
   }, [apiProjects, reviewProjectId])
 
   const reviewSelectedFlow = useMemo(
@@ -1801,8 +1810,12 @@ export default function MyTasksPage() {
   // 右欄底部的工作紀錄
   const reviewSelectedLogs = useMemo(() => {
     if (!reviewFlowTaskId) return []
-    return apiProjects.flatMap(p => p.taskLogs)
-      .filter(l => l.taskId === reviewFlowTaskId)
+    // 排除當責的補充（reportOnly）——與流程的取樣範圍一致。
+    //   補充混進來會被標上「未進紀錄」之類的審核狀態，讓人以為那筆也卡在某個審核關卡。
+    const proj = apiProjects.find(p => p.tasks.some(t => t.id === reviewFlowTaskId))
+    if (!proj) return []
+    return proj.taskLogs
+      .filter(l => l.taskId === reviewFlowTaskId && !l.reportOnly)
       .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
   }, [apiProjects, reviewFlowTaskId])
 

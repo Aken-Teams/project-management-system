@@ -49,9 +49,14 @@ export async function GET(request: NextRequest) {
 
   const pairs = supervised.map(m => ({ projectId: m.projectId, authorId: m.userId }))
 
+  // 當責在撰寫台「我的補充」寫的內容帶 reportOnly=true：不走審核流程，送出後直接進更新紀錄。
+  //   審核相關的查詢一律排除，否則當責只要也被列在督導名單裡，她的補充就會變成一筆
+  //   「待審報告」送進主管信箱，而它永遠不會被審。
+  const notSupplement = { reportOnly: false }
+
   // 待審報告（尚未發布、未被駁回）— 用來找出「有待審筆的 任務×填報週」群組
   const pendingLogs = await prisma.taskLog.findMany({
-    where: { publishedAt: null, reviewerRejectedAt: null, OR: pairs },
+    where: { ...notSupplement, publishedAt: null, reviewerRejectedAt: null, OR: pairs },
     select: { projectId: true, authorId: true, taskId: true, weekOf: true },
   })
   // 待審群組鍵（同一 任務×作者×填報週 只要有一筆待審，整組都要重審）
@@ -60,7 +65,7 @@ export async function GET(request: NextRequest) {
   const pendingTaskIds = [...new Set(pendingLogs.map(l => l.taskId))]
   const pendingAuthorIds = [...new Set(pendingLogs.map(l => l.authorId))]
   const groupLogs = pendingTaskIds.length === 0 ? [] : await prisma.taskLog.findMany({
-    where: { taskId: { in: pendingTaskIds }, authorId: { in: pendingAuthorIds } },
+    where: { ...notSupplement, taskId: { in: pendingTaskIds }, authorId: { in: pendingAuthorIds } },
     select: {
       id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
       logDate: true, content: true, attachments: true, nextPlans: true,
@@ -74,6 +79,7 @@ export async function GET(request: NextRequest) {
   const sixtyDaysAgo = new Date(); sixtyDaysAgo.setUTCDate(sixtyDaysAgo.getUTCDate() - 60)
   const reviewedLogs = await prisma.taskLog.findMany({
     where: {
+      ...notSupplement,
       AND: [
         { OR: pairs },
         { OR: [{ publishedAt: { not: null } }, { reviewerRejectedAt: { not: null } }] },
@@ -92,12 +98,12 @@ export async function GET(request: NextRequest) {
 
   // 本週已送出的報告（用來判斷「本週未送 → 需追」）
   const weekLogs = await prisma.taskLog.findMany({
-    where: { OR: pairs, weekOf: monday },
+    where: { ...notSupplement, OR: pairs, weekOf: monday },
     select: { projectId: true, authorId: true },
   })
   // 相容舊資料(無 weekOf)：以 logDate 落在本週判斷
   const weekLogsByDate = await prisma.taskLog.findMany({
-    where: { OR: pairs, weekOf: null, logDate: { gte: mondayDate, lt: sundayDate } },
+    where: { ...notSupplement, OR: pairs, weekOf: null, logDate: { gte: mondayDate, lt: sundayDate } },
     select: { projectId: true, authorId: true },
   })
   const submittedSet = new Set<string>()
@@ -129,6 +135,7 @@ export async function GET(request: NextRequest) {
   // 該週的報告（用來判斷已填）：weekOf=該週 或 舊資料(無 weekOf)且 logDate 落在該週
   const trackLogs = await prisma.taskLog.findMany({
     where: {
+      ...notSupplement,
       projectId: { in: projectIds },
       OR: [
         { weekOf: trackWeek },
@@ -141,7 +148,7 @@ export async function GET(request: NextRequest) {
   // 任務層級的報告（不限週別）：流程時間軸要描述「這個任務的報告鏈」，
   //   只看所選週會把別週已完成的環節畫成沒發生（實際踩過：W30 交並核准，看 W35 全變空心）。
   const allTaskLogs = await prisma.taskLog.findMany({
-    where: { projectId: { in: projectIds } },
+    where: { ...notSupplement, projectId: { in: projectIds } },
     select: { taskId: true, authorId: true, createdAt: true, publishedAt: true, publishedBy: true, reviewerRejectedAt: true, reviewerNote: true },
     orderBy: { createdAt: 'asc' },
   })

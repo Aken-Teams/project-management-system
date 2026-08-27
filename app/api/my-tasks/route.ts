@@ -185,6 +185,7 @@ export async function GET(request: NextRequest) {
           lastEditedBy: tl.lastEditedBy || null,
           publishedAt: tl.publishedAt ? tl.publishedAt.toISOString() : null,
           weekOf: tl.weekOf || null,
+          reportOnly: tl.reportOnly,
           reviewerRejectedAt: tl.reviewerRejectedAt ? tl.reviewerRejectedAt.toISOString() : null,
           reviewerRejectedBy: tl.reviewerRejectedBy || null,
           reviewerNote: tl.reviewerNote || null,

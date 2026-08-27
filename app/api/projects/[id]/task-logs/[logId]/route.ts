@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { safeJsonParse } from '@/lib/utils'
 import { prisma } from '@/lib/db'
 import { syncTaskProgressFromLogs, syncMilestoneStatus } from '@/lib/sync-milestone-status'
+import { isReportVisible } from '@/lib/report-cutoff'
 
 type RouteContext = { params: Promise<{ id: string; logId: string }> }
 
@@ -14,10 +15,11 @@ async function syncAfterLogChange(taskId: string, projectId: string) {
   })
   if (!task) return
 
-  const allLogs = await prisma.taskLog.findMany({
+  // 與 task-logs / weekly-report / my-tasks / projects 一致：只有已核准（或 7/12 前的舊資料）才驅動進度
+  const allLogs = (await prisma.taskLog.findMany({
     where: { taskId },
-    select: { taskId: true, logDate: true, author: { select: { name: true } } },
-  })
+    select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+  })).filter(isReportVisible)
   await syncTaskProgressFromLogs([task], allLogs)
   await syncMilestoneStatus(task.milestoneId, projectId)
 }
@@ -112,7 +114,33 @@ export async function DELETE(
     }
 
     const taskId = log.taskId
+    const wasUnderReview = !log.publishedAt || !!log.reviewerRejectedAt
     await prisma.taskLog.delete({ where: { id: logId } })
+
+    // 刪掉的是「還在審／已被駁回」的報告時，要一併收拾任務上的審核狀態。
+    //   駁回紀錄是掛在 log 上的（reviewerRejectedAt/reviewerNote），log 一刪就沒了，
+    //   但 task.reportedDoneAt 還在——任務會變成「回報完成了卻從沒填過報告」，
+    //   重新回到當責的待辦，執行者的「待修正」也一起清空，等於刪報告就能規避駁回。
+    //   （實際踩過：R 被退件後把報告刪掉，該任務就一直掛在當責待辦上。）
+    if (wasUnderReview) {
+      const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { reportedDoneAt: true, reportedDoneBy: true, reviewedAt: true, completedAt: true },
+      })
+      // 當責已確認／已完成的不動——那是既成事實，不該被一次刪除推翻
+      if (task?.reportedDoneAt && !task.reviewedAt && !task.completedAt) {
+        const left = await prisma.taskLog.count({ where: { taskId, reportOnly: false } })
+        if (left === 0) {
+          await prisma.task.update({
+            where: { id: taskId },
+            data: { reportedDoneAt: null, reportedDoneBy: null },
+          })
+          await prisma.taskReviewEvent.create({
+            data: { taskId, projectId: id, type: 'reported_cleared', actor: task.reportedDoneBy || '', note: '報告已刪除，回報完成一併取消' },
+          }).catch(() => {})
+        }
+      }
+    }
 
     // Sync progress after deletion
     await syncAfterLogChange(taskId, id)
