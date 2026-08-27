@@ -1271,6 +1271,59 @@ export default function MyTasksPage() {
       .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
   }, [rFlowTargetId, rReportDialogProject])
 
+  // 主管清單：依成員分組（他督導多人，人名重複才是這邊的雜訊來源）
+  const renderSupRowsByMember = (
+    rows: { rv: Reviewee; s: ReviewSubmission | ReviewedSubmission }[],
+    pid: string,
+    keyOf: (authorId: string, taskId: string, weekOf: string | null) => string,
+  ) => {
+    const groups: { author: Reviewee; items: typeof rows }[] = []
+    for (const r of rows) {
+      const last = groups[groups.length - 1]
+      if (last && last.author.authorId === r.rv.authorId) last.items.push(r)
+      else groups.push({ author: r.rv, items: [r] })
+    }
+    return (
+      <div>
+        {groups.map((g, gi) => (
+          <div key={`${g.author.authorId}#${gi}`}>
+            <div className="sticky top-0 z-10 flex items-center gap-1.5 border-y bg-muted/85 px-4 py-1.5 backdrop-blur">
+              <FlowAvatar name={g.author.authorName} size={18} />
+              <span className="text-[11px] font-medium text-muted-foreground truncate">{g.author.authorName}</span>
+              <span className="ml-auto shrink-0 rounded bg-background px-1.5 text-[11px] font-semibold tabular-nums">{g.items.length}</span>
+            </div>
+            <div className="divide-y divide-border/60">
+              {g.items.map(({ rv, s: sub }) => {
+                const k = keyOf(rv.authorId, sub.taskId, sub.weekOf)
+                const f = supFlows.map.get(k)
+                const brief = sub.logs.map(l => l.content).join('；')
+                const outcome = 'outcome' in sub ? sub.outcome : null
+                return (
+                  <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
+                    className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
+                      supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
+                    <div className="text-sm font-medium truncate">{sub.taskTitle}</div>
+                    <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>
+                      {outcome === 'rejected' && 'note' in sub && sub.note ? `駁回原因：${sub.note}` : brief}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                      {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
+                      {sub.weekOf && (
+                        <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap" title="此報告的填報週">
+                          {formatReportWeek(sub.weekOf)}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   // 選取項目時一併決定右欄預設看哪一頁（審核情境看流程、瀏覽情境看內容）
   const selectReviewFlow = (taskId: string, defaultTab: FlowPanelTab = 'flow') => {
     setReviewFlowTaskId(taskId)
@@ -1284,8 +1337,8 @@ export default function MyTasksPage() {
   // 左欄清單：群組標題（麵包屑）+ 群組內項目。兩處清單（分頁／棒次視角）共用。
   const renderFlowGroups = (groups: { path: string; rows: ReviewFlow[] }[]) => (
     <div>
-      {groups.map(g => (
-        <div key={g.path}>
+      {groups.map((g, gi) => (
+        <div key={`${g.path}#${gi}`}>
           <div className="sticky top-0 z-10 border-b border-t bg-muted/85 px-4 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur truncate"
             title={g.path}>
             {g.path}
@@ -2620,8 +2673,8 @@ export default function MyTasksPage() {
                         const groups = groupByPath(entries.map(([, f]) => f).sort(byProjectOrder))
                         return (
                           <div>
-                            {groups.map(g => (
-                              <div key={g.path}>
+                            {groups.map((g, gi) => (
+                              <div key={`${g.path}#${gi}`}>
                                 <div className="sticky top-0 z-10 border-y bg-muted/85 px-4 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur truncate" title={g.path}>
                                   {g.path}
                                 </div>
@@ -2779,30 +2832,7 @@ export default function MyTasksPage() {
                         if (rows.length === 0) {
                           return <p className="text-sm text-muted-foreground text-center px-4 py-8">目前沒有待審核的報告</p>
                         }
-                        return <div className="divide-y divide-border/70">{rows.map(({ rv, s: sub }) => {
-                          const k = keyOf(rv.authorId, sub.taskId, sub.weekOf)
-                          const f = supFlows.map.get(k)
-                          const brief = sub.logs.map(l => l.content).join('；')
-                          return (
-                            <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
-                              className={cn('w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors border-l-2',
-                                supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
-                              <FlowAvatar name={rv.authorName} size={26} />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium truncate">{rv.authorName}</span>
-                                  <span className="text-xs text-muted-foreground truncate">{sub.taskTitle}</span>
-                                </div>
-                                <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>{brief}</div>
-                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                  {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
-                                  {sub.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(sub.weekOf)}</span>}
-                                </div>
-                              </div>
-                              <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                            </button>
-                          )
-                        })}</div>
+                        return renderSupRowsByMember(rows, pid, keyOf)
                       })()
                     ) : (
                       (() => {
@@ -2810,32 +2840,7 @@ export default function MyTasksPage() {
                         if (rows.length === 0) {
                           return <p className="text-sm text-muted-foreground text-center px-4 py-8">尚無已審核的報告</p>
                         }
-                        return <div className="divide-y divide-border/70">{rows.map(({ rv, s: sub }) => {
-                          const k = keyOf(rv.authorId, sub.taskId, sub.weekOf)
-                          const f = supFlows.map.get(k)
-                          const brief = sub.logs.map(l => l.content).join('；')
-                          return (
-                            <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
-                              className={cn('w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors border-l-2',
-                                supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
-                              <FlowAvatar name={rv.authorName} size={26} />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium truncate">{rv.authorName}</span>
-                                  <span className="text-xs text-muted-foreground truncate">{sub.taskTitle}</span>
-                                </div>
-                                <div className="text-xs text-muted-foreground truncate mt-0.5" title={brief}>
-                                  {sub.outcome === 'rejected' && sub.note ? `駁回原因：${sub.note}` : brief}
-                                </div>
-                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                  {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
-                                  {sub.weekOf && <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap" title="此報告的填報週">{formatReportWeek(sub.weekOf)}</span>}
-                                </div>
-                              </div>
-                              <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                            </button>
-                          )
-                        })}</div>
+                        return renderSupRowsByMember(rows, pid, keyOf)
                       })()
                     )}
                     </div>
