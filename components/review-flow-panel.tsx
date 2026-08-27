@@ -79,6 +79,8 @@ export interface ReviewFlow {
   noReviewer: boolean
   /** 這條流程描述的是哪一份報告（填報週標籤）。null＝尚無報告 */
   reportWeekLabel: string | null
+  /** 報告只是靠 7/12 舊資料寬限而顯示，從未經過任何人核准 → 沒有「核准」可撤回 */
+  legacy: boolean
   /**
    * 目前輪到當責時，要做的是哪一種動作：
    *   review-report＝審核報告（代主管，通過即納入更新紀錄）
@@ -134,6 +136,10 @@ export interface StageMeta {
   exeLabel: string
   /** 誰該動 */
   owner: string
+  /** 這一棒裝什麼（A 視角） */
+  desc: string
+  /** 這一棒裝什麼（R主管視角） */
+  supDesc: string
   dot: string
   chip: string
   ring: string
@@ -141,31 +147,41 @@ export interface StageMeta {
 
 export const STAGE_META: Record<FlowStage, StageMeta> = {
   unfilled: {
-    key: 'unfilled', label: '待 R 填報', supLabel: '成員未填報', exeLabel: '待你填報', owner: '執行者 R',
+    key: 'unfilled', label: '待 R 填報', supLabel: '待 R 填報告', exeLabel: '待你填報', owner: '執行者 R',
+    desc: '本週還沒交報告，需要催執行者',
+    supDesc: '你督導的成員本週還沒交報告',
     dot: 'bg-red-500',
     chip: 'bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
     ring: 'ring-red-500/40',
   },
   supervisor: {
-    key: 'supervisor', label: '主管審核中', supLabel: '待你審核', exeLabel: '主管審核中', owner: '報告審核主管',
+    key: 'supervisor', label: '主管審核中', supLabel: '待你處理', exeLabel: '主管審核中', owner: '報告審核主管',
+    desc: '報告已送出，等報告審核主管核准',
+    supDesc: '成員送出的報告，等你核准或駁回',
     dot: 'bg-blue-500',
     chip: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
     ring: 'ring-blue-500/40',
   },
   accountable: {
-    key: 'accountable', label: '待你處理', supLabel: '已送當責確認', exeLabel: '當責審核中', owner: '當責 A',
+    key: 'accountable', label: '待你處理', supLabel: '待 A 審核', exeLabel: '當責審核中', owner: '當責 A',
+    desc: '輪到你處理：審報告，或確認任務完成',
+    supDesc: '你已核准，報告已轉給當責處理',
     dot: 'bg-amber-500',
     chip: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
     ring: 'ring-amber-500/40',
   },
   running: {
-    key: 'running', label: '執行中', supLabel: '執行中', exeLabel: '進行中', owner: '執行者 R',
+    key: 'running', label: '執行中', supLabel: '執行中', exeLabel: '進行中', owner: '無人待辦',
+    desc: '報告已納入更新紀錄、任務持續進行——沒有人卡著，不需要處理',
+    supDesc: '報告已納入更新紀錄、任務持續進行——不需要處理',
     dot: 'bg-slate-300 dark:bg-slate-600',
     chip: 'bg-muted/60 text-muted-foreground border-border',
     ring: 'ring-slate-400/30',
   },
   done: {
     key: 'done', label: '已完成', supLabel: '已完成', exeLabel: '已完成', owner: '—',
+    desc: '任務已標記 100% 完成、已結案',
+    supDesc: '任務已標記 100% 完成、已結案',
     dot: 'bg-emerald-500',
     chip: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800',
     ring: 'ring-emerald-500/40',
@@ -405,6 +421,13 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
       who: i.aReject.actor || i.accountableName, at: i.aReject.at, note: i.aReject.note,
       detail: '已退回重做',
     })
+  } else if (i.completed) {
+    // 任務已完成卻沒有 reviewedAt：舊資料是直接標完成的，沒走過這一棒。
+    // 用「略過」而不是「待辦」——後面接著綠色的「完成 100%」，標成待辦會讀起來像流程壞掉。
+    steps.push({
+      key: 'accountable', label: '當責 A 確認', roleLabel: '', state: 'skipped',
+      who: null, warn: '未經此步驟', detail: '此任務是直接標記完成的，沒有經過當責確認',
+    })
   } else {
     steps.push({
       key: 'accountable', label: '當責 A 確認', roleLabel: '', state: 'todo',
@@ -524,7 +547,7 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee, noReviewer: !hasReviewer,
-    reportWeekLabel: weekLabel,
+    reportWeekLabel: weekLabel, legacy: rs.legacy,
     pendingAction: pendingActionOf(steps, stage),
   }
 }
@@ -584,7 +607,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, i.assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee: i.assignee || '', noReviewer: false,
-    reportWeekLabel: weekLabel,
+    reportWeekLabel: weekLabel, legacy: false,
     pendingAction: null,
   }
 }
@@ -651,6 +674,28 @@ export interface PipelineCounts { unfilled: number; supervisor: number; accounta
  * 流程總覽列：把四棒畫成一條線，各棒積了幾件一目瞭然。
  * 點某一棒＝只看卡在那一棒的項目；再點一次取消篩選。
  */
+/** 某一棒的定義文字（依視角）。點進棒次視角時顯示在清單頂端。 */
+export function stageDesc(stage: FlowStage, viewer: FlowViewer): string {
+  return viewer === 'supervisor' ? STAGE_META[stage].supDesc : STAGE_META[stage].desc
+}
+
+/** 棒次視角清單頂端的說明條：講清楚這一格裝什麼 */
+export function StageLensHeader({ stage, viewer, count }: { stage: FlowStage; viewer: FlowViewer; count: number }) {
+  const meta = STAGE_META[stage]
+  return (
+    <div className="flex items-start gap-2 border-b bg-muted/30 px-4 py-2">
+      <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', meta.dot)} />
+      <div className="min-w-0">
+        <div className="text-xs font-medium">
+          {stageLabel(stage, viewer)}
+          <span className="ml-1.5 text-muted-foreground tabular-nums font-normal">{count} 件</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground leading-relaxed">{stageDesc(stage, viewer)}</div>
+      </div>
+    </div>
+  )
+}
+
 export function ReviewPipelineBar({ counts, value, onChange, viewer, className }: {
   counts: PipelineCounts
   value: FlowStage | null
@@ -672,9 +717,7 @@ export function ReviewPipelineBar({ counts, value, onChange, viewer, className }
               onClick={() => onChange(selected ? null : key)}
               disabled={n === 0 && !selected}
               aria-pressed={selected}
-              title={n === 0
-                ? `${stageLabel(key, viewer)}｜目前無項目`
-                : `${stageLabel(key, viewer)}｜負責：${meta.owner}｜${n} 件（點擊只看這一棒）`}
+              title={`${stageLabel(key, viewer)}：${stageDesc(key, viewer)}${n === 0 ? '｜目前無項目' : `｜${n} 件（點擊只看這一棒）`}`}
               className={cn(
                 'group flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-all shrink-0',
                 'focus-visible:outline-none focus-visible:ring-2',
@@ -701,7 +744,7 @@ export function ReviewPipelineBar({ counts, value, onChange, viewer, className }
             type="button"
             onClick={() => onChange(value === 'running' ? null : 'running')}
             aria-pressed={value === 'running'}
-            title="正常進行中、目前沒有卡在任何人手上"
+            title={`執行中：${stageDesc('running', viewer)}`}
             className={cn(
               'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-all shrink-0 hover:border-foreground/25',
               value === 'running' ? cn('border-transparent ring-2', STAGE_META.running.ring, STAGE_META.running.chip) : 'border-border bg-background text-muted-foreground',

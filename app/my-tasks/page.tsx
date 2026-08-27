@@ -45,6 +45,7 @@ import {
   ReviewFlowTimeline,
   ReviewFlowEmpty,
   ReviewFlowCollapsed,
+  StageLensHeader,
   StageChip,
   FlowAvatar,
   type FlowStage,
@@ -304,6 +305,8 @@ export default function MyTasksPage() {
   const [reviewDialogTab, setReviewDialogTab] = useState<'pending' | 'reviewed' | 'tracking'>('pending')
   // ── 主管端流程面板：右欄顯示所選項目的完整審核鏈 ──
   const [supFlowKey, setSupFlowKey] = useState<string | null>(null)
+  // 棒次視角：母體＝該週的填報追蹤，用來追「誰還沒交」與「誰卡在哪一棒」
+  const [supStageFilter, setSupStageFilter] = useState<FlowStage | null>(null)
   // 待審核／已審核的視角：依成員 或 依任務（週別沿用填報追蹤那組，三個分頁看同一週）
   const [supViewBy, setSupViewBy] = useState<'member' | 'task'>('member')
   // 預設收斂到單一週別；被濾掉的筆數會標示出來，可一鍵展開全部
@@ -331,7 +334,7 @@ export default function MyTasksPage() {
         if (!t.owned) continue // 上層節點只提供層級脈絡，不是待辦
         const f = buildFlowFromSummary({
           taskId: t.taskId, title: t.taskTitle, assignee: rv.authorName,
-          path: [t.msName, `計畫 ${t.planStart} ~ ${t.planEnd}`].filter(Boolean).join(' · '),
+          path: t.msName,
           reportKind: t.reviewState, reportedDone: t.reportedDone, completed: t.done,
           activeThisWeek: true, weekOf: reviewTrackWeek, overdue: t.overdue,
           submittedAt: firstAt(t.logs), reviewerName: user?.name ?? null,
@@ -1293,6 +1296,7 @@ export default function MyTasksPage() {
     pid: string,
     keyOf: (authorId: string, taskId: string, weekOf: string | null) => string,
     emptyText: string,
+    defaultTab: FlowPanelTab,
   ) => {
     if (rows.length === 0) {
       return <p className="text-sm text-muted-foreground text-center px-4 py-8">{emptyText}</p>
@@ -1375,7 +1379,7 @@ export default function MyTasksPage() {
                 const brief = sub.logs.map(l => l.content).join('；')
                 const outcome = 'outcome' in sub ? sub.outcome : null
                 return (
-                  <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
+                  <button key={k} type="button" onClick={() => selectSupFlow(k, defaultTab)}
                     className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
                       supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
                     <div className="flex items-start gap-2">
@@ -1384,7 +1388,7 @@ export default function MyTasksPage() {
                         {supViewBy === 'member' ? sub.taskTitle : rv.authorName}
                       </div>
                       {outcome && (
-                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium',
+                        <span className={cn('shrink-0 rounded px-2 py-0.5 text-xs font-semibold',
                           outcome === 'approved'
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
                             : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300')}>
@@ -1484,7 +1488,8 @@ export default function MyTasksPage() {
                     </span>
                   )}
                   <StageChip stage={flow.stage} viewer="accountable" days={flow.stuckDays} />
-                  {flow.noReviewer && (
+                  {/* 已完成就沒有東西要審了，這個提醒只在流程還在跑時才有意義 */}
+                  {flow.noReviewer && flow.stage !== 'done' && (
                     <span className="inline-flex items-center gap-0.5 text-[11px] text-orange-700 dark:text-orange-400"
                       title="此成員未設報告審核主管，報告直接由你審核">
                       <AlertTriangle className="h-3 w-3" />由你代審
@@ -1918,8 +1923,9 @@ export default function MyTasksPage() {
             <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
               <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap align-top">
                 {new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                {l.status === 'pending' && <span className="ml-1 inline-block rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1 text-[10px] align-middle">待審</span>}
-                {l.status === 'approved' && <span className="ml-1 inline-block rounded bg-muted text-muted-foreground px-1 text-[10px] align-middle">已審</span>}
+                {l.status === 'pending' && <span className="ml-1 inline-block rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 text-[11px] font-medium align-middle">待審</span>}
+                {l.status === 'approved' && <span className="ml-1 inline-block rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-1.5 py-0.5 text-[11px] font-medium align-middle">已審</span>}
+                {l.status === 'rejected' && <span className="ml-1 inline-block rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 text-[11px] font-medium align-middle">已退回</span>}
               </td>
               <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
               <td className="px-2 py-1.5 text-center">
@@ -2779,7 +2785,7 @@ export default function MyTasksPage() {
         )}
 
         {/* 審核報告對話框：分頁（待審核 / 已審核）+ 點列展開完整內容 */}
-        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) { setReviewDialogProjectId(null); setSupFlowKey(null) } }}>
+        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) { setReviewDialogProjectId(null); setSupFlowKey(null); setSupStageFilter(null) } }}>
           <DialogContent className="sm:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
             <DialogHeader className="px-5 pt-5 pb-3">
               <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />審核報告 — {reviewDialogProject?.projectName}</DialogTitle>
@@ -2796,13 +2802,17 @@ export default function MyTasksPage() {
               return (
                 <>
                   {/* Tab bar */}
-                  <div className="px-5 flex gap-1 border-b">
+                  <div className={cn('px-5 flex gap-1 border-b', supStageFilter && 'opacity-40 pointer-events-none')}>
                     {([
                       { val: 'pending', label: '待審核', cnt: pRows.length, tone: 'amber' },
                       { val: 'reviewed', label: '已審核', cnt: rRows.length, tone: 'muted' },
                       { val: 'tracking', label: '填報追蹤', cnt: trackMiss, tone: 'red' },
                     ] as const).map(({ val, label, cnt, tone }) => (
-                      <button key={val} onClick={() => { setReviewDialogTab(val); setSupFlowKey(null) }}
+                      <button key={val} onClick={() => {
+                        setReviewDialogTab(val); setSupFlowKey(null)
+                        // 待審核＝要做判斷，先看流程；已審核＝回顧內容，先看紀錄
+                        setFlowTab(val === 'reviewed' ? 'logs' : 'flow')
+                      }}
                         className={cn('px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
                           reviewDialogTab === val ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>
                         {label}
@@ -2812,11 +2822,66 @@ export default function MyTasksPage() {
                     ))}
                   </div>
 
+                  {/* 棒次列：追人用。母體是該週的填報追蹤，所以「待 R 填報告」＝誰沒交。 */}
+                  <div className="px-5 py-2.5 border-b bg-muted/20">
+                    <ReviewPipelineBar
+                      counts={supFlows.counts}
+                      value={supStageFilter}
+                      onChange={(next) => { setSupStageFilter(next); setSupFlowKey(null) }}
+                      viewer="supervisor"
+                    />
+                  </div>
+
                   <div className="flex-1 flex min-h-0 overflow-hidden">
                     {/* ── 左欄：清單 ── */}
                     <div className={cn('overflow-y-auto border-r min-w-0',
                       flowPanelOpen ? 'w-[57%] shrink-0' : 'flex-1')}>
-                    {reviewDialogTab === 'tracking' ? (
+                    {supStageFilter ? (
+                      /* 棒次視角：誰卡在這一棒。扁平清單即可——分組會產生「（未分類）」這種假分類。 */
+                      (() => {
+                        // supFlows.map 對同一個任務可能同時有 track: 與 pid:author:task:week 兩種鍵，
+                        // 直接列會重複。以 taskId 去重，優先保留 track:（狀態最完整）。
+                        const seen = new Map<string, { key: string; flow: ReviewFlow }>()
+                        for (const [k, f] of supFlows.map) {
+                          if (f.stage !== supStageFilter) continue
+                          const prev = seen.get(f.taskId)
+                          if (!prev || k.startsWith('track:')) seen.set(f.taskId, { key: k, flow: f })
+                        }
+                        const order = new Map<string, number>()
+                        let oi = 0
+                        for (const rv of reviewDialogProject.reviewees) {
+                          for (const t of rv.tracking) if (!order.has(t.taskId)) order.set(t.taskId, oi++)
+                        }
+                        const rows = [...seen.values()]
+                          .sort((a, b) => (order.get(a.flow.taskId) ?? 1e9) - (order.get(b.flow.taskId) ?? 1e9))
+                        if (rows.length === 0) {
+                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">這一棒目前沒有項目</p>
+                        }
+                        return (
+                          <div>
+                            <StageLensHeader stage={supStageFilter} viewer="supervisor" count={rows.length} />
+                            <div className="divide-y divide-border/60">
+                            {rows.map(({ key, flow: f }) => (
+                              <button key={key} type="button" onClick={() => selectSupFlow(key, 'flow')}
+                                className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
+                                  supFlowKey === key ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
+                                {f.path && <div className="text-[11px] text-muted-foreground truncate">{f.path}</div>}
+                                <div className="text-sm font-medium truncate">{f.title}</div>
+                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                  {f.assignee && (
+                                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                      <FlowAvatar name={f.assignee} size={16} />{f.assignee}
+                                    </span>
+                                  )}
+                                  <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />
+                                </div>
+                              </button>
+                            ))}
+                            </div>
+                          </div>
+                        )
+                      })()
+                    ) : reviewDialogTab === 'tracking' ? (
                       <div className="space-y-3 px-4 py-3">
                         <div className="rounded-md border bg-muted/20 px-3 py-2.5">
                           <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />
@@ -2944,14 +3009,14 @@ export default function MyTasksPage() {
                         const rows = pRows
                         if (rows.length === 0) {
                         }
-                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '目前沒有待審核的報告')}</>
+                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '目前沒有待審核的報告', 'flow')}</>
                       })()
                     ) : (
                       (() => {
                         const rows = rRows
                         if (rows.length === 0) {
                         }
-                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '尚無已審核的報告')}</>
+                        return <>{renderSupToolbar()}{renderSupRows(rows, pid, keyOf, '尚無已審核的報告', 'logs')}</>
                       })()
                     )}
                     </div>
@@ -2972,8 +3037,9 @@ export default function MyTasksPage() {
                           logsCount={supSelectedLogs.length}
                           logs={renderReviewLogs(supSelectedLogs)}
                           renderRevoke={(step) => {
-                            // 只有「我核准過的那一棒」可撤；下游是否動過由後端把關（409）
-                            if (step.key !== 'supervisor' || !supFlowKey) return null
+                            // 只有「我核准過的那一棒」可撤；下游是否動過由後端把關（409）。
+                            // legacy＝靠 7/12 舊資料寬限而顯示，從未有人按過核准，沒有東西可撤。
+                            if (step.key !== 'supervisor' || !supFlowKey || supSelectedFlow.legacy) return null
                             const src = supFlows.actionable.get(supFlowKey)
                             const parts = supFlowKey.split(':')
                             const authorId = src?.authorId ?? parts[1]
@@ -5430,7 +5496,11 @@ export default function MyTasksPage() {
               reviewStageRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center px-4 py-8">這一棒目前沒有項目</p>
               ) : (
-                renderFlowGroups(reviewStageRows)
+                <>
+                  <StageLensHeader stage={reviewStageFilter} viewer="accountable"
+                    count={reviewStageRows.reduce((n, g) => n + g.rows.length, 0)} />
+                  {renderFlowGroups(reviewStageRows)}
+                </>
               )
             ) : reviewTab === 'pending' ? (
               reviewActionableRows.length === 0 ? (
