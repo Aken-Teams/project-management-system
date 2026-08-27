@@ -304,11 +304,10 @@ export default function MyTasksPage() {
   const [reviewDialogTab, setReviewDialogTab] = useState<'pending' | 'reviewed' | 'tracking'>('pending')
   // ── 主管端流程面板：右欄顯示所選項目的完整審核鏈 ──
   const [supFlowKey, setSupFlowKey] = useState<string | null>(null)
-  const [supStageFilter, setSupStageFilter] = useState<FlowStage | null>(null)
   // 待審核／已審核的視角：依成員 或 依任務（週別沿用填報追蹤那組，三個分頁看同一週）
   const [supViewBy, setSupViewBy] = useState<'member' | 'task'>('member')
-  // 週別篩選：'all' = 不限週別（舊資料多半沒有填報週，預設不濾才不會整片消失）
-  const [supWeekFilter, setSupWeekFilter] = useState<'all' | 'week'>('all')
+  // 預設收斂到單一週別；被濾掉的筆數會標示出來，可一鍵展開全部
+  const [supShowAllWeeks, setSupShowAllWeeks] = useState(false)
   const subKey = (projectId: string, authorId: string, s: ReviewSubmission) => `${projectId}:${authorId}:${s.taskId}:${s.weekOf ?? '_'}`
   // 選取鍵：與對話框內 keyOf() 同格式，右欄才對得上左欄那一列
   const supRowKey = (projectId: string, authorId: string, taskId: string, weekOf: string | null) => `${projectId}:${authorId}:${taskId}:${weekOf ?? '_'}`
@@ -1295,17 +1294,54 @@ export default function MyTasksPage() {
     keyOf: (authorId: string, taskId: string, weekOf: string | null) => string,
     emptyText: string,
   ) => {
-    const shown = supWeekFilter === 'week'
-      ? rows.filter(r => r.s.weekOf === reviewTrackWeek)
-      : rows
-    if (shown.length === 0) {
-      return <p className="text-sm text-muted-foreground text-center px-4 py-8">
-        {supWeekFilter === 'week' ? '這一週沒有符合的報告' : emptyText}
-      </p>
+    if (rows.length === 0) {
+      return <p className="text-sm text-muted-foreground text-center px-4 py-8">{emptyText}</p>
     }
+    // 先收斂到所選週別。沒有填報週的舊資料只在「全部週別」模式出現。
+    const inWeek = supShowAllWeeks ? rows : rows.filter(r => r.s.weekOf === reviewTrackWeek)
+    const hiddenCount = rows.length - inWeek.length
+    // 被濾掉的筆數一定要講出來，否則主管會以為那些報告不存在
+    const weekFooter = hiddenCount > 0 || supShowAllWeeks ? (
+      <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-muted-foreground border-t">
+        {supShowAllWeeks
+          ? <span>目前顯示全部 {rows.length} 筆</span>
+          : <span>其他週別另有 <b className="text-foreground">{hiddenCount}</b> 筆</span>}
+        <button type="button" onClick={() => setSupShowAllWeeks(v => !v)}
+          className="ml-auto rounded border px-2 py-0.5 transition-colors hover:bg-muted hover:text-foreground">
+          {supShowAllWeeks ? '只看所選週別' : '顯示全部週別'}
+        </button>
+      </div>
+    ) : null
+    if (inWeek.length === 0) {
+      return (
+        <>
+          <p className="text-sm text-muted-foreground text-center px-4 py-8">這一週沒有報告</p>
+          {weekFooter}
+        </>
+      )
+    }
+    // 依任務時沿用「填報追蹤」的樹狀順序（buildTrackTree 產出的 DFS 序），
+    // 這樣主管看到的任務排列跟 WBS 一致，不會是散落的平面清單。
+    const treeOrder = new Map<string, number>()
+    let oi = 0
+    for (const rv of (reviewDialogProject?.reviewees ?? [])) {
+      for (const t of rv.tracking) if (!treeOrder.has(t.taskId)) treeOrder.set(t.taskId, oi++)
+    }
+    const shown = [...inWeek].sort((a, b) => {
+      if (supViewBy === 'task') {
+        const d = (treeOrder.get(a.s.taskId) ?? 1e9) - (treeOrder.get(b.s.taskId) ?? 1e9)
+        if (d !== 0) return d
+      }
+      // 同組內新的週別排前面
+      return (b.s.weekOf ?? '').localeCompare(a.s.weekOf ?? '')
+    })
 
     // 分組：依成員＝人名當標題；依任務＝任務名當標題（同任務跨週的報告收在一起）
-    const groups = new Map<string, { title: string; avatar: string | null; items: typeof shown }>()
+    const depthOf = new Map<string, number>()
+    for (const rv of (reviewDialogProject?.reviewees ?? [])) {
+      for (const t of rv.tracking) if (!depthOf.has(t.taskId)) depthOf.set(t.taskId, t.depth)
+    }
+    const groups = new Map<string, { title: string; avatar: string | null; depth: number; items: typeof shown }>()
     for (const r of shown) {
       const gk = supViewBy === 'member' ? `m:${r.rv.authorId}` : `t:${r.s.taskId}`
       const g = groups.get(gk)
@@ -1313,6 +1349,7 @@ export default function MyTasksPage() {
       else groups.set(gk, {
         title: supViewBy === 'member' ? r.rv.authorName : r.s.taskTitle,
         avatar: supViewBy === 'member' ? r.rv.authorName : null,
+        depth: supViewBy === 'task' ? (depthOf.get(r.s.taskId) ?? 0) : 0,
         items: [r],
       })
     }
@@ -1325,7 +1362,10 @@ export default function MyTasksPage() {
               {g.avatar
                 ? <FlowAvatar name={g.avatar} size={18} />
                 : <ListChecks className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-              <span className="text-[11px] font-medium text-muted-foreground truncate">{g.title}</span>
+              <span className="text-[11px] font-medium text-muted-foreground truncate"
+                style={g.depth ? { paddingLeft: g.depth * 12 } : undefined}>
+                {g.depth ? '└ ' : ''}{g.title}
+              </span>
               <span className="ml-auto shrink-0 rounded bg-background px-1.5 text-[11px] font-semibold tabular-nums">{g.items.length}</span>
             </div>
             <div className="divide-y divide-border/60">
@@ -1357,7 +1397,8 @@ export default function MyTasksPage() {
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                       {f && <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />}
-                      {sub.weekOf && (
+                      {/* 已框住單一週別時，每列再標一次週別是多餘的 */}
+                      {supShowAllWeeks && sub.weekOf && (
                         <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 whitespace-nowrap">
                           {formatReportWeek(sub.weekOf)}
                         </span>
@@ -1369,24 +1410,20 @@ export default function MyTasksPage() {
             </div>
           </div>
         ))}
+        {weekFooter}
       </div>
     )
   }
 
-  /** 待審核／已審核共用的工具列：週別篩選 + 依成員/依任務 */
+  /** 待審核／已審核共用的工具列：週別（範圍）＋ 依成員／依任務（分類軸）。 */
   const renderSupToolbar = () => (
-    <div className="space-y-2 px-4 py-3 border-b">
+    <div className="space-y-2 px-4 py-2.5 border-b">
+      {!supShowAllWeeks && <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />}
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit shrink-0">
-          {([['all', '不限週別'], ['week', '指定週別']] as const).map(([v, label]) => (
-            <button key={v} type="button" onClick={() => setSupWeekFilter(v)}
-              className={cn('px-2.5 py-1 text-xs rounded-md transition-colors',
-                supWeekFilter === v ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit shrink-0 ml-auto">
+        {supShowAllWeeks && (
+          <span className="text-xs text-muted-foreground">顯示全部週別</span>
+        )}
+        <div className="flex items-center gap-1 p-0.5 bg-muted/50 rounded-lg w-fit ml-auto">
           {([['member', '依成員'], ['task', '依任務']] as const).map(([v, label]) => (
             <button key={v} type="button" onClick={() => setSupViewBy(v)}
               className={cn('px-2.5 py-1 text-xs rounded-md transition-colors',
@@ -1396,7 +1433,6 @@ export default function MyTasksPage() {
           ))}
         </div>
       </div>
-      {supWeekFilter === 'week' && <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />}
     </div>
   )
 
@@ -2743,7 +2779,7 @@ export default function MyTasksPage() {
         )}
 
         {/* 審核報告對話框：分頁（待審核 / 已審核）+ 點列展開完整內容 */}
-        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) { setReviewDialogProjectId(null); setSupFlowKey(null); setSupStageFilter(null) } }}>
+        <Dialog open={!!reviewDialogProject} onOpenChange={(o) => { if (!o) { setReviewDialogProjectId(null); setSupFlowKey(null) } }}>
           <DialogContent className="sm:max-w-5xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
             <DialogHeader className="px-5 pt-5 pb-3">
               <DialogTitle className="text-base flex items-center gap-2"><ClipboardList className="h-4 w-4 text-primary" />審核報告 — {reviewDialogProject?.projectName}</DialogTitle>
@@ -2760,7 +2796,7 @@ export default function MyTasksPage() {
               return (
                 <>
                   {/* Tab bar */}
-                  <div className={cn('px-5 flex gap-1 border-b', supStageFilter && 'opacity-40 pointer-events-none')}>
+                  <div className="px-5 flex gap-1 border-b">
                     {([
                       { val: 'pending', label: '待審核', cnt: pRows.length, tone: 'amber' },
                       { val: 'reviewed', label: '已審核', cnt: rRows.length, tone: 'muted' },
@@ -2776,62 +2812,11 @@ export default function MyTasksPage() {
                     ))}
                   </div>
 
-                  {/* 流程總覽列（主管視角） */}
-                  <div className="px-5 py-2.5 border-b bg-muted/20">
-                    <ReviewPipelineBar
-                      counts={supFlows.counts}
-                      value={supStageFilter}
-                      onChange={(next) => { setSupStageFilter(next); setSupFlowKey(null) }}
-                      viewer="supervisor"
-                    />
-                  </div>
-
                   <div className="flex-1 flex min-h-0 overflow-hidden">
                     {/* ── 左欄：清單 ── */}
                     <div className={cn('overflow-y-auto border-r min-w-0',
                       flowPanelOpen ? 'w-[57%] shrink-0' : 'flex-1')}>
-                    {supStageFilter ? (
-                      /* 棒次視角：與 A 端同一套群組樣式，依專案順序排 */
-                      (() => {
-                        const entries = [...supFlows.map.entries()].filter(([, f]) => f.stage === supStageFilter)
-                        if (entries.length === 0) {
-                          return <p className="text-sm text-muted-foreground text-center px-4 py-8">這一棒目前沒有項目</p>
-                        }
-                        const keyOfFlow = new Map(entries.map(([k, f]) => [f, k]))
-                        const groups = groupByPath(entries.map(([, f]) => f).sort(byProjectOrder))
-                        return (
-                          <div>
-                            {groups.map((g, gi) => (
-                              <div key={`${g.path}#${gi}`}>
-                                <div className="sticky top-0 z-10 border-y bg-muted/85 px-4 py-1.5 text-[11px] font-medium text-muted-foreground backdrop-blur truncate" title={g.path}>
-                                  {g.path}
-                                </div>
-                                <div className="divide-y divide-border/60">
-                                  {g.rows.map(f => {
-                                    const k = keyOfFlow.get(f)!
-                                    return (
-                                      <button key={k} type="button" onClick={() => selectSupFlow(k, 'flow')}
-                                        className={cn('w-full text-left px-4 py-2 transition-colors border-l-2',
-                                          supFlowKey === k ? 'border-l-primary bg-primary/5' : 'border-l-transparent hover:bg-muted/40')}>
-                                        <div className="text-sm font-medium truncate">{f.title}</div>
-                                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                          {f.assignee && (
-                                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                              <FlowAvatar name={f.assignee} size={16} />{f.assignee}
-                                            </span>
-                                          )}
-                                          <StageChip stage={f.stage} viewer="supervisor" days={f.stuckDays} />
-                                        </div>
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      })()
-                    ) : reviewDialogTab === 'tracking' ? (
+                    {reviewDialogTab === 'tracking' ? (
                       <div className="space-y-3 px-4 py-3">
                         <div className="rounded-md border bg-muted/20 px-3 py-2.5">
                           <WeekPicker value={reviewTrackWeek} onChange={onTrackWeekChange} />
