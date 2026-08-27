@@ -77,6 +77,8 @@ export interface ReviewFlow {
   assignee: string
   /** 此成員未設報告審核主管（＝由當責代審），供清單加註 */
   noReviewer: boolean
+  /** 這條流程描述的是哪一份報告（填報週標籤）。null＝尚無報告 */
+  reportWeekLabel: string | null
   /**
    * 目前輪到當責時，要做的是哪一種動作：
    *   review-report＝審核報告（代主管，通過即納入更新紀錄）
@@ -128,6 +130,8 @@ export interface StageMeta {
   label: string
   /** R主管視角的稱呼 */
   supLabel: string
+  /** R（執行者）視角的稱呼 */
+  exeLabel: string
   /** 誰該動 */
   owner: string
   dot: string
@@ -137,31 +141,31 @@ export interface StageMeta {
 
 export const STAGE_META: Record<FlowStage, StageMeta> = {
   unfilled: {
-    key: 'unfilled', label: '待 R 填報', supLabel: '成員未填報', owner: '執行者 R',
+    key: 'unfilled', label: '待 R 填報', supLabel: '成員未填報', exeLabel: '待你填報', owner: '執行者 R',
     dot: 'bg-red-500',
     chip: 'bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
     ring: 'ring-red-500/40',
   },
   supervisor: {
-    key: 'supervisor', label: '主管審核中', supLabel: '待你審核', owner: '報告審核主管',
+    key: 'supervisor', label: '主管審核中', supLabel: '待你審核', exeLabel: '主管審核中', owner: '報告審核主管',
     dot: 'bg-blue-500',
     chip: 'bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800',
     ring: 'ring-blue-500/40',
   },
   accountable: {
-    key: 'accountable', label: '待你處理', supLabel: '已送當責確認', owner: '當責 A',
+    key: 'accountable', label: '待你處理', supLabel: '已送當責確認', exeLabel: '當責審核中', owner: '當責 A',
     dot: 'bg-amber-500',
     chip: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
     ring: 'ring-amber-500/40',
   },
   running: {
-    key: 'running', label: '執行中', supLabel: '執行中', owner: '執行者 R',
+    key: 'running', label: '執行中', supLabel: '執行中', exeLabel: '進行中', owner: '執行者 R',
     dot: 'bg-slate-300 dark:bg-slate-600',
     chip: 'bg-muted/60 text-muted-foreground border-border',
     ring: 'ring-slate-400/30',
   },
   done: {
-    key: 'done', label: '已完成', supLabel: '已完成', owner: '—',
+    key: 'done', label: '已完成', supLabel: '已完成', exeLabel: '已完成', owner: '—',
     dot: 'bg-emerald-500',
     chip: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800',
     ring: 'ring-emerald-500/40',
@@ -171,10 +175,11 @@ export const STAGE_META: Record<FlowStage, StageMeta> = {
 /** 流程總覽列的顯示順序（running 不佔位，併入「執行中」尾巴） */
 export const PIPELINE_ORDER: FlowStage[] = ['unfilled', 'supervisor', 'accountable', 'done']
 
-export type FlowViewer = 'accountable' | 'supervisor'
+export type FlowViewer = 'accountable' | 'supervisor' | 'executor'
 
 export function stageLabel(stage: FlowStage, viewer: FlowViewer): string {
-  return viewer === 'supervisor' ? STAGE_META[stage].supLabel : STAGE_META[stage].label
+  const m = STAGE_META[stage]
+  return viewer === 'supervisor' ? m.supLabel : viewer === 'executor' ? m.exeLabel : m.label
 }
 
 // ─────────────────────────────────────────────────────────
@@ -435,8 +440,11 @@ function ballOf(steps: FlowStep[], stage: FlowStage, assignee: string): ReviewFl
   if (stage === 'done') return null
   const active = steps.find(s => s.state === 'current' || s.state === 'rejected')
   if (!active) return null
-  if (active.state === 'rejected') return { who: assignee || null, roleLabel: '執行者 R' }
-  return { who: active.who, roleLabel: active.roleLabel }
+  // who 可能是 null 或空字串（作者不在專案團隊名單、或主管只存 email 沒存名字）。
+  // 一律正規化成 null，讓呈現端退回角色名，而不是渲染出「現在在 　 手上」這種空洞。
+  const clean = (v: string | null | undefined) => (v && v.trim() ? v.trim() : null)
+  if (active.state === 'rejected') return { who: clean(assignee), roleLabel: '執行者 R' }
+  return { who: clean(active.who), roleLabel: active.roleLabel || '下一位審核者' }
 }
 
 export interface BuildFlowInput {
@@ -494,6 +502,7 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee, noReviewer: !hasReviewer,
+    reportWeekLabel: weekLabel,
     pendingAction: pendingActionOf(steps, stage),
   }
 }
@@ -553,6 +562,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, i.assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee: i.assignee || '', noReviewer: false,
+    reportWeekLabel: weekLabel,
     pendingAction: null,
   }
 }
@@ -735,7 +745,7 @@ const STEP_STYLE: Record<FlowStepState, { icon: typeof Check; iconCls: string; n
 export type FlowPanelTab = 'flow' | 'logs'
 
 export function ReviewFlowTimeline({
-  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, className,
+  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, className,
 }: {
   flow: ReviewFlow
   viewer: FlowViewer
@@ -747,8 +757,16 @@ export function ReviewFlowTimeline({
   onTabChange?: (t: FlowPanelTab) => void
   /** 收合整個右欄 */
   onCollapse?: () => void
+  /**
+   * 隱藏審核流程，只留工作紀錄。
+   * 用於「本週報告尚未送出」的情境——此時流程講的是上一份報告，顯示出來會讓人
+   * 誤以為自己已經送出並在被審核。
+   */
+  hideFlow?: boolean
   className?: string
 }) {
+  const showFlow = !hideFlow
+  const activeTab: FlowPanelTab = hideFlow ? 'logs' : tab
   return (
     <div className={cn('flex flex-col min-h-0 h-full', className)}>
       {/* 標題列：只留識別用的標題與收合鈕。麵包屑/負責人/棒次/附件在左欄那一列都有了，
@@ -764,7 +782,7 @@ export function ReviewFlowTimeline({
       </div>
 
       {/* 下一棒 —— A/主管 最想知道的一句話 */}
-      <div className={cn(
+      {showFlow && <div className={cn(
         'flex items-center gap-2 px-4 py-2 text-xs shrink-0 border-b',
         flow.ballWith ? 'bg-amber-50/60 dark:bg-amber-950/20' : 'bg-emerald-50/60 dark:bg-emerald-950/20',
       )}>
@@ -789,17 +807,17 @@ export function ReviewFlowTimeline({
             <span className="font-medium text-emerald-700 dark:text-emerald-400">流程已走完，無待辦</span>
           </>
         )}
-      </div>
+      </div>}
 
       {/* 分頁：流程與工作紀錄分開，避免長篇紀錄把流程淹掉 */}
-      {logs != null && (
+      {logs != null && showFlow && (
         <div className="border-b px-3 py-2 shrink-0">
           <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
             {([
               { val: 'flow' as const, label: '審核流程', Icon: GitBranch, cnt: 0 },
               { val: 'logs' as const, label: '工作紀錄', Icon: FileText, cnt: logsCount },
             ]).map(({ val, label, Icon, cnt }) => {
-              const active = tab === val
+              const active = activeTab === val
               return (
                 <button key={val} type="button" onClick={() => onTabChange?.(val)} aria-pressed={active}
                   className={cn('flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-all',
@@ -819,7 +837,7 @@ export function ReviewFlowTimeline({
       )}
 
       {/* 工作紀錄分頁 */}
-      {logs != null && tab === 'logs' && (
+      {logs != null && activeTab === 'logs' && (
         <div className="flex-1 overflow-y-auto min-h-0">
           {logsCount === 0
             ? <p className="text-sm text-muted-foreground text-center py-8">此任務尚無工作紀錄</p>
@@ -828,7 +846,8 @@ export function ReviewFlowTimeline({
       )}
 
       {/* 時間軸 */}
-      <div className={cn('flex-1 overflow-y-auto px-4 py-3 min-h-0', logs != null && tab !== 'flow' && 'hidden')}>
+      <div className={cn('flex-1 overflow-y-auto px-4 py-3 min-h-0',
+        (!showFlow || (logs != null && activeTab !== 'flow')) && 'hidden')}>
         <ol className="relative">
           {flow.steps.map((step, i) => {
             const st = STEP_STYLE[step.state]
@@ -869,7 +888,7 @@ export function ReviewFlowTimeline({
 
                   {(step.who || step.at) && (
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                      {step.who && (
+                      {step.who && step.who.trim() && (
                         <span className="inline-flex items-center gap-1 min-w-0">
                           <FlowAvatar name={step.who} size={16} />
                           <span className="text-foreground/80 truncate">{step.who}</span>
@@ -914,14 +933,83 @@ export function ReviewFlowTimeline({
 // 未選取時的右欄
 // ─────────────────────────────────────────────────────────
 
-/** 右欄收合後的細長條：點一下展開 */
-export function ReviewFlowCollapsed({ onExpand }: { onExpand: () => void }) {
+/**
+ * 橫向精簡流程條 —— 給空間有限、又不需要完整履歷的地方用（例如 R 的填報彈窗）。
+ * 一行內講完：這份報告走過哪幾棒、現在卡在誰手上、卡了幾天。
+ */
+export function ReviewFlowStrip({ flow, viewer, className }: {
+  flow: ReviewFlow
+  viewer: FlowViewer
+  className?: string
+}) {
+  // 只取有意義的棒次（buildSteps 已依情境決定要不要畫當責/完成那兩棒）
+  const steps = flow.steps
   return (
-    <button type="button" onClick={onExpand} title="展開審核流程"
-      className="flex h-full w-11 shrink-0 flex-col items-center gap-2 border-l bg-muted/20 py-3 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
+    <div className={cn('rounded-lg border bg-muted/20 px-3 py-2', className)}>
+      {/* 講清楚是哪一份報告的進度——否則會和「本週未填」混淆成互相矛盾的兩件事 */}
+      <div className="mb-1.5 text-[11px] text-muted-foreground">
+        {flow.reportWeekLabel
+          ? <>你先前送出的週報（<span className="font-medium text-foreground/70">{flow.reportWeekLabel}</span>）目前的審核進度</>
+          : <>你先前送出的週報目前的審核進度</>}
+      </div>
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        {steps.map((step, i) => {
+          const tone =
+            step.state === 'done' ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/25 dark:text-emerald-300 dark:border-emerald-800'
+              : step.state === 'current' ? 'bg-amber-100 text-amber-800 border-amber-300 font-semibold dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
+                : step.state === 'rejected' ? 'bg-red-100 text-red-700 border-red-300 font-semibold dark:bg-red-900/25 dark:text-red-300 dark:border-red-800'
+                  : 'bg-background text-muted-foreground border-border'
+          return (
+            <Fragment key={step.key}>
+              {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" />}
+              <span className={cn('flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[11px]', tone)}
+                title={[step.detail, step.note && `原因：${step.note}`].filter(Boolean).join('\n')}>
+                {step.state === 'done' && <Check className="h-3 w-3" strokeWidth={3} />}
+                {step.state === 'current' && <CircleDot className="h-3 w-3" strokeWidth={3} />}
+                {step.state === 'rejected' && <Undo2 className="h-3 w-3" strokeWidth={3} />}
+                {step.label}
+              </span>
+            </Fragment>
+          )
+        })}
+      </div>
+
+      {/* 一句話結論 */}
+      <div className="mt-1.5 flex items-center gap-1.5 border-t pt-1.5 text-xs">
+        {flow.ballWith ? (
+          <>
+            <UserRound className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="text-muted-foreground shrink-0">現在在</span>
+            {flow.ballWith.who && <FlowAvatar name={flow.ballWith.who} size={16} />}
+            <span className="font-medium truncate">{flow.ballWith.who ?? flow.ballWith.roleLabel}</span>
+            <span className="text-muted-foreground shrink-0">手上</span>
+            {flow.stuckDays > 0 && (
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1 tabular-nums text-muted-foreground">
+                <Clock className="h-3 w-3" />已等 {flow.stuckDays} 天
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            <Flag className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">流程已走完，不需等待任何人</span>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** 右欄收合後的細長條：點一下展開 */
+export function ReviewFlowCollapsed({ onExpand, label = '審核流程 · 工作紀錄' }: { onExpand: () => void; label?: string }) {
+  // self-stretch 而非 h-full：這是 flex 子項，h-full 的 100% 解不到父層高度（父層高度是 auto），
+  // 結果只長到內容高度，左側那條 border 就會半途而廢。
+  return (
+    <button type="button" onClick={onExpand} title={`展開${label}`}
+      className="flex w-11 shrink-0 self-stretch flex-col items-center gap-2 border-l bg-muted/20 py-3 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
       <PanelRightOpen className="h-4 w-4 shrink-0" />
       <span className="text-sm font-medium tracking-wide leading-tight [writing-mode:vertical-rl]">
-        審核流程 · 工作紀錄
+        {label}
       </span>
     </button>
   )

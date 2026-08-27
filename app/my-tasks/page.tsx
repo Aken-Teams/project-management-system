@@ -167,6 +167,8 @@ interface MyTasksProject {
   reviewEvents?: RReviewEvent[]
   // 每位成員在此專案的報告審核主管；reviewer=null 代表未指定 → 後端 fallback 由當責代審
   memberReviewers?: { name: string; reviewer: string | null }[]
+  /** 本專案當責(A)姓名，供流程圖顯示「下一棒是誰」 */
+  accountableName?: string | null
   pendingDelayMilestoneIds?: string[]
   pendingDelayProposedDates?: Record<string, string>
 }
@@ -490,9 +492,12 @@ export default function MyTasksPage() {
   // ── 流程面板：右側顯示所選任務的完整審核鏈；管線列可依「卡在哪一棒」篩選 ──
   const [reviewFlowTaskId, setReviewFlowTaskId] = useState<string | null>(null)
   const [reviewStageFilter, setReviewStageFilter] = useState<FlowStage | null>(null)
-  // 右欄：分頁（審核流程／工作紀錄）與收合狀態，兩個對話框共用同一組偏好
+  // 右欄：分頁（審核流程／工作紀錄）與收合狀態，A／主管兩個對話框共用同一組偏好
   const [flowTab, setFlowTab] = useState<FlowPanelTab>('flow')
   const [flowPanelOpen, setFlowPanelOpen] = useState(true)
+  // R 的填報彈窗主要用途是「寫報告」，右欄預設收起，想看流程才拉開
+  const [rFlowPanelOpen, setRFlowPanelOpen] = useState(false)
+  const [rFlowTab, setRFlowTab] = useState<FlowPanelTab>('flow')
   // A 代審報告（該成員未設主管）：處理中的 taskId、以及駁回原因對話框
   const [aReportBusy, setAReportBusy] = useState<string | null>(null)
   const [aReportReject, setAReportReject] = useState<{ taskId: string; title: string } | null>(null)
@@ -1128,12 +1133,27 @@ export default function MyTasksPage() {
     const [wy, wm, wd] = rReportWeekOf.split('-').map(Number)
     const wEnd = new Date(wy, wm - 1, wd + 6)
     const weekEnd = `${wEnd.getFullYear()}-${String(wEnd.getMonth() + 1).padStart(2, '0')}-${String(wEnd.getDate()).padStart(2, '0')}`
+    // 這個任務有沒有「我送出、但還沒進更新紀錄」的報告（審核中或被駁回都算在途）
+    const logsByTask = new Map<string, TaskLog[]>()
+    for (const l of rReportDialogProject.taskLogs) {
+      const arr = logsByTask.get(l.taskId)
+      if (arr) arr.push(l); else logsByTask.set(l.taskId, [l])
+    }
+    const hasInFlightReport = (t: Task) =>
+      (logsByTask.get(t.id) ?? []).some(l => isSameUser(l.author, user) && !isReportVisible(l) && !l.reviewerRejectedAt)
+    const hasRejectedReport = (t: Task) =>
+      (logsByTask.get(t.id) ?? []).some(l => isSameUser(l.author, user) && !!l.reviewerRejectedAt && !l.publishedAt)
+
     return {
-      // 待完成：R 從「被指派那刻」起才看到 → 指派日 <= 該週結束日（與任務起訖無關）。
+      // 待完成：純寫報告的地方。R 從「被指派那刻」起才看到 → 指派日 <= 該週結束日。
       // assignedAt 若缺（舊資料）則照舊顯示，不誤藏。
       rActiveGroups: build(t => !t.completedAt && !t.reportedDoneAt && (!t.assignedAt || t.assignedAt <= weekEnd), false),
-      // 待確認：已回報、A 還沒審（未審核、未完成）
-      rPendingGroups: build(t => !!t.reportedDoneAt && !t.completedAt && !t.reviewedAt, true),
+      // 待確認：我送出去、還沒落地的東西。兩種都算——
+      //   ① 報告已送出但尚未進更新紀錄（審核中／被駁回）
+      //   ② 已回報任務完成、等當責確認
+      rPendingGroups: build(t => !t.completedAt && !t.reviewedAt && (
+        !!t.reportedDoneAt || hasInFlightReport(t) || hasRejectedReport(t)
+      ), true),
       // 完成區：A 已審核通過 或 A 已標記 100% 完成
       rDoneGroups: build(t => !!t.completedAt || !!t.reviewedAt, true),
     }
@@ -1211,6 +1231,45 @@ export default function MyTasksPage() {
     }
     return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   }, [apiProjects])
+
+  // R（執行者）視角：我這個任務的報告現在跑到哪、卡在誰手上。
+  //   與 A/主管 共用同一套推導，所以三方看到的流程一定一致，不會各說各話。
+  const rFlowOf = useCallback((taskId: string): ReviewFlow | null => {
+    const p = rReportDialogProject
+    if (!p) return null
+    const t = p.tasks.find(tt => tt.id === taskId)
+    if (!t) return null
+    // 只看「我自己寫的」報告：別人代寫的那份不是我的旅程。
+    // 若吃整個任務的報告，會出現「右欄說我的報告在被審、待確認卻查無此筆」的矛盾。
+    const myLogs = p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, user))
+    const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
+    const weekEnd = weekEndOf(rReportWeekOf)
+    return buildReviewFlow({
+      task: t,
+      hasReviewer: myLogs.length > 0 ? undefined : !!mr?.reviewer,
+      logs: myLogs,
+      events: (p.reviewEvents ?? []).filter(e => e.taskId === taskId),
+      activeThisWeek: shouldTrackReport(
+        { assignee: t.assignee, status: t.status, startDate: t.startDate, endDate: t.endDate, completedAt: t.completedAt ?? null },
+        rReportWeekOf, weekEnd,
+      ),
+      accountableName: p.accountableName ?? null,
+    })
+  }, [rReportDialogProject, rReportWeekOf, user])
+
+  // R 右欄的目標任務：待完成看「選取中」那筆，待確認/完成區看「展開中」那筆
+  const rFlowTargetId = useMemo(() => {
+    if (rDialogTab === 'active') return rSelectedTaskId
+    const [first] = [...rDoneExpanded]
+    return first ?? null
+  }, [rDialogTab, rSelectedTaskId, rDoneExpanded])
+  const rSelectedFlow = useMemo(() => (rFlowTargetId ? rFlowOf(rFlowTargetId) : null), [rFlowTargetId, rFlowOf])
+  const rSelectedFlowLogs = useMemo(() => {
+    if (!rFlowTargetId || !rReportDialogProject) return []
+    return rReportDialogProject.taskLogs
+      .filter(l => l.taskId === rFlowTargetId)
+      .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  }, [rFlowTargetId, rReportDialogProject])
 
   // 選取項目時一併決定右欄預設看哪一頁（審核情境看流程、瀏覽情境看內容）
   const selectReviewFlow = (taskId: string, defaultTab: FlowPanelTab = 'flow') => {
@@ -1426,18 +1485,22 @@ export default function MyTasksPage() {
       const weekEnd = weekEndOf(reviewReportWeek)
       // 這位執行者在本專案有沒有報告審核主管。沒有 → 流程圖不畫「R主管審核」那一棒，
       // 因為後端送出報告時就已 fallback 通知當責（task-logs/batch: routedTo='accountable'）。
+      // 審核鏈跟著「報告作者」走，不是跟著任務指派人。（實例：Bob 的任務由 Alice 代寫報告，
+      // 該用 Alice 的主管判斷。用指派人會判成「有主管」卻取不到名字，畫面出現空白的經手人。）
+      // 有報告 → 交給 buildReviewFlow 依作者推斷；沒報告 → 才用指派人預測未來的鏈。
+      const taskLogs = p.taskLogs.filter(l => l.taskId === taskId)
       const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
       return buildReviewFlow({
         task: t,
-        hasReviewer: !!mr?.reviewer,
-        logs: p.taskLogs.filter(l => l.taskId === taskId),
+        hasReviewer: taskLogs.length > 0 ? undefined : !!mr?.reviewer,
+        logs: taskLogs,
         events: (p.reviewEvents ?? []).filter(e => e.taskId === taskId),
         activeThisWeek: shouldTrackReport(
           { assignee: t.assignee, status: t.status, startDate: t.startDate, endDate: t.endDate, completedAt: t.completedAt ?? null },
           reviewReportWeek, weekEnd,
         ),
         path: [ms?.name, ...anc].filter(Boolean).join(' › ') || null,
-        accountableName: user?.name ?? null,
+        accountableName: p.accountableName ?? user?.name ?? null,
       })
     }
     return null
@@ -4021,7 +4084,8 @@ export default function MyTasksPage() {
         if (!open) { closeRReportDialog(); return }
         setRReportDialogOpen(open)
       }}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogContent className={cn('max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden transition-[max-width] duration-200',
+          rFlowPanelOpen ? 'sm:max-w-5xl' : 'sm:max-w-2xl')}>
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <DialogTitle className="text-base">填寫週報</DialogTitle>
             {rReportDialogProject && (
@@ -4031,7 +4095,9 @@ export default function MyTasksPage() {
             )}
           </DialogHeader>
           {rReportDialogProject && (
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="flex-1 flex min-h-0 overflow-hidden">
+            <div className={cn('overflow-y-auto px-6 py-4 space-y-4 min-w-0',
+              rFlowPanelOpen ? 'w-[57%] shrink-0 border-r' : 'flex-1')}>
               {/* Week selector (matching Gantt chart WeekPicker) */}
               <WeekPicker
                 value={rReportWeekOf}
@@ -4075,7 +4141,7 @@ export default function MyTasksPage() {
                     onClick={() => { setRDialogTab('pending'); setRSelectedTaskId(null) }}
                     className={cn('px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors flex items-center gap-1',
                       rDialogTab === 'pending' ? 'border-primary text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground')}
-                    title="已回報完成、等待確認的任務"
+                    title="你送出後還沒落地的：報告審核中、被駁回、或已回報完成等當責確認"
                   >
                     待確認
                     {rPendingCount > 0 && (
@@ -4626,10 +4692,10 @@ export default function MyTasksPage() {
                                 <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[11px] px-1.5 py-0.5 shrink-0" title="當責已審核通過你的回報（是否算完成由當責在報告中決定）">
                                   <Check className="h-3 w-3 mr-0.5" />已審核通過
                                 </Badge>
-                              ) : (
+                              ) : task.reportedDoneAt ? (
                                 <span className="flex items-center gap-1 shrink-0">
-                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[11px] px-1.5 py-0.5" title="已回報完成，等待確認">
-                                    <Check className="h-3 w-3 mr-0.5" />待確認
+                                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 text-[11px] px-1.5 py-0.5" title="已回報任務完成，等待當責確認">
+                                    <Check className="h-3 w-3 mr-0.5" />等確認完成
                                   </Badge>
                                   <Button
                                     size="sm"
@@ -4643,11 +4709,20 @@ export default function MyTasksPage() {
                                     取消回報
                                   </Button>
                                 </span>
+                              ) : (
+                                // 因「報告還在途」而進到待確認的：沒有回報完成可取消，只標它卡在哪一棒
+                                (() => {
+                                  const f = rFlowOf(task.id)
+                                  return f
+                                    ? <StageChip stage={f.stage} viewer="executor" days={f.stuckDays} className="shrink-0" />
+                                    : null
+                                })()
                               )}
                               <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform', expanded && 'rotate-180')} />
                             </div>
                             {expanded && (
-                              <div className="mt-1.5 rounded-lg border border-border/60 overflow-hidden">
+                              <div className="mt-1.5">
+                              <div className="rounded-lg border border-border/60 overflow-hidden">
                                 {logs.length === 0 ? (
                                   <p className="text-xs text-muted-foreground/60 px-3 py-3 text-center">尚無工作紀錄</p>
                                 ) : (
@@ -4708,6 +4783,7 @@ export default function MyTasksPage() {
                                   </div>
                                 )}
                               </div>
+                              </div>
                             )}
                           </div>
                         )
@@ -4718,6 +4794,52 @@ export default function MyTasksPage() {
                 )}
                 </div>
               </div>
+            </div>
+
+            {/* ── 右欄：這個任務的審核流程 / 工作紀錄（預設收起）── */}
+            {!rFlowPanelOpen && (
+              <ReviewFlowCollapsed
+                onExpand={() => setRFlowPanelOpen(true)}
+                label={rDialogTab === 'active' ? '工作紀錄' : '審核流程 · 工作紀錄'}
+              />
+            )}
+            {rFlowPanelOpen && (
+              <div className="flex-1 min-w-0 flex flex-col bg-muted/10">
+                {rSelectedFlow ? (
+                  <ReviewFlowTimeline
+                    key={rSelectedFlow.taskId}
+                    className="animate-in fade-in slide-in-from-right-4 duration-200"
+                    flow={rSelectedFlow}
+                    viewer="executor"
+                    tab={rFlowTab}
+                    onTabChange={setRFlowTab}
+                    onCollapse={() => setRFlowPanelOpen(false)}
+                    logsCount={rSelectedFlowLogs.length}
+                    logs={renderReviewLogs(rSelectedFlowLogs)}
+                    // 待完成＝本週還沒送出，此時流程講的是上一份報告，顯示出來會讓 R
+                    // 誤以為自己已經送出並在被審核。只給工作紀錄當寫報告的參考。
+                    hideFlow={rDialogTab === 'active'}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div className="flex justify-end border-b px-2 py-1.5 shrink-0">
+                      <button type="button" onClick={() => setRFlowPanelOpen(false)} title="收合右欄"
+                        className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                        <PanelRightClose className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                      <FileText className="h-7 w-7 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">
+                        {rDialogTab === 'active'
+                          ? '點左側任一任務，這裡會顯示它過去的工作紀錄，方便你參考著寫'
+                          : '點左側任一任務，這裡會顯示它的審核流程與工作紀錄'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             </div>
           )}
         </DialogContent>

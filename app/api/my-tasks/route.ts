@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
           orderBy: { createdAt: 'desc' },
         },
         teamMembers: {
-          select: { userId: true, reportReviewerName: true, reportReviewerEmail: true, user: { select: { name: true } } },
+          select: { userId: true, role: true, reportReviewerName: true, reportReviewerEmail: true, user: { select: { name: true } } },
         },
         delayRequests: {
           where: { status: 'pending' },
@@ -198,6 +198,8 @@ export async function GET(request: NextRequest) {
           name: tm.user.name,
           reviewer: tm.reportReviewerName || tm.reportReviewerEmail || null,
         })),
+        // 本專案的當責(A)姓名。流程圖要顯示「下一棒是誰」，沒有名字就只剩角色代號。
+        accountableName: p.teamMembers.find(tm => tm.role === 'A')?.user.name ?? null,
         reviewEvents: p.tasks.flatMap(t =>
           ((t as Record<string, unknown>).reviewEvents as Array<{ id: string; type: string; actor: string; note: string | null; createdAt: Date }> || []).map(e => ({
             id: e.id,
