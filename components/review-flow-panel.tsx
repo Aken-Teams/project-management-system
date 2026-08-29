@@ -25,9 +25,10 @@ import { Fragment } from 'react'
 import {
   Check, ChevronRight, CircleDot, Clock, FileText, Paperclip,
   Undo2, UserRound, Flag, Circle, MinusCircle, TriangleAlert, X,
-  PanelRightClose, PanelRightOpen, GitBranch, Info,
+  PanelRightClose, PanelRightOpen, GitBranch, Info, ListFilter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectSeparator } from '@/components/ui/select'
 import { isReportVisible } from '@/lib/report-cutoff'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
@@ -944,7 +945,7 @@ const STEP_STYLE: Record<FlowStepState, { icon: typeof Check; iconCls: string; n
 export type FlowPanelTab = 'flow' | 'logs'
 
 export function ReviewFlowTimeline({
-  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, revokeHint, chains, className,
+  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, revokeHint, chainFilter, className,
 }: {
   flow: ReviewFlow
   viewer: FlowViewer
@@ -964,10 +965,15 @@ export function ReviewFlowTimeline({
   /** 不能撤回時的說明（例：球已傳到下游，要下游先退回）。與 renderRevoke 互斥呈現。 */
   revokeHint?: React.ReactNode
   /**
-   * 同一個任務可能有多條審核鏈（本週報告、完成後補充…）。
-   * 給兩條以上時顯示切換列——否則看不到的那一條就無從操作（撤回、駁回都碰不到）。
+   * 同一個任務可能有多條審核鏈（本週報告、每一批完成後補充…）。
+   * 兩條以上時在標題列右側顯示篩選下拉；預設 'all' 顯示全部紀錄，
+   * 選定某一條後流程與工作紀錄都收斂到那一條（撤回、駁回才有明確對象）。
    */
-  chains?: { key: string; label: string; active: boolean; onSelect: () => void }[]
+  chainFilter?: {
+    value: string
+    options: { key: string; label: string }[]
+    onChange: (v: string) => void
+  }
   /**
    * 隱藏審核流程，只留工作紀錄。
    * 用於「本週報告尚未送出」的情境——此時流程講的是上一份報告，顯示出來會讓人
@@ -983,7 +989,52 @@ export function ReviewFlowTimeline({
       {/* 標題列：只留識別用的標題與收合鈕。麵包屑/負責人/棒次/附件在左欄那一列都有了，
           在這裡重列會把真正重要的「下一棒是誰」稀釋掉。 */}
       <div className="flex items-center gap-2 border-b px-4 py-2.5 shrink-0">
-        <div className="min-w-0 flex-1 text-sm font-semibold truncate" title={flow.title}>{flow.title}</div>
+        <div className="min-w-0 text-sm font-semibold truncate" title={flow.title}>{flow.title}</div>
+        {/* 多條鏈時才需要解釋兩者差別；平時不佔版面 */}
+        {chainFilter && chainFilter.options.length > 1 && (
+          <HoverCard openDelay={80} closeDelay={100}>
+            <HoverCardTrigger asChild>
+              <button type="button" aria-label="什麼是審核鏈？"
+                className="shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground">
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </HoverCardTrigger>
+            <HoverCardContent align="start" className="w-72 p-3 text-xs">
+              <div className="mb-1.5 font-medium">這個任務有多條審核鏈</div>
+              <div className="space-y-1.5 text-muted-foreground">
+                <div><b className="text-foreground">正式報告</b>：任務本身的報告，驅動甘特進度與完成判定。</div>
+                <div><b className="text-foreground">補充</b>：完成之後才補交的資料，一樣要經審核才進更新紀錄，但不會改變完成日與進度。每批補充各自送審、各自撤回。</div>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
+        )}
+        <div className="flex-1" />
+        {chainFilter && chainFilter.options.length > 1 && (
+          <Select value={chainFilter.value} onValueChange={chainFilter.onChange}>
+            <SelectTrigger
+              title="這個任務有多條審核鏈，可只看其中一條"
+              className={cn(
+                'h-8 w-auto max-w-[260px] shrink-0 gap-1.5 rounded-md px-2.5 text-xs font-medium shadow-sm transition-colors focus:ring-0 focus:ring-offset-0',
+                // 篩選中要一眼看得出來——否則使用者會以為畫面上就只有這些資料
+                chainFilter.value === 'all'
+                  ? 'border-border bg-muted/60 text-foreground hover:bg-muted'
+                  : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/15',
+              )}>
+              <ListFilter className="h-3.5 w-3.5 shrink-0" />
+              <span className="shrink-0 font-normal opacity-70">審核鏈</span>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end" className="min-w-[240px]">
+              <SelectItem value="all" className="text-xs">
+                全部 · {chainFilter.options.length} 條
+              </SelectItem>
+              <SelectSeparator />
+              {chainFilter.options.map(o => (
+                <SelectItem key={o.key} value={o.key} className="text-xs">{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {onCollapse && (
           <button type="button" onClick={onCollapse} title="收合右欄"
             className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
@@ -991,20 +1042,6 @@ export function ReviewFlowTimeline({
           </button>
         )}
       </div>
-
-      {/* 審核鏈切換：一個任務可能同時有本週報告與完成後補充兩條 */}
-      {showFlow && chains && chains.length > 1 && (
-        <div className="flex items-center gap-1 border-b bg-muted/30 px-3 py-1.5 shrink-0">
-          <span className="mr-1 text-[11px] text-muted-foreground shrink-0">審核鏈</span>
-          {chains.map(c => (
-            <button key={c.key} type="button" onClick={c.onSelect}
-              className={cn('rounded px-2 py-1 text-xs transition-colors',
-                c.active ? 'bg-background font-medium text-foreground shadow-sm border' : 'text-muted-foreground hover:bg-muted')}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* 下一棒 —— A/主管 最想知道的一句話 */}
       {showFlow && <div className={cn(

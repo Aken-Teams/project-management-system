@@ -52,6 +52,7 @@ import {
   type FlowPanelTab,
   type PipelineCounts,
   type ReviewFlow,
+  formatWeekLabel,
 } from '@/components/review-flow-panel'
 import {
   computeTaskStatus,
@@ -401,22 +402,6 @@ export default function MyTasksPage() {
       }
     }
 
-    // 工作紀錄要跟當責端看到的一致：以「任務」為單位呈現該成員的全部紀錄，
-    //   而不是只給當前那一組填報週。原本每個鍵只掛自己那一組，
-    //   於是同一個任務在主管端是 1 筆、當責端是 2 筆（實際踩過）。
-    //   每列本來就有「已進紀錄／待主管審／已退回」的狀態標記，混週別也讀得懂。
-    const byTask = new Map<string, Map<string, ReviewLogItem>>()
-    for (const [k, ls] of logs) {
-      const f = map.get(k); if (!f) continue
-      const bag = byTask.get(f.taskId) ?? new Map<string, ReviewLogItem>()
-      for (const l of ls) bag.set(l.id, l)
-      byTask.set(f.taskId, bag)
-    }
-    for (const [k, f] of map) {
-      const bag = byTask.get(f.taskId)
-      if (bag) logs.set(k, [...bag.values()].sort((a, b) => a.logDate.localeCompare(b.logDate)))
-    }
-
     // 棒次列的數字必須跟點進去的清單筆數一致，所以用同一套去重規則算：
     //   同一個任務在 map 裡可能同時有 track: 與 pid:author:task:week 兩種鍵
     //   （追蹤一份、每個填報週各一份），逐筆累加會比清單多。
@@ -432,7 +417,21 @@ export default function MyTasksPage() {
   }, [reviewDialogProject, reviewTrackWeek, user])
 
   const supSelectedFlow = supFlowKey ? supFlows.map.get(supFlowKey) ?? null : null
-  const supSelectedLogs = supFlowKey ? supFlows.logs.get(supFlowKey) ?? [] : []
+  // 「全部」＝工作紀錄跨鏈列出整個任務；流程仍畫目前這條（流程本來就只能畫一條）
+  const [supChainAll, setSupChainAll] = useState(true)
+  useEffect(() => { setSupChainAll(true) }, [supSelectedFlow?.taskId])
+  const supSelectedLogs = useMemo(() => {
+    if (!supFlowKey) return [] as ReviewLogItem[]
+    if (!supChainAll) return supFlows.logs.get(supFlowKey) ?? []
+    const taskId = supFlows.map.get(supFlowKey)?.taskId
+    if (!taskId) return supFlows.logs.get(supFlowKey) ?? []
+    const bag = new Map<string, ReviewLogItem>()
+    for (const [k, ls] of supFlows.logs) {
+      if (supFlows.map.get(k)?.taskId !== taskId) continue
+      for (const l of ls) bag.set(l.id, l)
+    }
+    return [...bag.values()].sort((a, b) => a.logDate.localeCompare(b.logDate))
+  }, [supFlowKey, supChainAll, supFlows])
   // 可操作的待審項目。棒次視角選到的可能是 track: 鍵（去重時優先保留它，狀態較完整），
   // 那把鑰匙不在 actionable 裡 → 直接查會找不到，按鈕就消失。改成再用 taskId 回頭找一次。
   const supSelectedAction = useMemo(() => {
@@ -602,11 +601,17 @@ export default function MyTasksPage() {
   const [revokeTarget, setRevokeTarget] = useState<
     { kind: 'confirm'; projectId: string; taskId: string; title: string }
     | { kind: 'approval'; projectId: string; authorId: string; taskId: string; title: string; weekOf: string | null
-        /** 撤的是哪一條鏈：完成後補充 / 一般週報。同一週可能兩條並存 */
-        supplement?: boolean }
+        /** 撤的是哪一條鏈：完成後補充 / 一般週報。同一任務可能多條並存 */
+        supplement?: boolean
+        /** 鏈的顯示名稱（例：補充 · 2026W35 · 8/24~8/30），對話框要講清楚撤的是哪一批 */
+        chainLabel?: string }
     | null
   >(null)
   const [revokeReason, setRevokeReason] = useState('')
+  // 右欄要看哪一條審核鏈；null＝自動（優先顯示還在途的那條）。
+  //   一個任務可能有多條：本週報告一條，加上每一批完成後補充各一條
+  //   （8/29 補 8/27+8/30、9/4 又補 9/2+9/5 → 兩批，各自獨立送審與撤回）。
+  const [flowChainKey, setFlowChainKey] = useState<string | null>(null)
   const [revokeBusy, setRevokeBusy] = useState(false)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
@@ -1387,14 +1392,32 @@ export default function MyTasksPage() {
    * 主管那一棒卻標「現在在這」）。所以先挑出「現在真正在跑的那一條」：
    *   有還沒核准的補充 → 畫補充鏈；否則 → 畫原本的報告鏈。
    */
-  const pickChain = useCallback((logs: TaskLog[]): TaskLog[] => {
-    const sup = logs.filter(l => l.postDoneSupplement)
-    const inFlight = sup.some(l => !l.publishedAt)
-    if (inFlight) return sup
-    const main = logs.filter(l => !l.postDoneSupplement)
-    // 只有補充、而且都已核准 → 仍以補充鏈呈現，否則右欄會整個空掉
-    return main.length > 0 ? main : sup
-  }, [])
+  /** 這筆紀錄屬於哪一條鏈。補充以填報週分批，各批獨立審核與撤回。 */
+  const chainKeyOf = useCallback((l: TaskLog) =>
+    l.postDoneSupplement ? `sup:${l.weekOf ?? '_'}` : 'main', [])
+
+  /** 這個任務有哪些鏈，依「主鏈 → 補充（新到舊）」排序。 */
+  const chainsOf = useCallback((logs: TaskLog[]) => {
+    const groups = new Map<string, TaskLog[]>()
+    for (const l of logs) {
+      const k = chainKeyOf(l)
+      const a = groups.get(k); if (a) a.push(l); else groups.set(k, [l])
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => (a === 'main' ? -1 : b === 'main' ? 1 : b.localeCompare(a)))
+      .map(([key, ls]) => ({ key, logs: ls }))
+  }, [chainKeyOf])
+
+  const pickChain = useCallback((logs: TaskLog[], want?: string | null): TaskLog[] => {
+    const groups = chainsOf(logs)
+    if (groups.length === 0) return []
+    const chosen = want ? groups.find(g => g.key === want) : null
+    if (chosen) return chosen.logs
+    // 自動：還在途（尚未納入更新紀錄）的那條優先——那是現在真正要處理的事
+    const inFlight = groups.find(g => g.key !== 'main' && g.logs.some(l => !l.publishedAt))
+    if (inFlight) return inFlight.logs
+    return (groups.find(g => g.key === 'main') ?? groups[0]).logs
+  }, [chainsOf])
 
   const rFlowOf = useCallback((taskId: string): ReviewFlow | null => {
     const p = rReportDialogProject
@@ -1824,7 +1847,7 @@ export default function MyTasksPage() {
       // 只算真正走審核的報告。當責在撰寫台寫的補充帶 reportOnly，它不進審核、送出直接進更新紀錄，
       // 混進來會算出自相矛盾的狀態（踩過：當責在 R 的任務上補一筆說明，那筆未發布，
       // 於是 A 看到「主管審核中」，R 卻看到自己的報告「已駁回」）。
-      const taskLogs = pickChain(p.taskLogs.filter(l => l.taskId === taskId && !l.reportOnly))
+      const taskLogs = pickChain(p.taskLogs.filter(l => l.taskId === taskId && !l.reportOnly), flowChainKey)
       const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
       return buildReviewFlow({
         task: t,
@@ -1840,7 +1863,7 @@ export default function MyTasksPage() {
       })
     }
     return null
-  }, [apiProjects, reviewReportWeek, user])
+  }, [apiProjects, reviewReportWeek, user, pickChain, flowChainKey])
 
   // 本專案有幾位成員沒設報告審核主管（＝其報告會直接落到當責身上）
   const reviewNoReviewerCount = useMemo(() => {
@@ -1887,6 +1910,33 @@ export default function MyTasksPage() {
     return null
   }, [apiProjects, reviewFlowTaskId])
 
+  useEffect(() => { setFlowChainKey(null) }, [reviewFlowTaskId])
+
+  // 這個任務有哪幾條鏈可切，以及目前顯示的是哪一條
+  const reviewChainInfo = useMemo(() => {
+    const empty = { chains: [] as { key: string; label: string; active: boolean; onSelect: () => void }[], activeKey: null as string | null }
+    if (!reviewFlowTaskId) return empty
+    const p = apiProjects.find(pp => pp.tasks.some(t => t.id === reviewFlowTaskId))
+    if (!p) return empty
+    const ls = p.taskLogs.filter(l => l.taskId === reviewFlowTaskId && !l.reportOnly)
+    const groups = chainsOf(ls)
+    if (groups.length === 0) return empty
+    const shownLogs = pickChain(ls, flowChainKey)
+    const activeKey = shownLogs.length > 0 ? chainKeyOf(shownLogs[0]) : null
+    if (groups.length < 2) return { chains: [], activeKey }
+    return {
+      activeKey,
+      chains: groups.map(g => ({
+        key: g.key,
+        // 正式報告＝任務本身的報告鏈（跨週，驅動進度與完成）；
+        //   補充可能有很多批，標上週別才分得出是哪一批
+        label: g.key === 'main'
+          ? '正式報告'
+          : `補充 · ${formatWeekLabel(g.logs.find(l => l.weekOf)?.weekOf) ?? g.logs.map(l => l.logDate).sort()[0]}`,
+      })),
+    }
+  }, [apiProjects, reviewFlowTaskId, flowChainKey, pickChain, chainsOf, chainKeyOf])
+
   const reviewSelectedItem = useMemo(
     () => reviewPendingItems.find(i => i.task.id === reviewFlowTaskId) ?? null,
     [reviewPendingItems, reviewFlowTaskId],
@@ -1898,10 +1948,12 @@ export default function MyTasksPage() {
     //   補充混進來會被標上「未進紀錄」之類的審核狀態，讓人以為那筆也卡在某個審核關卡。
     const proj = apiProjects.find(p => p.tasks.some(t => t.id === reviewFlowTaskId))
     if (!proj) return []
-    return proj.taskLogs
-      .filter(l => l.taskId === reviewFlowTaskId && !l.reportOnly)
-      .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
-  }, [apiProjects, reviewFlowTaskId])
+    const all = proj.taskLogs.filter(l => l.taskId === reviewFlowTaskId && !l.reportOnly)
+    // 預設（flowChainKey=null）列出整個任務的紀錄；選定某一條鏈才收斂到那一條。
+    //   篩選要同時作用在流程與紀錄，不然會出現「選了補充，紀錄卻還列著本週報告」的錯覺。
+    const scoped = flowChainKey ? pickChain(all, flowChainKey) : all
+    return scoped.slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  }, [apiProjects, reviewFlowTaskId, pickChain, flowChainKey])
 
   // 管線列計數：以「本週該追蹤 ∪ 待你確認」的任務為母體，逐一歸棒
   const reviewPipeline = useMemo(() => {
@@ -3318,6 +3370,23 @@ export default function MyTasksPage() {
                           onCollapse={() => setFlowPanelOpen(false)}
                           logsCount={supSelectedLogs.length}
                           logs={renderReviewLogs(supSelectedLogs)}
+                          chainFilter={{
+                            // 同一個任務在 map 裡每條鏈各有一個鍵（追蹤／各填報週／每批補充）。
+                            //   只顯示一條的話，其他條就沒有任何入口可以撤回或駁回。
+                            value: supChainAll ? 'all' : (supFlowKey ?? 'all'),
+                            options: [...supFlows.map.entries()]
+                              .filter(([, f]) => f.taskId === supSelectedFlow.taskId)
+                              .map(([k, f]) => ({
+                                key: k,
+                                label: f.supplement
+                                  ? `補充 · ${f.reportWeekLabel ?? ''}`.trim()
+                                  : `正式報告 · ${f.reportWeekLabel ?? ''}`.trim().replace(/ ·$/, ''),
+                              })),
+                            onChange: v => {
+                              if (v === 'all') { setSupChainAll(true); return }
+                              setSupChainAll(false); setSupFlowKey(v)
+                            },
+                          }}
                           revokeHint={
                             supSelectedFlow.supplement
                               ? (supSelectedFlow.stage === 'done'
@@ -3348,7 +3417,7 @@ export default function MyTasksPage() {
                             if (!authorId) return null
                             return (
                               <button type="button"
-                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, supplement: supSelectedFlow.supplement }) }}
+                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, supplement: supSelectedFlow.supplement, chainLabel: supSelectedFlow.supplement ? `補充 · ${supSelectedFlow.reportWeekLabel ?? ''}`.trim() : undefined }) }}
                                 title="收回你在「R主管審核」做的核准：報告退回「待你審核」，不會動到當責那一棒"
                                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                                 <Undo2 className="h-3 w-3" />撤回我的核准
@@ -5320,10 +5389,25 @@ export default function MyTasksPage() {
                                 if (n.has(task.id)) n.delete(task.id); else n.add(task.id)
                                 return n
                               })}
-                              className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+                              className="group flex items-center gap-2 px-3 py-2.5 rounded-lg border border-border/60 bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
                             >
                               <span className={cn('h-2 w-2 rounded-full shrink-0', (aDone || task.reviewedAt) ? 'bg-green-500' : 'bg-amber-500')} />
                               <span className="text-sm flex-1 truncate text-muted-foreground">{task.title}</span>
+                              {/* 補充入口。平時隱藏、hover（或鍵盤聚焦）才浮出，避免完成區被按鈕塞滿 */}
+                              {aDone && isSameUser(task.assignee, user) && (
+                                <Button
+                                  size="sm" variant="outline"
+                                  className="h-7 shrink-0 gap-1 border-primary/40 bg-primary/10 px-2.5 text-xs font-medium text-primary shadow-sm transition-all hover:bg-primary/20 hover:text-primary opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                                  title="補交這個任務當時的紀錄或文件"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setRSupRows([{ date: task.completedAt?.slice(0, 10) || '', content: '' }])
+                                    setRSupTask({ id: task.id, title: task.title, projectId: rReportDialogProject!.id, completedAt: task.completedAt ?? null })
+                                  }}
+                                >
+                                  <PenLine className="h-3 w-3" />我要補充
+                                </Button>
+                              )}
                               <span className="text-xs tabular-nums text-muted-foreground/70 shrink-0">{fmtMD(task.startDate)} → {fmtMD(task.endDate)}</span>
                               {aDone ? (
                                 <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 text-[11px] px-1.5 py-0.5 shrink-0" title={task.completedBy ? `由 ${task.completedBy} 確認完成` : undefined}>
@@ -5364,23 +5448,6 @@ export default function MyTasksPage() {
                             {expanded && (
                               <div className="mt-1.5">
                               <div className="rounded-lg border border-border/60 overflow-hidden">
-                                {aDone && isSameUser(task.assignee, user) && (
-                                  <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
-                                    <span className="text-[11px] text-muted-foreground">
-                                      任務已完成。仍可補交當時的紀錄或文件——需經審核，但不會改變完成日與進度。
-                                    </span>
-                                    <Button
-                                      size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setRSupRows([{ date: task.completedAt?.slice(0, 10) || '', content: '' }])
-                                        setRSupTask({ id: task.id, title: task.title, projectId: rReportDialogProject!.id, completedAt: task.completedAt ?? null })
-                                      }}
-                                    >
-                                      <PenLine className="h-3 w-3" />我要補充
-                                    </Button>
-                                  </div>
-                                )}
                                 {logs.length === 0 ? (
                                   <p className="text-xs text-muted-foreground/60 px-3 py-3 text-center">尚無工作紀錄</p>
                                 ) : (
@@ -5818,7 +5885,8 @@ export default function MyTasksPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {revokeTarget?.kind === 'confirm' ? '撤回完成確認？' : '撤回核准？'}
+              {revokeTarget?.kind === 'confirm' ? '撤回完成確認？'
+                : revokeTarget?.supplement ? '撤回這批補充？' : '撤回核准？'}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
@@ -5829,6 +5897,19 @@ export default function MyTasksPage() {
                       甘特、完成區、里程碑進度會一併退回
                     </div>
                     <div>會通知執行者與審核主管。</div>
+                  </>
+                ) : revokeTarget?.supplement ? (
+                  <>
+                    {/* 一個任務可能有很多批補充，一定要指名撤的是哪一批 */}
+                    <div>
+                      撤回「{revokeTarget.title}」的
+                      <b className="text-foreground">{revokeTarget.chainLabel || '完成後補充'}</b>
+                      ，這批補充會退出更新紀錄、回到待審。
+                    </div>
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+                      不影響甘特、完成區與里程碑——任務維持已完成，完成日不變
+                    </div>
+                    <div className="text-muted-foreground">同一任務的其他報告與其他批補充都不受影響。</div>
                   </>
                 ) : (
                   <>
@@ -6136,6 +6217,11 @@ export default function MyTasksPage() {
                     onCollapse={() => setFlowPanelOpen(false)}
                     logsCount={reviewSelectedLogs.length}
                     logs={renderReviewLogs(toLogRows(reviewSelectedLogs))}
+                    chainFilter={{
+                      value: flowChainKey ?? 'all',
+                      options: reviewChainInfo.chains,
+                      onChange: v => setFlowChainKey(v === 'all' ? null : v),
+                    }}
                     renderRevoke={(step) => {
                       // 完成後補充：當責撤的是「通過補充」那一棒，跟任務完成無關。
                       //   撤回後補充退出更新紀錄，回到當責待審（主管的核准保留）。
@@ -6146,7 +6232,7 @@ export default function MyTasksPage() {
                         if (!rep2) return null
                         return (
                           <button type="button"
-                            onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: rep2.projectId, authorId: rep2.authorId, taskId: rep2.taskId, title: reviewSelectedFlow.title, weekOf: rep2.weekOf, supplement: true }) }}
+                            onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: rep2.projectId, authorId: rep2.authorId, taskId: rep2.taskId, title: reviewSelectedFlow.title, weekOf: rep2.weekOf, supplement: true, chainLabel: reviewChainInfo.chains.find(c => c.key === reviewChainInfo.activeKey)?.label ?? '完成後補充' }) }}
                             title="收回你對這筆補充的通過：補充退出更新紀錄，回到你的待審；主管的核准保留"
                             className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                             <Undo2 className="h-3 w-3" />撤回我的通過
