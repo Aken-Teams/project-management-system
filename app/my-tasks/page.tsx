@@ -1450,6 +1450,32 @@ export default function MyTasksPage() {
         const fileCount = logRows.reduce((n, r) => n + (r.log.attachments?.length || 0), 0)
         out.push({ projectId: p.id, projectName: p.name, task: t, path, reporter: t.reportedDoneBy || '', reportedAt: t.reportedDoneAt, logRows, fileCount })
       }
+
+      // 完成後補充：主管核准後輪到當責收尾。這類任務通常「已完成」且沒有 reportedDoneAt，
+      //   上面那圈的條件全部不符合，所以要另外收——否則補充過了主管那關就沒人接得到。
+      const already = new Set(out.filter(i => i.projectId === p.id).map(i => i.task.id))
+      for (const t of p.tasks) {
+        if (already.has(t.id)) continue
+        const waiting = p.taskLogs.filter(l => l.taskId === t.id
+          && l.postDoneSupplement && l.reviewerApprovedAt && !l.publishedAt && !l.reviewerRejectedAt)
+        if (waiting.length === 0) continue
+        const ms = p.milestones.find(m => m.id === t.milestoneId)
+        const anc: string[] = []
+        let cur = t.parentId ? byId.get(t.parentId) : undefined
+        while (cur) { anc.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
+        const rows: ReviewLogRow[] = waiting
+          .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+          .map(l => ({ log: l }))
+        out.push({
+          projectId: p.id, projectName: p.name, task: t,
+          path: [ms?.name, ...anc].filter(Boolean).join(' › '),
+          reporter: waiting[0].author,
+          // 排序基準用「主管核准的時間」——那才是球傳到當責手上的時刻
+          reportedAt: waiting.map(l => l.reviewerApprovedAt!).sort()[0],
+          logRows: rows,
+          fileCount: rows.reduce((n, r) => n + (r.log.attachments?.length || 0), 0),
+        })
+      }
     }
     return out.sort((a, b) => a.reportedAt.localeCompare(b.reportedAt))
   }, [apiProjects, user])
@@ -1514,9 +1540,17 @@ export default function MyTasksPage() {
     if (groups.length === 0) return []
     const chosen = want ? groups.find(g => g.key === want) : null
     if (chosen) return chosen.logs
-    // 自動：還在途（尚未納入更新紀錄）的那條優先——那是現在真正要處理的事
-    const inFlight = groups.find(g => g.key !== 'main' && g.logs.some(l => !l.publishedAt))
-    if (inFlight) return inFlight.logs
+    // 自動挑「現在真正要處理的那一條」：
+    //   在途（尚未納入更新紀錄）的補充優先；同時有多批在途時，
+    //   先排除整批已被駁回的（那球在執行者手上、在「待修正」處理），再取最新的一批。
+    //   挑錯會讓該給當責看的那批被蓋掉——實際踩過：舊的被駁回批壓過新的待當責批，
+    //   當責的「待你處理」就完全看不到它。
+    const inFlightAll = groups.filter(g => g.key !== 'main' && g.logs.some(l => !l.publishedAt))
+    if (inFlightAll.length > 0) {
+      const active = inFlightAll.filter(g => !g.logs.every(l => l.reviewerRejectedAt))
+      const pool = active.length > 0 ? active : inFlightAll
+      return pool[pool.length - 1].logs
+    }
     return (groups.find(g => g.key === 'main') ?? groups[0]).logs
   }, [chainsOf])
 
