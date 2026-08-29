@@ -27,6 +27,11 @@ interface BatchBody {
    * 但不動任務的完成狀態，也不參與進度計算。
    */
   postDoneSupplement?: boolean
+  /**
+   * 重送被駁回的補充時帶原本的批次。不帶的話，這次新增的列會自成一批，
+   * 一次送出就被拆成兩批（各自送審、各自撤回），使用者看到的是「我明明一起送的」。
+   */
+  supplementBatchId?: string | null
 }
 
 export async function POST(
@@ -64,7 +69,9 @@ export async function POST(
     }
 
     // 這次送出的批次識別；同一次送出的補充共用一個值，之後才分得出是哪一批
-    const batchId = supplement ? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` : null
+    const batchId = supplement
+      ? (body.supplementBatchId || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
+      : null
 
     const validPlans = body.nextPlans?.filter(p => p.content.trim()) || []
 

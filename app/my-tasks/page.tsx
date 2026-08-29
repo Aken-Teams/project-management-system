@@ -562,8 +562,8 @@ export default function MyTasksPage() {
   const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'fix' | 'done' | 'history'>('active')
   // ── 完成後補充：執行者對「已完成」任務補交資料 ──
   //   照走 R主管審核、核准即進更新紀錄，但不動任務的完成日與進度（客戶需求 2026-08-29）。
-  const [rSupTask, setRSupTask] = useState<{ id: string; title: string; projectId: string; completedAt: string | null } | null>(null)
-  const [rSupRows, setRSupRows] = useState<{ date: string; content: string; attachments?: TaskLogAttachment[] }[]>([{ date: '', content: '' }])
+  const [rSupTask, setRSupTask] = useState<{ id: string; title: string; projectId: string; completedAt: string | null; fixing?: boolean; batch?: string | null } | null>(null)
+  const [rSupRows, setRSupRows] = useState<{ date: string; content: string; attachments?: TaskLogAttachment[]; existingLogId?: string }[]>([{ date: '', content: '' }])
   const [rSupSaving, setRSupSaving] = useState(false)
   const [rSupUploadingIdx, setRSupUploadingIdx] = useState<number | null>(null)
   const rSupFileRef = useRef<HTMLInputElement>(null)
@@ -1330,7 +1330,52 @@ export default function MyTasksPage() {
       .sort((a, b) => b.days - a.days)
   }, [rReportDialogProject, user])
 
+  /**
+   * 待修正分成兩類，因為修正的入口完全不同：
+   *   正式報告 → 回到原本那一週的「待完成」改。
+   *   完成後補充 → 任務早就完成了，不在待完成裡；要回「完成區」重開補充表單改。
+   * 補充還要以「批」為單位收攏——同一次送出被退回，是一張卡不是好幾張。
+   */
+  const rFixGroups = useMemo(() => {
+    const main = rFixItems.filter(i => !i.log.postDoneSupplement)
+    const supMap = new Map<string, { key: string; taskId: string; taskTitle: string; path: string; weekOf: string | null; batch: string | null; logs: TaskLog[]; rejectedBy: string | null; note: string | null; days: number }>()
+    for (const i of rFixItems) {
+      if (!i.log.postDoneSupplement) continue
+      const key = `${i.taskId}:${i.log.supplementBatch ?? i.weekOf ?? '_'}`
+      const g = supMap.get(key)
+      if (g) { g.logs.push(i.log); g.days = Math.max(g.days, i.days) }
+      else supMap.set(key, {
+        key, taskId: i.taskId, taskTitle: i.taskTitle, path: i.path, weekOf: i.weekOf,
+        batch: i.log.supplementBatch ?? null, logs: [i.log],
+        rejectedBy: i.rejectedBy, note: i.note, days: i.days,
+      })
+    }
+    const supplement = [...supMap.values()]
+      .map(g => ({ ...g, logs: g.logs.slice().sort((a, b) => a.logDate.localeCompare(b.logDate)) }))
+      .sort((a, b) => b.days - a.days)
+    return { main, supplement, total: main.length + supplement.length }
+  }, [rReportDialogProject, user])
+
   // 一鍵回到被駁回的那一週、選取該任務並解鎖編輯——R 不必自己算是哪一週
+  /** 被退回的補充：回完成區、展開該任務，並用原本那批的內容開啟補充表單。 */
+  const goFixSupplement = (g: { taskId: string; taskTitle: string; logs: TaskLog[] }) => {
+    const t = rReportDialogProject?.tasks.find(x => x.id === g.taskId)
+    setRDialogTab('done')
+    setRDoneExpanded(new Set([g.taskId]))
+    setRSupRows(g.logs.map(l => ({
+      date: l.logDate, content: l.content,
+      attachments: l.attachments, existingLogId: l.id,
+    })))
+    setRSupTask({
+      id: g.taskId, title: g.taskTitle,
+      projectId: rReportDialogProject!.id,
+      completedAt: t?.completedAt ?? null,
+      fixing: true,
+      // 帶原批：修正時新增的列要併回同一批，不能另開一批
+      batch: g.logs.find(l => l.supplementBatch)?.supplementBatch ?? null,
+    })
+  }
+
   const goFixRejected = (item: { taskId: string; weekOf: string | null }) => {
     if (item.weekOf) setRReportWeekOf(item.weekOf)
     setRDialogTab('active')
@@ -2502,7 +2547,8 @@ export default function MyTasksPage() {
     if (!rSupTask || !user) return
     const entries = rSupRows
       .filter(r => r.content.trim() && r.date)
-      .map(r => ({ logDate: r.date, content: r.content.trim(), attachments: r.attachments?.length ? r.attachments : undefined }))
+      // 帶 existingLogId＝更新原本那筆（重送被退回的補充），後端會一併清掉駁回狀態
+      .map(r => ({ logDate: r.date, content: r.content.trim(), existingLogId: r.existingLogId, attachments: r.attachments?.length ? r.attachments : undefined }))
     if (entries.length === 0) { toast.error('請至少填一列日期與內容'); return }
     setRSupSaving(true)
     try {
@@ -2511,14 +2557,16 @@ export default function MyTasksPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           taskId: rSupTask.id, userId: user.id, weekOf: rReportWeekOf,
-          entries, postDoneSupplement: true,
+          entries, postDoneSupplement: true, supplementBatchId: rSupTask.batch ?? null,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(data?.error || '送出失敗，請稍後再試'); return }
-      toast.success(data?.routedTo === 'reviewer'
-        ? `補充已送出，待 ${data.reviewerName || '主管'} 審核`
-        : '補充已送出，待當責審核')
+      toast.success(rSupTask.fixing
+        ? '已重新送出，回到主管待審'
+        : data?.routedTo === 'reviewer'
+          ? `補充已送出，待 ${data.reviewerName || '主管'} 審核`
+          : '補充已送出，待當責審核')
       setRSupTask(null)
       setRSupRows([{ date: '', content: '' }])
       const refreshRes = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
@@ -4596,11 +4644,16 @@ export default function MyTasksPage() {
       <Dialog open={!!rSupTask} onOpenChange={open => { if (!open && !rSupSaving) { setRSupTask(null); setRSupRows([{ date: '', content: '' }]) } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base">完成後補充 — {rSupTask?.title}</DialogTitle>
+            <DialogTitle className="text-base">
+              {rSupTask?.fixing ? '修改被駁回的補充' : '完成後補充'} — {rSupTask?.title}
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              補交這個任務當時的紀錄或文件。日期可填完成日之前或之後，
-              <b className="text-foreground">不會改變任務的完成日與甘特進度</b>。
-              送出後與一般週報走同一條審核：主管核准即納入更新紀錄。
+              {rSupTask?.fixing
+                ? <>這批補充被駁回了，改完重新送出會回到主管待審。
+                  <b className="text-foreground">仍不會改變任務的完成日與甘特進度</b>。</>
+                : <>補交這個任務當時的紀錄或文件。日期可填完成日之前或之後，
+                  <b className="text-foreground">不會改變任務的完成日與甘特進度</b>。
+                  送出後與一般週報走同一條審核：主管核准後再由當責通過即納入更新紀錄。</>}
             </DialogDescription>
           </DialogHeader>
 
@@ -4672,7 +4725,7 @@ export default function MyTasksPage() {
             <Button variant="outline" disabled={rSupSaving}
               onClick={() => { setRSupTask(null); setRSupRows([{ date: '', content: '' }]) }}>取消</Button>
             <Button disabled={rSupSaving || rSupUploadingIdx !== null} onClick={submitRSupplement}>
-              {rSupSaving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />送出中...</> : <><Send className="mr-1.5 h-3.5 w-3.5" />送出補充</>}
+              {rSupSaving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />送出中...</> : <><Send className="mr-1.5 h-3.5 w-3.5" />{rSupTask?.fixing ? '重新送出' : '送出補充'}</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4929,8 +4982,8 @@ export default function MyTasksPage() {
                     title="被審核主管或當責駁回、還沒重新送出的報告"
                   >
                     待修正
-                    {rFixItems.length > 0 && (
-                      <span className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{rFixItems.length}</span>
+                    {rFixGroups.total > 0 && (
+                      <span className="text-[11px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full px-1.5 py-0.5">{rFixGroups.total}</span>
                     )}
                   </button>
                   <button
@@ -5441,15 +5494,69 @@ export default function MyTasksPage() {
                   )
                 ) : (
                   rDialogTab === 'fix' ? (
-                    rFixItems.length === 0 ? (
+                    rFixGroups.total === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-8">目前沒有被駁回待修正的報告</p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-4">
+                        {/* ── 完成後補充：任務已完成，修正入口在完成區，不在待完成 ── */}
+                        {rFixGroups.supplement.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium">完成後補充</span>
+                              <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                {rFixGroups.supplement.length}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">任務已完成，改完重送不影響完成日與進度</span>
+                            </div>
+                            {rFixGroups.supplement.map(g => (
+                              <div key={g.key} className="overflow-hidden rounded-lg border border-red-200 dark:border-red-900">
+                                <div className="bg-red-50/50 px-3 py-2.5 dark:bg-red-950/20">
+                                  {g.path && <div className="truncate text-[11px] text-muted-foreground">{g.path}</div>}
+                                  <div className="mt-0.5 flex items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate text-sm font-medium">{g.taskTitle}</div>
+                                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                        <span className="whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                          補充 · {g.logs.length} 筆
+                                        </span>
+                                        {g.rejectedBy && <span>由 {g.rejectedBy} 駁回</span>}
+                                        <span className="tabular-nums text-red-600 dark:text-red-400">已擱置 {g.days} 天</span>
+                                      </div>
+                                    </div>
+                                    <Button size="sm" className="h-7 shrink-0 gap-1 text-xs" onClick={() => goFixSupplement(g)}>
+                                      <PenLine className="h-3.5 w-3.5" />修改補充
+                                    </Button>
+                                  </div>
+                                  {g.note && (
+                                    <p className="mt-2 rounded border border-red-200 bg-background px-2 py-1.5 text-xs text-red-700 dark:border-red-900 dark:text-red-400">
+                                      <span className="font-medium">駁回原因：</span>{g.note}
+                                    </p>
+                                  )}
+                                  <ul className="mt-1.5 space-y-0.5">
+                                    {g.logs.map(l => (
+                                      <li key={l.id} className="truncate text-[11px] text-muted-foreground">
+                                        <span className="tabular-nums">{l.logDate.slice(5).replace('-', '/')}</span>　{l.content}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* ── 正式報告：回到原本那一週的「待完成」修改 ── */}
+                        {rFixGroups.main.length > 0 && (
+                        <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium">正式報告</span>
+                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium">{rFixGroups.main.length}</span>
+                        </div>
                         <div className="flex items-start gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
                           <span>要回到<b>原本那一週</b>修改再送出，在別週另寫不會補回該週紀錄。</span>
                         </div>
-                        {rFixItems.map(item => (
+                        {rFixGroups.main.map(item => (
                           <div key={item.log.id} className="rounded-lg border border-red-200 dark:border-red-900 overflow-hidden">
                             <div className="px-3 py-2.5 bg-red-50/50 dark:bg-red-950/20">
                               {item.path && <div className="text-[11px] text-muted-foreground truncate">{item.path}</div>}
@@ -5480,6 +5587,8 @@ export default function MyTasksPage() {
                             </div>
                           </div>
                         ))}
+                        </div>
+                        )}
                       </div>
                     )
                   ) : (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).length === 0 ? (
@@ -5582,13 +5691,21 @@ export default function MyTasksPage() {
                                       </thead>
                                       <tbody>
                                         {logs.map(l => (
-                                          <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
+                                          <tr key={l.id} className={cn('border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30',
+                                            l.reviewerRejectedAt && !l.publishedAt && 'bg-red-50/50 dark:bg-red-950/20')}>
                                             <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
                                             <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.author}</td>
                                             <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">
-                                              {l.postDoneSupplement && (
-                                                <span className="mr-1.5 inline-block rounded border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300">完成後補充</span>
-                                              )}
+                                              {/* 一列只給一個徽章：狀態才是要一眼掃的。
+                                                  「補充」降成內容前的灰字註記，兩個彩色徽章並排太吵。 */}
+                                              {(() => {
+                                                const st = l.publishedAt ? { t: '已進紀錄', c: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' }
+                                                  : l.reviewerRejectedAt ? { t: '已退回', c: 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300' }
+                                                    : l.reviewerApprovedAt ? { t: '待當責', c: 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300' }
+                                                      : { t: '待主管審', c: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300' }
+                                                return <span className={cn('mr-1.5 inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium align-middle', st.c)}>{st.t}</span>
+                                              })()}
+                                              {l.postDoneSupplement && <span className="mr-1 text-[11px] text-muted-foreground">補充 ·</span>}
                                               {l.content}
                                             </td>
                                             <td className="px-2 py-1.5 text-center">
