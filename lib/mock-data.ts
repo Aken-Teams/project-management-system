@@ -197,6 +197,13 @@ export interface TaskLog {
    * 所以所有審核相關的清單與流程都要用這個旗標排除它。
    */
   reportOnly?: boolean
+  /**
+   * true = 執行者在任務「已完成」之後補交的資料。
+   * 照常送 R主管審核、核准即進更新紀錄，但不影響任務完成日與進度。
+   */
+  postDoneSupplement?: boolean
+  /** R主管核准時間。完成後補充要再經當責通過才會 publishedAt 進更新紀錄 */
+  reviewerApprovedAt?: string | null
 }
 
 export interface Risk {

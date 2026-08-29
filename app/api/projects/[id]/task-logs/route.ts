@@ -63,7 +63,7 @@ export async function POST(
     // ── Sync task progress & milestone after adding log ──
     const allLogs = (await prisma.taskLog.findMany({
       where: { taskId: body.taskId },
-      select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+      select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, postDoneSupplement: true, author: { select: { name: true } } },
     }))
       // 與 my-tasks / projects 一致：只有已核准（或 7/12 前的舊資料）才驅動進度
       .filter(isReportVisible)

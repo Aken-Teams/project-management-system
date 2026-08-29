@@ -68,6 +68,7 @@ import {
   CalendarClock,
   CircleCheck,
   Undo2,
+  PenLine,
   ChevronDown,
   ChevronRight,
   PanelRightClose,
@@ -180,15 +181,23 @@ type RReviewEvent = { id: string; taskId: string; taskTitle: string; path?: stri
 
 // 審核中心：一筆待審項目（logRows 含此任務 + 所有子任務的紀錄，附件掛在各列）
 // R 報告審核主管收件匣型別（督導總覽：每 R 的待審 + 已審核 + 追蹤狀態）
-type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[]; status?: 'pending' | 'approved' | 'rejected'; createdAt?: string }
+type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[]; status?: 'pending' | 'approved' | 'rejected'; createdAt?: string; supplement?: boolean }
 type ReviewSubmission = {
   taskId: string; taskTitle: string; weekOf: string | null
   reportedDone: boolean
+  /** 執行者在任務完成後補交的資料——審核照走，但不影響完成日與進度 */
+  supplement?: boolean
+  /** 補充：主管已核准，正等當責收尾 */
+  reviewerApproved?: boolean
   logs: ReviewLogItem[]
 }
 type ReviewedSubmission = {
   taskId: string; taskTitle: string; weekOf: string | null
   outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string
+  supplement?: boolean
+  reviewerApproved?: boolean
+  reportedDone?: boolean
+  completed?: boolean
   logs: ReviewLogItem[]
 }
 type TrackingItem = {
@@ -359,16 +368,14 @@ export default function MyTasksPage() {
         })
         map.set(`track:${rv.authorId}:${t.taskId}`, f)
         logs.set(`track:${rv.authorId}:${t.taskId}`, t.logs)
-        counts[f.stage]++
       }
       for (const sub of rv.pending) {
         const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf)
         logs.set(k, sub.logs)
         actionable.set(k, { authorId: rv.authorId, authorName: rv.authorName, sub })
-        // 追蹤母體只涵蓋所選週；別週送來、仍待你審的報告要另計，否則「待你審核」會少算
-        if (!map.has(`track:${rv.authorId}:${sub.taskId}`)) counts.supervisor++
         map.set(k, buildFlowFromSummary({
           taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
+          supplement: sub.supplement, reviewerApproved: sub.reviewerApproved,
           reportKind: 'pending', reportedDone: sub.reportedDone, completed: false,
           activeThisWeek: true, weekOf: sub.weekOf, submittedAt: firstAt(sub.logs),
           reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
@@ -378,16 +385,49 @@ export default function MyTasksPage() {
       for (const sub of rv.reviewed) {
         const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf)
         logs.set(k, sub.logs)
-        map.set(k, buildFlowFromSummary({
+        const f = buildFlowFromSummary({
           taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
+          supplement: sub.supplement, reviewerApproved: sub.reviewerApproved,
           reportKind: sub.outcome === 'approved' ? 'published' : 'rejected',
-          reportedDone: false, completed: false, activeThisWeek: true, weekOf: sub.weekOf,
+          // 照實帶任務狀態：寫死 false 會讓已完成任務的舊報告被算成「執行中」，
+          //   跟當責端看到的「已完成」對不起來（實際踩過）。
+          reportedDone: !!sub.reportedDone, completed: !!sub.completed,
+          activeThisWeek: true, weekOf: sub.weekOf,
           submittedAt: firstAt(sub.logs), decidedAt: sub.reviewedAt, rejectNote: sub.note,
           reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
           attachments: attOf(sub.logs), logCount: sub.logs.length,
-        }))
+        })
+        map.set(k, f)
       }
     }
+
+    // 工作紀錄要跟當責端看到的一致：以「任務」為單位呈現該成員的全部紀錄，
+    //   而不是只給當前那一組填報週。原本每個鍵只掛自己那一組，
+    //   於是同一個任務在主管端是 1 筆、當責端是 2 筆（實際踩過）。
+    //   每列本來就有「已進紀錄／待主管審／已退回」的狀態標記，混週別也讀得懂。
+    const byTask = new Map<string, Map<string, ReviewLogItem>>()
+    for (const [k, ls] of logs) {
+      const f = map.get(k); if (!f) continue
+      const bag = byTask.get(f.taskId) ?? new Map<string, ReviewLogItem>()
+      for (const l of ls) bag.set(l.id, l)
+      byTask.set(f.taskId, bag)
+    }
+    for (const [k, f] of map) {
+      const bag = byTask.get(f.taskId)
+      if (bag) logs.set(k, [...bag.values()].sort((a, b) => a.logDate.localeCompare(b.logDate)))
+    }
+
+    // 棒次列的數字必須跟點進去的清單筆數一致，所以用同一套去重規則算：
+    //   同一個任務在 map 裡可能同時有 track: 與 pid:author:task:week 兩種鍵
+    //   （追蹤一份、每個填報週各一份），逐筆累加會比清單多。
+    //   以 taskId 去重、優先採用 track:（狀態最完整），與清單的取法一字不差。
+    const dedup = new Map<string, ReviewFlow>()
+    for (const [k, f] of map) {
+      const prev = dedup.get(f.taskId)
+      if (!prev || k.startsWith('track:')) dedup.set(f.taskId, f)
+    }
+    for (const f of dedup.values()) counts[f.stage]++
+
     return { map, counts, logs, actionable }
   }, [reviewDialogProject, reviewTrackWeek, user])
 
@@ -509,6 +549,14 @@ export default function MyTasksPage() {
   const [rSubmittingBatch, setRSubmittingBatch] = useState(false)
   const [rTogglingDone, setRTogglingDone] = useState<string | null>(null)
   const [rDialogTab, setRDialogTab] = useState<'active' | 'pending' | 'fix' | 'done' | 'history'>('active')
+  // ── 完成後補充：執行者對「已完成」任務補交資料 ──
+  //   照走 R主管審核、核准即進更新紀錄，但不動任務的完成日與進度（客戶需求 2026-08-29）。
+  const [rSupTask, setRSupTask] = useState<{ id: string; title: string; projectId: string; completedAt: string | null } | null>(null)
+  const [rSupRows, setRSupRows] = useState<{ date: string; content: string; attachments?: TaskLogAttachment[] }[]>([{ date: '', content: '' }])
+  const [rSupSaving, setRSupSaving] = useState(false)
+  const [rSupUploadingIdx, setRSupUploadingIdx] = useState<number | null>(null)
+  const rSupFileRef = useRef<HTMLInputElement>(null)
+  const rSupTargetIdx = useRef<number | null>(null)
   // 展開任務內的子分頁：write＝撰寫報告(預設)；children＝查看子層報告(僅當選到的任務有子任務時才出現)
   const [rExpandSubTab, setRExpandSubTab] = useState<'write' | 'children'>('write')
   const [rChildViewTaskId, setRChildViewTaskId] = useState<string | null>(null)
@@ -553,7 +601,9 @@ export default function MyTasksPage() {
   // 撤回：kind 決定撤哪一棒（當責撤回完成確認 / 主管撤回報告核准）
   const [revokeTarget, setRevokeTarget] = useState<
     { kind: 'confirm'; projectId: string; taskId: string; title: string }
-    | { kind: 'approval'; projectId: string; authorId: string; taskId: string; title: string; weekOf: string | null }
+    | { kind: 'approval'; projectId: string; authorId: string; taskId: string; title: string; weekOf: string | null
+        /** 撤的是哪一條鏈：完成後補充 / 一般週報。同一週可能兩條並存 */
+        supplement?: boolean }
     | null
   >(null)
   const [revokeReason, setRevokeReason] = useState('')
@@ -1331,6 +1381,21 @@ export default function MyTasksPage() {
 
   // R（執行者）視角：我這個任務的報告現在跑到哪、卡在誰手上。
   //   與 A/主管 共用同一套推導，所以三方看到的流程一定一致，不會各說各話。
+  /**
+   * 一個任務可能同時存在兩條審核鏈：原本的報告鏈，以及完成後補充鏈。
+   * 混在一起算會得出自相矛盾的流程（實際踩過：標題說「流程已走完」，
+   * 主管那一棒卻標「現在在這」）。所以先挑出「現在真正在跑的那一條」：
+   *   有還沒核准的補充 → 畫補充鏈；否則 → 畫原本的報告鏈。
+   */
+  const pickChain = useCallback((logs: TaskLog[]): TaskLog[] => {
+    const sup = logs.filter(l => l.postDoneSupplement)
+    const inFlight = sup.some(l => !l.publishedAt)
+    if (inFlight) return sup
+    const main = logs.filter(l => !l.postDoneSupplement)
+    // 只有補充、而且都已核准 → 仍以補充鏈呈現，否則右欄會整個空掉
+    return main.length > 0 ? main : sup
+  }, [])
+
   const rFlowOf = useCallback((taskId: string): ReviewFlow | null => {
     const p = rReportDialogProject
     if (!p) return null
@@ -1338,7 +1403,7 @@ export default function MyTasksPage() {
     if (!t) return null
     // 只看「我自己寫的」報告：別人代寫的那份不是我的旅程。
     // 若吃整個任務的報告，會出現「右欄說我的報告在被審、待確認卻查無此筆」的矛盾。
-    const myLogs = p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, user))
+    const myLogs = pickChain(p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, user)))
     const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
     const weekEnd = weekEndOf(rReportWeekOf)
     return buildReviewFlow({
@@ -1555,12 +1620,17 @@ export default function MyTasksPage() {
                     <span
                       title={flow.pendingAction === 'review-report'
                         ? '你要審這份週報。通過後報告進入更新紀錄，任務仍在進行。'
-                        : '執行者已回報 100% 完成，你要確認。通過後任務標記完成、甘特與里程碑同步。'}
-                      className={cn('shrink-0 text-[11px] rounded px-1.5 py-0.5 font-medium cursor-help',
+                        : flow.pendingAction === 'review-supplement'
+                          ? '主管已核准這筆完成後補充，等你收尾。通過即納入更新紀錄；不會改變任務的完成日與進度。'
+                          : '執行者已回報 100% 完成，你要確認。通過後任務標記完成、甘特與里程碑同步。'}
+                      className={cn('shrink-0 text-xs rounded px-2 py-0.5 font-medium cursor-help',
                         flow.pendingAction === 'review-report'
                           ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300')}>
-                      {flow.pendingAction === 'review-report' ? '要審週報' : '要確認完成'}
+                          : flow.pendingAction === 'review-supplement'
+                            ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300')}>
+                      {flow.pendingAction === 'review-report' ? '要審週報'
+                        : flow.pendingAction === 'review-supplement' ? '要審補充' : '要確認完成'}
                     </span>
                   )}
                 </div>
@@ -1754,7 +1824,7 @@ export default function MyTasksPage() {
       // 只算真正走審核的報告。當責在撰寫台寫的補充帶 reportOnly，它不進審核、送出直接進更新紀錄，
       // 混進來會算出自相矛盾的狀態（踩過：當責在 R 的任務上補一筆說明，那筆未發布，
       // 於是 A 看到「主管審核中」，R 卻看到自己的報告「已駁回」）。
-      const taskLogs = p.taskLogs.filter(l => l.taskId === taskId && !l.reportOnly)
+      const taskLogs = pickChain(p.taskLogs.filter(l => l.taskId === taskId && !l.reportOnly))
       const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
       return buildReviewFlow({
         task: t,
@@ -1798,6 +1868,20 @@ export default function MyTasksPage() {
       if (pending.length === 0) continue
       const first = pending[0]
       if (!first.authorId) return null // 舊 payload 沒有 authorId 就不給操作，避免打錯對象
+      return { projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId, weekOf: first.weekOf ?? null }
+    }
+    return null
+  }, [apiProjects, reviewFlowTaskId])
+
+  // 當責要撤回補充時的目標：該任務「已納入更新紀錄的補充」那一組
+  const reviewSelectedApprovedSupplement = useMemo(() => {
+    if (!reviewFlowTaskId) return null
+    for (const p of apiProjects) {
+      const done = p.taskLogs
+        .filter(l => l.taskId === reviewFlowTaskId && l.postDoneSupplement && !!l.publishedAt)
+        .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
+      const first = done[0]
+      if (!first?.authorId) continue
       return { projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId, weekOf: first.weekOf ?? null }
     }
     return null
@@ -1930,6 +2014,7 @@ export default function MyTasksPage() {
           body: JSON.stringify({
             reviewerEmail: user.email, projectId: t.projectId, taskId: t.taskId,
             authorId: t.authorId, weekOf: t.weekOf, action: 'revoke', note: reason,
+            supplement: t.supplement,
           }),
         })
         if (!res.ok) {
@@ -2032,10 +2117,11 @@ export default function MyTasksPage() {
     ) as 'approved' | 'rejected' | 'pending' | 'unpublished',
     rejectNote: l.reviewerNote ?? null,
     rejectedBy: l.reviewerRejectedBy ?? null,
+    supplement: !!l.postDoneSupplement,
   }))
 
   // 週報審核：某任務本週紀錄的小表格（日期／內容／附件）。附件＝icon+數量，hover 展開可下載清單。
-  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[]; status?: 'pending' | 'approved' | 'rejected' | 'unpublished'; rejectNote?: string | null; rejectedBy?: string | null }[]) => (
+  const renderReviewLogs = (logs: { id: string; logDate: string; content: string; attachments?: TaskLogAttachment[]; status?: 'pending' | 'approved' | 'rejected' | 'unpublished'; rejectNote?: string | null; rejectedBy?: string | null; supplement?: boolean }[]) => (
     <div className="max-h-[200px] overflow-y-auto border-t border-b bg-background">
       <table className="w-full text-xs border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur"><tr className="text-muted-foreground">
@@ -2054,7 +2140,13 @@ export default function MyTasksPage() {
                 {l.status === 'rejected' && <span className="ml-1 inline-block rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 text-[11px] font-medium align-middle" title="被駁回，需修改後重新送出">已退回</span>}
 
               </td>
-              <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
+              <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">
+                {l.supplement && (
+                  <span className="mr-1.5 inline-block rounded border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 align-middle dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300"
+                    title="執行者在任務完成後補交的資料：照常審核，但不影響完成日與進度">完成後補充</span>
+                )}
+                {l.content}
+              </td>
               <td className="px-2 py-1.5 text-center">
                 {l.attachments && l.attachments.length > 0 ? (
                   <HoverCard openDelay={80} closeDelay={120}>
@@ -2254,6 +2346,66 @@ export default function MyTasksPage() {
   }, [rChildViewTaskId, rReportDialogProject])
 
   // R dialog: file upload for batch log rows
+  // 完成後補充：附件上傳（與週報同一支上傳 API）
+  const handleRSupFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    const idx = rSupTargetIdx.current
+    if (!files || files.length === 0 || idx === null) { e.target.value = ''; return }
+    const fileArray = Array.from(files)
+    e.target.value = ''
+    setRSupUploadingIdx(idx)
+    try {
+      const uploaded: TaskLogAttachment[] = []
+      for (const file of fileArray) uploaded.push(await uploadFile(file))
+      if (uploaded.length > 0) {
+        setRSupRows(prev => prev.map((r, i) => i === idx ? { ...r, attachments: [...(r.attachments || []), ...uploaded] } : r))
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '上傳失敗，請重試')
+    } finally {
+      setRSupUploadingIdx(null)
+      rSupTargetIdx.current = null
+    }
+  }
+
+  // 完成後補充：送出。與週報同一支 batch API，只多帶 postDoneSupplement 旗標。
+  const submitRSupplement = async () => {
+    if (!rSupTask || !user) return
+    const entries = rSupRows
+      .filter(r => r.content.trim() && r.date)
+      .map(r => ({ logDate: r.date, content: r.content.trim(), attachments: r.attachments?.length ? r.attachments : undefined }))
+    if (entries.length === 0) { toast.error('請至少填一列日期與內容'); return }
+    setRSupSaving(true)
+    try {
+      const res = await fetch(`/api/projects/${rSupTask.projectId}/task-logs/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: rSupTask.id, userId: user.id, weekOf: rReportWeekOf,
+          entries, postDoneSupplement: true,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data?.error || '送出失敗，請稍後再試'); return }
+      toast.success(data?.routedTo === 'reviewer'
+        ? `補充已送出，待 ${data.reviewerName || '主管'} 審核`
+        : '補充已送出，待當責審核')
+      setRSupTask(null)
+      setRSupRows([{ date: '', content: '' }])
+      const refreshRes = await fetch(`/api/my-tasks?userId=${user.id}&userEmail=${encodeURIComponent(user.email)}`)
+      if (refreshRes.ok) {
+        const fresh = await refreshRes.json()
+        setApiProjects(fresh.projects ?? [])
+        const updated = (fresh.projects ?? []).find((p: MyTasksProject) => p.id === rSupTask.projectId)
+        if (updated) setRReportDialogProject(updated)
+      }
+    } catch {
+      toast.error('送出失敗，請稍後再試')
+    } finally {
+      setRSupSaving(false)
+    }
+  }
+
   const handleRRowFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     const idx = rRowTargetIdx.current
@@ -3167,7 +3319,11 @@ export default function MyTasksPage() {
                           logsCount={supSelectedLogs.length}
                           logs={renderReviewLogs(supSelectedLogs)}
                           revokeHint={
-                            supSelectedFlow.stage === 'accountable'
+                            supSelectedFlow.supplement
+                              ? (supSelectedFlow.stage === 'done'
+                                ? <>補充已由當責通過並納入更新紀錄，須<b className="text-foreground">由當責先撤回</b>才能撤回核准。</>
+                                : undefined)
+                              : supSelectedFlow.stage === 'accountable'
                               ? <>報告已轉給當責審核，須<b className="text-foreground">由當責先駁回</b>才能撤回核准。</>
                               : supSelectedFlow.stage === 'done'
                                 ? <>任務已完成，須<b className="text-foreground">由當責先撤回完成確認</b>才能撤回核准。</>
@@ -3179,7 +3335,11 @@ export default function MyTasksPage() {
                             // 撤回必須從最下游開始：球只要已經傳到當責（待 A 審核）或更後面，
                             // 主管就不能自己抽回來——要當責先駁回，球回到主管這裡才輪得到他撤。
                             if (step.key !== 'supervisor' || !supFlowKey || supSelectedFlow.legacy) return null
-                            if (supSelectedFlow.stage === 'accountable' || supSelectedFlow.stage === 'done') return null
+                            // 補充：當責還沒通過（stage=accountable）時主管仍可收回自己的核准；
+                            //   一旦當責通過（done）就要他先撤。一般報告維持原本的級聯守則。
+                            if (supSelectedFlow.supplement
+                              ? supSelectedFlow.stage === 'done'
+                              : supSelectedFlow.stage === 'accountable' || supSelectedFlow.stage === 'done') return null
                             if (!isWithinRevokeWindow(step.at)) return null
                             const src = supFlows.actionable.get(supFlowKey)
                             const parts = supFlowKey.split(':')
@@ -3188,7 +3348,7 @@ export default function MyTasksPage() {
                             if (!authorId) return null
                             return (
                               <button type="button"
-                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf }) }}
+                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, supplement: supSelectedFlow.supplement }) }}
                                 title="收回你在「R主管審核」做的核准：報告退回「待你審核」，不會動到當責那一棒"
                                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                                 <Undo2 className="h-3 w-3" />撤回我的核准
@@ -4245,6 +4405,92 @@ export default function MyTasksPage() {
         </DialogContent>
       </Dialog>
 
+      {/* 完成後補充：執行者對已完成任務補交紀錄。走完整審核，但不動完成日與進度。 */}
+      <Dialog open={!!rSupTask} onOpenChange={open => { if (!open && !rSupSaving) { setRSupTask(null); setRSupRows([{ date: '', content: '' }]) } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">完成後補充 — {rSupTask?.title}</DialogTitle>
+            <DialogDescription className="text-xs">
+              補交這個任務當時的紀錄或文件。日期可填完成日之前或之後，
+              <b className="text-foreground">不會改變任務的完成日與甘特進度</b>。
+              送出後與一般週報走同一條審核：主管核准即納入更新紀錄。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-muted/40">
+                  <th className="w-[130px] border-b px-2 py-1.5 text-left text-[11px] font-medium text-muted-foreground">日期</th>
+                  <th className="border-b px-2 py-1.5 text-left text-[11px] font-medium text-muted-foreground">補充內容</th>
+                  <th className="w-[40px] border-b px-1 py-1.5 text-center text-[11px] font-medium text-muted-foreground">附件</th>
+                  <th className="w-[28px] border-b"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rSupRows.map((row, idx) => (
+                  <tr key={idx} className="border-b border-border last:border-b-0">
+                    <td className="px-2 py-1.5 align-top">
+                      <input type="date" value={row.date}
+                        className="h-8 w-full rounded border bg-background px-2 text-xs"
+                        onChange={e => setRSupRows(prev => prev.map((r, i) => i === idx ? { ...r, date: e.target.value } : r))} />
+                    </td>
+                    <td className="px-2 py-1.5 align-top">
+                      <Textarea rows={2} placeholder="補充內容..." value={row.content} className="min-h-[38px] text-xs"
+                        onChange={e => setRSupRows(prev => prev.map((r, i) => i === idx ? { ...r, content: e.target.value } : r))} />
+                      {!!row.attachments?.length && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {row.attachments.map((att, ai) => (
+                            <span key={ai} className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px]">
+                              <Paperclip className="h-3 w-3 text-muted-foreground" />
+                              <span className="max-w-[140px] truncate">{att.name}</span>
+                              <button type="button" className="text-muted-foreground hover:text-destructive"
+                                onClick={() => setRSupRows(prev => prev.map((r, i) => i === idx
+                                  ? { ...r, attachments: (r.attachments || []).filter((_, k) => k !== ai) } : r))}>
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-1 py-1.5 text-center align-top">
+                      <button type="button" className="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40"
+                        disabled={rSupUploadingIdx !== null}
+                        onClick={() => { rSupTargetIdx.current = idx; rSupFileRef.current?.click() }}>
+                        {rSupUploadingIdx === idx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+                      </button>
+                    </td>
+                    <td className="px-1 py-1.5 text-center align-top">
+                      {rSupRows.length > 1 && (
+                        <button type="button" className="rounded p-1.5 text-muted-foreground hover:text-destructive"
+                          onClick={() => setRSupRows(prev => prev.filter((_, i) => i !== idx))}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <input ref={rSupFileRef} type="file" multiple className="hidden" onChange={handleRSupFileSelect} />
+            <button type="button"
+              className="w-full border-t border-dashed border-primary/20 py-2 text-xs text-primary transition-colors hover:bg-primary/5"
+              onClick={() => setRSupRows(prev => [...prev, { date: '', content: '' }])}>
+              + 新增一列
+            </button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" disabled={rSupSaving}
+              onClick={() => { setRSupTask(null); setRSupRows([{ date: '', content: '' }]) }}>取消</Button>
+            <Button disabled={rSupSaving || rSupUploadingIdx !== null} onClick={submitRSupplement}>
+              {rSupSaving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />送出中...</> : <><Send className="mr-1.5 h-3.5 w-3.5" />送出補充</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete task log confirmation */}
       <AlertDialog open={!!deletingLog} onOpenChange={open => { if (!open) setDeletingLog(null) }}>
         <AlertDialogContent>
@@ -5118,6 +5364,23 @@ export default function MyTasksPage() {
                             {expanded && (
                               <div className="mt-1.5">
                               <div className="rounded-lg border border-border/60 overflow-hidden">
+                                {aDone && isSameUser(task.assignee, user) && (
+                                  <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
+                                    <span className="text-[11px] text-muted-foreground">
+                                      任務已完成。仍可補交當時的紀錄或文件——需經審核，但不會改變完成日與進度。
+                                    </span>
+                                    <Button
+                                      size="sm" variant="outline" className="h-7 shrink-0 gap-1 text-xs"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setRSupRows([{ date: task.completedAt?.slice(0, 10) || '', content: '' }])
+                                        setRSupTask({ id: task.id, title: task.title, projectId: rReportDialogProject!.id, completedAt: task.completedAt ?? null })
+                                      }}
+                                    >
+                                      <PenLine className="h-3 w-3" />我要補充
+                                    </Button>
+                                  </div>
+                                )}
                                 {logs.length === 0 ? (
                                   <p className="text-xs text-muted-foreground/60 px-3 py-3 text-center">尚無工作紀錄</p>
                                 ) : (
@@ -5137,7 +5400,12 @@ export default function MyTasksPage() {
                                           <tr key={l.id} className="border-b border-border/40 last:border-b-0 align-top hover:bg-muted/30">
                                             <td className="px-2 py-1.5 tabular-nums text-muted-foreground whitespace-nowrap">{new Date(l.logDate).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}</td>
                                             <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.author}</td>
-                                            <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">{l.content}</td>
+                                            <td className="px-2 py-1.5 text-foreground/85 whitespace-pre-wrap break-words">
+                                              {l.postDoneSupplement && (
+                                                <span className="mr-1.5 inline-block rounded border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300">完成後補充</span>
+                                              )}
+                                              {l.content}
+                                            </td>
                                             <td className="px-2 py-1.5 text-center">
                                               {l.attachments && l.attachments.length > 0 ? (
                                                 <Popover>
@@ -5869,6 +6137,22 @@ export default function MyTasksPage() {
                     logsCount={reviewSelectedLogs.length}
                     logs={renderReviewLogs(toLogRows(reviewSelectedLogs))}
                     renderRevoke={(step) => {
+                      // 完成後補充：當責撤的是「通過補充」那一棒，跟任務完成無關。
+                      //   撤回後補充退出更新紀錄，回到當責待審（主管的核准保留）。
+                      if (reviewSelectedFlow.supplement) {
+                        if (step.key !== 'accountable' || reviewSelectedFlow.stage !== 'done') return null
+                        if (!isWithinRevokeWindow(step.at)) return null
+                        const rep2 = reviewSelectedApprovedSupplement
+                        if (!rep2) return null
+                        return (
+                          <button type="button"
+                            onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: rep2.projectId, authorId: rep2.authorId, taskId: rep2.taskId, title: reviewSelectedFlow.title, weekOf: rep2.weekOf, supplement: true }) }}
+                            title="收回你對這筆補充的通過：補充退出更新紀錄，回到你的待審；主管的核准保留"
+                            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
+                            <Undo2 className="h-3 w-3" />撤回我的通過
+                          </button>
+                        )
+                      }
                       // 當責只能撤回自己那一棒（確認完成）。流程未走到完成就沒得撤。
                       if (step.key !== 'complete' || reviewSelectedFlow.stage !== 'done') return null
                       // 超過一個月的完成確認不能撤回——甘特與里程碑無預警倒退的影響太大
@@ -5886,17 +6170,20 @@ export default function MyTasksPage() {
                     }}
                     actions={
                       // 代主管審報告：通過即納入更新紀錄（不代表任務完成）
-                      reviewSelectedFlow.pendingAction === 'review-report' && reviewSelectedReport ? (
+                      (reviewSelectedFlow.pendingAction === 'review-report'
+                        || reviewSelectedFlow.pendingAction === 'review-supplement') && reviewSelectedReport ? (
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400"
                             disabled={aReportBusy === reviewSelectedFlow.taskId}
                             onClick={() => { setAReportRejectReason(''); setAReportReject({ taskId: reviewSelectedFlow.taskId, title: reviewSelectedFlow.title }) }}>
-                            <Undo2 className="h-3.5 w-3.5" />駁回報告
+                            <Undo2 className="h-3.5 w-3.5" />
+                            {reviewSelectedFlow.pendingAction === 'review-supplement' ? '退回主管' : '駁回報告'}
                           </Button>
                           <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
                             disabled={aReportBusy === reviewSelectedFlow.taskId}
                             onClick={() => aReviewReport('approve')}>
-                            {aReportBusy === reviewSelectedFlow.taskId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}通過並納入紀錄
+                            {aReportBusy === reviewSelectedFlow.taskId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CircleCheck className="h-3.5 w-3.5" />}
+                            {reviewSelectedFlow.pendingAction === 'review-supplement' ? '通過補充並納入紀錄' : '通過並納入紀錄'}
                           </Button>
                         </div>
                       // 確認 R 回報的 100% 完成

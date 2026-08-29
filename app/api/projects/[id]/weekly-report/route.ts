@@ -145,7 +145,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       //   下次載入又用已核准重算掉回來——進度會來回跳。
       const allLogs = (await prisma.taskLog.findMany({
         where: { projectId: id },
-        select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+        select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, postDoneSupplement: true, author: { select: { name: true } } },
       })).filter(isReportVisible)
       await syncTaskProgressFromLogs(allTasks, allLogs)
       const affectedMs = new Set(allTasks.filter(t => touchedTaskIds.has(t.id)).map(t => t.milestoneId))

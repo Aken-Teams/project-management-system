@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     where: { ...notSupplement, taskId: { in: pendingTaskIds }, authorId: { in: pendingAuthorIds } },
     select: {
       id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
-      logDate: true, content: true, attachments: true, nextPlans: true,
+      logDate: true, content: true, attachments: true, nextPlans: true, postDoneSupplement: true, reviewerApprovedAt: true,
       publishedAt: true, reviewerRejectedAt: true, createdAt: true, updatedAt: true,
       task: { select: { id: true, title: true, reportedDoneAt: true, completedAt: true } },
     },
@@ -88,9 +88,9 @@ export async function GET(request: NextRequest) {
     },
     select: {
       id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
-      logDate: true, content: true, attachments: true, nextPlans: true,
+      logDate: true, content: true, attachments: true, nextPlans: true, postDoneSupplement: true, reviewerApprovedAt: true,
       publishedAt: true, publishedBy: true, reviewerRejectedAt: true, reviewerNote: true,
-      task: { select: { title: true } },
+      task: { select: { title: true, reportedDoneAt: true, completedAt: true } },
     },
     orderBy: { updatedAt: 'desc' },
     take: 300,
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
         { weekOf: null, logDate: { gte: trackStartDate, lt: trackEndExclusive } },
       ],
     },
-    select: { id: true, taskId: true, authorId: true, weekOf: true, logDate: true, publishedAt: true, reviewerRejectedAt: true, content: true, attachments: true, nextPlans: true },
+    select: { id: true, taskId: true, authorId: true, weekOf: true, logDate: true, publishedAt: true, reviewerRejectedAt: true, content: true, attachments: true, nextPlans: true, postDoneSupplement: true },
   })
 
   // 任務層級的報告（不限週別）：流程時間軸要描述「這個任務的報告鏈」，
@@ -160,9 +160,15 @@ export async function GET(request: NextRequest) {
   const metaById = new Map(taskMeta.map(t => [t.id, t]))
 
   // 分組：project → reviewee(R) → { pending submissions, submittedThisWeek, openTaskCount }
-  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected'; createdAt?: string }
-  type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; logs: LogItem[] }
-  type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; logs: LogItem[] }
+  type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected'; createdAt?: string
+    /** 執行者在任務完成後補交的資料——審核照走，但不影響完成日與進度 */
+    supplement?: boolean }
+  type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; supplement: boolean; reviewerApproved: boolean; logs: LogItem[] }
+  type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; supplement: boolean; reviewerApproved: boolean
+    // 任務的真實狀態。少了這兩個，前端組流程時只能假設「未完成」，
+    //   已完成任務的舊報告就會被算成「執行中」，跟當責端的「已完成」對不起來。
+    reportedDone: boolean; completed: boolean
+    logs: LogItem[] }
   type TrackItem = { taskId: string; taskTitle: string; depth: number; owned: boolean; done: boolean; msName: string | null; planStart: string; planEnd: string; overdue: boolean; reportedDone: boolean; filled: boolean; reviewState: 'none' | 'pending' | 'published' | 'rejected'; logs: LogItem[]
   // ↓ 任務層級（不限週別），供流程時間軸使用
   taskReviewState: 'none' | 'pending' | 'published' | 'rejected'
@@ -235,6 +241,7 @@ export async function GET(request: NextRequest) {
             attachments: safeJsonParse<Att[]>(l.attachments, []),
             nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
             status: l.publishedAt ? 'approved' : l.reviewerRejectedAt ? 'rejected' : 'pending',
+            supplement: l.postDoneSupplement,
           }))
         // 任務層級：這位成員在此任務的全部報告（不限週別）
         const myAllLogs = owned ? allTaskLogs.filter(l => l.taskId === t.id && l.authorId === m.userId) : []
@@ -295,12 +302,17 @@ export async function GET(request: NextRequest) {
     const week = l.weekOf || null
     const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
     if (!pendingKeys.has(key)) continue // 只收「有待審筆」的群組
-    if (l.task.completedAt) continue
+    // 已完成的任務不再追一般週報，但「完成後補充」要照常送審——
+    //   那正是它存在的理由（客戶需求 2026-08-29）。
+    if (l.task.completedAt && !l.postDoneSupplement) continue
     const p = projMap.get(l.projectId); if (!p) continue
     const rv = p.reviewees.get(l.authorId); if (!rv) continue
     let s = subMap.get(key)
     if (!s) {
-      s = { taskId: l.taskId, taskTitle: l.task.title, weekOf: week, reportedDone: !!l.task.reportedDoneAt, logs: [] }
+      s = { taskId: l.taskId, taskTitle: l.task.title, weekOf: week,
+        // 補充鏈沒有「當責確認完成」那一棒，reportedDone 不參與
+        reportedDone: !l.postDoneSupplement && !!l.task.reportedDoneAt,
+        supplement: l.postDoneSupplement, reviewerApproved: !!l.reviewerApprovedAt, logs: [] }
       subMap.set(key, s)
       rv.pending.push(s)
     }
@@ -312,6 +324,7 @@ export async function GET(request: NextRequest) {
       attachments: safeJsonParse<Att[]>(l.attachments, []),
       nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
       status,
+      supplement: l.postDoneSupplement,
       createdAt: l.createdAt.toISOString(),
     })
   }
@@ -335,6 +348,10 @@ export async function GET(request: NextRequest) {
         outcome: rejected ? 'rejected' : 'approved',
         note: l.reviewerNote || null,
         reviewedAt: (l.reviewerRejectedAt || l.publishedAt || l.logDate).toISOString(),
+        supplement: l.postDoneSupplement, reviewerApproved: !!l.reviewerApprovedAt,
+        // 補充鏈不看任務完成狀態（它有自己的棒次），一般報告要照實帶
+        reportedDone: !l.postDoneSupplement && !!l.task.reportedDoneAt,
+        completed: !l.postDoneSupplement && !!l.task.completedAt,
         logs: [],
       }
       reviewedMap.set(key, s)
@@ -347,6 +364,7 @@ export async function GET(request: NextRequest) {
       attachments: safeJsonParse<Att[]>(l.attachments, []),
       nextPlans: safeJsonParse<{ date?: string; content: string }[]>(l.nextPlans, []),
       status: l.publishedAt ? 'approved' : 'rejected',
+      supplement: l.postDoneSupplement,
     })
   }
 
@@ -378,6 +396,11 @@ interface ActionBody {
   weekOf?: string | null
   action: 'approve' | 'reject' | 'revoke'
   note?: string
+  /**
+   * 指定要操作哪一條鏈：true=完成後補充、false=一般週報。
+   * 同一個填報週可能兩條並存，不指明就以「還沒審完的那一條」為準。
+   */
+  supplement?: boolean
 }
 
 export async function POST(request: NextRequest) {
@@ -417,6 +440,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 完成後補充過了主管那一關之後，換當責把最後一關——此時當責有權處理，
+    //   即使該成員本來就有審核主管（客戶決策 2026-08-29：補充由 A 收尾）。
+    let asAccountable = viaAccountable
+    if (!authorized || true) {
+      const supAwait = await prisma.taskLog.findFirst({
+        where: { projectId, taskId, authorId, weekOf: body.weekOf ?? null,
+          postDoneSupplement: true, publishedAt: null, reviewerRejectedAt: null, reviewerApprovedAt: { not: null } },
+        select: { id: true },
+      })
+      if (supAwait) {
+        const me = await prisma.user.findUnique({ where: { email: reviewerEmail }, select: { id: true } })
+        const acc = me ? await prisma.projectTeamMember.findFirst({
+          where: { projectId, userId: me.id, role: 'A' }, select: { userId: true },
+        }) : null
+        if (acc) { authorized = true; asAccountable = true }
+      }
+    }
+
     if (!authorized) {
       return NextResponse.json({
         error: hasReviewer
@@ -427,11 +468,28 @@ export async function POST(request: NextRequest) {
 
     // 目標：該 submission 中仍待審的 log（同專案/任務/作者/填報週）
     const week = body.weekOf ?? null
+
+    // 「完成後補充」比一般週報多一關：主管核准只記 reviewerApprovedAt，
+    //   要當責再通過才 publishedAt 進更新紀錄。所以要先分辨這一組是哪一種、卡在哪一關。
+    // 同一個填報週可能同時存在「一般週報」與「完成後補充」兩條獨立的鏈。
+    //   前端送出時會指明操作的是哪一條；沒指明就以「還沒審完的那一條」為準。
+    const sample = await prisma.taskLog.findFirst({
+      where: { projectId, taskId, authorId, weekOf: week, publishedAt: null },
+      select: { postDoneSupplement: true, reviewerApprovedAt: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    const isSupplement = body.supplement ?? !!sample?.postDoneSupplement
+    // 範圍一定要含旗標，否則撤回／駁回會連同另一條鏈的報告一起動到
+    const groupWhere = { projectId, taskId, authorId, weekOf: week, postDoneSupplement: isSupplement }
+    // 補充已過主管那一關 → 現在輪到當責
+    const awaitingAccountable = isSupplement && !!sample?.reviewerApprovedAt
+
     const targetWhere = {
-      projectId, taskId, authorId,
-      weekOf: week,
+      ...groupWhere,
       publishedAt: null,
       reviewerRejectedAt: null,
+      // 主管那一棒只處理「還沒核准過」的；當責那一棒只處理「主管已核准」的
+      ...(isSupplement ? { reviewerApprovedAt: awaitingAccountable ? { not: null } : null } : {}),
     }
 
     // ── 撤回核准：把已核准的報告退回「待審」──
@@ -440,6 +498,51 @@ export async function POST(request: NextRequest) {
         where: { id: taskId },
         select: { title: true, reviewedAt: true, completedAt: true, reportedDoneAt: true },
       })
+
+      // ── 補充的撤回：不看任務完成狀態（任務本來就完成了），只看這條鏈走到哪 ──
+      if (isSupplement) {
+        const cur = await prisma.taskLog.findFirst({
+          where: { ...groupWhere },
+          select: { publishedAt: true, reviewerApprovedAt: true },
+          orderBy: { createdAt: 'desc' },
+        })
+        if (!cur) return NextResponse.json({ success: true, revoked: 0, noop: true })
+
+        // 撤回一律從最下游開始：當責已通過時，主管不能越過他抽回自己的核准
+        if (cur.publishedAt && !asAccountable) {
+          return NextResponse.json({
+            error: '補充已由當責通過並納入更新紀錄，須由當責先撤回才能撤回核准',
+          }, { status: 409 })
+        }
+        const at = cur.publishedAt ?? cur.reviewerApprovedAt
+        if (at && !isWithinRevokeWindow(at)) {
+          return NextResponse.json({
+            error: `已超過 ${REVOKE_WINDOW_DAYS} 天，無法撤回`,
+          }, { status: 409 })
+        }
+
+        // 當責撤回 → 收回「已納入更新紀錄」，退回當責待審（主管核准仍在）
+        // 主管撤回 → 收回自己的核准，退回主管待審
+        const res = await prisma.taskLog.updateMany({
+          where: { ...groupWhere, ...(asAccountable ? { publishedAt: { not: null } } : { reviewerApprovedAt: { not: null }, publishedAt: null }) },
+          data: asAccountable
+            ? { publishedAt: null, publishedBy: null }
+            : { reviewerApprovedAt: null, reviewerApprovedBy: null },
+        })
+        if (res.count === 0) return NextResponse.json({ success: true, revoked: 0, noop: true })
+
+        await prisma.taskReviewEvent.create({
+          data: { taskId, projectId, type: 'report_approve_revoked', actor: reviewerName,
+            note: asAccountable ? '完成後補充：當責撤回通過' : '完成後補充：主管撤回核准' },
+        }).catch(() => {})
+        const p2 = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
+        await notifyApprovalRevoked({
+          projectId, projectName: p2?.name || '專案',
+          taskId, taskTitle: task?.title || '任務',
+          stage: 'approval', actorName: reviewerName, reason: body.note?.trim() || null,
+        }).catch(() => {})
+        return NextResponse.json({ success: true, revoked: res.count })
+      }
 
       // 守衛①：當責已確認完成 → 要當責先撤回
       if (task?.reviewedAt || task?.completedAt) {
@@ -471,7 +574,7 @@ export async function POST(request: NextRequest) {
 
       // 守衛③：超過一個月的核准不能撤——甘特與里程碑無預警倒退的影響太大
       const approved = await prisma.taskLog.findFirst({
-        where: { projectId, taskId, authorId, weekOf: week, publishedAt: { not: null } },
+        where: { ...groupWhere, publishedAt: { not: null } },
         orderBy: { publishedAt: 'desc' }, select: { publishedAt: true },
       })
       if (approved?.publishedAt && !isWithinRevokeWindow(approved.publishedAt)) {
@@ -481,7 +584,7 @@ export async function POST(request: NextRequest) {
       }
 
       const res = await prisma.taskLog.updateMany({
-        where: { projectId, taskId, authorId, weekOf: week, publishedAt: { not: null } },
+        where: { ...groupWhere, publishedAt: { not: null } },
         data: { publishedAt: null, publishedBy: null },
       })
       if (res.count === 0) {
@@ -507,41 +610,75 @@ export async function POST(request: NextRequest) {
 
     if (action === 'approve') {
       const now = new Date()
+      // 完成後補充在主管這一關只記「主管已核准」，不發布——要當責再通過才進更新紀錄。
+      //   （客戶決策 2026-08-29：補充由當責收尾。）
+      const supervisorStageOfSupplement = isSupplement && !awaitingAccountable
       const res = await prisma.taskLog.updateMany({
         where: targetWhere,
-        data: { publishedAt: now, publishedBy: reviewerName },
+        data: supervisorStageOfSupplement
+          ? { reviewerApprovedAt: now, reviewerApprovedBy: reviewerName }
+          : { publishedAt: now, publishedBy: reviewerName,
+              // 一般報告：主管核准＝直接發布，兩個時間一起寫，履歷才看得出經手人
+              ...(sample?.reviewerApprovedAt ? {} : { reviewerApprovedAt: now, reviewerApprovedBy: reviewerName }) },
       })
       // 沒有任何待審 log 被更新 → 這是重複點擊/已審過的 no-op，不再寫歷程、不再重複發通知。
       if (res.count === 0) {
         return NextResponse.json({ success: true, published: 0, noop: true })
       }
       // 審視歷程
-      await prisma.taskReviewEvent.create({ data: { taskId, projectId, type: 'report_approved', actor: reviewerName, note: null } }).catch(() => {})
-      // 通知：A 知道已進更新紀錄；若該任務已回報100%，另通知 A 審核完成
+      await prisma.taskReviewEvent.create({
+        data: { taskId, projectId, type: 'report_approved', actor: reviewerName,
+          note: supervisorStageOfSupplement ? '完成後補充：主管核准，待當責通過' : null },
+      }).catch(() => {})
       const proj = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
       const task = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true, reportedDoneAt: true, completedAt: true } })
       const author = await prisma.user.findUnique({ where: { id: authorId }, select: { name: true } })
       const ctx = { projectId, projectName: proj?.name || '專案', rName: author?.name || '成員', taskTitle: task?.title || '任務' }
+      // 補充在主管這關通過 → 通知當責來把最後一關（尚未進更新紀錄，先不發「已納入」的通知）
       await notifyReportPublishedToAccountable(ctx)
-      if (task?.reportedDoneAt && !task.completedAt) {
+      if (!supervisorStageOfSupplement && task?.reportedDoneAt && !task.completedAt) {
         await notifyReportDoneReviewToAccountable(ctx)
       }
-      return NextResponse.json({ success: true, published: res.count })
+      return NextResponse.json({
+        success: true,
+        published: supervisorStageOfSupplement ? 0 : res.count,
+        forwardedToAccountable: supervisorStageOfSupplement ? res.count : 0,
+      })
     }
 
     // reject
     if (!body.note?.trim()) {
       return NextResponse.json({ error: '駁回需填寫原因' }, { status: 400 })
     }
+    // 當責駁回「主管已核准的補充」→ 退回主管重審（清掉主管核准），不是直接退回 R。
+    //   退回 R 是主管那一棒的權責；當責這一棒質疑的是主管的判斷。
+    const accountableRejectsSupplement = awaitingAccountable && asAccountable
     const res = await prisma.taskLog.updateMany({
       where: targetWhere,
-      data: { reviewerRejectedAt: new Date(), reviewerRejectedBy: reviewerName, reviewerNote: body.note.trim() },
+      data: accountableRejectsSupplement
+        ? { reviewerApprovedAt: null, reviewerApprovedBy: null, reviewerNote: body.note.trim() }
+        : { reviewerRejectedAt: new Date(), reviewerRejectedBy: reviewerName, reviewerNote: body.note.trim() },
     })
     // 沒有任何待審 log 被駁回 → 重複點擊/已駁回的 no-op，不再寫一筆「主管駁回」歷程（避免履歷洗版）。
     if (res.count === 0) {
       return NextResponse.json({ success: true, rejected: 0, noop: true })
     }
-    await prisma.taskReviewEvent.create({ data: { taskId, projectId, type: 'report_rejected', actor: reviewerName, note: body.note.trim() } }).catch(() => {})
+    await prisma.taskReviewEvent.create({
+      data: { taskId, projectId, type: 'report_rejected', actor: reviewerName,
+        note: accountableRejectsSupplement ? `當責退回主管重審：${body.note.trim()}` : body.note.trim() },
+    }).catch(() => {})
+
+    // 當責把補充退回主管：任務本來就完成了，沒有「回報完成」可清，也不必通知 R 改東西。
+    if (accountableRejectsSupplement) {
+      const proj2 = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
+      const t2 = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true } })
+      await notifyReportRejected({
+        projectId, projectName: proj2?.name || '專案',
+        taskId, taskTitle: t2?.title || '任務',
+        actorName: reviewerName, reason: body.note.trim(), routedTo: 'reviewer',
+      }).catch(() => {})
+      return NextResponse.json({ success: true, rejected: res.count, returnedToReviewer: true })
+    }
 
     // 報告被退 → 一併清掉 R 的「回報完成」宣告。
     //   曾經送過不代表現在還成立：R 修好報告後要自己重新判斷是真的完成、還是需要再花時間，

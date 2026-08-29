@@ -59,8 +59,10 @@ export interface FlowStep {
   note?: string | null
   /** 卡在這一棒幾天 */
   waitDays?: number
-  /** 步驟上的提醒徽章，例：未設主管 */
+  /** 步驟上的提醒徽章（橘色警示），例：未設主管 */
   warn?: string
+  /** 步驟上的中性標籤（非警示），例：完成後補充 */
+  tag?: string
 }
 
 export interface ReviewFlow {
@@ -82,12 +84,14 @@ export interface ReviewFlow {
   reportWeekLabel: string | null
   /** 報告只是靠 7/12 舊資料寬限而顯示，從未經過任何人核准 → 沒有「核准」可撤回 */
   legacy: boolean
+  /** 這是執行者在任務完成後補交的資料（不影響完成日與進度），清單要標示出來 */
+  supplement: boolean
   /**
    * 目前輪到當責時，要做的是哪一種動作：
    *   review-report＝審核報告（代主管，通過即納入更新紀錄）
    *   confirm-done ＝確認 R 回報的 100% 完成
    */
-  pendingAction: 'review-report' | 'confirm-done' | null
+  pendingAction: 'review-report' | 'confirm-done' | 'review-supplement' | null
 }
 
 export interface FlowSourceTask {
@@ -113,6 +117,10 @@ export interface FlowSourceLog {
   reviewerRejectedAt?: string | null
   reviewerNote?: string | null
   authorReviewerName?: string | null
+  /** 執行者在任務完成後補交的資料 */
+  postDoneSupplement?: boolean
+  /** R主管核准時間（補充要再經當責通過才發布） */
+  reviewerApprovedAt?: string | null
   attachments?: { name: string; url: string; type: 'image' | 'file' }[] | null
 }
 
@@ -300,6 +308,17 @@ export function deriveFlowStage(opts: {
   return 'running'
 }
 
+/**
+ * 完成後補充的棒次。不能沿用 deriveFlowStage：那套會因為「任務已完成」直接回 done，
+ * 或因為「已核准但沒回報完成」掉進 running（實際踩過：主管端把已核准的補充標成「執行中」，
+ * A 端同一個任務卻是「已完成」，兩邊對不起來）。
+ */
+function supplementStage(reportKind: ReportKind, reviewerApproved: boolean): FlowStage {
+  if (reportKind === 'rejected') return 'unfilled'      // 退回 R 補
+  if (reportKind === 'published') return 'done'          // 已進更新紀錄，這條鏈結束
+  return reviewerApproved ? 'accountable' : 'supervisor' // 主管核准後輪到當責收尾
+}
+
 // ── 共用的步驟組裝（raw logs 版與 summary 版共用同一套文案與規則）──
 
 interface StepBuildInput {
@@ -331,6 +350,14 @@ interface StepBuildInput {
   completedBy: string | null
   /** 主管視角時文案要改成第二人稱 */
   viewerIsReviewer: boolean
+  /** 補充：主管那一關已核准，正等當責收尾 */
+  reviewerApproved?: boolean
+  /**
+   * 這條鏈描述的是「執行者在任務完成後補交的資料」。
+   * 補充只有三棒：補交 → 主管審核 → 納入更新紀錄。
+   * 不畫「當責確認／完成 100%」——任務早就完成了，補充不會再改變它。
+   */
+  supplement?: boolean
 }
 
 function buildSteps(i: StepBuildInput): FlowStep[] {
@@ -339,19 +366,22 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
   // ① R 填報週報
   //   「已回報完成卻一筆報告都沒有」是真實會發生的狀態（R 直接按回報完成）。
   //   用空心待辦表達會變成「①② 未做、③ 進行中」，讀起來像流程壞掉 → 標成「略過」並說明。
-  const doneWithoutReport = i.reportKind === 'none' && (i.reportedDone || i.completed)
+  // 補充一定伴隨紀錄，不會有「宣告完成卻沒報告」的情況
+  const doneWithoutReport = !i.supplement && i.reportKind === 'none' && (i.reportedDone || i.completed)
+  const step1Label = i.supplement ? 'R 完成後補充' : 'R 填報週報'
   steps.push(i.reportKind !== 'none'
     ? {
-      key: 'report', label: 'R 填報週報', roleLabel: '', state: 'done',
+      key: 'report', label: step1Label, roleLabel: '', state: 'done',
       who: i.assignee || null, at: i.submittedAt, detail: i.reportDetail,
+      ...(i.supplement ? { tag: '完成後補充' } : {}),
     }
     : doneWithoutReport
     ? {
-      key: 'report', label: 'R 填報週報', roleLabel: '', state: 'skipped',
+      key: 'report', label: step1Label, roleLabel: '', state: 'skipped',
       who: i.assignee || null, warn: '未填報告', detail: '執行者未填寫報告即回報完成',
     }
     : {
-      key: 'report', label: 'R 填報週報', roleLabel: '',
+      key: 'report', label: step1Label, roleLabel: '',
       state: i.activeThisWeek ? 'current' : 'todo', who: i.assignee || null,
       detail: i.activeThisWeek ? (i.overdue ? '逾期未交' : '本週未交') : null,
     })
@@ -382,7 +412,14 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
     steps.push({
       key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'done',
       who: i.reviewerName, at: i.decidedAt,
-      detail: i.legacy ? '7/12 前的舊資料，已在更新紀錄中（未經審核流程）' : '已核准，進入更新紀錄',
+      detail: i.supplement ? '已核准，轉當責確認'
+        : i.legacy ? '7/12 前的舊資料，已在更新紀錄中（未經審核流程）' : '已核准，進入更新紀錄',
+    })
+  } else if (i.supplement && i.reviewerApproved) {
+    // 補充：主管已核准，球在當責手上
+    steps.push({
+      key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'done',
+      who: i.reviewerName, at: i.decidedAt, detail: '已核准，轉當責確認',
     })
   } else if (i.reportKind === 'rejected') {
     steps.push({
@@ -404,17 +441,53 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
 
   // ③ 分岔：R 沒按「回報完成」= 一般週報，流程到「納入更新紀錄」就結束，
   //    不該畫「當責確認 / 完成 100%」——那會讓 A 以為自己還有事沒做。
+  // 補充有自己的第三棒：當責審核（審的是補充內容，不是任務完成）。
+  if (i.supplement) {
+    if (i.reportKind === 'published') {
+      steps.push({
+        key: 'accountable', label: '當責 A 審核補充', roleLabel: '', state: 'done',
+        who: i.accountableName, at: i.decidedAt, detail: '已通過',
+      })
+      steps.push({
+        key: 'record', label: '納入更新紀錄', roleLabel: '補充流程終點', state: 'done', who: null,
+        detail: '已納入更新紀錄。任務完成日與進度不受補充影響。',
+      })
+    } else if (i.reviewerApproved) {
+      steps.push({
+        key: 'accountable', label: '當責 A 審核補充', roleLabel: '', state: 'current',
+        who: i.accountableName, waitDays: daysSince(i.decidedAt),
+        detail: '通過即納入更新紀錄；駁回則退回主管重審',
+      })
+      steps.push({
+        key: 'record', label: '納入更新紀錄', roleLabel: '補充流程終點', state: 'todo', who: null,
+        detail: '不會改變任務的完成日與進度',
+      })
+    } else {
+      steps.push({
+        key: 'accountable', label: '當責 A 審核補充', roleLabel: '', state: 'todo',
+        who: i.accountableName, detail: '主管核准後輪到當責',
+      })
+      steps.push({
+        key: 'record', label: '納入更新紀錄', roleLabel: '補充流程終點', state: 'todo', who: null,
+        detail: '不會改變任務的完成日與進度',
+      })
+    }
+    return steps
+  }
+
   const goesToAccountable = i.reportedDone || i.completed || !!i.reviewedAt
   if (!goesToAccountable) {
     if (i.reportKind === 'published') {
       steps.push({
-        key: 'record', label: '納入更新紀錄', roleLabel: '本週流程終點', state: 'done', who: null,
-        detail: i.legacy ? '舊資料已在更新紀錄中。任務續行，下週繼續填報。' : '本週結案。任務續行，下週繼續填報。',
+        key: 'record', label: '納入更新紀錄', roleLabel: i.supplement ? '補充流程終點' : '本週流程終點', state: 'done', who: null,
+        detail: i.supplement ? '已納入更新紀錄。任務完成日與進度不受補充影響。'
+          : i.legacy ? '舊資料已在更新紀錄中。任務續行，下週繼續填報。' : '本週結案。任務續行，下週繼續填報。',
       })
     } else {
       steps.push({
-        key: 'record', label: '納入更新紀錄', roleLabel: '本週流程終點', state: 'todo', who: null,
-        detail: i.hasReviewer ? '主管核准後納入，本週結束' : '你通過後納入，本週結束',
+        key: 'record', label: '納入更新紀錄', roleLabel: i.supplement ? '補充流程終點' : '本週流程終點', state: 'todo', who: null,
+        detail: i.supplement ? '核准後納入更新紀錄；不會改變任務的完成日與進度'
+          : i.hasReviewer ? '主管核准後納入，本週結束' : '你通過後納入，本週結束',
       })
     }
     return steps
@@ -490,9 +563,11 @@ const STEP_OWNER: Record<FlowStep['key'], string> = {
 }
 
 /** 輪到當責時，該給哪一組按鈕：審報告？還是確認完成？ */
-function pendingActionOf(steps: FlowStep[], stage: FlowStage): ReviewFlow['pendingAction'] {
+function pendingActionOf(steps: FlowStep[], stage: FlowStage, supplement = false): ReviewFlow['pendingAction'] {
   if (stage !== 'accountable') return null
   const active = steps.find(s => s.state === 'current')
+  // 補充：當責這一棒審的是補充內容，通過即納入更新紀錄，不代表任何完成判定
+  if (supplement) return active?.key === 'accountable' ? 'review-supplement' : null
   if (active?.key === 'supervisor') return 'review-report'   // 代主管審報告
   if (active?.key === 'accountable') return 'confirm-done'   // 確認 100% 完成
   return null
@@ -532,9 +607,15 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
   const sorted = [...logs].sort((a, b) => (a.createdAt ?? a.logDate).localeCompare(b.createdAt ?? b.logDate))
   const rs = reportStateOf(sorted)
   const hasReviewer = input.hasReviewer ?? sorted.some(l => !!l.authorReviewerName)
-  const completed = !!task.completedAt || task.status === 'done'
-  const reportedDone = !!task.reportedDoneAt
-  const stage = deriveFlowStage({ completed, reportedDone, reportKind: rs.kind, activeThisWeek, hasReviewer })
+  // 這批紀錄全是「完成後補充」→ 這條鏈講的是補充，不是任務本身的完成。
+  //   任務的 completed 若照實傳入，棒次會直接算成「已完成」，補充永遠不會顯示成待審。
+  const supplement = sorted.length > 0 && sorted.every(l => l.postDoneSupplement)
+  const reviewerApproved = supplement && sorted.some(l => !!l.reviewerApprovedAt)
+  const completed = !supplement && (!!task.completedAt || task.status === 'done')
+  const reportedDone = !supplement && !!task.reportedDoneAt
+  const stage = supplement
+    ? supplementStage(rs.kind, reviewerApproved)
+    : deriveFlowStage({ completed, reportedDone, reportKind: rs.kind, activeThisWeek, hasReviewer })
 
   const attachments = sorted.reduce((n, l) => n + (l.attachments?.length ?? 0), 0)
   const weekLabel = formatWeekLabel(sorted.find(l => l.weekOf)?.weekOf)
@@ -554,8 +635,8 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
     aReject: lastReject && !task.reportedDoneAt
       ? { actor: lastReject.actor, note: lastReject.note ?? null, at: lastReject.createdAt }
       : null,
-    completedAt: task.completedAt ?? null, completedBy: task.completedBy ?? null,
-    viewerIsReviewer: false,
+    completedAt: supplement ? null : task.completedAt ?? null, completedBy: task.completedBy ?? null,
+    viewerIsReviewer: false, supplement, reviewerApproved,
   }))
 
   const assignee = task.assignee || ''
@@ -564,8 +645,8 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee, noReviewer: !hasReviewer,
-    reportWeekLabel: weekLabel, legacy: rs.legacy,
-    pendingAction: pendingActionOf(steps, stage),
+    reportWeekLabel: weekLabel, legacy: rs.legacy, supplement,
+    pendingAction: pendingActionOf(steps, stage, supplement),
   }
 }
 
@@ -597,6 +678,10 @@ export interface SummaryFlowInput {
   overdue?: boolean
   /** 當責姓名，供「下一棒」顯示人名而非只有角色代號 */
   accountableName?: string | null
+  /** 這批是執行者在任務完成後補交的資料 */
+  supplement?: boolean
+  /** 補充：主管那一關已核准，正等當責收尾 */
+  reviewerApproved?: boolean
   /** 已由當責確認（reviewedAt）／完成（completedAt）的資訊，讓當責那一棒能畫出經手人 */
   reviewedAt?: string | null
   reviewedBy?: string | null
@@ -607,16 +692,23 @@ export interface SummaryFlowInput {
 }
 
 export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
-  const stage = deriveFlowStage({
-    completed: i.completed, reportedDone: i.reportedDone, reportKind: i.reportKind,
-    activeThisWeek: i.activeThisWeek ?? false, hasReviewer: true,
-  })
+  // 同上：補充鏈不看任務本身的完成狀態，否則棒次會直接算成已完成
+  const supplement = !!i.supplement
+  const reviewerApproved = !!i.reviewerApproved
+  const completed = !supplement && i.completed
+  const reportedDone = !supplement && i.reportedDone
+  const stage = supplement
+    ? supplementStage(i.reportKind, reviewerApproved)
+    : deriveFlowStage({
+      completed, reportedDone, reportKind: i.reportKind,
+      activeThisWeek: i.activeThisWeek ?? false, hasReviewer: true,
+    })
   const weekLabel = formatWeekLabel(i.weekOf)
   const attachments = i.attachments ?? 0
 
   const steps = keepSingleCurrent(buildSteps({
-    reportKind: i.reportKind, legacy: i.legacy, hasReviewer: true, reportedDone: i.reportedDone,
-    completed: i.completed, activeThisWeek: i.activeThisWeek ?? false, overdue: i.overdue,
+    reportKind: i.reportKind, legacy: i.legacy, hasReviewer: true, reportedDone,
+    completed, activeThisWeek: i.activeThisWeek ?? false, overdue: i.overdue,
     assignee: i.assignee, stage,
     submittedAt: i.submittedAt ?? null,
     reportDetail: [weekLabel, i.logCount && i.logCount > 1 ? `${i.logCount} 筆紀錄` : null, attachments > 0 ? `${attachments} 個附件` : null]
@@ -625,8 +717,8 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
     rejectNote: i.rejectNote ?? null,
     accountableName: i.accountableName ?? null,
     reviewedAt: i.reviewedAt ?? null, reviewedBy: i.reviewedBy ?? null, reportedDoneAt: null,
-    aReject: null, completedAt: i.completedAt ?? null, completedBy: i.completedBy ?? null,
-    viewerIsReviewer: true,
+    aReject: null, completedAt: supplement ? null : i.completedAt ?? null, completedBy: i.completedBy ?? null,
+    viewerIsReviewer: true, supplement, reviewerApproved,
   }))
 
   return {
@@ -634,7 +726,7 @@ export function buildFlowFromSummary(i: SummaryFlowInput): ReviewFlow {
     ballWith: ballOf(steps, stage, i.assignee), steps, attachments,
     stuckDays: steps.find(s => s.state === 'current')?.waitDays ?? 0,
     assignee: i.assignee || '', noReviewer: false,
-    reportWeekLabel: weekLabel, legacy: !!i.legacy,
+    reportWeekLabel: weekLabel, legacy: !!i.legacy, supplement,
     pendingAction: null,
   }
 }
@@ -852,7 +944,7 @@ const STEP_STYLE: Record<FlowStepState, { icon: typeof Check; iconCls: string; n
 export type FlowPanelTab = 'flow' | 'logs'
 
 export function ReviewFlowTimeline({
-  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, revokeHint, className,
+  flow, viewer, actions, logs, logsCount = 0, tab = 'flow', onTabChange, onCollapse, hideFlow, renderRevoke, revokeHint, chains, className,
 }: {
   flow: ReviewFlow
   viewer: FlowViewer
@@ -871,6 +963,11 @@ export function ReviewFlowTimeline({
   renderRevoke?: (step: FlowStep) => React.ReactNode
   /** 不能撤回時的說明（例：球已傳到下游，要下游先退回）。與 renderRevoke 互斥呈現。 */
   revokeHint?: React.ReactNode
+  /**
+   * 同一個任務可能有多條審核鏈（本週報告、完成後補充…）。
+   * 給兩條以上時顯示切換列——否則看不到的那一條就無從操作（撤回、駁回都碰不到）。
+   */
+  chains?: { key: string; label: string; active: boolean; onSelect: () => void }[]
   /**
    * 隱藏審核流程，只留工作紀錄。
    * 用於「本週報告尚未送出」的情境——此時流程講的是上一份報告，顯示出來會讓人
@@ -894,6 +991,20 @@ export function ReviewFlowTimeline({
           </button>
         )}
       </div>
+
+      {/* 審核鏈切換：一個任務可能同時有本週報告與完成後補充兩條 */}
+      {showFlow && chains && chains.length > 1 && (
+        <div className="flex items-center gap-1 border-b bg-muted/30 px-3 py-1.5 shrink-0">
+          <span className="mr-1 text-[11px] text-muted-foreground shrink-0">審核鏈</span>
+          {chains.map(c => (
+            <button key={c.key} type="button" onClick={c.onSelect}
+              className={cn('rounded px-2 py-1 text-xs transition-colors',
+                c.active ? 'bg-background font-medium text-foreground shadow-sm border' : 'text-muted-foreground hover:bg-muted')}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 下一棒 —— A/主管 最想知道的一句話 */}
       {showFlow && <div className={cn(
@@ -993,9 +1104,15 @@ export function ReviewFlowTimeline({
                       </Badge>
                     )}
                     {step.warn && (
-                      <Badge variant="outline" className="text-[11px] px-1.5 py-0 h-5 gap-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800"
+                      <Badge variant="outline" className="text-xs px-2 py-0 h-6 gap-0.5 bg-orange-50 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800"
                         title="此成員未指定報告審核主管，可到專案「團隊」設定">
-                        <TriangleAlert className="h-3 w-3" />{step.warn}
+                        <TriangleAlert className="h-3.5 w-3.5" />{step.warn}
+                      </Badge>
+                    )}
+                    {step.tag && (
+                      <Badge variant="outline" className="text-xs px-2 py-0 h-6 bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-900/20 dark:text-sky-300 dark:border-sky-800"
+                        title="執行者在任務完成後補交的資料：照常審核，但不影響完成日與進度">
+                        {step.tag}
                       </Badge>
                     )}
                   </div>

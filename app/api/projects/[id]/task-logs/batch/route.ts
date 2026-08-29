@@ -22,6 +22,11 @@ interface BatchBody {
   weekOf?: string          // 填報週（Monday YYYY-MM-DD）；讓 A 依填報週看到 R 的報告
   entries: BatchEntry[]
   nextPlans?: { date?: string; content: string }[]
+  /**
+   * true = 執行者對「已完成」任務補交資料。照常送審（R主管核准即進更新紀錄），
+   * 但不動任務的完成狀態，也不參與進度計算。
+   */
+  postDoneSupplement?: boolean
 }
 
 export async function POST(
@@ -51,6 +56,13 @@ export async function POST(
       return NextResponse.json({ error: '找不到使用者' }, { status: 404 })
     }
 
+    // 補充只能補在已完成的任務上；未完成的任務走一般週報路徑即可，
+    //   否則會出現「未完成卻標成補充」而永遠不計進度的紀錄。
+    const supplement = !!body.postDoneSupplement
+    if (supplement && !task.completedAt) {
+      return NextResponse.json({ error: '此任務尚未完成，請用一般週報填寫' }, { status: 400 })
+    }
+
     const validPlans = body.nextPlans?.filter(p => p.content.trim()) || []
 
     // Process entries: create new or update existing
@@ -75,6 +87,8 @@ export async function POST(
               lastEditedBy: user.name,
               // 重送 → 清除前次被 R主管駁回的狀態，回到「待審」
               reviewerRejectedAt: null, reviewerRejectedBy: null, reviewerNote: null,
+              // 重送要保留補充身分，否則被駁回改一次就變回一般報告、開始影響進度
+              ...(supplement ? { postDoneSupplement: true } : {}),
               ...(body.weekOf ? { weekOf: body.weekOf } : {}),
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
             },
@@ -109,6 +123,7 @@ export async function POST(
                 content: entry.content.trim(),
                 lastEditedBy: user.name,
                 reviewerRejectedAt: null, reviewerRejectedBy: null, reviewerNote: null,
+                ...(supplement ? { postDoneSupplement: true } : {}),
                 ...(body.weekOf ? { weekOf: body.weekOf } : {}),
                 ...(mergedAttachmentsJson !== undefined ? { attachments: mergedAttachmentsJson } : {}),
               },
@@ -122,6 +137,7 @@ export async function POST(
                 authorId: user.id,
                 logDate: new Date(entry.logDate),
                 content: entry.content.trim(),
+                ...(supplement ? { postDoneSupplement: true } : {}),
                 ...(body.weekOf ? { weekOf: body.weekOf } : {}),
                 ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               },
@@ -156,7 +172,7 @@ export async function POST(
     // Sync task progress & milestone
     const allLogs = (await prisma.taskLog.findMany({
       where: { taskId: body.taskId },
-      select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+      select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, postDoneSupplement: true, author: { select: { name: true } } },
     }))
       // 與 my-tasks / projects 的算法一致：只有「已核准或 7/12 前的舊資料」才驅動進度。
       // 不濾的話，R 一送出進度就先跳上去，下次載入又用已核准重算掉回來——進度會來回跳。

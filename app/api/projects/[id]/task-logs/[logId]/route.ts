@@ -18,7 +18,7 @@ async function syncAfterLogChange(taskId: string, projectId: string) {
   // 與 task-logs / weekly-report / my-tasks / projects 一致：只有已核准（或 7/12 前的舊資料）才驅動進度
   const allLogs = (await prisma.taskLog.findMany({
     where: { taskId },
-    select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, author: { select: { name: true } } },
+    select: { taskId: true, logDate: true, createdAt: true, publishedAt: true, postDoneSupplement: true, author: { select: { name: true } } },
   })).filter(isReportVisible)
   await syncTaskProgressFromLogs([task], allLogs)
   await syncMilestoneStatus(task.milestoneId, projectId)

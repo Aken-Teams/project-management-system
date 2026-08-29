@@ -353,8 +353,18 @@ model TaskLog {
   publishedBy String?   @map("published_by")
   // true = A 撰寫的「報告敘述」(進更新紀錄，但不驅動進度；進度由標記完成/延期決定)
   reportOnly  Boolean   @default(false) @map("report_only")
+  // true = 執行者在任務「已完成」之後補交的資料。
+  //   走完整審核（R主管核准即進更新紀錄，當責可事後駁回／撤回），
+  //   但不參與進度與甘特計算——任務的完成日不因補充而改變。
+  postDoneSupplement Boolean @default(false) @map("post_done_supplement")
   // 填報週(週一 YYYY-MM-DD)；讓 A 依填報週重新載入編輯，不受 logDate 落點影響
   weekOf      String?   @map("week_of")
+  // R 報告審核主管「核准」紀錄。
+  //   一般週報：主管核准＝直接發布，這欄與 publishedAt 同時設定。
+  //   完成後補充：多一關——主管核准只寫這欄，要當責再通過才會 publishedAt 進更新紀錄。
+  //   當責駁回時清空這欄，該筆就回到主管的待審清單。
+  reviewerApprovedAt DateTime? @map("reviewer_approved_at")
+  reviewerApprovedBy String?   @map("reviewer_approved_by")
   // R 報告審核主管「駁回」紀錄：有值代表這批報告被駁回、退回 R 重寫。R 重送時清空。
   reviewerRejectedAt DateTime? @map("reviewer_rejected_at")
   reviewerRejectedBy String?   @map("reviewer_rejected_by")

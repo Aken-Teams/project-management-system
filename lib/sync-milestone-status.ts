@@ -218,11 +218,14 @@ export async function autoProgressTasks(
  */
 export async function syncTaskProgressFromLogs(
   tasks: { id: string; parentId?: string | null; durationDays?: number; startDate: Date; endDate: Date; originalStartDate?: Date | null; progress: number; completedAt: Date | null; assignee?: string | null }[],
-  taskLogs: { taskId: string; logDate: Date; reportOnly?: boolean; author?: { name?: string | null } | null }[],
+  taskLogs: { taskId: string; logDate: Date; reportOnly?: boolean; postDoneSupplement?: boolean; author?: { name?: string | null } | null }[],
 ): Promise<void> {
   // Group logs (date + 作者名) by taskId — 用來依指派人挑「該由誰的報告算進度」。
   const logsByTask = new Map<string, { date: Date; author: string | null }[]>()
   for (const log of taskLogs) {
+    // 完成後補充不參與進度：執行者 8/29 完成、9/2 才補上 8/30 的紀錄，
+    //   完成日仍是 8/29。補充只補事實，不改時間軸。
+    if (log.postDoneSupplement) continue
     const list = logsByTask.get(log.taskId) || []
     list.push({ date: log.logDate, author: log.author?.name ?? null })
     logsByTask.set(log.taskId, list)
