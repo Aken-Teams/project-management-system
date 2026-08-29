@@ -200,6 +200,8 @@ type ReviewedSubmission = {
   outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string
   supplement?: boolean
   reviewerApproved?: boolean
+  /** 已真正進更新紀錄；補充在當責通過前是 false */
+  published?: boolean
   reportedDone?: boolean
   completed?: boolean
   logs: ReviewLogItem[]
@@ -392,7 +394,9 @@ export default function MyTasksPage() {
         const f = buildFlowFromSummary({
           taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
           supplement: sub.supplement, reviewerApproved: sub.reviewerApproved,
-          reportKind: sub.outcome === 'approved' ? 'published' : 'rejected',
+          // 補充經主管核准後仍未進更新紀錄（要等當責），此時不能算 published，
+          //   否則棒次會直接跳到「已完成」，跟當責端的「待你處理」對不起來。
+          reportKind: sub.outcome === 'rejected' ? 'rejected' : (sub.published === false ? 'pending' : 'published'),
           // 照實帶任務狀態：寫死 false 會讓已完成任務的舊報告被算成「執行中」，
           //   跟當責端看到的「已完成」對不起來（實際踩過）。
           reportedDone: !!sub.reportedDone, completed: !!sub.completed,
@@ -441,6 +445,10 @@ export default function MyTasksPage() {
     if (!supFlowKey) return null
     const direct = supFlows.actionable.get(supFlowKey)
     if (direct) return direct
+    // track: 是任務層級的檢視鍵，本身不對應任何一批送審 → 退回找該任務待處理的那一批。
+    //   但明確選定某一條鏈時不能退回：那條已審完卻顯示別批的「通過／駁回」，
+    //   按下去會核准到使用者根本沒在看的那一批（實際踩過）。
+    if (!supFlowKey.startsWith('track:')) return null
     const f = supFlows.map.get(supFlowKey)
     if (!f) return null
     for (const a of supFlows.actionable.values()) {
@@ -455,7 +463,8 @@ export default function MyTasksPage() {
       const res = await fetch('/api/report-reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewerEmail: user.email, projectId, taskId: s.taskId, authorId, weekOf: s.weekOf, action, note }),
+        // 這裡是主管的對話框 → 一律以主管身分；批次要帶，否則會動到同一週的其他批補充
+        body: JSON.stringify({ reviewerEmail: user.email, projectId, taskId: s.taskId, authorId, weekOf: s.weekOf, batch: s.batch ?? null, supplement: !!s.supplement, as: 'reviewer', action, note }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || '操作失敗'); return }
       const d = await res.json().catch(() => ({}))
@@ -608,6 +617,8 @@ export default function MyTasksPage() {
         supplement?: boolean
         /** 補充的批次；同一週可能多批，撤回只能動到指定那一批 */
         batch?: string | null
+        /** 由哪個對話框發起：主管撤自己的核准 / 當責撤自己的通過 */
+        as?: 'reviewer' | 'accountable'
         /** 鏈的顯示名稱（例：補充 · 8/29 送出），對話框要講清楚撤的是哪一批 */
         chainLabel?: string }
     | null
@@ -1519,7 +1530,7 @@ export default function MyTasksPage() {
   const renderSupRows = (
     rows: { rv: Reviewee; s: ReviewSubmission | ReviewedSubmission }[],
     pid: string,
-    keyOf: (authorId: string, taskId: string, weekOf: string | null) => string,
+    keyOf: (authorId: string, taskId: string, weekOf: string | null, batch?: string | null) => string,
     emptyText: string,
     defaultTab: FlowPanelTab,
     /** 是否用週別收斂。收件匣（待審核）必須為 false——濾掉待辦等於把工作藏起來。 */
@@ -1601,7 +1612,7 @@ export default function MyTasksPage() {
             </div>
             <div className="divide-y divide-border/60">
               {g.items.map(({ rv, s: sub }) => {
-                const k = keyOf(rv.authorId, sub.taskId, sub.weekOf)
+                const k = keyOf(rv.authorId, sub.taskId, sub.weekOf, sub.batch ?? null)
                 const f = supFlows.map.get(k)
                 const brief = sub.logs.map(l => l.content).join('；')
                 const outcome = 'outcome' in sub ? sub.outcome : null
@@ -1947,24 +1958,29 @@ export default function MyTasksPage() {
       if (pending.length === 0) continue
       const first = pending[0]
       if (!first.authorId) return null // 舊 payload 沒有 authorId 就不給操作，避免打錯對象
-      return { projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId, weekOf: first.weekOf ?? null }
+      return { projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId, weekOf: first.weekOf ?? null, batch: first.supplementBatch ?? null }
     }
     return null
   }, [apiProjects, reviewFlowTaskId])
 
-  // 當責要撤回補充時的目標：該任務「已納入更新紀錄的補充」那一組
+  // 當責要撤回補充時的目標：一定要鎖定「右欄目前顯示的那一批」。
+  //   只用任務+週別去找，會把同一週的其他批補充一起撤掉。
   const reviewSelectedApprovedSupplement = useMemo(() => {
     if (!reviewFlowTaskId) return null
-    for (const p of apiProjects) {
-      const done = p.taskLogs
-        .filter(l => l.taskId === reviewFlowTaskId && l.postDoneSupplement && !!l.publishedAt)
-        .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
-      const first = done[0]
-      if (!first?.authorId) continue
-      return { projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId, weekOf: first.weekOf ?? null }
+    const p = apiProjects.find(pp => pp.tasks.some(t => t.id === reviewFlowTaskId))
+    if (!p) return null
+    const chain = pickChain(
+      p.taskLogs.filter(l => l.taskId === reviewFlowTaskId && !l.reportOnly),
+      flowChainKey,
+    )
+    const first = chain[0]
+    if (!first?.authorId || !first.postDoneSupplement) return null
+    if (!chain.some(l => l.publishedAt)) return null // 還沒進更新紀錄，沒有「通過」可撤
+    return {
+      projectId: p.id, taskId: reviewFlowTaskId, authorId: first.authorId,
+      weekOf: first.weekOf ?? null, batch: first.supplementBatch ?? null,
     }
-    return null
-  }, [apiProjects, reviewFlowTaskId])
+  }, [apiProjects, reviewFlowTaskId, pickChain, flowChainKey])
 
   useEffect(() => { setFlowChainKey(null) }, [reviewFlowTaskId])
 
@@ -2122,7 +2138,7 @@ export default function MyTasksPage() {
           body: JSON.stringify({
             reviewerEmail: user.email, projectId: t.projectId, taskId: t.taskId,
             authorId: t.authorId, weekOf: t.weekOf, action: 'revoke', note: reason,
-            supplement: t.supplement, batch: t.batch,
+            supplement: t.supplement, batch: t.batch, as: t.as ?? 'reviewer',
           }),
         })
         if (!res.ok) {
@@ -2150,7 +2166,12 @@ export default function MyTasksPage() {
       const res = await fetch('/api/report-reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reviewerEmail: user.email, ...t, action, note }),
+        body: JSON.stringify({
+          reviewerEmail: user.email, ...t, action, note,
+          // 補充的最後一關是當責；代主管審報告（成員未設主管）則是頂主管的缺
+          as: reviewSelectedFlow?.pendingAction === 'review-supplement' ? 'accountable' : 'reviewer',
+          supplement: reviewSelectedFlow?.supplement ?? false,
+        }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || '操作失敗'); return }
       const d = await res.json().catch(() => ({}))
@@ -3187,7 +3208,9 @@ export default function MyTasksPage() {
               const rRows = reviewDialogProject.reviewees.flatMap(rv => rv.reviewed.map(s => ({ rv, s })))
                 .sort((a, b) => b.s.reviewedAt.localeCompare(a.s.reviewedAt))
               const pid = reviewDialogProject.projectId
-              const keyOf = (authorId: string, taskId: string, weekOf: string | null) => `${pid}:${authorId}:${taskId}:${weekOf ?? '_'}`
+              // 必須與後端的群組鍵一字不差（含補充批次），否則點左欄選不到右欄那條鏈
+              const keyOf = (authorId: string, taskId: string, weekOf: string | null, batch: string | null = null) =>
+                `${pid}:${authorId}:${taskId}:${weekOf ?? '_'}:${batch ?? '_'}`
               const trackMiss = reviewDialogProject.reviewees.reduce((n, rv) => n + rv.tracking.filter(t => t.owned && !t.filled).length, 0)
               return (
                 <>
@@ -3490,22 +3513,34 @@ export default function MyTasksPage() {
                             if (!authorId) return null
                             return (
                               <button type="button"
-                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, batch, supplement: supSelectedFlow.supplement, chainLabel: supSelectedFlow.supplement ? `補充 · ${supSelectedFlow.reportWeekLabel ?? ''}`.trim() : undefined }) }}
+                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, batch, supplement: supSelectedFlow.supplement, as: 'reviewer', chainLabel: supSelectedFlow.supplement ? `補充 · ${supSelectedFlow.reportWeekLabel ?? ''}`.trim() : undefined }) }}
                                 title="收回你在「R主管審核」做的核准：報告退回「待你審核」，不會動到當責那一棒"
                                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                                 <Undo2 className="h-3 w-3" />撤回我的核准
                               </button>
                             )
                           }}
-                          actions={supSelectedAction ? (
+                          actions={
+                            // 這個對話框是「R主管」的身分。棒次已經交給當責時就不該再出現動作鈕——
+                            //   同一個人可能同時是主管與當責（實際踩過），但那是兩個角色、兩個入口，
+                            //   當責要在自己的「週報審核」裡處理，才不會分不清是以什麼身分按的。
+                            supSelectedAction && supSelectedFlow.stage === 'supervisor' ? (
                             <div className="flex items-center gap-2">
                               {/* 工作紀錄預設列出整個任務（可能含別條鏈已核准的筆數），
                                   但按鈕只作用在這一批。範圍要寫出來，否則會以為是全部一起審。 */}
                               <span className="mr-auto text-[11px] text-muted-foreground">
                                 將處理
                                 <b className="text-foreground">
-                                  {supSelectedFlow.supplement ? '補充' : '正式報告'}
-                                  {supSelectedAction.sub.weekOf ? ` · ${formatWeekLabel(supSelectedAction.sub.weekOf)}` : ''}
+                                  {(() => {
+                                  if (!supSelectedFlow.supplement) {
+                                    return `正式報告${supSelectedAction.sub.weekOf ? ` · ${formatWeekLabel(supSelectedAction.sub.weekOf)}` : ''}`
+                                  }
+                                  const first = supSelectedAction.sub.logs
+                                    .map(l => l.createdAt ?? l.logDate).filter(Boolean).sort()[0]
+                                  if (!first) return '補充'
+                                  const d = new Date(first)
+                                  return `補充 · ${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 送出`
+                                })()}
                                 </b>
                                 {' '}的 {supSelectedAction.sub.logs.length} 筆
                               </span>
@@ -6320,7 +6355,7 @@ export default function MyTasksPage() {
                         if (!rep2) return null
                         return (
                           <button type="button"
-                            onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: rep2.projectId, authorId: rep2.authorId, taskId: rep2.taskId, title: reviewSelectedFlow.title, weekOf: rep2.weekOf, supplement: true, chainLabel: reviewChainInfo.chains.find(c => c.key === reviewChainInfo.activeKey)?.label ?? '完成後補充' }) }}
+                            onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: rep2.projectId, authorId: rep2.authorId, taskId: rep2.taskId, title: reviewSelectedFlow.title, weekOf: rep2.weekOf, batch: rep2.batch, supplement: true, as: 'accountable', chainLabel: reviewChainInfo.chains.find(c => c.key === reviewChainInfo.activeKey)?.label ?? '完成後補充' }) }}
                             title="收回你對這筆補充的通過：補充退出更新紀錄，回到你的待審；主管的核准保留"
                             className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                             <Undo2 className="h-3 w-3" />撤回我的通過

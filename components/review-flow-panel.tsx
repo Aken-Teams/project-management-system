@@ -403,6 +403,14 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
     } else {
       steps.push({ ...common, state: 'todo', who: i.accountableName, detail: null })
     }
+  } else if (i.supplement && i.reviewerApproved) {
+    // 補充在主管這關已核准，只是還沒經當責通過，所以 publishedAt 仍為空、
+    //   reportKind 還是 'pending'。這一棒要先判，否則會畫成「待主管核准」，
+    //   跟下一棒的「現在在這」互相矛盾（實際踩過）。
+    steps.push({
+      key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'done',
+      who: i.reviewerName, at: i.decidedAt, detail: '已核准，轉當責確認',
+    })
   } else if (i.reportKind === 'pending') {
     steps.push({
       key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'current',
@@ -415,12 +423,6 @@ function buildSteps(i: StepBuildInput): FlowStep[] {
       who: i.reviewerName, at: i.decidedAt,
       detail: i.supplement ? '已核准，轉當責確認'
         : i.legacy ? '7/12 前的舊資料，已在更新紀錄中（未經審核流程）' : '已核准，進入更新紀錄',
-    })
-  } else if (i.supplement && i.reviewerApproved) {
-    // 補充：主管已核准，球在當責手上
-    steps.push({
-      key: 'supervisor', label: 'R主管審核', roleLabel: '', state: 'done',
-      who: i.reviewerName, at: i.decidedAt, detail: '已核准，轉當責確認',
     })
   } else if (i.reportKind === 'rejected') {
     steps.push({
@@ -612,6 +614,10 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
   //   任務的 completed 若照實傳入，棒次會直接算成「已完成」，補充永遠不會顯示成待審。
   const supplement = sorted.length > 0 && sorted.every(l => l.postDoneSupplement)
   const reviewerApproved = supplement && sorted.some(l => !!l.reviewerApprovedAt)
+  // 補充尚未發布時 reportStateOf 沒有「決定時間」可給——改用主管核准的時間
+  const supervisorApprovedAt = reviewerApproved
+    ? sorted.map(l => l.reviewerApprovedAt).filter(Boolean).sort().slice(-1)[0] ?? null
+    : null
   const completed = !supplement && (!!task.completedAt || task.status === 'done')
   const reportedDone = !supplement && !!task.reportedDoneAt
   const stage = supplement
@@ -628,7 +634,7 @@ export function buildReviewFlow(input: BuildFlowInput): ReviewFlow {
     submittedAt: sorted[0]?.createdAt ?? sorted[0]?.logDate ?? null,
     reportDetail: [weekLabel, sorted.length > 1 ? `${sorted.length} 筆紀錄` : null, attachments > 0 ? `${attachments} 個附件` : null]
       .filter(Boolean).join(' · ') || null,
-    reviewerName: rs.reviewer, decidedAt: rs.since,
+    reviewerName: rs.reviewer, decidedAt: supervisorApprovedAt ?? rs.since,
     rejectNote: sorted.map(l => l.reviewerNote).filter(Boolean).slice(-1)[0] ?? null,
     accountableName: accountableName ?? null,
     reviewedAt: task.reviewedAt ?? null, reviewedBy: task.reviewedBy ?? null,
