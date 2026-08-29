@@ -356,6 +356,20 @@ export default function MyTasksPage() {
       logs.reduce<string | null>((min, l) => { const t = l.createdAt ?? l.logDate; return !min || t < min ? t : min }, null)
 
     for (const rv of proj.reviewees) {
+      // 「回報完成 → 當責確認 → 完成 100%」是任務層級的事，不屬於某一週的報告。
+      //   每個任務只有「最新那一份正式報告」承載這幾棒；較早的週報是已結案的歷史，
+      //   畫到「納入更新紀錄」就結束。不這樣分的話，W30、W33 這些老週報也會被畫成
+      //   「當責確認 · 現在在這」，看起來像全都還沒結（實際踩過）。
+      const latestMainWeek = new Map<string, string>()
+      for (const sub of [...rv.pending, ...rv.reviewed]) {
+        if (sub.supplement) continue
+        const w = sub.weekOf ?? ''
+        const cur = latestMainWeek.get(sub.taskId)
+        if (cur === undefined || w > cur) latestMainWeek.set(sub.taskId, w)
+      }
+      const carriesTaskSteps = (sub: { taskId: string; weekOf: string | null; supplement?: boolean }) =>
+        !sub.supplement && (latestMainWeek.get(sub.taskId) ?? '') === (sub.weekOf ?? '')
+
       for (const t of rv.tracking) {
         if (!t.owned) continue // 上層節點只提供層級脈絡，不是待辦
         // 全部走任務層級，與 A／R 用同一套推導——同一個任務在三個角色看到的必須是同一條流程。
@@ -382,7 +396,7 @@ export default function MyTasksPage() {
         map.set(k, buildFlowFromSummary({
           taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
           supplement: sub.supplement, reviewerApproved: sub.reviewerApproved,
-          reportKind: 'pending', reportedDone: sub.reportedDone, completed: false,
+          reportKind: 'pending', reportedDone: carriesTaskSteps(sub) && sub.reportedDone, completed: false,
           activeThisWeek: true, weekOf: sub.weekOf, submittedAt: firstAt(sub.logs),
           reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
           attachments: attOf(sub.logs), logCount: sub.logs.length,
@@ -398,8 +412,10 @@ export default function MyTasksPage() {
           //   否則棒次會直接跳到「已完成」，跟當責端的「待你處理」對不起來。
           reportKind: sub.outcome === 'rejected' ? 'rejected' : (sub.published === false ? 'pending' : 'published'),
           // 照實帶任務狀態：寫死 false 會讓已完成任務的舊報告被算成「執行中」，
-          //   跟當責端看到的「已完成」對不起來（實際踩過）。
-          reportedDone: !!sub.reportedDone, completed: !!sub.completed,
+          //   跟當責端看到的「已完成」對不起來。但只有最新那一份週報帶，
+          //   否則每一週的鏈都會長出「當責確認／完成 100%」。
+          reportedDone: carriesTaskSteps(sub) && !!sub.reportedDone,
+          completed: carriesTaskSteps(sub) && !!sub.completed,
           activeThisWeek: true, weekOf: sub.weekOf,
           submittedAt: firstAt(sub.logs), decidedAt: sub.reviewedAt, rejectNote: sub.note,
           reviewerName: user?.name ?? null, accountableName: proj.accountableName ?? null,
@@ -1530,9 +1546,15 @@ export default function MyTasksPage() {
   // R 右欄的目標任務：待完成看「選取中」那筆，待確認/完成區看「展開中」那筆
   const rFlowTargetId = useMemo(() => {
     if (rDialogTab === 'active') return rSelectedTaskId
-    const [first] = [...rDoneExpanded]
-    return first ?? null
-  }, [rDialogTab, rSelectedTaskId, rDoneExpanded])
+    // 展開狀態是「待確認」與「完成區」共用的。直接取集合第一個，
+    //   會在另一個分頁還有展開的項目時抓到別的任務——右欄顯示的流程就跟左欄選的對不上
+    //   （實際踩過：在待確認展開 1.1，右欄畫的卻是完成區展開中的 1.1.3）。
+    //   所以要限定在「目前這個分頁列得出來的任務」裡找，並取最後展開的那個。
+    const groups = rDialogTab === 'pending' ? rPendingGroups : rDialogTab === 'done' ? rDoneGroups : []
+    const inTab = new Set(groups.flatMap(g => g.tasks.map(t => t.id)))
+    const matched = [...rDoneExpanded].filter(id => inTab.has(id))
+    return matched.length > 0 ? matched[matched.length - 1] : null
+  }, [rDialogTab, rSelectedTaskId, rDoneExpanded, rPendingGroups, rDoneGroups])
   const rSelectedFlow = useMemo(() => (rFlowTargetId ? rFlowOf(rFlowTargetId) : null), [rFlowTargetId, rFlowOf])
   const rSelectedFlowLogs = useMemo(() => {
     if (!rFlowTargetId || !rReportDialogProject || !user) return []
@@ -3502,7 +3524,15 @@ export default function MyTasksPage() {
                             //   只顯示一條的話，其他條就沒有任何入口可以撤回或駁回。
                             value: supChainAll ? 'all' : (supFlowKey ?? 'all'),
                             options: [...supFlows.map.entries()]
-                              .filter(([, f]) => f.taskId === supSelectedFlow.taskId)
+                              .filter(([k, f]) => {
+                                if (f.taskId !== supSelectedFlow.taskId) return false
+                                // track: 是「任務層級」的檢視鍵，不是一份送審，列進來會跟
+                                //   同一週的送審紀錄重複（兩個一模一樣的選項，選了也分不出差別）。
+                                return !k.startsWith('track:')
+                              })
+                              // 同一個 (填報週, 批次) 只留一個，避免重複列出
+                              .filter(([k], i, arr) => arr.findIndex(([k2]) =>
+                                k2.split(':').slice(3).join(':') === k.split(':').slice(3).join(':')) === i)
                               .sort(([ka, fa], [kb, fb]) => {
                                 // 正式報告在前，補充依送出時間由舊到新
                                 if (!fa.supplement && fb.supplement) return -1
