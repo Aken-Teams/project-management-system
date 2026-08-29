@@ -57,17 +57,20 @@ export async function GET(request: NextRequest) {
   // 待審報告（尚未發布、未被駁回）— 用來找出「有待審筆的 任務×填報週」群組
   const pendingLogs = await prisma.taskLog.findMany({
     where: { ...notSupplement, publishedAt: null, reviewerRejectedAt: null, OR: pairs },
-    select: { projectId: true, authorId: true, taskId: true, weekOf: true },
+    select: { projectId: true, authorId: true, taskId: true, weekOf: true, supplementBatch: true },
   })
-  // 待審群組鍵（同一 任務×作者×填報週 只要有一筆待審，整組都要重審）
-  const pendingKeys = new Set(pendingLogs.map(l => `${l.projectId}:${l.authorId}:${l.taskId}:${l.weekOf ?? '_'}`))
+  // 待審群組鍵（同一 任務×作者×填報週×補充批次 只要有一筆待審，整組都要重審）。
+  //   補充要再依批次細分：同一週送兩次就是兩批，各自審、各自撤，不能混。
+  const gk = (l: { projectId: string; authorId: string; taskId: string; weekOf: string | null; supplementBatch: string | null }) =>
+    `${l.projectId}:${l.authorId}:${l.taskId}:${l.weekOf ?? '_'}:${l.supplementBatch ?? '_'}`
+  const pendingKeys = new Set(pendingLogs.map(gk))
   // 取這些群組的「整週所有報告」（含先前已通過的），讓 R主管以週報視角看全部、重新審核一次
   const pendingTaskIds = [...new Set(pendingLogs.map(l => l.taskId))]
   const pendingAuthorIds = [...new Set(pendingLogs.map(l => l.authorId))]
   const groupLogs = pendingTaskIds.length === 0 ? [] : await prisma.taskLog.findMany({
     where: { ...notSupplement, taskId: { in: pendingTaskIds }, authorId: { in: pendingAuthorIds } },
     select: {
-      id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
+      id: true, projectId: true, authorId: true, taskId: true, weekOf: true, supplementBatch: true,
       logDate: true, content: true, attachments: true, nextPlans: true, postDoneSupplement: true, reviewerApprovedAt: true,
       publishedAt: true, reviewerRejectedAt: true, createdAt: true, updatedAt: true,
       task: { select: { id: true, title: true, reportedDoneAt: true, completedAt: true } },
@@ -88,7 +91,7 @@ export async function GET(request: NextRequest) {
     },
     select: {
       id: true, projectId: true, authorId: true, taskId: true, weekOf: true,
-      logDate: true, content: true, attachments: true, nextPlans: true, postDoneSupplement: true, reviewerApprovedAt: true,
+      logDate: true, content: true, attachments: true, nextPlans: true, postDoneSupplement: true, reviewerApprovedAt: true, supplementBatch: true,
       publishedAt: true, publishedBy: true, reviewerRejectedAt: true, reviewerNote: true,
       task: { select: { title: true, reportedDoneAt: true, completedAt: true } },
     },
@@ -163,8 +166,8 @@ export async function GET(request: NextRequest) {
   type LogItem = { id: string; logDate: string; content: string; attachments: Att[]; nextPlans: { date?: string; content: string }[]; status: 'pending' | 'approved' | 'rejected'; createdAt?: string
     /** 執行者在任務完成後補交的資料——審核照走，但不影響完成日與進度 */
     supplement?: boolean }
-  type Sub = { taskId: string; taskTitle: string; weekOf: string | null; reportedDone: boolean; supplement: boolean; reviewerApproved: boolean; logs: LogItem[] }
-  type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; supplement: boolean; reviewerApproved: boolean
+  type Sub = { taskId: string; taskTitle: string; weekOf: string | null; batch: string | null; reportedDone: boolean; supplement: boolean; reviewerApproved: boolean; logs: LogItem[] }
+  type ReviewedSub = { taskId: string; taskTitle: string; weekOf: string | null; batch: string | null; outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string; supplement: boolean; reviewerApproved: boolean
     // 任務的真實狀態。少了這兩個，前端組流程時只能假設「未完成」，
     //   已完成任務的舊報告就會被算成「執行中」，跟當責端的「已完成」對不起來。
     reportedDone: boolean; completed: boolean
@@ -300,7 +303,7 @@ export async function GET(request: NextRequest) {
   const subMap = new Map<string, Sub>() // key: project:author:task:week
   for (const l of groupLogs) {
     const week = l.weekOf || null
-    const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
+    const key = gk(l)
     if (!pendingKeys.has(key)) continue // 只收「有待審筆」的群組
     // 已完成的任務不再追一般週報，但「完成後補充」要照常送審——
     //   那正是它存在的理由（客戶需求 2026-08-29）。
@@ -309,7 +312,7 @@ export async function GET(request: NextRequest) {
     const rv = p.reviewees.get(l.authorId); if (!rv) continue
     let s = subMap.get(key)
     if (!s) {
-      s = { taskId: l.taskId, taskTitle: l.task.title, weekOf: week,
+      s = { taskId: l.taskId, taskTitle: l.task.title, weekOf: week, batch: l.supplementBatch,
         // 補充鏈沒有「當責確認完成」那一棒，reportedDone 不參與
         reportedDone: !l.postDoneSupplement && !!l.task.reportedDoneAt,
         supplement: l.postDoneSupplement, reviewerApproved: !!l.reviewerApprovedAt, logs: [] }
@@ -338,13 +341,13 @@ export async function GET(request: NextRequest) {
     const p = projMap.get(l.projectId); if (!p) continue
     const rv = p.reviewees.get(l.authorId); if (!rv) continue
     const week = l.weekOf || null
-    const key = `${l.projectId}:${l.authorId}:${l.taskId}:${week ?? '_'}`
+    const key = gk(l)
     if (pendingKeys.has(key)) continue
     let s = reviewedMap.get(key)
     if (!s) {
       const rejected = !!l.reviewerRejectedAt
       s = {
-        taskId: l.taskId, taskTitle: l.task.title, weekOf: week,
+        taskId: l.taskId, taskTitle: l.task.title, weekOf: week, batch: l.supplementBatch,
         outcome: rejected ? 'rejected' : 'approved',
         note: l.reviewerNote || null,
         reviewedAt: (l.reviewerRejectedAt || l.publishedAt || l.logDate).toISOString(),
@@ -396,6 +399,8 @@ interface ActionBody {
   weekOf?: string | null
   action: 'approve' | 'reject' | 'revoke'
   note?: string
+  /** 補充的批次；同一週可能有多批，各自獨立審核與撤回 */
+  batch?: string | null
   /**
    * 指定要操作哪一條鏈：true=完成後補充、false=一般週報。
    * 同一個填報週可能兩條並存，不指明就以「還沒審完的那一條」為準。
@@ -473,14 +478,18 @@ export async function POST(request: NextRequest) {
     //   要當責再通過才 publishedAt 進更新紀錄。所以要先分辨這一組是哪一種、卡在哪一關。
     // 同一個填報週可能同時存在「一般週報」與「完成後補充」兩條獨立的鏈。
     //   前端送出時會指明操作的是哪一條；沒指明就以「還沒審完的那一條」為準。
+    const batch = body.batch ?? null
     const sample = await prisma.taskLog.findFirst({
-      where: { projectId, taskId, authorId, weekOf: week, publishedAt: null },
+      where: { projectId, taskId, authorId, weekOf: week, publishedAt: null, ...(batch ? { supplementBatch: batch } : {}) },
       select: { postDoneSupplement: true, reviewerApprovedAt: true },
       orderBy: { createdAt: 'desc' },
     })
     const isSupplement = body.supplement ?? !!sample?.postDoneSupplement
-    // 範圍一定要含旗標，否則撤回／駁回會連同另一條鏈的報告一起動到
-    const groupWhere = { projectId, taskId, authorId, weekOf: week, postDoneSupplement: isSupplement }
+    // 範圍要含旗標與批次，否則撤回／駁回會連同另一條鏈、或同一週的另一批補充一起動到
+    const groupWhere = {
+      projectId, taskId, authorId, weekOf: week, postDoneSupplement: isSupplement,
+      ...(isSupplement && batch ? { supplementBatch: batch } : {}),
+    }
     // 補充已過主管那一關 → 現在輪到當責
     const awaitingAccountable = isSupplement && !!sample?.reviewerApprovedAt
 

@@ -63,6 +63,9 @@ export async function POST(
       return NextResponse.json({ error: '此任務尚未完成，請用一般週報填寫' }, { status: 400 })
     }
 
+    // 這次送出的批次識別；同一次送出的補充共用一個值，之後才分得出是哪一批
+    const batchId = supplement ? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` : null
+
     const validPlans = body.nextPlans?.filter(p => p.content.trim()) || []
 
     // Process entries: create new or update existing
@@ -87,7 +90,8 @@ export async function POST(
               lastEditedBy: user.name,
               // 重送 → 清除前次被 R主管駁回的狀態，回到「待審」
               reviewerRejectedAt: null, reviewerRejectedBy: null, reviewerNote: null,
-              // 重送要保留補充身分，否則被駁回改一次就變回一般報告、開始影響進度
+              // 重送要保留補充身分，否則被駁回改一次就變回一般報告、開始影響進度。
+              //   批次沿用原本那批（重送不算新的一批），只在建立時才給新值。
               ...(supplement ? { postDoneSupplement: true } : {}),
               ...(body.weekOf ? { weekOf: body.weekOf } : {}),
               ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
@@ -137,7 +141,7 @@ export async function POST(
                 authorId: user.id,
                 logDate: new Date(entry.logDate),
                 content: entry.content.trim(),
-                ...(supplement ? { postDoneSupplement: true } : {}),
+                ...(supplement ? { postDoneSupplement: true, supplementBatch: batchId } : {}),
                 ...(body.weekOf ? { weekOf: body.weekOf } : {}),
                 ...(attachmentsJson !== undefined ? { attachments: attachmentsJson } : {}),
               },

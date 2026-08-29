@@ -185,6 +185,8 @@ type RReviewEvent = { id: string; taskId: string; taskTitle: string; path?: stri
 type ReviewLogItem = { id: string; logDate: string; content: string; attachments: TaskLogAttachment[]; nextPlans: { date?: string; content: string }[]; status?: 'pending' | 'approved' | 'rejected'; createdAt?: string; supplement?: boolean }
 type ReviewSubmission = {
   taskId: string; taskTitle: string; weekOf: string | null
+  /** 補充的批次：同一週送兩次就是兩批，各自審核與撤回 */
+  batch?: string | null
   reportedDone: boolean
   /** 執行者在任務完成後補交的資料——審核照走，但不影響完成日與進度 */
   supplement?: boolean
@@ -194,6 +196,7 @@ type ReviewSubmission = {
 }
 type ReviewedSubmission = {
   taskId: string; taskTitle: string; weekOf: string | null
+  batch?: string | null
   outcome: 'approved' | 'rejected'; note: string | null; reviewedAt: string
   supplement?: boolean
   reviewerApproved?: boolean
@@ -332,9 +335,9 @@ export default function MyTasksPage() {
   const [supViewBy, setSupViewBy] = useState<'member' | 'task'>('member')
   // 預設收斂到單一週別；被濾掉的筆數會標示出來，可一鍵展開全部
   const [supShowAllWeeks, setSupShowAllWeeks] = useState(false)
-  const subKey = (projectId: string, authorId: string, s: ReviewSubmission) => `${projectId}:${authorId}:${s.taskId}:${s.weekOf ?? '_'}`
+  const subKey = (projectId: string, authorId: string, s: ReviewSubmission) => `${projectId}:${authorId}:${s.taskId}:${s.weekOf ?? '_'}:${s.batch ?? '_'}`
   // 選取鍵：與對話框內 keyOf() 同格式，右欄才對得上左欄那一列
-  const supRowKey = (projectId: string, authorId: string, taskId: string, weekOf: string | null) => `${projectId}:${authorId}:${taskId}:${weekOf ?? '_'}`
+  const supRowKey = (projectId: string, authorId: string, taskId: string, weekOf: string | null, batch: string | null = null) => `${projectId}:${authorId}:${taskId}:${weekOf ?? '_'}:${batch ?? '_'}`
 
   // 主管端：把「待審核 / 已審核 / 填報追蹤」三份資料統一成同一條四棒流程。
   // 管線計數以「填報追蹤」為母體（它才是本週該追的完整清單），待審/已審只是同一批任務的不同切面。
@@ -371,7 +374,7 @@ export default function MyTasksPage() {
         logs.set(`track:${rv.authorId}:${t.taskId}`, t.logs)
       }
       for (const sub of rv.pending) {
-        const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf)
+        const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf, sub.batch ?? null)
         logs.set(k, sub.logs)
         actionable.set(k, { authorId: rv.authorId, authorName: rv.authorName, sub })
         map.set(k, buildFlowFromSummary({
@@ -384,7 +387,7 @@ export default function MyTasksPage() {
         }))
       }
       for (const sub of rv.reviewed) {
-        const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf)
+        const k = supRowKey(proj.projectId, rv.authorId, sub.taskId, sub.weekOf, sub.batch ?? null)
         logs.set(k, sub.logs)
         const f = buildFlowFromSummary({
           taskId: sub.taskId, title: sub.taskTitle, assignee: rv.authorName,
@@ -603,7 +606,9 @@ export default function MyTasksPage() {
     | { kind: 'approval'; projectId: string; authorId: string; taskId: string; title: string; weekOf: string | null
         /** 撤的是哪一條鏈：完成後補充 / 一般週報。同一任務可能多條並存 */
         supplement?: boolean
-        /** 鏈的顯示名稱（例：補充 · 2026W35 · 8/24~8/30），對話框要講清楚撤的是哪一批 */
+        /** 補充的批次；同一週可能多批，撤回只能動到指定那一批 */
+        batch?: string | null
+        /** 鏈的顯示名稱（例：補充 · 8/29 送出），對話框要講清楚撤的是哪一批 */
         chainLabel?: string }
     | null
   >(null)
@@ -612,6 +617,8 @@ export default function MyTasksPage() {
   //   一個任務可能有多條：本週報告一條，加上每一批完成後補充各一條
   //   （8/29 補 8/27+8/30、9/4 又補 9/2+9/5 → 兩批，各自獨立送審與撤回）。
   const [flowChainKey, setFlowChainKey] = useState<string | null>(null)
+  // R 端同一份篩選（他自己也可能有正式報告＋多批補充）
+  const [rFlowChainKey, setRFlowChainKey] = useState<string | null>(null)
   const [revokeBusy, setRevokeBusy] = useState(false)
   // 週報彈窗內的錯誤提示（改用彈跳視窗，不用 window.alert）
   const [rErrorMsg, setRErrorMsg] = useState<string | null>(null)
@@ -1392,19 +1399,41 @@ export default function MyTasksPage() {
    * 主管那一棒卻標「現在在這」）。所以先挑出「現在真正在跑的那一條」：
    *   有還沒核准的補充 → 畫補充鏈；否則 → 畫原本的報告鏈。
    */
-  /** 這筆紀錄屬於哪一條鏈。補充以填報週分批，各批獨立審核與撤回。 */
+  /**
+   * 這筆紀錄屬於哪一條鏈。補充以「送出批次」分，不是以填報週——
+   * 同一週送兩次就是兩批，各自送審、各自核准、各自撤回。
+   * 舊資料沒有批次值時退回用填報週，至少不會全部混成一批。
+   */
   const chainKeyOf = useCallback((l: TaskLog) =>
-    l.postDoneSupplement ? `sup:${l.weekOf ?? '_'}` : 'main', [])
+    l.postDoneSupplement ? `sup:${l.supplementBatch ?? l.weekOf ?? '_'}` : 'main', [])
 
   /** 這個任務有哪些鏈，依「主鏈 → 補充（新到舊）」排序。 */
+  /**
+   * 補充鏈的標籤：用「送出時間 + 筆數」。
+   * 補充不綁週，週別對它沒意義；而同一天可能送好幾批，
+   * 只到日期會出現兩個一模一樣的選項，所以要帶到分鐘。
+   */
+  const supplementChainLabel = useCallback((ls: TaskLog[]) => {
+    const submitted = ls.map(l => l.createdAt).filter(Boolean).sort()[0]
+    if (!submitted) return `補充 · 補交 · ${ls.length} 筆`
+    const d = new Date(submitted)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return `補充 · ${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm} 送出 · ${ls.length} 筆`
+  }, [])
+
   const chainsOf = useCallback((logs: TaskLog[]) => {
     const groups = new Map<string, TaskLog[]>()
     for (const l of logs) {
       const k = chainKeyOf(l)
       const a = groups.get(k); if (a) a.push(l); else groups.set(k, [l])
     }
+    // 正式報告永遠在最前，補充依「送出時間」由舊到新——照事情發生的順序讀最直覺。
+    //   不能用鍵的字串排：回填的 bf- 與 API 產生的批次 id 格式不同，字串序會亂。
+    const submittedAt = (ls: TaskLog[]) => ls.map(l => l.createdAt ?? l.logDate).filter(Boolean).sort()[0] ?? ''
     return [...groups.entries()]
-      .sort(([a], [b]) => (a === 'main' ? -1 : b === 'main' ? 1 : b.localeCompare(a)))
+      .sort(([a, la], [b, lb]) =>
+        a === 'main' ? -1 : b === 'main' ? 1 : submittedAt(la).localeCompare(submittedAt(lb)))
       .map(([key, ls]) => ({ key, logs: ls }))
   }, [chainKeyOf])
 
@@ -1426,7 +1455,7 @@ export default function MyTasksPage() {
     if (!t) return null
     // 只看「我自己寫的」報告：別人代寫的那份不是我的旅程。
     // 若吃整個任務的報告，會出現「右欄說我的報告在被審、待確認卻查無此筆」的矛盾。
-    const myLogs = pickChain(p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, user)))
+    const myLogs = pickChain(p.taskLogs.filter(l => l.taskId === taskId && isSameUser(l.author, user)), rFlowChainKey)
     const mr = p.memberReviewers?.find(m => isSameUser(t.assignee, { name: m.name }))
     const weekEnd = weekEndOf(rReportWeekOf)
     return buildReviewFlow({
@@ -1440,7 +1469,7 @@ export default function MyTasksPage() {
       ),
       accountableName: p.accountableName ?? null,
     })
-  }, [rReportDialogProject, rReportWeekOf, user])
+  }, [rReportDialogProject, rReportWeekOf, user, pickChain, rFlowChainKey])
 
   // R 右欄的目標任務：待完成看「選取中」那筆，待確認/完成區看「展開中」那筆
   const rFlowTargetId = useMemo(() => {
@@ -1453,10 +1482,37 @@ export default function MyTasksPage() {
     if (!rFlowTargetId || !rReportDialogProject || !user) return []
     // 只放 R 自己寫的。別人（例如當責）在同一任務上的補充不是他的紀錄，
     // 混進來會讓他以為自己交過某筆，也對不上他自己的審核鏈（rFlowOf 同樣只看自己的）。
-    return rReportDialogProject.taskLogs
+    const mine = rReportDialogProject.taskLogs
       .filter(l => l.taskId === rFlowTargetId && isSameUser(l.author, user))
-      .slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
-  }, [rFlowTargetId, rReportDialogProject, user])
+    // 預設列全部；選定某一條鏈才收斂（與當責端同一套規則）
+    const scoped = rFlowChainKey ? pickChain(mine, rFlowChainKey) : mine
+    return scoped.slice().sort((a, b) => a.logDate.localeCompare(b.logDate))
+  }, [rFlowTargetId, rReportDialogProject, user, pickChain, rFlowChainKey])
+
+  // R 換任務就回到「全部」
+  useEffect(() => { setRFlowChainKey(null) }, [rFlowTargetId])
+
+  // R 這個任務有哪幾條鏈
+  const rChainInfo = useMemo(() => {
+    const empty = { chains: [] as { key: string; label: string }[], activeKey: null as string | null }
+    if (!rFlowTargetId || !rReportDialogProject || !user) return empty
+    const mine = rReportDialogProject.taskLogs
+      .filter(l => l.taskId === rFlowTargetId && isSameUser(l.author, user))
+    const groups = chainsOf(mine)
+    if (groups.length === 0) return empty
+    const shown = pickChain(mine, rFlowChainKey)
+    const activeKey = shown.length > 0 ? chainKeyOf(shown[0]) : null
+    if (groups.length < 2) return { chains: [], activeKey }
+    return {
+      activeKey,
+      chains: groups.map(g => ({
+        key: g.key,
+        label: g.key === 'main'
+          ? '正式報告'
+          : supplementChainLabel(g.logs),
+      })),
+    }
+  }, [rFlowTargetId, rReportDialogProject, user, rFlowChainKey, pickChain, chainsOf, chainKeyOf])
 
   // 主管清單：先依週別篩選，再依「成員」或「任務」分組。
   //   週別是篩選條件不是分類軸——同一週內主管想切換的是「誰交了什麼」還是「哪些任務有報告」。
@@ -1932,7 +1988,7 @@ export default function MyTasksPage() {
         //   補充可能有很多批，標上週別才分得出是哪一批
         label: g.key === 'main'
           ? '正式報告'
-          : `補充 · ${formatWeekLabel(g.logs.find(l => l.weekOf)?.weekOf) ?? g.logs.map(l => l.logDate).sort()[0]}`,
+          : supplementChainLabel(g.logs),
       })),
     }
   }, [apiProjects, reviewFlowTaskId, flowChainKey, pickChain, chainsOf, chainKeyOf])
@@ -2066,7 +2122,7 @@ export default function MyTasksPage() {
           body: JSON.stringify({
             reviewerEmail: user.email, projectId: t.projectId, taskId: t.taskId,
             authorId: t.authorId, weekOf: t.weekOf, action: 'revoke', note: reason,
-            supplement: t.supplement,
+            supplement: t.supplement, batch: t.batch,
           }),
         })
         if (!res.ok) {
@@ -3376,10 +3432,26 @@ export default function MyTasksPage() {
                             value: supChainAll ? 'all' : (supFlowKey ?? 'all'),
                             options: [...supFlows.map.entries()]
                               .filter(([, f]) => f.taskId === supSelectedFlow.taskId)
+                              .sort(([ka, fa], [kb, fb]) => {
+                                // 正式報告在前，補充依送出時間由舊到新
+                                if (!fa.supplement && fb.supplement) return -1
+                                if (fa.supplement && !fb.supplement) return 1
+                                const at = (k: string) => (supFlows.logs.get(k) ?? [])
+                                  .map(l => l.createdAt ?? l.logDate).filter(Boolean).sort()[0] ?? ''
+                                return at(ka).localeCompare(at(kb))
+                              })
                               .map(([k, f]) => ({
                                 key: k,
                                 label: f.supplement
-                                  ? `補充 · ${f.reportWeekLabel ?? ''}`.trim()
+                                  ? (() => {
+                                    const ls = supFlows.logs.get(k) ?? []
+                                    const first = ls.map(l => l.createdAt ?? l.logDate).filter(Boolean).sort()[0]
+                                    if (!first) return `補充 · 補交 · ${ls.length} 筆`
+                                    const d = new Date(first)
+                                    const hh = String(d.getHours()).padStart(2, '0')
+                                    const mm = String(d.getMinutes()).padStart(2, '0')
+                                    return `補充 · ${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm} 送出 · ${ls.length} 筆`
+                                  })()
                                   : `正式報告 · ${f.reportWeekLabel ?? ''}`.trim().replace(/ ·$/, ''),
                               })),
                             onChange: v => {
@@ -3414,10 +3486,11 @@ export default function MyTasksPage() {
                             const parts = supFlowKey.split(':')
                             const authorId = src?.authorId ?? parts[1]
                             const weekOf = parts[3] === '_' ? null : parts[3]
+                            const batch = parts[4] === '_' || parts[4] === undefined ? null : parts[4]
                             if (!authorId) return null
                             return (
                               <button type="button"
-                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, supplement: supSelectedFlow.supplement, chainLabel: supSelectedFlow.supplement ? `補充 · ${supSelectedFlow.reportWeekLabel ?? ''}`.trim() : undefined }) }}
+                                onClick={() => { setRevokeReason(''); setRevokeTarget({ kind: 'approval', projectId: pid, authorId, taskId: supSelectedFlow.taskId, title: supSelectedFlow.title, weekOf, batch, supplement: supSelectedFlow.supplement, chainLabel: supSelectedFlow.supplement ? `補充 · ${supSelectedFlow.reportWeekLabel ?? ''}`.trim() : undefined }) }}
                                 title="收回你在「R主管審核」做的核准：報告退回「待你審核」，不會動到當責那一棒"
                                 className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive">
                                 <Undo2 className="h-3 w-3" />撤回我的核准
@@ -3426,6 +3499,16 @@ export default function MyTasksPage() {
                           }}
                           actions={supSelectedAction ? (
                             <div className="flex items-center gap-2">
+                              {/* 工作紀錄預設列出整個任務（可能含別條鏈已核准的筆數），
+                                  但按鈕只作用在這一批。範圍要寫出來，否則會以為是全部一起審。 */}
+                              <span className="mr-auto text-[11px] text-muted-foreground">
+                                將處理
+                                <b className="text-foreground">
+                                  {supSelectedFlow.supplement ? '補充' : '正式報告'}
+                                  {supSelectedAction.sub.weekOf ? ` · ${formatWeekLabel(supSelectedAction.sub.weekOf)}` : ''}
+                                </b>
+                                {' '}的 {supSelectedAction.sub.logs.length} 筆
+                              </span>
                               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive border-destructive/40 hover:bg-destructive/10"
                                 disabled={reviewBusy === subKey(pid, supSelectedAction.authorId, supSelectedAction.sub)}
                                 onClick={() => { setRejectTarget({ projectId: pid, authorId: supSelectedAction.authorId, authorName: supSelectedAction.authorName, sub: supSelectedAction.sub }); setRejectReason('') }}>
@@ -5546,6 +5629,11 @@ export default function MyTasksPage() {
                     onCollapse={() => setRFlowPanelOpen(false)}
                     logsCount={rSelectedFlowLogs.length}
                     logs={renderReviewLogs(toLogRows(rSelectedFlowLogs))}
+                    chainFilter={{
+                      value: rFlowChainKey ?? 'all',
+                      options: rChainInfo.chains,
+                      onChange: v => setRFlowChainKey(v === 'all' ? null : v),
+                    }}
                     // 待完成＝本週還沒送出，此時流程講的是上一份報告，顯示出來會讓 R
                     // 誤以為自己已經送出並在被審核。只給工作紀錄當寫報告的參考。
                     hideFlow={rDialogTab === 'active'}

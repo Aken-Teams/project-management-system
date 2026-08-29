@@ -188,6 +188,7 @@ export async function GET(request: NextRequest) {
           reportOnly: tl.reportOnly,
           postDoneSupplement: tl.postDoneSupplement,
           reviewerApprovedAt: tl.reviewerApprovedAt ? tl.reviewerApprovedAt.toISOString() : null,
+          supplementBatch: tl.supplementBatch,
           reviewerRejectedAt: tl.reviewerRejectedAt ? tl.reviewerRejectedAt.toISOString() : null,
           reviewerRejectedBy: tl.reviewerRejectedBy || null,
           reviewerNote: tl.reviewerNote || null,

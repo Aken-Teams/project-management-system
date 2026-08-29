@@ -357,6 +357,10 @@ model TaskLog {
   //   走完整審核（R主管核准即進更新紀錄，當責可事後駁回／撤回），
   //   但不參與進度與甘特計算——任務的完成日不因補充而改變。
   postDoneSupplement Boolean @default(false) @map("post_done_supplement")
+  // 補充的「批次」：同一次送出的所有紀錄共用一個值。
+  //   補充是臨時性的，不像週報有天然的週別單位——同一週送兩次就是兩批，
+  //   各自送審、各自核准、各自撤回，不能混在一起。null = 一般週報。
+  supplementBatch String? @map("supplement_batch")
   // 填報週(週一 YYYY-MM-DD)；讓 A 依填報週重新載入編輯，不受 logDate 落點影響
   weekOf      String?   @map("week_of")
   // R 報告審核主管「核准」紀錄。

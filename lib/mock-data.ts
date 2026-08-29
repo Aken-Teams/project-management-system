@@ -204,6 +204,8 @@ export interface TaskLog {
   postDoneSupplement?: boolean
   /** R主管核准時間。完成後補充要再經當責通過才會 publishedAt 進更新紀錄 */
   reviewerApprovedAt?: string | null
+  /** 補充的送出批次：同一週送兩次就是兩批，各自審核與撤回 */
+  supplementBatch?: string | null
 }
 
 export interface Risk {
