@@ -11,9 +11,13 @@ export function useProjectTypes() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // API 失敗時 body 可能是空的（例如資料庫連線逾時回 500），
+    //   直接 r.json() 會拋 SyntaxError 變成未攔截的錯誤畫面。
+    //   專案類型只是選單資料，抓不到就留空、不要讓整頁掛掉。
     fetch('/api/project-types')
-      .then(r => r.json())
-      .then(data => setProjectTypes(data))
+      .then(r => (r.ok ? r.json() : []))
+      .then(data => setProjectTypes(Array.isArray(data) ? data : []))
+      .catch(() => setProjectTypes([]))
       .finally(() => setLoading(false))
   }, [])
 

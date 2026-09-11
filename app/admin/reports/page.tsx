@@ -117,11 +117,14 @@ export default function AdminReportsPage() {
   useEffect(() => {
     if (!user) return
     fetch(`/api/admin/settings?keys=${[...SETTING_KEYS, 'cron.report.enabled'].join(',')}`, { headers: headers() })
-      .then(r => r.json())
+      // 失敗時 body 可能是空的（資料庫逾時回 500），直接 r.json() 會拋 SyntaxError
+      .then(r => (r.ok ? r.json() : null))
       .then(data => {
+        if (!data) return
         setCronEnabled(data['cron.report.enabled'] !== 'false')
         setSettings(prev => ({ ...prev, ...data }))
       })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [user, headers])
 

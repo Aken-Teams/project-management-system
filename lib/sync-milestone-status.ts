@@ -266,7 +266,12 @@ export async function syncTaskProgressFromLogs(
       const assigned = hasAssignee(task.assignee)
       const children = subtasksByParent.get(task.id) || []
       if (!assigned && children.length > 0) {
-        target = computeWeightedProgress(children.map(c => ({ progress: c.progress, durationDays: c.durationDays })))
+        const agg = computeWeightedProgress(children.map(c => ({ progress: c.progress, durationDays: c.durationDays })))
+        // 子項還沒全完成就不能顯示 100%。加權後四捨五入很容易把 99.8% 湊成 100，
+        //   實際上還有子項在跑（實際踩過：8 個子項只完成 6 個，父層卻寫 100%）。
+        //   葉節點本來就壓在 99，父層要用同一把尺。
+        const allChildrenDone = children.every(c => !!c.completedAt)
+        target = allChildrenDone ? 100 : Math.min(99, agg)
       } else {
         const all = logsByTask.get(task.id) || []
         // 有指派人：只留該指派人寫的 log；無指派人葉：全留（都是 A 的）。
@@ -295,6 +300,25 @@ export async function syncTaskProgressFromLogs(
     if (target !== task.progress) {
       await prisma.task.update({ where: { id: task.id }, data: { progress: target } })
       ;(task as { progress: number }).progress = target
+    }
+
+    // 純結構父層（無指派人、有子項）子項全完成 → 父層本身就該算完成。
+    //   不補這一步，父層會永遠停在「100% 但未完成」：進度條滿了卻不是綠燈、
+    //   也進不了完成區（實際踩過：4.清潔與擠膠壓力實驗、6.PM晶片測試）。
+    //   完成日取子項最晚的那一天——父層的完成時點就是最後一個子項做完的時候。
+    if (!task.completedAt && !hasAssignee(task.assignee)) {
+      const ch = subtasksByParent.get(task.id) || []
+      if (ch.length > 0 && ch.every(c => !!c.completedAt)) {
+        const latest = ch.reduce<Date | null>((m, c) => (!m || c.completedAt! > m ? c.completedAt! : m), null)
+        if (latest) {
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { completedAt: latest, status: 'done', progress: 100 },
+          })
+          ;(task as { completedAt: Date | null; progress: number }).completedAt = latest
+          ;(task as { progress: number }).progress = 100
+        }
+      }
     }
   }
 }

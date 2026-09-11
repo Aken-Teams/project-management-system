@@ -119,6 +119,30 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     return completedAt || latestLogDateMap.get(taskId) || null
   }, [latestLogDateMap])
 
+  /**
+   * 實際起訖（含子孫聚合）。父層自己通常不填報，報告都寫在子項身上——
+   * 只看自己的紀錄，有子項的父層就永遠畫不出實際條。
+   * （實際踩過：工程試作底下 8 個實驗，報告全在 o.計畫表／a.切割站 這些站點上，
+   *   父層自己 0 筆，於是整排只有已完成的那幾個看得到實際條。）
+   */
+  const aggActualRange = useCallback((t: { id: string; completedAt?: string | null }) => {
+    let start = earliestLogDateMap.get(t.id) ?? null
+    let end = t.completedAt ?? latestLogDateMap.get(t.id) ?? null
+    const stack = tasks.filter(x => x.parentId === t.id)
+    const seen = new Set<string>()
+    while (stack.length) {
+      const c = stack.pop()!
+      if (seen.has(c.id)) continue
+      seen.add(c.id)
+      const s = earliestLogDateMap.get(c.id) || c.completedAt || null
+      if (s && (!start || s < start)) start = s
+      const e = c.completedAt || latestLogDateMap.get(c.id) || null
+      if (e && (!end || e > end)) end = e
+      for (const k of tasks) if (k.parentId === c.id) stack.push(k)
+    }
+    return { start, end }
+  }, [tasks, earliestLogDateMap, latestLogDateMap])
+
   // Helper: 里程碑實際結束日 = 底層所有任務(任意深度)「completedAt / 最後報告日」的最大值
   const getMilestoneActualEnd = useCallback((msTasks: Task[]) => {
     if (msTasks.length === 0) return null
@@ -182,9 +206,11 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
     const endNext = new Date(end)
     endNext.setDate(endNext.getDate() + 1)
     const right = toPercent(endNext.toISOString().split('T')[0])
-    // 最小寬度只當「避免 0 寬」的安全值；不可大到讓單日長條凸出結束日
-    // （寬視圖下 1 天可能 < 0.6%，舊值 0.6 會把實際長條撐出去一天）。
-    return { left: `${left}%`, width: `${Math.max(right - left, 0.1)}%` }
+    // 最小寬度用「像素」而不是百分比。時間軸跨度大時（例如 386 天），
+    //   1 天只佔 0.26% 寬度，畫出來約 2px，等於看不見——而這個專案有三分之一的
+    //   任務是 1 天。百分比下限沒用（放大會凸出結束日、縮小又還是看不見），
+    //   固定 6px 則不論縮放都保持看得到，且超出的量有上限。
+    return { left: `${left}%`, width: `${Math.max(right - left, 0.1)}%`, minWidth: '6px' }
   }
 
   // Today line — 用 UTC 午夜「今天」，與 server(todayUtc)/DB 的日期定義一致，逾期判定不再差一天
@@ -426,11 +452,15 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
                   {subHasExtension && (
                     <div className="absolute h-3 rounded-r-sm" style={{ ...barStyle(sub.originalEndDate!, sub.endDate), top: 5, backgroundColor: EXTENSION_COLOR.bg, border: subIsDone ? `1px dashed ${EXTENSION_COLOR.border}` : `1px solid ${EXTENSION_COLOR.border}`, borderLeft: 'none' }} />
                   )}
-                  {subIsDone && sub.completedAt ? (
-                    <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), sub.completedAt), top: 24, backgroundColor: subColors.bg }} />
-                  ) : earliestLogDateMap.has(sub.id) ? (
-                    <div className="absolute h-3 rounded-sm" style={{ ...barStyle(getActualStart(sub.id, sub.startDate), getActualEnd(sub.id) || todayStr), top: 24, backgroundColor: subColors.bg }} />
-                  ) : null}
+                  {(() => {
+                    // 有子項的父層要吃子孫的活動，否則自己沒填報就整條不見
+                    const r = aggActualRange(sub)
+                    if (subIsDone && sub.completedAt) {
+                      return <div className="absolute h-3 rounded-sm" style={{ ...barStyle(r.start || getActualStart(sub.id, sub.startDate), sub.completedAt), top: 24, backgroundColor: subColors.bg }} />
+                    }
+                    if (!r.start) return null
+                    return <div className="absolute h-3 rounded-sm" style={{ ...barStyle(r.start, r.end || todayStr), top: 24, backgroundColor: subColors.bg }} />
+                  })()}
                   <span className="absolute text-[11px] font-medium whitespace-nowrap" style={{ left: `calc(${parseFloat(barStyle(sub.startDate, sub.endDate).left) + parseFloat(barStyle(sub.startDate, sub.endDate).width)}% + 4px)`, top: 5 }}>
                     <span className="text-muted-foreground">{sub.progress}%</span>
                     {(() => { const diff = getTimeDiffLabel(sub); return diff ? <span style={{ color: diff.color }}>{' '}{diff.text}</span> : null })()}
