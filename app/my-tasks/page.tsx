@@ -1335,11 +1335,16 @@ export default function MyTasksPage() {
       .map(l => {
         const t = byId.get(l.taskId)
         const ms = t ? rReportDialogProject.milestones.find(m => m.id === t.milestoneId) : undefined
+        // 完整層級：里程碑 › 父任務 › …。站點名稱大量重複（每個實驗底下都有 a.切割站、
+        //   b.焊接站…），只給里程碑名稱的話，好幾張卡片會長得一模一樣、分不出是哪一個。
+        const anc: string[] = []
+        let cur = t?.parentId ? byId.get(t.parentId) : undefined
+        while (cur) { anc.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : undefined }
         return {
           log: l,
           taskId: l.taskId,
           taskTitle: t?.title ?? '任務',
-          path: ms?.name ?? '',
+          path: [ms?.name, ...anc].filter(Boolean).join(' › '),
           weekOf: l.weekOf ?? null,
           completed: !!t?.completedAt,
           rejectedAt: l.reviewerRejectedAt!,
@@ -5145,7 +5150,7 @@ export default function MyTasksPage() {
                     <div key={group.key} className={cn('space-y-1', gIdx > 0 && 'mt-3 pt-3 border-t border-border/40')}>
                       {/* 群組標頭：完整層級麵包屑 里程碑 › 父任務 › …（截止已改由各任務列呈現） */}
                       <div className="flex items-center gap-2 px-1">
-                        <span className="text-xs font-medium text-muted-foreground truncate">{group.pathLabel}</span>
+                        <span className="text-xs font-medium leading-snug text-muted-foreground" title={group.pathLabel}>{group.pathLabel}</span>
                       </div>
 
                       {/* Task items — 只顯示最底層任務名，層級已由標頭麵包屑表達 */}
@@ -5629,10 +5634,10 @@ export default function MyTasksPage() {
                             {rFixGroups.supplement.map(g => (
                               <div key={g.key} className="overflow-hidden rounded-lg border border-red-200 dark:border-red-900">
                                 <div className="bg-red-50/50 px-3 py-2.5 dark:bg-red-950/20">
-                                  {g.path && <div className="truncate text-[11px] text-muted-foreground">{g.path}</div>}
+                                  {g.path && <div className="text-[11px] leading-snug text-muted-foreground">{g.path}</div>}
                                   <div className="mt-0.5 flex items-start gap-2">
                                     <div className="min-w-0 flex-1">
-                                      <div className="truncate text-sm font-medium">{g.taskTitle}</div>
+                                      <div className="text-sm font-medium leading-snug">{g.taskTitle}</div>
                                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                                         <span className="whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
                                           補充 · {g.logs.length} 筆
@@ -5676,10 +5681,10 @@ export default function MyTasksPage() {
                             {rFixGroups.onDone.map(g => (
                               <div key={g.key} className="overflow-hidden rounded-lg border border-red-200 dark:border-red-900">
                                 <div className="bg-red-50/50 px-3 py-2.5 dark:bg-red-950/20">
-                                  {g.path && <div className="truncate text-[11px] text-muted-foreground">{g.path}</div>}
+                                  {g.path && <div className="text-[11px] leading-snug text-muted-foreground">{g.path}</div>}
                                   <div className="mt-0.5 flex items-start gap-2">
                                     <div className="min-w-0 flex-1">
-                                      <div className="truncate text-sm font-medium">{g.taskTitle}</div>
+                                      <div className="text-sm font-medium leading-snug">{g.taskTitle}</div>
                                       <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                                         <span className="whitespace-nowrap rounded bg-muted px-1.5 py-0.5">
                                           {g.weekOf ? formatReportWeek(g.weekOf) : '未標填報週'}
@@ -5725,10 +5730,10 @@ export default function MyTasksPage() {
                         {rFixGroups.main.map(item => (
                           <div key={item.log.id} className="rounded-lg border border-red-200 dark:border-red-900 overflow-hidden">
                             <div className="px-3 py-2.5 bg-red-50/50 dark:bg-red-950/20">
-                              {item.path && <div className="text-[11px] text-muted-foreground truncate">{item.path}</div>}
+                              {item.path && <div className="text-[11px] leading-snug text-muted-foreground">{item.path}</div>}
                               <div className="flex items-start gap-2 mt-0.5">
                                 <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium truncate">{item.taskTitle}</div>
+                                  <div className="text-sm font-medium leading-snug">{item.taskTitle}</div>
                                   <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-muted-foreground">
                                     <span className="rounded bg-muted px-1.5 py-0.5 whitespace-nowrap">
                                       {item.weekOf ? formatReportWeek(item.weekOf) : '未標填報週'}
@@ -5765,7 +5770,7 @@ export default function MyTasksPage() {
                   (rDialogTab === 'pending' ? rPendingGroups : rDoneGroups).map((group, gIdx) => (
                     <div key={group.key} className={cn('space-y-1', gIdx > 0 && 'mt-3 pt-3 border-t border-border/40')}>
                       <div className="flex items-center gap-2 px-1">
-                        <span className="text-xs font-medium text-muted-foreground truncate">{group.pathLabel}</span>
+                        <span className="text-xs font-medium leading-snug text-muted-foreground" title={group.pathLabel}>{group.pathLabel}</span>
                       </div>
                       {group.tasks.map(task => {
                         const fmtMD = (d: string) => new Date(d).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
