@@ -37,10 +37,12 @@ import {
   RotateCcw,
   SlidersHorizontal,
   HelpCircle,
+  Copy,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
+import { DuplicateProjectDialog } from '@/components/duplicate-project-dialog'
 import { getRolePermissions } from '@/lib/permissions'
 import { Loader2 } from 'lucide-react'
 import { useProjectTypes } from '@/hooks/use-project-types'
@@ -49,6 +51,11 @@ import { zhTW } from 'date-fns/locale'
 
 export default function ProjectsPage() {
   const { user } = useAuth()
+  // 複製專案：只有系統管理員／專案經理可用（會一次生出整組里程碑與任務）
+  const canDuplicate = user?.role === 'admin' || user?.role === 'pm'
+  const [dupTarget, setDupTarget] = useState<{ id: string; name: string } | null>(null)
+  // 從頁首進來時還不知道要複製哪個專案，先選
+  const [dupPickerOpen, setDupPickerOpen] = useState(false)
   const { projectTypes } = useProjectTypes()
   const [allProjects, setAllProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -206,11 +213,20 @@ export default function ProjectsPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">管理和追蹤所有專案的進度與狀態</p>
           </div>
-          {getRolePermissions(user?.role).canCreateProject && (
-            <Link href="/projects/new">
-              <Button>建立新專案</Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {/* 複製要跟「建立新專案」並排。藏在卡片 hover 裡沒人找得到——
+                使用者不會把滑鼠停在卡片上等按鈕浮出來。 */}
+            {canDuplicate && (
+              <Button variant="outline" className="gap-1.5" onClick={() => setDupPickerOpen(true)}>
+                <Copy className="h-4 w-4" />複製現有專案
+              </Button>
+            )}
+            {getRolePermissions(user?.role).canCreateProject && (
+              <Link href="/projects/new">
+                <Button>建立新專案</Button>
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Filters */}
@@ -390,7 +406,9 @@ export default function ProjectsPage() {
         <>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {paginatedProjects.map((project) => (
-            <Link key={project.id} href={`/projects/${project.id}`}>
+            <Link key={project.id} href={`/projects/${project.id}`} className="block">
+              {/* 複製：只有系統管理員／專案經理看得到。放在卡片外層絕對定位，
+                  不進 <Link> 的內容流，點擊時要擋掉連結的導頁。 */}
               <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="p-4 space-y-2.5">
                   {/* Row 1: Code + Type + Status（單行並排，型別過長時僅截斷型別標籤） */}
@@ -443,6 +461,19 @@ export default function ProjectsPage() {
                     <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{(project.budgetUsed / 1000000).toFixed(1)}M/{((project.budgetDenom ?? project.budget) / 1000000).toFixed(1)}M</span>
                     <span className="ml-auto">{project.owner} · {project.milestones.filter(m => m.status === 'done').length}/{project.milestones.length} 里程碑</span>
                   </div>
+
+                  {/* 複製：常駐顯示、有文字說明。只有系統管理員／專案經理看得到 */}
+                  {canDuplicate && (
+                    <div className="flex justify-end border-t pt-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDupTarget({ id: project.id, name: project.name }) }}
+                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <Copy className="h-3 w-3" />以此專案為範本
+                      </button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </Link>
@@ -487,6 +518,45 @@ export default function ProjectsPage() {
               </Button>
             </div>
           </div>
+        )}
+
+        {/* 頁首入口：先挑一個專案當範本 */}
+        <Dialog open={dupPickerOpen} onOpenChange={setDupPickerOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Copy className="h-4 w-4" />複製現有專案
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                選一個專案當範本。下一步可以挑要複製哪些內容。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[50vh] space-y-1 overflow-y-auto">
+              {projects.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { setDupPickerOpen(false); setDupTarget({ id: p.id, name: p.name }) }}
+                  className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted"
+                >
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">{p.projectCode}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{p.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{p.milestones.length} 里程碑</span>
+                </button>
+              ))}
+              {projects.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted-foreground">目前沒有可複製的專案</p>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {dupTarget && (
+          <DuplicateProjectDialog
+            open={!!dupTarget}
+            onOpenChange={o => { if (!o) setDupTarget(null) }}
+            projectId={dupTarget.id}
+            projectName={dupTarget.name}
+          />
         )}
 
         {filteredProjects.length === 0 && (
