@@ -5,6 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Plus, Trash2, ImageUp, Loader2, ChevronDown, ChevronRight, AlertTriangle, ClipboardPaste } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export interface BudgetItem {
   id?: string
@@ -136,7 +140,7 @@ function rowToItem(cols: string[], mapping: FieldType[]): BudgetItem {
       case 'station': station = val; break
       case 'vendor': vendor = val; break
       case 'equipment': equipment = val; break
-      case 'quantity': quantity = parseFloat(val.replace(/,/g, '')) || 1; break
+      case 'quantity': quantity = Math.round((parseFloat(val.replace(/,/g, '')) || 1) * 100) / 100; break
       case 'purchaseType': purchaseType = val; break
       case 'unitPrice': unitPrice = parseNumber(val); break
       case 'estimatedCost': estimatedCost = parseNumber(val); break
@@ -193,6 +197,13 @@ function parseTsvToBudgetItems(text: string): { items: BudgetItem[]; total: numb
 export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEditorProps) {
   const { toast } = useToast()
   const [parsing, setParsing] = useState(false)
+  // AI 解析完、但清單已有資料時，先擱著等使用者決定取代或附加
+  const [pendingParse, setPendingParse] = useState<{ items: BudgetItem[]; total: number | null } | null>(null)
+
+  const applyParsed = (newItems: BudgetItem[], aiTotal: number | null, mode: 'replace' | 'append' = 'append') => {
+    onChange(mode === 'replace' ? newItems : [...items, ...newItems])
+    if (aiTotal != null && aiTotal > 0 && onAITotal) onAITotal(aiTotal)
+  }
   const [expanded, setExpanded] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -337,12 +348,14 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
         }
       })
 
-      onChange([...items, ...newItems])
-
-      // Set AI total as the budget (from the 合計 row — highly accurate)
-      if (aiTotal != null && aiTotal > 0 && onAITotal) {
-        onAITotal(aiTotal)
+      // 清單原本就有資料時不要悶聲附加。實務上使用者會先手動 key 幾筆、再上傳整張表，
+      //   直接附加會變成「手 key 的 + AI 的」混在一起，總和對不上圖片合計，
+      //   接著被對帳擋住儲存——使用者只看到畫面卡住，不知道是重複了。
+      if (items.length > 0) {
+        setPendingParse({ items: newItems, total: aiTotal })
+        return
       }
+      applyParsed(newItems, aiTotal)
 
       // Build toast with validation info
       const itemsSum = newItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
@@ -486,9 +499,13 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
                             className="h-7 text-xs px-1.5 min-w-[140px]" placeholder="設備名稱" />
                         </td>
                         <td className="px-1 py-1">
-                          <Input type="number" min={1} value={item.quantity}
-                            onChange={e => update(i, 'quantity', parseInt(e.target.value) || 1)}
-                            className="h-7 text-xs px-1.5 w-16 text-center" />
+                          {/* 組數允許小數兩位：實務上會有 0.5 套、1.25 組這種拆帳情形 */}
+                          <Input type="number" min={0.01} step={0.01} value={item.quantity}
+                            onChange={e => {
+                              const v = parseFloat(e.target.value)
+                              update(i, 'quantity', Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : 1)
+                            }}
+                            className="h-7 text-xs px-1.5 w-20 text-center" />
                         </td>
                         <td className="px-1 py-1">
                           <Input value={item.purchaseType} onChange={e => update(i, 'purchaseType', e.target.value)}
@@ -540,6 +557,38 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
           )}
         </div>
       )}
+
+      {/* AI 解析後：清單已有資料時，讓使用者決定取代還是附加 */}
+      <AlertDialog open={!!pendingParse} onOpenChange={o => { if (!o) setPendingParse(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>清單已有 {items.length} 筆資料</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  AI 從圖片解析出 <b className="text-foreground">{pendingParse?.items.length ?? 0} 筆</b>
+                  {pendingParse?.total != null && <>，圖片合計 <b className="text-foreground">NT$ {pendingParse.total.toLocaleString('zh-TW')}</b></>}。
+                </div>
+                <div className="text-muted-foreground">
+                  若圖片就是完整的設備清單，選「取代」；若只是要補上新的幾筆，選「附加」。
+                  附加會讓原有資料與解析結果並存，總金額也會相加。
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <Button variant="outline"
+              onClick={() => { if (pendingParse) applyParsed(pendingParse.items, pendingParse.total, 'append'); setPendingParse(null) }}>
+              附加在後面
+            </Button>
+            <AlertDialogAction
+              onClick={() => { if (pendingParse) applyParsed(pendingParse.items, pendingParse.total, 'replace'); setPendingParse(null) }}>
+              取代現有清單
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

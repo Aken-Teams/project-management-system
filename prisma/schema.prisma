@@ -598,7 +598,8 @@ model ProjectBudgetItem {
   station       String   @default("") // 站別
   vendor        String   @default("") // 廠商
   equipment     String   @default("") // 設備機型/名稱
-  quantity      Int      @default(1)  // 組數
+  // 組數允許小數（實務上有 0.5 套、1.25 組這種拆帳），Int 會把小數直接截掉
+  quantity      Float    @default(1)  // 組數
   purchaseType  String   @default("") @map("purchase_type") // 選購方式
   unitPrice     Float?   @map("unit_price")      // 預估單價
   estimatedCost Float?   @map("estimated_cost") // 預估費用（= 單價 × 組數）
@@ -719,7 +720,7 @@ model CapexItem {
   partDescription       String    @default("") @map("part_description")
   unit                  String    @default("")
   currency              String    @default("TWD")
-  quantity              Int       @default(1)
+  quantity              Float     @default(1)
   originalPrice         Float?    @map("original_price")
   twdPrice              Float?    @map("twd_price")
   orderAmount           Float?    @map("order_amount")

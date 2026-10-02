@@ -135,6 +135,11 @@ export function CapexItemDialog({
     updateField(field, e.target.value === '' ? null : parseFloat(e.target.value))
   const chInt = (field: keyof CapexItemData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     updateField(field, e.target.value === '' ? 0 : parseInt(e.target.value))
+  // 組數允許小數兩位（0.5 套、1.25 組這類拆帳），不能用 parseInt 吃掉小數
+  const chQty = (field: keyof CapexItemData) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = parseFloat(e.target.value)
+    updateField(field, e.target.value === '' ? 0 : (Number.isFinite(v) ? Math.round(v * 100) / 100 : 0))
+  }
   const chPct = (field: keyof CapexItemData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     updateField(field, e.target.value === '' ? null : parseInt(e.target.value) / 100)
   const chDate = (field: keyof CapexItemData) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -278,7 +283,7 @@ export function CapexItemDialog({
                     </Select>
                   </Field>
                   <Field label="數量">
-                    <Input className="h-8 text-xs text-right" type="number" value={draft.quantity || ''} onChange={chInt('quantity')} />
+                    <Input className="h-8 text-xs text-right" type="number" min={0} step={0.01} value={draft.quantity || ''} onChange={chQty('quantity')} />
                   </Field>
                   <Field label="原幣議價">
                     <Input className="h-8 text-xs text-right" type="number" value={draft.originalPrice ?? ''} onChange={chNum('originalPrice')} />

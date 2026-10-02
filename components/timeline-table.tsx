@@ -126,7 +126,9 @@ export interface TimelineTableProps {
 export type DropMode = 'inside' | 'before' | 'after'
 
 // ─── Column grid class (shared across all rows) ─────────────
-const GRID_COLS = 'grid grid-cols-[28px_1fr_72px_140px_140px_88px_52px_28px] gap-0 items-center'
+// 名稱欄給一個下限（minmax 的 280px），其餘欄位收窄：
+//   名稱是最常輸入、也最長的欄位，原本 1fr 在對話框裡被固定欄位擠到只剩約 150px。
+const GRID_COLS = 'grid grid-cols-[28px_minmax(280px,1fr)_64px_128px_128px_80px_48px_28px] gap-0 items-center'
 
 // ─── DateInput (uncontrolled to bypass React 19 controlled-input rollback) ──
 // React 19 resets controlled <input type="date"> values before the batched

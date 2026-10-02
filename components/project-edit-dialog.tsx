@@ -1082,7 +1082,7 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-4xl max-h-[90vh] flex flex-col"
+        className="sm:max-w-6xl max-h-[90vh] flex flex-col"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
@@ -1184,19 +1184,40 @@ export function ProjectEditDialog({ open, onOpenChange, project, onSave, onTeamC
                   <span className="text-xs text-muted-foreground">由 AI 解析合計帶入</span>
                 )}
               </div>
+              {/* 不鎖死這個欄位。AI 讀到的合計只是「對帳基準」，它自己也可能認錯
+                  （圖片上的合計格 OCR 錯、或合計含了清單沒列的項目）。
+                  原本設成唯讀 + 不符就擋儲存，一旦 AI 認錯就完全無解：
+                  欄位改不了、清單是對的沒得改、儲存也按不下去。 */}
               <Input
                 id="edit-budget"
                 type="number"
                 value={form.budget}
-                onChange={e => update('budget', Number(e.target.value) || 0)}
-                readOnly={aiBudgetTotal != null}
-                className={aiBudgetTotal != null ? 'bg-muted/60 cursor-not-allowed' : ''}
+                onChange={e => {
+                  update('budget', Number(e.target.value) || 0)
+                  // 手動改動＝使用者接手，AI 的合計不再當基準
+                  if (aiBudgetTotal != null) setAiBudgetTotal(null)
+                }}
               />
               {hasBudgetMismatch && (
-                <p className="text-xs text-destructive flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  清單合計 NT$ {budgetItemsTotal.toLocaleString('zh-TW')} 與預算 NT$ {aiBudgetTotal!.toLocaleString('zh-TW')} 不符（差 {Math.abs(budgetItemsTotal - aiBudgetTotal!).toLocaleString('zh-TW')}），請修正設備清單後再儲存
-                </p>
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-2 space-y-1.5">
+                  <p className="text-xs text-destructive flex items-start gap-1">
+                    <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                    <span>
+                      清單逐筆合計 <b>NT$ {budgetItemsTotal.toLocaleString('zh-TW')}</b>
+                      {' '}與 AI 從圖片讀到的合計 <b>NT$ {aiBudgetTotal!.toLocaleString('zh-TW')}</b> 不符
+                      （差 {Math.abs(budgetItemsTotal - aiBudgetTotal!).toLocaleString('zh-TW')}）。
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pl-4">
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => { setAiBudgetTotal(budgetItemsTotal); update('budget', budgetItemsTotal) }}>
+                      以清單合計為準
+                    </Button>
+                    <span className="text-[11px] text-muted-foreground">
+                      或修正上方清單的金額；也可直接在「投資預算」欄位自行輸入
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
 

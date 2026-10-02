@@ -3,6 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 // Support both common naming conventions
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY
 
+// 地端視覺模型（OpenAI 相容 gateway）。設了就優先用，失敗再退回 OpenAI。
+const LOCAL_AI_URL = process.env.LOCAL_AI_URL
+const LOCAL_AI_KEY = process.env.LOCAL_AI_KEY
+const LOCAL_AI_VISION_MODEL = process.env.LOCAL_AI_VISION_MODEL || 'mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit'
+
+type ChatMessage = { role: string; content: string | Array<{ type: string; [k: string]: unknown }> }
+
 interface ParsedItem {
   station: string
   vendor: string | null
@@ -13,10 +20,30 @@ interface ParsedItem {
   estimatedCost: number | null
 }
 
-async function callOpenAI(
-  messages: Array<{ role: string; content: string | Array<{ type: string; [k: string]: unknown }> }>,
-  maxTokens = 6000,
-) {
+/** 地端 gateway。走 Cloudflare，不帶 User-Agent 會吃到 error code 1010，所以明確帶一個。 */
+async function callLocal(messages: ChatMessage[], maxTokens: number) {
+  const res = await fetch(`${LOCAL_AI_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOCAL_AI_KEY}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'project-management-system/1.0',
+    },
+    body: JSON.stringify({
+      model: LOCAL_AI_VISION_MODEL,
+      temperature: 0,
+      messages,
+      max_tokens: maxTokens,
+    }),
+  })
+  if (!res.ok) throw new Error(`Local AI error ${res.status}: ${await res.text()}`)
+  const data = await res.json()
+  const msg = data.choices?.[0]?.message
+  // thinking 模型在 tokens 不夠時 content 會是空字串，答案留在 reasoning
+  return (msg?.content || msg?.reasoning || '') as string
+}
+
+async function callOpenAI(messages: ChatMessage[], maxTokens: number) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -38,15 +65,34 @@ async function callOpenAI(
   return data.choices?.[0]?.message?.content ?? ''
 }
 
+/**
+ * 地端優先、失敗退回 OpenAI。
+ * 地端跑在本機 MLX 上，機器沒開或模型沒載就連不上——退回雲端才不會整個功能掛掉。
+ * 回傳值第二個元素是實際用了哪一邊，供前端／記錄判斷。
+ */
+async function callAI(messages: ChatMessage[], maxTokens = 6000): Promise<[string, 'local' | 'openai']> {
+  if (LOCAL_AI_URL && LOCAL_AI_KEY) {
+    try {
+      const out = await callLocal(messages, maxTokens)
+      if (out.trim()) return [out, 'local']
+      console.warn('Local AI returned empty content, falling back to OpenAI')
+    } catch (e) {
+      console.warn('Local AI failed, falling back to OpenAI:', e instanceof Error ? e.message : e)
+    }
+  }
+  if (!OPENAI_API_KEY) throw new Error('地端 AI 無法使用，且未設定 OpenAI API Key')
+  return [await callOpenAI(messages, maxTokens), 'openai']
+}
+
 // ─── POST /api/parse-budget-image ────────────────────────
 // Two-pass + programmatic validation:
 //   Pass 1 (Vision): Transcribe ALL columns per row in vertical format
 //   Pass 2 (Text):   Convert structured text to JSON, filter out 產能 columns
 //   Validation:      Programmatic auto-fix for unitPrice × qty ≠ estimatedCost
 export async function POST(request: NextRequest) {
-  if (!OPENAI_API_KEY) {
-    console.error('OpenAI key not found. Set OPENAI_API_KEY or OPENAI_KEY in .env')
-    return NextResponse.json({ error: '未設定 OpenAI API Key' }, { status: 500 })
+  if (!OPENAI_API_KEY && !(LOCAL_AI_URL && LOCAL_AI_KEY)) {
+    console.error('No AI backend configured. Set LOCAL_AI_URL/LOCAL_AI_KEY or OPENAI_API_KEY in .env')
+    return NextResponse.json({ error: '未設定 AI 服務（地端或 OpenAI 擇一）' }, { status: 500 })
   }
 
   try {
@@ -108,7 +154,7 @@ export async function POST(request: NextRequest) {
 - 每個儲存格空白就寫「空白」，不要猜測或從其他行搬移
 - 只輸出上述格式，不要其他說明`
 
-    const transcription = await callOpenAI([
+    const [transcription, pass1Backend] = await callAI([
       { role: 'system', content: pass1System },
       {
         role: 'user',
@@ -160,7 +206,7 @@ ${transcription}
 
 只回傳 JSON，不要任何說明文字。`
 
-    const pass2Content = await callOpenAI([
+    const [pass2Content, pass2Backend] = await callAI([
       { role: 'system', content: pass2System },
       { role: 'user', content: pass2User },
     ])
@@ -174,27 +220,27 @@ ${transcription}
     const items: ParsedItem[] = parsed.items ?? []
     const expectedTotal: number | null = typeof parsed.total === 'number' ? parsed.total : null
 
-    // ── Programmatic auto-correction ──
-    for (const item of items) {
-      if (item.unitPrice == null || item.estimatedCost == null) continue
-      if (item.unitPrice === 0 && item.estimatedCost === 0) continue
-
-      const computed = item.unitPrice * item.quantity
-      if (Math.abs(computed - item.estimatedCost) < 1) continue
-
-      // Mismatch detected — try to fix
-      if (item.unitPrice > 0 && item.estimatedCost > 0) {
-        // Strategy 1: Maybe quantity is wrong — if estimatedCost / unitPrice is a clean number, fix qty
-        const impliedQty = item.estimatedCost / item.unitPrice
-        if (Number.isInteger(impliedQty) || Math.abs(impliedQty - Math.round(impliedQty * 10) / 10) < 0.01) {
-          // e.g., cost=90000, price=30000 → qty should be 3
-          item.quantity = Math.round(impliedQty * 10) / 10
-        } else {
-          // Strategy 2: Recalculate estimatedCost from unitPrice × qty
-          item.estimatedCost = item.unitPrice * item.quantity
-        }
-      }
-    }
+    // ── 不改寫 AI 讀到的數字 ──
+    //   這裡原本會在「單價 × 組數 ≠ 預估費用」時自動改寫預估費用（或反推組數）。
+    //   但實務上的表格，「組數」常常是設計產能的比例（0.35、0.45、0.3），
+    //   本來就不是費用的乘數——表上的費用才是對的，改寫反而把正確值弄壞。
+    //   實際踩過：某張 15 列的表被改掉 4 列，合計少了 789,800，
+    //   前端對帳對不起來又擋住儲存，使用者完全無解。
+    //   表格是真相來源：照實回傳，不一致的列交給人在畫面上判斷。
+    const inconsistent = items
+      .map((item, idx) => ({ idx, item }))
+      .filter(({ item }) =>
+        item.unitPrice != null && item.estimatedCost != null
+        && !(item.unitPrice === 0 && item.estimatedCost === 0)
+        && Math.abs(item.unitPrice * item.quantity - item.estimatedCost) >= 1)
+      .map(({ idx, item }) => ({
+        row: idx + 1,
+        equipment: item.equipment,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        estimatedCost: item.estimatedCost,
+        computed: (item.unitPrice ?? 0) * item.quantity,
+      }))
 
     // ── Clean up vendor values ──
     for (const item of items) {
@@ -218,6 +264,11 @@ ${transcription}
         computedSum,
         totalMatch,
         itemCount: items.length,
+        // 單價 × 組數 與預估費用不一致的列。不代表讀錯——組數可能是產能比例，
+        //   所以只回報、不自動改，讓人在畫面上確認。
+        inconsistent,
+        // 哪一邊解析的：地端沒開或失敗時會是 openai
+        backend: pass1Backend === pass2Backend ? pass1Backend : `${pass1Backend}+${pass2Backend}`,
       },
     })
   } catch (error) {
