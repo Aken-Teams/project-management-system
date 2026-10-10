@@ -5,8 +5,12 @@ import ExcelJS from 'exceljs'
 
 // ─── GET /api/projects/[id]/export-overview ──────────────
 // 把「里程碑階段總覽」匯出成 Excel：
-//   ① 階段總覽  用儲存格畫出甘特，可直接複製貼到 PPT，顏色與文字都能再編輯
-//   ② 原始資料  同一份內容的表格版，要自己做圖或算數字時用
+//   ① 階段總覽  一格一週。整個專案一眼看完，寬度控制在可貼 PPT 的範圍
+//   ② 各階段細節  一格一天，每個階段一張。欄寬正常、人在 Excel 裡改得動
+//   ③ 原始資料  同一份內容的表格版，要自己做圖或算數字時用
+// 為什麼要拆成兩種粒度：Excel 的一欄固定代表一段時間，沒有「縮放」這回事。
+//   整個專案做成一格一天要 380+ 欄，欄寬被迫壓到 5px，既調不動、標記也全擠在一起；
+//   但一格一週又看不出長條確切落在哪一天。拆開之後兩邊都成立。
 // 單向匯出——在 Excel 改完不會回寫系統。
 
 const DAY = 86400000
@@ -30,7 +34,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     select: {
       projectCode: true, name: true, startDate: true, endDate: true, progress: true,
       milestones: { orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, startDate: true, dueDate: true, status: true, progress: true } },
-      tasks: { select: { id: true, milestoneId: true, title: true, endDate: true, completedAt: true } },
+      tasks: {
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true, milestoneId: true, parentId: true, title: true, assignee: true,
+          startDate: true, endDate: true, completedAt: true, status: true, progress: true,
+        },
+      },
     },
   })
   if (!project) return NextResponse.json({ error: '找不到專案' }, { status: 404 })
@@ -67,15 +77,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const minT = Math.min(project.startDate.getTime(), ...phases.map(p => p.start.getTime()))
   const maxT = Math.max(project.endDate.getTime(), ...phases.map(p => p.end.getTime()))
 
-  // ── 週格（貼到 PPT 時寬度才控制得住；每格 = 一週）──
+  // ── 時間格（貼到 PPT 時寬度才控制得住）──
+  //   對齊「專案起始日」而不是星期一。對齊星期一會讓第一格跑到專案開始之前
+  //   （10/1 開工卻落在 9/29 那格），標記看起來就像提早了好幾天。
+  //   格寬依專案長度調整，讓總欄數維持在可貼 PPT 的範圍。
+  //   這張表一格＝一週，為的是欄寬維持正常、人改得動。要看確切是哪一天，
+  //   請翻到該階段自己的那張細節表（一格一天）。
+  const STEP = 7
   const weeks: { start: Date; end: Date }[] = []
   const cursor = new Date(minT)
-  cursor.setUTCDate(cursor.getUTCDate() - ((cursor.getUTCDay() + 6) % 7)) // 週一對齊
   while (cursor.getTime() <= maxT) {
-    const ws = new Date(cursor)
-    const we = new Date(cursor); we.setUTCDate(we.getUTCDate() + 6)
-    weeks.push({ start: ws, end: we })
-    cursor.setUTCDate(cursor.getUTCDate() + 7)
+    const bs = new Date(cursor)
+    const be = new Date(cursor); be.setUTCDate(be.getUTCDate() + STEP - 1)
+    weeks.push({ start: bs, end: be })
+    cursor.setUTCDate(cursor.getUTCDate() + STEP)
   }
 
   const LABEL_COLS = 4          // 名稱 / 類型 / 開始 / 結束
@@ -109,10 +124,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   ws.mergeCells(2, 1, 2, lastCol)
   ws.addRow([])
 
-  // 年列 / 月列
+  // 年列 / 月列。總表一格＝一週，標到「日」反而會讓人以為那一欄就是那一天——
+  //   要看確切日期請翻該階段的細節分頁（那裡才是一格一天）。
   const yearRow = ws.addRow([])
   const monthRow = ws.addRow([])
-  yearRow.height = 16; monthRow.height = 16
+  yearRow.height = 16; monthRow.height = 18
   const spanMerge = (row: number, keyOf: (w: { start: Date }) => string, labelOf: (w: { start: Date }) => string) => {
     let i = 0
     while (i < weeks.length) {
@@ -131,6 +147,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   spanMerge(4, w => String(w.start.getUTCFullYear()), w => String(w.start.getUTCFullYear()))
   spanMerge(5, w => `${w.start.getUTCFullYear()}-${w.start.getUTCMonth()}`, w => `${w.start.getUTCMonth() + 1}月`)
+  // 日列：每格標該週的起始日。只有年月時看不出長條確切落在哪一天，
+  //   欄寬只有 3 個字，所以僅放日期數字（月份看上一列）。
+  // 月列底下收一條線，當作時間軸與內容的分界
+  for (let i = 0; i < weeks.length; i++) {
+    const cell = ws.getCell(monthRow.number, firstWeekCol + i)
+    cell.border = { ...(cell.border ?? {}), bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } }
+  }
   for (const [r, t] of [[4, '年'], [5, '月']] as const) {
     const c = ws.getCell(r, 1); c.value = t
     c.font = { size: 9, bold: true, color: { argb: 'FF334155' } }
@@ -192,7 +215,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const startRow = ws.rowCount + 1
 
     const isBottleneck = p.name === bottleneckName
-    const planRow = ws.addRow([(isBottleneck ? '⚠ ' : '') + p.name, 'Plan', fmt(p.start), fmt(p.end)])
+    const planRow = ws.addRow([(isBottleneck ? '⚠ ' : '') + p.name, '計畫', fmt(p.start), fmt(p.end)])
     planRow.height = 20
     for (let c = firstWeekCol; c <= lastCol; c++) ws.getCell(planRow.number, c).border = { left: GRID, right: GRID }
     for (let c = c1; c <= c2; c++) {
@@ -210,7 +233,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const earnedEnd = p.status === 'done'
       ? (p.actualEnd ?? p.end)
       : new Date(p.start.getTime() + prog * Math.max(1, p.end.getTime() - p.start.getTime()))
-    const actualRow = ws.addRow(['', 'Actual', prog > 0 ? fmt(p.start) : '', prog > 0 ? fmt(earnedEnd) : ''])
+    const actualRow = ws.addRow(['', '實際', prog > 0 ? fmt(p.start) : '', prog > 0 ? fmt(earnedEnd) : ''])
     actualRow.height = 20
     for (let c = firstWeekCol; c <= lastCol; c++) ws.getCell(actualRow.number, c).border = { left: GRID, right: GRID }
     if (prog > 0) {
@@ -270,8 +293,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     for (let r = startRow; r <= endRow; r++) {
       for (let c = 2; c <= LABEL_COLS; c++) {
         const cell = ws.getCell(r, c)
-        cell.font = { size: 9, color: { argb: 'FF64748B' } }
-        if (c >= 3) cell.alignment = { horizontal: 'center' }
+        cell.font = c === 2
+          ? { size: 9, bold: true, color: { argb: 'FF475569' } }
+          : { size: 9, color: { argb: 'FF64748B' } }
+        cell.alignment = { horizontal: c === 2 ? 'center' : c >= 3 ? 'center' : 'left', vertical: 'middle' }
       }
       if (r === endRow) {
         for (let c = 1; c <= lastCol; c++) {
@@ -298,26 +323,33 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const legend = ws.addRow(['圖例', '', '', ''])
   legend.getCell(1).font = { bold: true, size: 9 }
   const LEGEND: [string, string][] = [
+    ['淡色＝計畫區間', 'FFD1FAE5'], ['實心＝實際進度', 'FF10B981'],
     ['已完成', 'FF10B981'], ['進行中', 'FF3B82F6'], ['逾期', 'FFF59E0B'],
     ['未開始', 'FF94A3B8'], ['遲交', LATE_FILL], ['瓶頸(⚠)', 'FFFEF2F2'],
   ]
   // 色塊與文字分開並各自合併儲存格。塞在同一個 3 字寬的週欄裡，
   //   文字會溢到隔壁格，看起來像色塊畫歪了。
+  // 排不下就換一列。原本是 `return`，等於沒聲沒息少印幾個圖例——
+  //   偏偏被吃掉的都是排在後面的「遲交」「瓶頸」，剛好是最需要解釋的那兩個。
+  const LG_STRIDE = 7
+  const lgPerRow = Math.max(1, Math.floor(weeks.length / LG_STRIDE))
+  let lgRow = legend
   LEGEND.forEach(([text, color], i) => {
-    const base = firstWeekCol + i * 7
+    if (i > 0 && i % lgPerRow === 0) { lgRow = ws.addRow([]); lgRow.height = 16 }
+    const base = firstWeekCol + (i % lgPerRow) * LG_STRIDE
     if (base + 5 > lastCol) return
-    ws.mergeCells(legend.number, base, legend.number, base + 1)
-    const sw = ws.getCell(legend.number, base)
+    ws.mergeCells(lgRow.number, base, lgRow.number, base + 1)
+    const sw = ws.getCell(lgRow.number, base)
     sw.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }
     sw.border = { top: EDGE, bottom: EDGE, left: EDGE, right: EDGE }
-    ws.mergeCells(legend.number, base + 2, legend.number, base + 5)
-    const lb = ws.getCell(legend.number, base + 2)
+    ws.mergeCells(lgRow.number, base + 2, lgRow.number, base + 5)
+    const lb = ws.getCell(lgRow.number, base + 2)
     lb.value = text
     lb.font = { size: 9, color: { argb: 'FF334155' } }
     lb.alignment = { horizontal: 'left', vertical: 'middle' }
   })
   legend.height = 16
-  const tip = ws.addRow(['說明：Plan 為計畫區間、Actual 為已完成部分；超出計畫截止的紅色段為遲交。階段名稱前的 ⚠ 為目前最落後的瓶頸。「標記」列的圈號對應下方的標記對照表（灰色＝計畫完成、紫色＝實際完成）。'])
+  const tip = ws.addRow([`說明：這張表每格 ${STEP} 天，用來看整體進度；確切日期請翻到各階段的細節分頁（一格＝一天）。每個階段上下兩列——上列「計畫」畫淡色、下列「實際」畫實心，兩條左右對齊，實際比計畫落後或超前用看的就知道；實際超出計畫截止的那一段轉紅代表遲交。階段名稱前的 ⚠ 為目前最落後的瓶頸。「標記」列的圈號對應下方的標記對照表（灰色＝計畫完成、紫色＝實際完成），確切日期以對照表為準。`])
   tip.getCell(1).font = { size: 9, color: { argb: 'FF64748B' } }
   ws.mergeCells(tip.number, 1, tip.number, lastCol)
 
@@ -366,7 +398,261 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  // ══ 工作表二：原始資料 ══
+  // ══ 每個階段一張：日級細節 ══
+  //   一格一天，而且每個任務自己一列——總覽上圈號疊在一起看不懂的問題，
+  //   在這裡根本不會發生，長條直接畫在它的日期上，旁邊就是日期文字。
+  //   單一階段通常只有幾十天，所以欄寬可以維持正常，人在 Excel 裡調得動。
+  const d0 = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  // 實心色 → 計畫列要用的淡色。計畫與實際同色系才看得出是同一件事的兩條
+  const SOFT: Record<string, string> = {
+    FF10B981: 'FFD1FAE5', FF3B82F6: 'FFDBEAFE', FFF59E0B: 'FFFEF3C7',
+    FF94A3B8: 'FFF1F5F9', [LATE_FILL]: 'FFFEE2E2',
+  }
+  const usedNames = new Set(['階段總覽'])
+  const sheetNameOf = (name: string) => {
+    // Excel 工作表名稱上限 31 字，且不接受 : \ / ? * [ ]
+    const base = (name.replace(/[:\\/?*[\]]/g, '-').slice(0, 27).trim()) || '階段'
+    let out = base
+    for (let n = 2; usedNames.has(out); n++) out = `${base.slice(0, 24)}(${n})`
+    usedNames.add(out)
+    return out
+  }
+
+  // 任務依樹狀排序（父在子前），子任務縮排，讀起來才看得出層級
+  type TaskRow = typeof project.tasks[number]
+  const kidsOf = new Map<string, TaskRow[]>()
+  for (const t of project.tasks) {
+    if (!t.parentId) continue
+    const a = kidsOf.get(t.parentId); if (a) a.push(t); else kidsOf.set(t.parentId, [t])
+  }
+  const flatten = (list: TaskRow[], depth: number): { t: TaskRow; depth: number }[] =>
+    list.flatMap(t => [{ t, depth }, ...flatten(kidsOf.get(t.id) ?? [], depth + 1)])
+
+  for (const p of phases) {
+    const roots = project.tasks.filter(t => t.milestoneId === p.id && !t.parentId)
+    const items = flatten(roots, 0)
+
+    // 日期範圍：階段計畫區間聯集所有任務的計畫與實際日期，前後各留 2 天當邊距
+    const stamps = [p.start, p.end, ...items.flatMap(({ t }) =>
+      [t.startDate ?? t.endDate, t.endDate, ...(t.completedAt ? [t.completedAt] : [])])]
+    const lo = d0(new Date(Math.min(...stamps.map(d => d.getTime()))))
+    const hi = d0(new Date(Math.max(...stamps.map(d => d.getTime()))))
+    lo.setUTCDate(lo.getUTCDate() - 2); hi.setUTCDate(hi.getUTCDate() + 2)
+    const days: Date[] = []
+    for (const c = new Date(lo); c <= hi; c.setUTCDate(c.getUTCDate() + 1)) days.push(new Date(c))
+
+    const LC = 6                       // 任務 / 負責人 / 類型 / 開始 / 結束 / 進度
+    const firstDayCol = LC + 1
+    const lastDayCol = LC + days.length
+    const colOf = (d: Date) => {
+      const i = Math.round((d0(d).getTime() - lo.getTime()) / DAY)
+      return firstDayCol + Math.max(0, Math.min(days.length - 1, i))
+    }
+
+    const ds = wb.addWorksheet(sheetNameOf(p.name), {
+      views: [{ state: 'frozen', xSplit: LC, ySplit: 6 }],
+      pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    })
+    ds.getColumn(1).width = 38
+    ds.getColumn(2).width = 12
+    ds.getColumn(3).width = 8
+    ds.getColumn(4).width = 13
+    ds.getColumn(5).width = 17   // 結束欄要放得下「2025-11-20（遲 5 天）」
+    ds.getColumn(6).width = 8
+    // 日欄 2.6：兩位數的日期放得下，拉寬拉窄也還在人能操作的範圍
+    for (let i = 0; i < days.length; i++) ds.getColumn(firstDayCol + i).width = 2.6
+
+    const tone0 = toneOf(p.status, p.progress, p.end, today)
+    const dt = ds.addRow([`${p.name}　｜　階段細節（一格＝一天）`])
+    dt.font = { bold: true, size: 14 }
+    ds.mergeCells(1, 1, 1, lastDayCol)
+    const dsub = ds.addRow([`計畫 ${fmt(p.start)} ~ ${fmt(p.end)}　|　狀態 ${tone0.text}　|　進度 ${p.progress}%　|　${project.projectCode} ${project.name}`])
+    dsub.font = { size: 10, color: { argb: 'FF64748B' } }
+    ds.mergeCells(2, 1, 2, lastDayCol)
+    ds.addRow([])
+
+    // 年 / 月 / 日。月份跨該月所有天數合併，一眼就分得出月份區段
+    const dYear = ds.addRow([]); const dMon = ds.addRow([]); const dDay = ds.addRow([])
+    dYear.height = 16; dMon.height = 18; dDay.height = 16
+    const dSpan = (row: number, keyOf: (d: Date) => string, labelOf: (d: Date) => string, head: boolean) => {
+      let i = 0
+      while (i < days.length) {
+        const key = keyOf(days[i])
+        let j = i
+        while (j + 1 < days.length && keyOf(days[j + 1]) === key) j++
+        const c1 = firstDayCol + i, c2 = firstDayCol + j
+        if (c2 > c1) ds.mergeCells(row, c1, row, c2)
+        const cell = ds.getCell(row, c1)
+        cell.value = labelOf(days[i])
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.font = { size: head ? 10 : 9, bold: true, color: { argb: 'FF334155' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: head ? 'FFE0E7FF' : 'FFF1F5F9' } }
+        i = j + 1
+      }
+    }
+    dSpan(dYear.number, d => String(d.getUTCFullYear()), d => String(d.getUTCFullYear()), false)
+    dSpan(dMon.number, d => `${d.getUTCFullYear()}-${d.getUTCMonth()}`, d => `${d.getUTCMonth() + 1}月`, true)
+    for (let i = 0; i < days.length; i++) {
+      const cell = ds.getCell(dDay.number, firstDayCol + i)
+      cell.value = days[i].getUTCDate()
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+      cell.font = { size: 9, color: { argb: 'FF475569' } }
+      // 週末上底色，用來數天數時有錨點，不然一整排數字看久了會跳行
+      const wd = days[i].getUTCDay()
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: wd === 0 || wd === 6 ? 'FFE2E8F0' : 'FFF8FAFC' } }
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } } }
+    }
+    for (const [r, t] of [[4, '年'], [5, '月'], [6, '日']] as const) {
+      const c = ds.getCell(r, 1); c.value = t
+      c.font = { size: 9, bold: true, color: { argb: 'FF334155' } }
+    }
+
+    // 每個項目兩列：上「計畫」淡色、下「實際」實心——跟總覽同一套讀法。
+    //   先前只畫一條、再把完成日塗深，結果是看的人分不出哪段是計畫哪段是實際。
+    //   兩條上下對齊之後，實際比計畫短／長多少用看的就知道。
+    const bar = (rowNum: number, from: Date, to: Date, color: string, solid: boolean, lateAfter?: Date) => {
+      const a2 = colOf(from), b2 = colOf(to)
+      const lateCol = lateAfter ? colOf(lateAfter) : Number.POSITIVE_INFINITY
+      for (let c = a2; c <= b2; c++) {
+        // 超出計畫截止的那一段轉紅：不分段的話，遲交一個月跟準時完成畫起來一樣
+        const edge = c > lateCol ? LATE_FILL : color
+        const cell = ds.getCell(rowNum, c)
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: solid ? edge : SOFT[edge] ?? edge } }
+        cell.border = {
+          top: { style: 'thin', color: { argb: edge } },
+          bottom: { style: 'thin', color: { argb: edge } },
+          left: c === a2 ? { style: 'thin', color: { argb: edge } } : undefined,
+          right: c === b2 ? { style: 'thin', color: { argb: edge } } : undefined,
+        }
+      }
+    }
+
+    /** 畫一組「計畫 / 實際」。actTo 為 null 代表還沒有任何實際進度，實際列就留空。 */
+    const pair = (opts: {
+      name: string; who: string; bold: boolean; size: number
+      planFrom: Date; planTo: Date
+      actFrom: Date | null; actTo: Date | null
+      lateAfter: Date | null; lateDays: number
+      progress: number; color: string
+    }) => {
+      const r1 = ds.addRow([opts.name, opts.who, '計畫', fmt(opts.planFrom), fmt(opts.planTo), `${opts.progress}%`])
+      const r2 = ds.addRow(['', '', '實際',
+        opts.actFrom ? fmt(opts.actFrom) : '',
+        opts.actTo ? `${fmt(opts.actTo)}${opts.lateDays > 0 ? `（遲 ${opts.lateDays} 天）` : ''}` : '',
+        ''])
+      r1.height = 18; r2.height = 18
+
+      // 名稱／負責人／進度跨兩列垂直置中，讀起來才是同一個任務的一組
+      for (const c of [1, 2, 6]) ds.mergeCells(r1.number, c, r2.number, c)
+      ds.getCell(r1.number, 1).font = { size: opts.size, bold: opts.bold }
+      ds.getCell(r1.number, 1).alignment = { vertical: 'middle' }
+      ds.getCell(r1.number, 2).font = { size: 9, color: { argb: 'FF64748B' } }
+      ds.getCell(r1.number, 2).alignment = { vertical: 'middle' }
+      ds.getCell(r1.number, 6).font = { size: 9, color: { argb: 'FF64748B' } }
+      ds.getCell(r1.number, 6).alignment = { horizontal: 'center', vertical: 'middle' }
+
+      for (const r of [r1, r2]) {
+        for (const c of [3, 4, 5]) {
+          const cell = r.getCell(c)
+          cell.font = { size: 9, color: { argb: 'FF64748B' } }
+          cell.alignment = { horizontal: 'center', vertical: 'middle' }
+          cell.numFmt = '@'
+        }
+        for (let c = firstDayCol; c <= lastDayCol; c++) r.getCell(c).border = { left: GRID, right: GRID }
+      }
+      // 「計畫 / 實際」這兩個字加深，掃過去才抓得到是哪一列
+      r1.getCell(3).font = { size: 9, bold: true, color: { argb: 'FF475569' } }
+      r2.getCell(3).font = { size: 9, bold: true, color: { argb: opts.lateDays > 0 ? LATE_FILL : 'FF475569' } }
+      if (opts.lateDays > 0) r2.getCell(5).font = { size: 9, bold: true, color: { argb: LATE_FILL } }
+
+      bar(r1.number, opts.planFrom, opts.planTo, opts.color, false)
+      if (opts.actFrom && opts.actTo) {
+        bar(r2.number, opts.actFrom, opts.actTo, opts.color, true, opts.lateAfter ?? undefined)
+      }
+      // 每組底下收一條線，兩個任務才不會黏在一起
+      for (let c = 1; c <= lastDayCol; c++) {
+        const cell = ds.getCell(r2.number, c)
+        cell.border = { ...(cell.border ?? {}), bottom: EDGE }
+      }
+    }
+
+    // 階段自己先畫一組當基準，底下任務才有東西可以對照
+    const pLate = p.actualEnd != null && d0(p.actualEnd) > d0(p.end)
+    pair({
+      name: `【階段】${p.name}`, who: '', bold: true, size: 11,
+      planFrom: p.start, planTo: p.end,
+      actFrom: p.progress > 0 || p.actualEnd ? p.start : null,
+      actTo: p.actualEnd ?? (p.progress > 0
+        ? new Date(p.start.getTime() + (p.progress / 100) * Math.max(1, p.end.getTime() - p.start.getTime()))
+        : null),
+      lateAfter: pLate ? p.end : null,
+      lateDays: pLate ? Math.round((d0(p.actualEnd!).getTime() - d0(p.end).getTime()) / DAY) : 0,
+      progress: p.progress, color: tone0.fill,
+    })
+    ds.addRow([])
+
+    for (const { t, depth } of items) {
+      const tt = toneOf(t.status, t.progress, t.endDate, today)
+      const planFrom = t.startDate ?? t.endDate
+      const late = t.completedAt != null && d0(t.completedAt) > d0(t.endDate)
+      // 還沒完成但有進度：用進度換算實際走到哪，跟總覽的 Actual 同一套算法
+      const actTo = t.completedAt ?? (t.progress > 0
+        ? new Date(planFrom.getTime() + (t.progress / 100) * Math.max(1, t.endDate.getTime() - planFrom.getTime()))
+        : null)
+      pair({
+        name: `${'　　'.repeat(depth)}${t.title}`, who: t.assignee || '',
+        bold: depth === 0, size: 10,
+        planFrom, planTo: t.endDate,
+        actFrom: actTo ? planFrom : null, actTo,
+        lateAfter: late ? t.endDate : null,
+        lateDays: late ? Math.round((d0(t.completedAt!).getTime() - d0(t.endDate).getTime()) / DAY) : 0,
+        progress: t.progress, color: tt.fill,
+      })
+    }
+
+    if (today >= lo && today <= hi) {
+      const tc = colOf(today)
+      for (let r = 4; r <= ds.rowCount; r++) {
+        const cell = ds.getCell(r, tc)
+        cell.border = { ...(cell.border ?? {}), right: { style: 'medium', color: { argb: 'FFE11D48' } } }
+      }
+      ds.getCell(3, tc).value = '今天'
+      ds.getCell(3, tc).font = { size: 9, bold: true, color: { argb: 'FFE11D48' } }
+    }
+
+    // 圖例：深綠／紅／各種淡色不解釋的話沒人知道是什麼意思
+    ds.addRow([])
+    const dLegend: [string, string][] = [
+      ['已完成', 'FF10B981'], ['進行中', 'FF3B82F6'], ['逾期', 'FFF59E0B'],
+      ['未開始', 'FF94A3B8'], ['遲交段', LATE_FILL], ['週末', 'FFE2E8F0'],
+    ]
+    // 色塊 2 欄 + 文字 9 欄：日欄只有 2.6 寬，文字擠在色塊同一格會蓋掉顏色
+    const SW = 2, TX = 9, STRIDE = SW + TX + 1
+    const perRow = Math.max(1, Math.floor(days.length / STRIDE))
+    let lgRow = ds.addRow([]); lgRow.height = 17
+    lgRow.getCell(1).value = '圖例'
+    lgRow.getCell(1).font = { bold: true, size: 10 }
+    dLegend.forEach(([text, color], i) => {
+      if (i > 0 && i % perRow === 0) { lgRow = ds.addRow([]); lgRow.height = 17 }
+      const base = firstDayCol + (i % perRow) * STRIDE
+      if (base + STRIDE - 1 > lastDayCol) return
+      ds.mergeCells(lgRow.number, base, lgRow.number, base + SW - 1)
+      const sw = ds.getCell(lgRow.number, base)
+      sw.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }
+      sw.border = { top: EDGE, bottom: EDGE, left: EDGE, right: EDGE }
+      ds.mergeCells(lgRow.number, base + SW, lgRow.number, base + SW + TX - 1)
+      const lb = ds.getCell(lgRow.number, base + SW)
+      lb.value = text
+      lb.font = { size: 9, color: { argb: 'FF334155' } }
+      lb.alignment = { horizontal: 'left', vertical: 'middle' }
+    })
+
+    const dtip = ds.addRow(['說明：一格＝一天。每個任務上下兩列——上列「計畫」畫淡色、下列「實際」畫實心，兩條左右對齊，實際比計畫長或短用看的就知道。實際超出計畫截止的那一段轉紅，並在「結束」欄註明遲幾天；還沒完成的任務，實際列畫到目前進度換算的位置。上方色塊為狀態配色，日期列灰底為週末，紅色直線為今天。'])
+    dtip.getCell(1).font = { size: 9, color: { argb: 'FF64748B' } }
+    ds.mergeCells(dtip.number, 1, dtip.number, lastDayCol)
+  }
+
+  // ══ 最後一張：原始資料 ══
   const raw = wb.addWorksheet('原始資料')
   raw.columns = [
     { header: '階段', width: 30 },
