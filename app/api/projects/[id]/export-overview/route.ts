@@ -7,7 +7,11 @@ import ExcelJS from 'exceljs'
 // 把「里程碑階段總覽」匯出成 Excel：
 //   ① 階段總覽  一格一週。整個專案一眼看完，寬度控制在可貼 PPT 的範圍
 //   ② 各階段細節  一格一天，每個階段一張。欄寬正常、人在 Excel 裡改得動
-//   ③ 原始資料  同一份內容的表格版，要自己做圖或算數字時用
+//   ③ 階段彙總  階段層級的表格版，要自己做圖或算數字時用
+//   ④ 任務明細  一列一個任務的平表，有篩選器——要篩選、排序、樞紐都在這張做
+// 篩選為什麼只放在平表：圖表分頁的任務名稱跨「計畫／實際」兩列合併，
+//   而 Excel 篩選是以列為單位，合併範圍被篩時只會留下第一列——
+//   篩出來會變成只剩計畫、實際整條消失，看起來就是錯的。
 // 為什麼要拆成兩種粒度：Excel 的一欄固定代表一段時間，沒有「縮放」這回事。
 //   整個專案做成一格一天要 380+ 欄，欄寬被迫壓到 5px，既調不動、標記也全擠在一起；
 //   但一格一週又看不出長條確切落在哪一天。拆開之後兩邊都成立。
@@ -349,7 +353,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     lb.alignment = { horizontal: 'left', vertical: 'middle' }
   })
   legend.height = 16
-  const tip = ws.addRow([`說明：這張表每格 ${STEP} 天，用來看整體進度；確切日期請翻到各階段的細節分頁（一格＝一天）。每個階段上下兩列——上列「計畫」畫淡色、下列「實際」畫實心，兩條左右對齊，實際比計畫落後或超前用看的就知道；實際超出計畫截止的那一段轉紅代表遲交。階段名稱前的 ⚠ 為目前最落後的瓶頸。「標記」列的圈號對應下方的標記對照表（灰色＝計畫完成、紫色＝實際完成），確切日期以對照表為準。`])
+  const tip = ws.addRow([`說明：這張表每格 ${STEP} 天，用來看整體進度；確切日期請翻到各階段的細節分頁（一格＝一天）。每個階段上下兩列——上列「計畫」畫淡色、下列「實際」畫實心，兩條左右對齊，實際比計畫落後或超前用看的就知道；實際超出計畫截止的那一段轉紅代表遲交。階段名稱前的 ⚠ 為目前最落後的瓶頸。「標記」列的圈號對應下方的標記對照表（灰色＝計畫完成、紫色＝實際完成），確切日期以對照表為準。要篩選或排序請用「任務明細」分頁（一列一個任務，篩選器已掛好）。`])
   tip.getCell(1).font = { size: 9, color: { argb: 'FF64748B' } }
   ws.mergeCells(tip.number, 1, tip.number, lastCol)
 
@@ -652,8 +656,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ds.mergeCells(dtip.number, 1, dtip.number, lastDayCol)
   }
 
-  // ══ 最後一張：原始資料 ══
-  const raw = wb.addWorksheet('原始資料')
+  // ══ 階段彙總：階段層級的平表 ══
+  const raw = wb.addWorksheet('階段彙總')
   raw.columns = [
     { header: '階段', width: 30 },
     { header: '計畫開始', width: 13 },
@@ -666,6 +670,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   ]
   raw.getRow(1).font = { bold: true, color: { argb: 'FF1E3A8A' } }
   raw.getRow(1).eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2F7' } } })
+  raw.views = [{ state: 'frozen', ySplit: 1 }]
+  raw.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 8 } }
   for (const p of phases) {
     const tone = toneOf(p.status, p.progress, p.end, today)
     raw.addRow([
@@ -690,6 +696,93 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
   for (const col of [2, 3, 7]) raw.getColumn(col).numFmt = '@'
+
+  // ══ 任務明細：一列一個任務的平表 ══
+  //   圖表分頁為了好讀用了合併儲存格，代價是不能篩選。要篩選、排序、
+  //   拉樞紐分析的人來這張——沒有任何合併、標題只有一列、篩選器已經掛好。
+  const flat = wb.addWorksheet('任務明細', { views: [{ state: 'frozen', ySplit: 1 }] })
+  const FLAT_COLS = [
+    { header: '階段', width: 26 },
+    { header: '層級', width: 11 },
+    { header: '任務名稱', width: 40 },
+    { header: '上層任務', width: 28 },
+    { header: '負責人', width: 14 },
+    { header: '計畫開始', width: 12 },
+    { header: '計畫結束', width: 12 },
+    { header: '計畫天數', width: 10 },
+    { header: '實際完成日', width: 12 },
+    { header: '與計畫差(天)', width: 13 },
+    { header: '遲交', width: 8 },
+    { header: '狀態', width: 10 },
+    { header: '進度%', width: 9 },
+    { header: '總覽標記', width: 10 },
+  ]
+  flat.columns = FLAT_COLS.map(c => ({ width: c.width }))
+  const fh = flat.addRow(FLAT_COLS.map(c => c.header))
+  fh.font = { bold: true, color: { argb: 'FF1E3A8A' } }
+  fh.eachCell(c => {
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2F7' } }
+    c.border = { top: EDGE, bottom: EDGE }
+  })
+
+  const titleById = new Map(project.tasks.map(t => [t.id, t.title]))
+  // 日期差一律走「整天」：completedAt 帶時分秒，直接相減會多算或少算一天
+  const dayDiff = (a: Date, b: Date) => Math.round((d0(a).getTime() - d0(b).getTime()) / DAY)
+
+  for (const ph of phases) {
+    // 里程碑自己也要是一列。只當成「階段」欄的話，篩「層級＝里程碑」會篩不到東西，
+    //   而且里程碑的計畫區間與實際完成日就沒有地方可以對照。
+    const mDiff = ph.actualEnd ? dayDiff(ph.actualEnd, ph.end) : null
+    const mTone = toneOf(ph.status, ph.progress, ph.end, today)
+    const mr = flat.addRow([
+      ph.name, '里程碑', ph.name, '', '',
+      fmt(ph.start), fmt(ph.end), dayDiff(ph.end, ph.start) + 1,
+      ph.actualEnd ? fmt(ph.actualEnd) : '',
+      mDiff ?? '', mDiff != null && mDiff > 0 ? '是' : '',
+      mTone.text, ph.progress, '',
+    ])
+    for (const c of [6, 7, 9]) mr.getCell(c).numFmt = '@'
+    // 上底色＋粗體當分組線。這是一般資料列，沒有合併，篩選照樣吃得到
+    mr.font = { size: 10, bold: true }
+    mr.eachCell(c => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }
+      c.border = { top: EDGE, bottom: EDGE }
+    })
+    if (mDiff != null && mDiff > 0) {
+      for (const c of [9, 10, 11]) mr.getCell(c).font = { size: 10, bold: true, color: { argb: LATE_FILL } }
+    }
+
+    const roots = project.tasks.filter(t => t.milestoneId === ph.id && !t.parentId)
+    for (const { t, depth } of flatten(roots, 0)) {
+      const planFrom = t.startDate ?? t.endDate
+      const diff = t.completedAt ? dayDiff(t.completedAt, t.endDate) : null
+      const tone = toneOf(t.status, t.progress, t.endDate, today)
+      const r = flat.addRow([
+        ph.name,
+        depth === 0 ? '任務' : `子任務 L${depth + 1}`,
+        t.title,
+        t.parentId ? (titleById.get(t.parentId) ?? '') : '',
+        t.assignee || '',
+        fmt(planFrom),
+        fmt(t.endDate),
+        dayDiff(t.endDate, planFrom) + 1,
+        t.completedAt ? fmt(t.completedAt) : '',
+        diff ?? '',
+        diff != null && diff > 0 ? '是' : '',
+        tone.text,
+        t.progress,
+        markerIds.has(t.id) ? '是' : '',
+      ])
+      // 日期欄位鎖成文字，否則 Excel 會把 2026-01-05 自動轉成別的格式
+      for (const c of [6, 7, 9]) r.getCell(c).numFmt = '@'
+      r.font = { size: 10 }
+      if (diff != null && diff > 0) {
+        for (const c of [9, 10, 11]) r.getCell(c).font = { size: 10, bold: true, color: { argb: LATE_FILL } }
+      }
+      r.eachCell(c => { c.border = { bottom: GRID } })
+    }
+  }
+  flat.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: FLAT_COLS.length } }
 
   const buf = await wb.xlsx.writeBuffer()
   const fileName = encodeURIComponent(`${project.projectCode}_階段總覽_${fmt(new Date())}.xlsx`)
