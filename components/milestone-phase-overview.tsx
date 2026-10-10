@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo, useState, useEffect } from 'react'
-import { ChevronDown, Flag, SlidersHorizontal, Rows3, Merge, Shrink, MoveHorizontal } from 'lucide-react'
+import { ChevronDown, Flag, SlidersHorizontal, Rows3, Merge, Shrink, MoveHorizontal,
+  FileSpreadsheet, Loader2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { todayUtc } from '@/lib/date-utils'
 import { useAuth } from '@/lib/auth-context'
@@ -140,6 +142,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
   // 聚焦某個階段：時間軸收斂到該階段區間、刻度改用「天」。
   //   這是當下想看細節的臨時操作，不存進設定檔（存了會害主管一進來只看到一段）。
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   // 載入（所有檢視者都套用 A 存好的設定）
   useEffect(() => {
@@ -356,6 +359,34 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
                   : '準時'}
             </span>
           )}
+        </button>
+        {/* 匯出：放在「顯示設定」左邊。匯出的就是這張總覽，所以入口要在總覽上，
+            不是跟專案層級的動作混在頁首。所有人都能匯出。 */}
+        <button
+          type="button"
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true)
+            try {
+              const res = await fetch(`/api/projects/${project.id}/export-overview`)
+              if (!res.ok) throw new Error()
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${project.projectCode ?? 'project'}_階段總覽.xlsx`
+              document.body.appendChild(a); a.click(); a.remove()
+              URL.revokeObjectURL(url)
+            } catch {
+              alert('匯出失敗，請稍後再試')
+            } finally {
+              setExporting(false)
+            }
+          }}
+          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+        >
+          {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+          匯出 Excel
         </button>
         {canCurate && (
           <Popover>
