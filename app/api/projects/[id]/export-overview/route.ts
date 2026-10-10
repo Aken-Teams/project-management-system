@@ -146,13 +146,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   for (const p of phases) {
     for (const t of project.tasks) {
       if (!markerIds.has(t.id) || t.milestoneId !== p.id) continue
-      // 先計畫、後實際——讀的人是拿實際去對照計畫，計畫是基準要先出現
+      // 先計畫、後實際——讀的人是拿實際去對照計畫，計畫是基準要先出現。
+      //   即使兩個日期相同（準時完成）也兩筆都留：少了計畫那筆就沒有對照基準，
+      //   看不出來是準時還是這任務根本沒排期。
       const entries: { d: Date; kind: 'plan' | 'actual' }[] = []
       if (markerSource !== 'actual') entries.push({ d: t.endDate, kind: 'plan' })
       if (markerSource !== 'plan' && t.completedAt) entries.push({ d: t.completedAt, kind: 'actual' })
       for (const e of entries) {
-        // 計畫日與實際完成日相同時只留一個，否則同一格會印出兩個一樣的標記
-        const key = `${t.id}|${fmt(e.d)}`
+        // 去重的鍵要含類型，否則同日期的計畫與實際會互相吃掉
+        const key = `${t.id}|${fmt(e.d)}|${e.kind}`
         if (seenMark.has(key)) continue
         seenMark.add(key)
         const no = marks.length + 1
