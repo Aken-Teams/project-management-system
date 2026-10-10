@@ -20,7 +20,11 @@ const DEFAULT_CONFIG = {
   markerSource: 'actual' as MarkerSource,
   // 展開時間軸時的月寬（縮放）：窄/中/寬
   zoom: 'sm' as 'sm' | 'md' | 'lg',
+  // 標記旁要顯示多少字：full=日期+任務名、date=只有日期、hover=都不顯示（滑過才看）
+  markerLabel: 'full' as 'full' | 'date' | 'hover',
 }
+const asMarkerLabel = (v: unknown): 'full' | 'date' | 'hover' =>
+  v === 'date' || v === 'hover' ? v : 'full'
 const asZoom = (v: unknown): 'sm' | 'md' | 'lg' => (v === 'md' || v === 'lg' ? v : 'sm')
 const asMarkerSource = (v: unknown): MarkerSource =>
   v === 'plan' || v === 'both' ? v : 'actual'
@@ -38,6 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     markers: asIdList(cfg.markers),
     markerSource: asMarkerSource(cfg.markerSource),
     zoom: asZoom(cfg.zoom),
+    markerLabel: asMarkerLabel(cfg.markerLabel),
   })
 }
 
@@ -64,7 +69,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const markers = asIdList(body.markers)
   const markerSource = asMarkerSource(body.markerSource)
   const zoom = asZoom(body.zoom)
-  const value = JSON.stringify({ mode, hidden, axis, markers, markerSource, zoom })
+  const markerLabel = asMarkerLabel(body.markerLabel)
+  const value = JSON.stringify({ mode, hidden, axis, markers, markerSource, zoom, markerLabel })
 
   await prisma.systemSetting.upsert({
     where: { key: keyOf(id) },

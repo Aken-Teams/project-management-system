@@ -134,6 +134,9 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
   const [markerSource, setMarkerSource] = useState<'plan' | 'actual' | 'both'>('actual')
   // 展開時間軸時的月寬。階段擠在一起時標記會疊住，放寬就拉得開。
   const [zoom, setZoom] = useState<'sm' | 'md' | 'lg'>('sm')
+  // 標記旁的文字量。預設連任務名一起顯示（客戶要求不必 hover 才看得到），
+  //   但標記多的時候會互相擠，所以保留「只顯示日期」與「滑過才顯示」兩段退路。
+  const [markerLabel, setMarkerLabel] = useState<'full' | 'date' | 'hover'>('full')
   // 聚焦某個階段：時間軸收斂到該階段區間、刻度改用「天」。
   //   這是當下想看細節的臨時操作，不存進設定檔（存了會害主管一進來只看到一段）。
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -143,7 +146,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
     let alive = true
     fetch(`/api/projects/${project.id}/phase-overview`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: { mode: string; hidden: string[]; axis?: string; markers?: string[]; markerSource?: string; zoom?: string }) => {
+      .then((d: { mode: string; hidden: string[]; axis?: string; markers?: string[]; markerSource?: string; zoom?: string; markerLabel?: string }) => {
         if (!alive) return
         setMode(d.mode === 'merge' ? 'merge' : 'separate')
         setHidden(new Set(Array.isArray(d.hidden) ? d.hidden : []))
@@ -151,6 +154,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
         setMarkers(new Set(Array.isArray(d.markers) ? d.markers : []))
         setMarkerSource(d.markerSource === 'plan' || d.markerSource === 'both' ? d.markerSource : 'actual')
         setZoom(d.zoom === 'md' || d.zoom === 'lg' ? d.zoom : 'sm')
+        setMarkerLabel(d.markerLabel === 'date' || d.markerLabel === 'hover' ? d.markerLabel : 'full')
       })
       .catch(() => { /* 用預設 */ })
     return () => { alive = false }
@@ -160,6 +164,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
   const persist = (next: Partial<{
     mode: 'separate' | 'merge'; hidden: Set<string>; axis: 'fit' | 'timeline'
     markers: Set<string>; markerSource: 'plan' | 'actual' | 'both'; zoom: 'sm' | 'md' | 'lg'
+    markerLabel: 'full' | 'date' | 'hover'
   }>) => {
     if (!canCurate || !user?.email) return
     fetch(`/api/projects/${project.id}/phase-overview`, {
@@ -172,6 +177,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
         markers: [...(next.markers ?? markers)],
         markerSource: next.markerSource ?? markerSource,
         zoom: next.zoom ?? zoom,
+        markerLabel: next.markerLabel ?? markerLabel,
       }),
     }).catch(() => { /* 忽略 */ })
   }
@@ -190,6 +196,7 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
   }
   const changeMarkerSource = (v: 'plan' | 'actual' | 'both') => { setMarkerSource(v); persist({ markerSource: v }) }
   const clearMarkers = () => { setMarkers(new Set()); persist({ markers: new Set() }) }
+  const changeMarkerLabel = (v: 'full' | 'date' | 'hover') => { setMarkerLabel(v); persist({ markerLabel: v }) }
   const changeZoom = (z: 'sm' | 'md' | 'lg') => {
     // 放大只在「展開時間軸」下有意義。與其把按鈕變灰要人先去切另一個設定，
     //   不如按下去就幫他切——使用者的意圖本來就是「我要看得更清楚」。
@@ -360,12 +367,22 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
             <PopoverContent align="end" collisionPadding={12} className="w-80 p-0 overflow-hidden" style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}>
               {/* 分三頁。原本四區直排，面板長到要一直捲，找設定比設定本身還久。 */}
               <Tabs defaultValue="layout" className="flex flex-col" style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}>
-                <TabsList className="grid w-full grid-cols-3 rounded-none border-b bg-muted/40">
-                  <TabsTrigger value="layout" className="text-xs">版面</TabsTrigger>
-                  <TabsTrigger value="marks" className="text-xs">
-                    日期標記{markers.size > 0 && <span className="ml-1 text-[10px] text-primary">{markers.size}</span>}
-                  </TabsTrigger>
-                  <TabsTrigger value="phases" className="text-xs">顯示階段</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 gap-0 rounded-none border-b bg-muted/40 p-0 h-auto">
+                  {([['layout', '版面'], ['marks', '日期標記'], ['phases', '顯示階段']] as const).map(([v, label]) => (
+                    <TabsTrigger key={v} value={v}
+                      className={cn(
+                        'relative rounded-none border-b-2 border-transparent py-2 text-xs font-medium text-muted-foreground shadow-none',
+                        'data-[state=active]:border-primary data-[state=active]:bg-background',
+                        'data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none',
+                      )}>
+                      {label}
+                      {v === 'marks' && markers.size > 0 && (
+                        <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
+                          {markers.size}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  ))}
                 </TabsList>
 
                 <TabsContent value="layout" className="m-0 space-y-3 overflow-y-auto p-3.5">
@@ -436,9 +453,25 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      勾選的任務會在長條上標出日期。<span className="text-rose-600">紅色</span>＝實際完成、
-                      <span className="text-slate-500">灰色</span>＝計畫完成。
+                      <span className="font-semibold text-violet-700 dark:text-violet-300">實心紫線</span>＝實際完成、
+                      <span className="font-semibold text-violet-500">虛線淡紫</span>＝計畫完成。
+                      （紅色在本圖代表今天線與遲交，故標記不使用紅色）
                     </p>
+                    <div className="space-y-1.5 border-t pt-2.5">
+                      <div className="text-xs font-semibold text-muted-foreground">標籤顯示方式</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {([['full', '日期＋任務'], ['date', '只有日期'], ['hover', '滑過才顯示']] as const).map(([v, label]) => (
+                          <button key={v} onClick={() => changeMarkerLabel(v)}
+                            className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
+                              markerLabel === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        標記密集時任務名會互相擠，可改成「只有日期」或「滑過才顯示」。
+                      </p>
+                    </div>
                   </div>
                   <div className="max-h-[320px] overflow-y-auto p-3.5 pt-2.5 space-y-2">
                     {project.milestones.filter(m => !hidden.has(m.id)).map(m => {
@@ -483,16 +516,17 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
       {!collapsed && (!model ? (
         <div className="px-4 pb-4 text-sm text-muted-foreground text-center py-6">無可顯示的里程碑階段（請在「顯示設定」勾選）</div>
       ) : (
-        <PhaseBody model={model} today={today} project={project} axis={axis} LABEL_W={LABEL_W} STAGE_LANE={STAGE_LANE} STAGE_SEG={STAGE_SEG} PLAN_LANE={PLAN_LANE} PLAN_SEG={PLAN_SEG} markers={markers} markerSource={markerSource} zoom={zoom} focusId={focusId} setFocusId={setFocusId} />
+        <PhaseBody model={model} today={today} project={project} axis={axis} LABEL_W={LABEL_W} STAGE_LANE={STAGE_LANE} STAGE_SEG={STAGE_SEG} PLAN_LANE={PLAN_LANE} PLAN_SEG={PLAN_SEG} markers={markers} markerSource={markerSource} markerLabel={markerLabel} zoom={zoom} focusId={focusId} setFocusId={setFocusId} />
       ))}
     </div>
   )
 }
 
-function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG, PLAN_LANE, PLAN_SEG, markers, markerSource, zoom, focusId, setFocusId }: {
+function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG, PLAN_LANE, PLAN_SEG, markers, markerSource, markerLabel, zoom, focusId, setFocusId }: {
   model: PhaseModel; today: Date; project: Project; axis: 'fit' | 'timeline'
   LABEL_W: string; STAGE_LANE: number; STAGE_SEG: number; PLAN_LANE: number; PLAN_SEG: number
-  markers: Set<string>; markerSource: 'plan' | 'actual' | 'both'; zoom: 'sm' | 'md' | 'lg'
+  markers: Set<string>; markerSource: 'plan' | 'actual' | 'both'
+  markerLabel: 'full' | 'date' | 'hover'; zoom: 'sm' | 'md' | 'lg'
   focusId: string | null; setFocusId: (v: string | null) => void
 }) {
   const { phases, laneCount, pct, months, years, dayTicks, todayInRange, todayPct, bottleneckId, allPhases } = model
@@ -555,14 +589,32 @@ function PhaseBody({ model, today, project, axis, LABEL_W, STAGE_LANE, STAGE_SEG
               <TooltipTrigger asChild>
                 <div className="absolute z-30 -translate-x-1/2 cursor-default"
                   style={{ left: `${m.x}%`, top: m.lane * laneH - 4, height: laneH }}>
-                  <div className={cn('mx-auto w-[3px] h-full rounded-full',
-                    kind === 'actual' ? 'bg-rose-600' : 'bg-slate-500')} />
-                  <div className={cn(
-                    'absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-semibold leading-none tabular-nums',
-                    kind === 'actual' ? 'text-rose-600' : 'text-slate-500',
-                    flip ? 'top-full mt-0.5' : 'bottom-full mb-0.5')}>
-                    {md}
+                  {/* 外層底色框把標記與長條隔開——直接畫紫線在飽和的綠色長條上會糊在一起。
+                      有了這圈襯底，不論底下是綠（已完成）、藍（進行中）、琥珀（逾期）或白底都切得開。
+                      內層沿用圖表既有語彙：計畫＝虛線淡色、實際＝實心深色。 */}
+                  <div className="mx-auto flex h-full w-[7px] justify-center rounded-full bg-background shadow-[0_0_0_1px_rgba(0,0,0,0.08)]">
+                    <div className={cn('w-[3px] h-full rounded-full',
+                      kind === 'actual' ? 'bg-violet-600 dark:bg-violet-400' : 'bg-violet-500/80 dark:bg-violet-400/70')}
+                      style={kind === 'plan'
+                        ? { backgroundImage: 'repeating-linear-gradient(to bottom, currentColor 0 3px, transparent 3px 6px)' }
+                        : undefined} />
                   </div>
+                  {/* 日期也要襯底：紫字壓在綠色長條上一樣讀不出來。
+                      標籤內容由設定決定——任務名很佔寬，標記多時會互相擠。 */}
+                  {markerLabel !== 'hover' && (
+                    <div className={cn(
+                      'absolute left-1/2 -translate-x-1/2 flex items-center gap-1 whitespace-nowrap rounded bg-background/95 px-1.5 py-0.5',
+                      'text-[11.5px] font-semibold leading-none shadow-[0_0_0_1px_rgba(0,0,0,0.06)]',
+                      kind === 'actual' ? 'text-violet-700 dark:text-violet-300' : 'text-violet-500 dark:text-violet-400',
+                      flip ? 'top-full mt-0.5' : 'bottom-full mb-0.5')}>
+                      <span className="tabular-nums">{md}</span>
+                      {/* 任務名完整顯示不截斷。代價是標記靠近時標籤會互相重疊——
+                          此時可改用「只有日期」、或聚焦該階段把時間軸拉開。 */}
+                      {markerLabel === 'full' && (
+                        <span className="font-medium text-foreground/80">{m.title}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
