@@ -254,8 +254,25 @@ export function GanttChart({ tasks = [], milestones = [], startDate, endDate, on
   // ADR-01/02: the milestone owns its OWN absolute start/due (shown in the edit table),
   // independent of its tasks. Draw the bar from that range so the Gantt matches the
   // table and covers deep descendants regardless of nesting depth.
+  // 里程碑沒填自己的開始日時，退回底下任務(任意深度)的最早開始日。
+  //   原本直接退回 dueDate，等於 start === end，長條塌成 1 天 —— 再被 barStyle
+  //   的 minWidth:6px 撐開，畫面上就變成到期日那裡孤零零一塊 6px 色塊，
+  //   旁邊卻有一條完整的「實際」長條，看起來像畫錯。
+  const earliestTaskStartByMs = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const t of tasks) {
+      if (!t.startDate) continue
+      const cur = m.get(t.milestoneId)
+      if (!cur || t.startDate < cur) m.set(t.milestoneId, t.startDate)
+    }
+    return m
+  }, [tasks])
+
   const getMilestoneBarRange = (ms: Milestone, _msTasks: Task[]) => {
-    return { start: ms.startDate || ms.dueDate, end: ms.dueDate }
+    if (ms.startDate) return { start: ms.startDate, end: ms.dueDate }
+    const earliest = earliestTaskStartByMs.get(ms.id)
+    // 任務開始日比到期日還晚（資料異常）就不採用，免得畫出反向長條
+    return { start: earliest && earliest <= ms.dueDate ? earliest : ms.dueDate, end: ms.dueDate }
   }
 
   // Helper: get actual start for a single task (earliest log date, or completedAt as fallback)
