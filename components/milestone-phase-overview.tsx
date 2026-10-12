@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { todayUtc } from '@/lib/date-utils'
 import { useAuth } from '@/lib/auth-context'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
@@ -338,6 +340,165 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
   const STAGE_LANE = 32, STAGE_SEG = 30
   const PLAN_LANE = 26, PLAN_SEG = 22
 
+  // 顯示設定：視窗夠大才用浮動面板，否則改用置中對話框。
+  //   浮動面板的高度是「按鈕旁邊還剩多少空間」決定的，1280~1919 這段寬度常搭配
+  //   720~900 的高度，面板會被頂到視窗上緣再壓扁 —— 「日期標記」的任務清單
+  //   只剩兩列，等於不能用。對話框是置中、獨立計算高度，不受按鈕位置影響。
+  //   SSR 時 useMediaQuery 回 false，先走對話框這個在任何尺寸都成立的版本。
+  const roomyForPopover = useMediaQuery('(min-width: 1920px) and (min-height: 900px)')
+
+  const settingsTrigger = (
+    <button className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border text-muted-foreground hover:bg-muted transition-colors">
+      <SlidersHorizontal className="h-3.5 w-3.5" />顯示設定
+    </button>
+  )
+
+  // 分三頁。原本四區直排，面板長到要一直捲，找設定比設定本身還久。
+  const settingsPanel = (
+    <Tabs defaultValue="layout" className="flex min-h-0 flex-1 flex-col">
+      <TabsList className="grid w-full shrink-0 grid-cols-3 gap-0 rounded-none border-b bg-muted/40 p-0 h-auto">
+        {([['layout', '版面'], ['marks', '日期標記'], ['phases', '顯示階段']] as const).map(([v, label]) => (
+          <TabsTrigger key={v} value={v}
+            className={cn(
+              'relative rounded-none border-b-2 border-transparent py-2 text-xs font-medium text-muted-foreground shadow-none',
+              'data-[state=active]:border-primary data-[state=active]:bg-background',
+              'data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none',
+            )}>
+            {label}
+            {v === 'marks' && markers.size > 0 && (
+              <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
+                {markers.size}
+              </span>
+            )}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
+      <TabsContent value="layout" className="m-0 min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5">
+        <div className="space-y-1.5">
+          <div className="text-xs font-semibold text-muted-foreground">重疊階段</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button onClick={() => changeMode('separate')}
+              className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
+                mode === 'separate' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+              <Rows3 className="h-3.5 w-3.5" />分開
+            </button>
+            <button onClick={() => changeMode('merge')}
+              className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
+                mode === 'merge' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+              <Merge className="h-3.5 w-3.5" />合併
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">分開：分層不遮擋；合併：擠成一列</p>
+        </div>
+        <div className="space-y-1.5 border-t pt-2.5">
+          <div className="text-xs font-semibold text-muted-foreground">時間軸寬度</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button onClick={() => changeAxis('fit')}
+              className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
+                axis === 'fit' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+              <Shrink className="h-3.5 w-3.5" />貼合
+            </button>
+            <button onClick={() => changeAxis('timeline')}
+              className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
+                axis === 'timeline' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+              <MoveHorizontal className="h-3.5 w-3.5" />展開時間軸
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">貼合：全部縮入畫面；展開時間軸：固定月寬、可橫向滑動（適合長專案）</p>
+        </div>
+        <div className="space-y-1.5 border-t pt-2.5">
+          <div className="text-xs font-semibold text-muted-foreground">放大倍率</div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {([['sm', '標準'], ['md', '放大'], ['lg', '最大']] as const).map(([v, label]) => (
+              <button key={v} onClick={() => changeZoom(v)}
+                className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
+                  zoom === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            拉開月寬，日期標記才不會擠在一起。選「放大」或「最大」會自動切換成展開時間軸、可橫向滑動。
+          </p>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="marks" className="m-0 flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+        <div className="shrink-0 space-y-1.5 border-b p-3.5">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold text-muted-foreground">標記哪一種日期</div>
+            {markers.size > 0 && (
+              <button className="text-xs text-primary hover:underline" onClick={clearMarkers}>清除</button>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {([['actual', '實際完成'], ['plan', '計畫完成'], ['both', '兩者']] as const).map(([v, label]) => (
+              <button key={v} onClick={() => changeMarkerSource(v)}
+                className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
+                  markerSource === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-semibold text-violet-700 dark:text-violet-300">實心紫線</span>＝實際完成、
+            <span className="font-semibold text-violet-500">虛線淡紫</span>＝計畫完成。
+            （紅色在本圖代表今天線與遲交，故標記不使用紅色）
+          </p>
+          <div className="space-y-1.5 border-t pt-2.5">
+            <div className="text-xs font-semibold text-muted-foreground">標籤顯示方式</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([['full', '日期＋任務'], ['date', '只有日期'], ['hover', '滑過才顯示']] as const).map(([v, label]) => (
+                <button key={v} onClick={() => changeMarkerLabel(v)}
+                  className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
+                    markerLabel === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              標記密集時任務名會互相擠，可改成「只有日期」或「滑過才顯示」。
+            </p>
+          </div>
+        </div>
+        <div className="min-h-[160px] flex-1 overflow-y-auto p-3.5 pt-2.5 space-y-2">
+          {project.milestones.filter(m => !hidden.has(m.id)).map(m => {
+            const ts = (project.tasks || []).filter(t => t.milestoneId === m.id && !t.parentId)
+            if (ts.length === 0) return null
+            return (
+              <div key={m.id}>
+                <div className="px-1 text-[11px] font-medium text-muted-foreground truncate">{m.name}</div>
+                {ts.map(t => (
+                  <label key={t.id} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-muted/60 cursor-pointer text-xs">
+                    <Checkbox checked={markers.has(t.id)} onCheckedChange={c => toggleMarker(t.id, !!c)} />
+                    <span className="truncate flex-1">{t.title}</span>
+                    {!t.completedAt && <span className="shrink-0 text-[10px] text-muted-foreground">未完成</span>}
+                  </label>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </TabsContent>
+
+      <TabsContent value="phases" className="m-0 flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+        <div className="flex shrink-0 items-center justify-between border-b p-3.5 pb-2.5">
+          <div className="text-xs font-semibold text-muted-foreground">顯示哪些階段</div>
+          <button className="text-xs text-primary hover:underline" onClick={showAll}>全選</button>
+        </div>
+        <div className="min-h-[160px] flex-1 overflow-y-auto p-3.5 pt-2.5 space-y-0.5">
+          {project.milestones.map(m => (
+            <label key={m.id} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-muted/60 cursor-pointer text-xs">
+              <Checkbox checked={!hidden.has(m.id)} onCheckedChange={(c) => setShown(m.id, !!c)} />
+              <span className="truncate">{m.name}</span>
+            </label>
+          ))}
+        </div>
+      </TabsContent>
+    </Tabs>
+  )
+
   return (
     <div className="rounded-xl border bg-card">
       {/* Header（左：收合；右：篩選，只有 A/pm/admin 顯示） */}
@@ -388,160 +549,30 @@ export function MilestonePhaseOverview({ project }: { project: Project }) {
           {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
           匯出 Excel
         </button>
-        {canCurate && (
+        {canCurate && (roomyForPopover ? (
           <Popover>
-            <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border text-muted-foreground hover:bg-muted transition-colors">
-                <SlidersHorizontal className="h-3.5 w-3.5" />顯示設定
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" collisionPadding={12} className="w-80 p-0 overflow-hidden" style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}>
-              {/* 分三頁。原本四區直排，面板長到要一直捲，找設定比設定本身還久。 */}
-              <Tabs defaultValue="layout" className="flex flex-col" style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}>
-                <TabsList className="grid w-full grid-cols-3 gap-0 rounded-none border-b bg-muted/40 p-0 h-auto">
-                  {([['layout', '版面'], ['marks', '日期標記'], ['phases', '顯示階段']] as const).map(([v, label]) => (
-                    <TabsTrigger key={v} value={v}
-                      className={cn(
-                        'relative rounded-none border-b-2 border-transparent py-2 text-xs font-medium text-muted-foreground shadow-none',
-                        'data-[state=active]:border-primary data-[state=active]:bg-background',
-                        'data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-none',
-                      )}>
-                      {label}
-                      {v === 'marks' && markers.size > 0 && (
-                        <span className="ml-1 rounded-full bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">
-                          {markers.size}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                <TabsContent value="layout" className="m-0 space-y-3 overflow-y-auto p-3.5">
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-semibold text-muted-foreground">重疊階段</div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button onClick={() => changeMode('separate')}
-                        className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
-                          mode === 'separate' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                        <Rows3 className="h-3.5 w-3.5" />分開
-                      </button>
-                      <button onClick={() => changeMode('merge')}
-                        className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
-                          mode === 'merge' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                        <Merge className="h-3.5 w-3.5" />合併
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">分開：分層不遮擋；合併：擠成一列</p>
-                  </div>
-                  <div className="space-y-1.5 border-t pt-2.5">
-                    <div className="text-xs font-semibold text-muted-foreground">時間軸寬度</div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button onClick={() => changeAxis('fit')}
-                        className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
-                          axis === 'fit' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                        <Shrink className="h-3.5 w-3.5" />貼合
-                      </button>
-                      <button onClick={() => changeAxis('timeline')}
-                        className={cn('inline-flex items-center justify-center gap-1 text-xs py-1.5 rounded-md border transition-colors',
-                          axis === 'timeline' ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                        <MoveHorizontal className="h-3.5 w-3.5" />展開時間軸
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">貼合：全部縮入畫面；展開時間軸：固定月寬、可橫向滑動（適合長專案）</p>
-                  </div>
-                  <div className="space-y-1.5 border-t pt-2.5">
-                    <div className="text-xs font-semibold text-muted-foreground">放大倍率</div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {([['sm', '標準'], ['md', '放大'], ['lg', '最大']] as const).map(([v, label]) => (
-                        <button key={v} onClick={() => changeZoom(v)}
-                          className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
-                            zoom === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      拉開月寬，日期標記才不會擠在一起。選「放大」或「最大」會自動切換成展開時間軸、可橫向滑動。
-                    </p>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="marks" className="m-0 flex flex-col overflow-hidden p-0">
-                  <div className="space-y-1.5 border-b p-3.5">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-muted-foreground">標記哪一種日期</div>
-                      {markers.size > 0 && (
-                        <button className="text-xs text-primary hover:underline" onClick={clearMarkers}>清除</button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {([['actual', '實際完成'], ['plan', '計畫完成'], ['both', '兩者']] as const).map(([v, label]) => (
-                        <button key={v} onClick={() => changeMarkerSource(v)}
-                          className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
-                            markerSource === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      <span className="font-semibold text-violet-700 dark:text-violet-300">實心紫線</span>＝實際完成、
-                      <span className="font-semibold text-violet-500">虛線淡紫</span>＝計畫完成。
-                      （紅色在本圖代表今天線與遲交，故標記不使用紅色）
-                    </p>
-                    <div className="space-y-1.5 border-t pt-2.5">
-                      <div className="text-xs font-semibold text-muted-foreground">標籤顯示方式</div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {([['full', '日期＋任務'], ['date', '只有日期'], ['hover', '滑過才顯示']] as const).map(([v, label]) => (
-                          <button key={v} onClick={() => changeMarkerLabel(v)}
-                            className={cn('inline-flex items-center justify-center text-xs py-1.5 rounded-md border transition-colors',
-                              markerLabel === v ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted')}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        標記密集時任務名會互相擠，可改成「只有日期」或「滑過才顯示」。
-                      </p>
-                    </div>
-                  </div>
-                  <div className="max-h-[320px] overflow-y-auto p-3.5 pt-2.5 space-y-2">
-                    {project.milestones.filter(m => !hidden.has(m.id)).map(m => {
-                      const ts = (project.tasks || []).filter(t => t.milestoneId === m.id && !t.parentId)
-                      if (ts.length === 0) return null
-                      return (
-                        <div key={m.id}>
-                          <div className="px-1 text-[11px] font-medium text-muted-foreground truncate">{m.name}</div>
-                          {ts.map(t => (
-                            <label key={t.id} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-muted/60 cursor-pointer text-xs">
-                              <Checkbox checked={markers.has(t.id)} onCheckedChange={c => toggleMarker(t.id, !!c)} />
-                              <span className="truncate flex-1">{t.title}</span>
-                              {!t.completedAt && <span className="shrink-0 text-[10px] text-muted-foreground">未完成</span>}
-                            </label>
-                          ))}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="phases" className="m-0 flex flex-col overflow-hidden p-0">
-                  <div className="flex items-center justify-between border-b p-3.5 pb-2.5">
-                    <div className="text-xs font-semibold text-muted-foreground">顯示哪些階段</div>
-                    <button className="text-xs text-primary hover:underline" onClick={showAll}>全選</button>
-                  </div>
-                  <div className="max-h-[360px] overflow-y-auto p-3.5 pt-2.5 space-y-0.5">
-                    {project.milestones.map(m => (
-                      <label key={m.id} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-muted/60 cursor-pointer text-xs">
-                        <Checkbox checked={!hidden.has(m.id)} onCheckedChange={(c) => setShown(m.id, !!c)} />
-                        <span className="truncate">{m.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </TabsContent>
-              </Tabs>
+            <PopoverTrigger asChild>{settingsTrigger}</PopoverTrigger>
+            <PopoverContent align="end" collisionPadding={12}
+              className="flex w-96 flex-col overflow-hidden p-0"
+              style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}>
+              {settingsPanel}
             </PopoverContent>
           </Popover>
-        )}
+        ) : (
+          <Dialog>
+            <DialogTrigger asChild>{settingsTrigger}</DialogTrigger>
+            <DialogContent
+              className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0"
+              style={{ width: 'min(34rem, calc(100vw - 2rem))', maxWidth: 'none' }}>
+              <DialogHeader className="shrink-0 border-b px-4 py-3">
+                <DialogTitle className="flex items-center gap-1.5 text-sm">
+                  <SlidersHorizontal className="h-4 w-4" />顯示設定
+                </DialogTitle>
+              </DialogHeader>
+              {settingsPanel}
+            </DialogContent>
+          </Dialog>
+        ))}
       </div>
 
       {!collapsed && (!model ? (
