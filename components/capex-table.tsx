@@ -80,6 +80,7 @@ export interface BudgetItemRef {
   equipment: string
   quantity: number
   unitPrice: number | null
+  modificationCost?: number | null
   estimatedCost: number | null
   actualCost: number | null
 }

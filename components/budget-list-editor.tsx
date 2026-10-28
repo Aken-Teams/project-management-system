@@ -18,6 +18,10 @@ export interface BudgetItem {
   quantity: number
   purchaseType: string
   unitPrice: number | null
+  /** 改機費用：共用機台分攤到本專案時另外要付的改機／安裝／客製費（選填，空白＝0） */
+  modificationCost: number | null
+  /** 改機費用的來源說明（例：改機約機台價 5%、3 個專案分攤）。公式每次不同，只留文字備查 */
+  modificationNote: string
   estimatedCost: number | null
   actualCost: number | null
 }
@@ -37,6 +41,8 @@ function emptyItem(): BudgetItem {
     quantity: 1,
     purchaseType: '新購',
     unitPrice: null,
+    modificationCost: null,
+    modificationNote: '',
     estimatedCost: null,
     actualCost: null,
   }
@@ -52,11 +58,15 @@ function parseNumber(val: string): number | null {
   return isNaN(n) ? null : n
 }
 
-/** Returns true if unitPrice × quantity does NOT equal estimatedCost (when both are set) */
+/** 單價 × 組數 ＋ 改機費用。共用機台的總價不是單純的單價×組數，改機那筆要另外加。 */
+export function expectedCost(item: BudgetItem): number {
+  return (item.unitPrice ?? 0) * item.quantity + (item.modificationCost ?? 0)
+}
+
+/** 預估費用與「單價 × 組數 ＋ 改機費用」對不起來就回 true（兩者都有值時才檢查） */
 export function hasCostMismatch(item: BudgetItem): boolean {
   if (item.unitPrice == null || item.estimatedCost == null) return false
-  const expected = item.unitPrice * item.quantity
-  return Math.abs(expected - item.estimatedCost) > 0.5
+  return Math.abs(expectedCost(item) - item.estimatedCost) > 0.5
 }
 
 /** Returns error messages for a list of items (for parent submit validation) */
@@ -64,8 +74,10 @@ export function validateBudgetItems(items: BudgetItem[]): string[] {
   const errors: string[] = []
   items.forEach((item, i) => {
     if (hasCostMismatch(item)) {
+      const base = `${formatNT(item.unitPrice)} × ${item.quantity}`
+      const mod = item.modificationCost ? ` + 改機 ${formatNT(item.modificationCost)}` : ''
       errors.push(
-        `第 ${i + 1} 筆（${item.equipment || '未命名'}）：單價 × 組數 (${formatNT(item.unitPrice)} × ${item.quantity} = ${formatNT((item.unitPrice ?? 0) * item.quantity)}) 不等於預估費用 (${formatNT(item.estimatedCost)})`
+        `第 ${i + 1} 筆（${item.equipment || '未命名'}）：單價 × 組數${mod} (${base}${mod} = ${formatNT(expectedCost(item))}) 不等於預估費用 (${formatNT(item.estimatedCost)})`
       )
     }
   })
@@ -154,7 +166,9 @@ function rowToItem(cols: string[], mapping: FieldType[]): BudgetItem {
   // Auto-calc estimatedCost if missing
   if (estimatedCost == null && unitPrice != null) estimatedCost = unitPrice * quantity
 
-  return { station, vendor, equipment, quantity, purchaseType, unitPrice, estimatedCost, actualCost: null }
+  // 貼上/AI 解析的來源沒有改機費用欄，一律留空；對不起來時由人工補。
+  return { station, vendor, equipment, quantity, purchaseType, unitPrice,
+    modificationCost: null, modificationNote: '', estimatedCost, actualCost: null }
 }
 
 function parseTsvToBudgetItems(text: string): { items: BudgetItem[]; total: number | null } {
@@ -212,11 +226,9 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
     const updated = items.map((item, i) => {
       if (i !== index) return item
       const next = { ...item, [field]: value }
-      // Auto-calc estimatedCost when unitPrice or quantity changes
-      if (field === 'unitPrice' || field === 'quantity') {
-        const price = field === 'unitPrice' ? (value as number | null) : next.unitPrice
-        const qty = field === 'quantity' ? (value as number) : next.quantity
-        next.estimatedCost = price != null ? price * qty : next.estimatedCost
+      // 單價／組數／改機費用任一改動 → 重算預估費用
+      if (field === 'unitPrice' || field === 'quantity' || field === 'modificationCost') {
+        if (next.unitPrice != null) next.estimatedCost = expectedCost(next)
       }
       return next
     })
@@ -336,6 +348,12 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
         // Clean up purchaseType
         const rawPurchaseType = typeof p.purchaseType === 'string' ? p.purchaseType.trim() : ''
         const purchaseType = ['空白', '-'].includes(rawPurchaseType) ? '' : (rawPurchaseType || '新購')
+        // 共用機台：預估費用高於「單價 × 組數」時，差額就是改機／安裝費。
+        //   這種列以前會被判成「對不起來」丟給人工處理，但它本來就是對的——
+        //   改機費不在單價裡。把差額填進改機費用欄，總價就驗算得過了。
+        const base = unitPrice != null ? unitPrice * qty : null
+        const diff = base != null && estimatedCost != null ? estimatedCost - base : 0
+        const modificationCost = diff > 0.5 ? Math.round(diff * 100) / 100 : null
         return {
           station: p.station ?? '',
           vendor,
@@ -343,6 +361,8 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
           quantity: qty,
           purchaseType,
           unitPrice,
+          modificationCost,
+          modificationNote: modificationCost ? '由圖片金額推算（預估費用 − 單價 × 組數）' : '',
           estimatedCost,
           actualCost: null,
         }
@@ -477,6 +497,7 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
                     <th className="px-2 py-1.5 text-center font-medium text-muted-foreground w-20">組數</th>
                     <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-20">選購方式</th>
                     <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">預估單價 (NT$)</th>
+                    <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">改機費用 (NT$)</th>
                     <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-36">預估費用 (NT$)</th>
                     <th className="px-2 py-1.5 w-8"></th>
                   </tr>
@@ -517,13 +538,27 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
                             className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
                         </td>
                         <td className="px-1 py-1">
+                          {/* 共用機台才會用到，但不限制「現有/新購」——新購也可能有安裝或客製費，
+                              擋起來只會逼人把它灌進單價，反而看不出組成。 */}
+                          <div className="flex flex-col gap-0.5">
+                            <Input type="number" min={0} value={item.modificationCost ?? ''}
+                              onChange={e => update(i, 'modificationCost', parseNumber(e.target.value))}
+                              className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
+                            {item.modificationCost != null && item.modificationCost !== 0 && (
+                              <Input value={item.modificationNote}
+                                onChange={e => update(i, 'modificationNote', e.target.value)}
+                                className="h-6 text-[11px] px-1.5 w-28" placeholder="來源說明" />
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-1 py-1">
                           <div className="flex items-center gap-1">
                             <Input type="number" min={0} value={item.estimatedCost ?? ''}
                               onChange={e => update(i, 'estimatedCost', parseNumber(e.target.value))}
                               className={`h-7 text-xs px-1.5 w-28 text-right ${mismatch ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
                               placeholder="0" />
                             {mismatch && (
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" title={`應為 ${formatNT((item.unitPrice ?? 0) * item.quantity)}`} />
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" title={`應為 ${formatNT(expectedCost(item))}`} />
                             )}
                           </div>
                         </td>
@@ -544,8 +579,8 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
                 <div className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-t flex items-start gap-1.5">
                   <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                   <span>
-                    橘色標示列的「預估費用」與「單價 × 組數」不符，請確認後修正再儲存。
-                    點擊預估費用欄直接輸入正確金額，或修正單價使其自動計算。
+                    橘色標示列的「預估費用」與「單價 × 組數 ＋ 改機費用」不符，請確認後修正再儲存。
+                    共用機台若有改機／安裝費，請填在「改機費用」欄——總價不是單純的單價 × 組數。
                   </span>
                 </div>
               )}

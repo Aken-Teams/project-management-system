@@ -180,6 +180,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               projectId: proj.id, station: b.station, vendor: b.vendor, equipment: b.equipment,
               quantity: b.quantity, purchaseType: b.purchaseType,
               unitPrice: b.unitPrice, estimatedCost: b.estimatedCost,
+              modificationCost: b.modificationCost, modificationNote: b.modificationNote,
               // 實際花費是執行結果，不複製
               actualCost: null, sortOrder: b.sortOrder,
             },

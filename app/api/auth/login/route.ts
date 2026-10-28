@@ -36,24 +36,26 @@ export async function POST(request: NextRequest) {
             const email = adUser.mail || `${adUser.username}@panjit.com.tw`
             const name = adUser.displayName || adUser.username
 
+            // AD 的 user 另有 jobCategory（管理職/…），系統沒有對應欄位，先不存。
+            const adOrg = adUser.department || ''
+            const adTitle = (adUser.title || '').trim()
+
             // Find or create user in DB
             let dbUser = await prisma.user.findUnique({ where: { email } })
             if (!dbUser) {
               dbUser = await prisma.user.create({
-                data: {
-                  name,
-                  email,
-                  role: 'member',
-                  jobTitle: '',
-                  organization: adUser.department || '',
-                },
+                data: { name, email, role: 'member', jobTitle: adTitle, organization: adOrg },
               })
-            } else if (dbUser.organization !== (adUser.department || '')) {
-              // Sync department from AD
-              dbUser = await prisma.user.update({
-                where: { id: dbUser.id },
-                data: { organization: adUser.department || '' },
-              })
+            } else {
+              // 每次登入同步 AD 的部門與職稱。
+              //   職稱只在「AD 真的有值」時才覆寫——測試帳號之類的 title 會回 null，
+              //   無條件寫回去會把既有職稱洗成空的。
+              const patch: { organization?: string; jobTitle?: string } = {}
+              if (dbUser.organization !== adOrg) patch.organization = adOrg
+              if (adTitle && dbUser.jobTitle !== adTitle) patch.jobTitle = adTitle
+              if (Object.keys(patch).length > 0) {
+                dbUser = await prisma.user.update({ where: { id: dbUser.id }, data: patch })
+              }
             }
 
             if (!dbUser.isActive) {
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
                 name: dbUser.name,
                 email: dbUser.email,
                 role: dbUser.role,
+                jobTitle: dbUser.jobTitle || '',
                 organization: dbUser.organization || '',
               },
             })

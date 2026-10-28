@@ -287,12 +287,20 @@ export async function syncTaskProgressFromLogs(
           const dates = relevant.map(l => l.date)
           const earliestLog = dates.reduce((a, b) => (a < b ? a : b))
           const rawLatest = dates.reduce((a, b) => (a > b ? a : b))
-          const latestLog = rawLatest > today ? today : rawLatest
           const effStart = earliestLog < plannedStart ? earliestLog : plannedStart
-          const totalSpan = task.endDate.getTime() - effStart.getTime()
+          // 分子上界壓在今天，免得有人把日期填到未來就把進度灌到 99。
+          //   但上界不能低於 effStart：整個任務都還在未來時（例：計畫 11/02 起、今天 10/28），
+          //   壓到今天會讓分子變成負的 5 天、被 Math.max(0,…) 吃掉，
+          //   明明已經交了報告卻顯示 0%。（實際踩過：SOT-89 的 Qual. Run #1~#3）
+          const cap = today > effStart ? today : effStart
+          const latestLog = rawLatest > cap ? cap : rawLatest
+          // 日數含當天：在任務第一天交報告＝那一天做完了，不是「零進度」。
+          //   與甘特長條的「結束日含當天」同一把尺，不然首日報告永遠算 0%。
+          const DAY_MS = 86400000
+          const totalSpan = task.endDate.getTime() + DAY_MS - effStart.getTime()
           target = totalSpan <= 0
             ? 99
-            : Math.min(99, Math.max(0, Math.round(((latestLog.getTime() - effStart.getTime()) / totalSpan) * 100)))
+            : Math.min(99, Math.max(0, Math.round(((latestLog.getTime() + DAY_MS - effStart.getTime()) / totalSpan) * 100)))
         }
       }
     }

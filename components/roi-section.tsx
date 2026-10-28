@@ -16,6 +16,7 @@ export interface RoiParams {
 interface BudgetItemMin {
   station: string
   equipment: string
+  modificationCost?: number | null
   estimatedCost: number | null
   actualCost: number | null
 }

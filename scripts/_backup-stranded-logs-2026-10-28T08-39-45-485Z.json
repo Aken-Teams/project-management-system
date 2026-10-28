@@ -1,0 +1,483 @@
+{
+  "takenAt": "2026-10-28T08:39:45.485Z",
+  "note": "補發布前的原值。還原：把這些 id 的 publishedAt / publishedBy 設回 null。",
+  "rows": [
+    {
+      "id": "cmrn4wizs004bbisdigrdfsxu",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "NPI-2026-004",
+      "taskTitle": "治工具發包",
+      "logDate": "2026-05-06",
+      "content": "完成PR"
+    },
+    {
+      "id": "cmrn4wizw004cbisd37sn0bvi",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "NPI-2026-004",
+      "taskTitle": "治工具發包",
+      "logDate": "2026-06-10",
+      "content": "PO全數送出"
+    },
+    {
+      "id": "cmrn4mk3l0042bisd4oq6oumk",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "NPI-2026-004",
+      "taskTitle": "設備進廠啟用",
+      "logDate": "2026-07-13",
+      "content": "確認設備進場時間"
+    },
+    {
+      "id": "cmrn4ngi00045bisdrzbvrzfz",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "NPI-2026-004",
+      "taskTitle": "設備進廠啟用",
+      "logDate": "2026-08-14",
+      "content": "設備進廠"
+    },
+    {
+      "id": "cmrn4qc4u0048bisdb3pu84r1",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "NPI-2026-004",
+      "taskTitle": "設備進廠啟用",
+      "logDate": "2026-08-16",
+      "content": "確認完成無誤"
+    },
+    {
+      "id": "cmtpu0x87007otzsd05esep3r",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "1.委外分析",
+      "logDate": "2026-06-02",
+      "content": "done"
+    },
+    {
+      "id": "cmvrow2ap000e3qsdosn8p8os",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "失效分析",
+      "logDate": "2026-06-30",
+      "content": "done"
+    },
+    {
+      "id": "cmrlqocqh0020bisdu6o06m2o",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "c.成型站",
+      "logDate": "2026-07-06",
+      "content": "PDFN8080 電鍍驗證 - MD"
+    },
+    {
+      "id": "cmrn3oinj003xbisdmlqstfgz",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "c.成型站",
+      "logDate": "2026-07-09",
+      "content": "PDFN8080 Clip B Hot Run - MD"
+    },
+    {
+      "id": "cmrnan5m6004gbisdhyc3sig9",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "c.成型站",
+      "logDate": "2026-07-10",
+      "content": "PDFN8080 Clip B Hot Run - MD試作報告"
+    },
+    {
+      "id": "cmrn3s9xf003zbisd9bxelmmc",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "c.成型站",
+      "logDate": "2026-07-13",
+      "content": "PDFN8080 Clip B Eng Run - MD試作報告"
+    },
+    {
+      "id": "cmrodvcds004kbisdda7liiph",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "e.除膠、電鍍站",
+      "logDate": "2026-07-17",
+      "content": "已將電鍍後樣品交予Q進行SAT作業"
+    },
+    {
+      "id": "cmrtycr770064bisdo98gjdu6",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "e.除膠、電鍍站",
+      "logDate": "2026-07-21",
+      "content": "報告補上SAT"
+    },
+    {
+      "id": "cmru9ol880069bisdpu84e7a5",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "e.除膠、電鍍站",
+      "logDate": "2026-07-21",
+      "content": "Clip B Eng Run 除膠電鍍完成"
+    },
+    {
+      "id": "cms3zftl0001dsbsdepsel27x",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-07-21",
+      "content": "ETN"
+    },
+    {
+      "id": "cms3zewsn001asbsdos6k0m2a",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-07-27",
+      "content": "ETN"
+    },
+    {
+      "id": "cmssje5f8002weysdjeo3z4i7",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-07-29",
+      "content": "ETN工程試作單"
+    },
+    {
+      "id": "cmscti18100140isd3hq8561s",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-08-03",
+      "content": "ENG RUN"
+    },
+    {
+      "id": "cmssmwx350039eysd68fuf86z",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "7.腳架硬度實驗",
+      "logDate": "2026-08-10",
+      "content": "各站SAT狀況"
+    },
+    {
+      "id": "cmssjb5l3002teysdmu3q3bfi",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-08-18",
+      "content": "實驗組別"
+    },
+    {
+      "id": "cmszw4rco0030sysdac1bzlv4",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "a.切割站",
+      "logDate": "2026-08-19",
+      "content": "（回報任務已 100% 完成，未另附工作說明，請主管確認）"
+    },
+    {
+      "id": "cmt11a9zy0034sysdvuio5qcu",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "a.切割站",
+      "logDate": "2026-08-20",
+      "content": "（回報任務已 100% 完成，未另附工作說明，請主管確認）"
+    },
+    {
+      "id": "cmt11aesy0037sysddhv28d9x",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "a.切割站",
+      "logDate": "2026-08-20",
+      "content": "（回報任務已 100% 完成，未另附工作說明，請主管確認）"
+    },
+    {
+      "id": "cmt11aiv80039sysdv7l37bcd",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "a.切割站",
+      "logDate": "2026-08-20",
+      "content": "（回報任務已 100% 完成，未另附工作說明，請主管確認）"
+    },
+    {
+      "id": "cmt11aso4003bsysdm9wc1l6h",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "a.切割站",
+      "logDate": "2026-08-20",
+      "content": "（回報任務已 100% 完成，未另附工作說明，請主管確認）"
+    },
+    {
+      "id": "cmsskcxj50035eysdk0rrhprc",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-08-28",
+      "content": "ETN工程試作"
+    },
+    {
+      "id": "cmvrosd7j00093qsdkau0g5m4",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-09-09",
+      "content": "done"
+    },
+    {
+      "id": "cmvroifdx00063qsdrd4esp4v",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "原物料準備",
+      "logDate": "2026-09-27",
+      "content": "原物料清點完成"
+    },
+    {
+      "id": "cmuowok1u000ktrsdxqm2op9c",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "c.成型站",
+      "logDate": "2026-10-01",
+      "content": "提交9/24工程試作報告"
+    },
+    {
+      "id": "cmvroudhk000b3qsdmqq46w3z",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-10-11",
+      "content": "done"
+    },
+    {
+      "id": "cmvrouxvq000d3qsd4y0e0416",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-001",
+      "taskTitle": "o.計畫表",
+      "logDate": "2026-10-20",
+      "content": "done"
+    },
+    {
+      "id": "cmvqltd3800f80dsdr7t58mu8",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-014",
+      "taskTitle": "APQP 2-12 新產品原物料 (BOM data) New Product BOM Data",
+      "logDate": "2026-05-04",
+      "content": "原物料"
+    },
+    {
+      "id": "cmvqlupva00fa0dsdlhkzbdsq",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-014",
+      "taskTitle": "APQP2-17 工程試作申請單 Engineering run (LC) application /工程試作通知單 Engineer Run Notices",
+      "logDate": "2026-05-18",
+      "content": "工程試作申請單"
+    },
+    {
+      "id": "cmvqlvrrk00fc0dsdvdxblfbf",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-014",
+      "taskTitle": "APQP2-18 初版打線圖/測試規格 (包含產品線路圖) Preliminary Bonding Diagram/Test Spec. (include Product Circuit Diagram)",
+      "logDate": "2026-05-25",
+      "content": "打線圖/測規"
+    },
+    {
+      "id": "cmvqlwn1600fe0dsdo546e6yv",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-014",
+      "taskTitle": "APQP2-20 Qualification Plan (特性測試、工程驗證、電性測試、信賴性測試)",
+      "logDate": "2026-06-08",
+      "content": "Qual plan"
+    },
+    {
+      "id": "cmvqlz4az00fi0dsdwo4bbci1",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-014",
+      "taskTitle": "APQP 3-1 生產流程圖 Process Flow (Wafer & Package)",
+      "logDate": "2026-08-03",
+      "content": "流程圖"
+    },
+    {
+      "id": "cmvqls64h00f50dsdta2ndy5g",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-014",
+      "taskTitle": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "logDate": "2026-10-20",
+      "content": "驗證計畫"
+    },
+    {
+      "id": "cmvqnby2s00gz0dsd0bqnr59z",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 1-6 初步設計可行性研究 (消費品是可選的)Initial Design Feasibility Study (Consumer products are optional)",
+      "logDate": "2026-02-16",
+      "content": "可行性研究"
+    },
+    {
+      "id": "cmvqndnm000h10dsdhvl4kcdg",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 1-7 初期物料清單確認是否為新供應商? (晶片/材料(除晶片)/外包封裝) Confirm primary bill of Materials if it is a new supplier? (Chip/Materials (except chips)/Outsourced Packaging)",
+      "logDate": "2026-03-02",
+      "content": "供應商確認"
+    },
+    {
+      "id": "cmvqnfsdr00h30dsdof4vlnyb",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "logDate": "2026-03-30",
+      "content": "矩陣定義"
+    },
+    {
+      "id": "cmvqnh3b000h50dsdkl8sfysp",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "logDate": "2026-03-30",
+      "content": "流程圖"
+    },
+    {
+      "id": "cmvqnhzsp00h70dsd4x5au3m4",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 2-3 試製品DFMEA[晶圓和封裝]Prototype DFMEA [Wafer & Package]",
+      "logDate": "2026-04-06",
+      "content": "初步DFMEA"
+    },
+    {
+      "id": "cmvqnlqwg00h90dsdd3ywpe39",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "logDate": "2026-04-20",
+      "content": "試製品驗證計畫"
+    },
+    {
+      "id": "cmvqnnx2i00hb0dsd999hwuz8",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP 2-12 新產品原物料 (BOM data) New Product BOM Data",
+      "logDate": "2026-05-04",
+      "content": "原物料"
+    },
+    {
+      "id": "cmvqnoyy700hd0dsdlitbp5tr",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP2-17 工程試作申請單 Engineering run (LC) application /工程試作通知單 Engineer Run Notices",
+      "logDate": "2026-05-18",
+      "content": "工程試作申請單"
+    },
+    {
+      "id": "cmvqnqpcl00hf0dsdh5ximza2",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-017",
+      "taskTitle": "APQP2-18 初版打線圖/測試規格 (包含產品線路圖) Preliminary Bonding Diagram/Test Spec. (include Product Circuit Diagram)",
+      "logDate": "2026-05-25",
+      "content": "打線圖/測規"
+    },
+    {
+      "id": "cmvqhl4is00dg0dsdc26tt1co",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-018",
+      "taskTitle": "APQP 1-9 開發里程碑與計畫表 Development plan / schedule",
+      "logDate": "2026-03-30",
+      "content": "開發里程碑與計畫表"
+    },
+    {
+      "id": "cmvqk5hv800dw0dsdq9y02vyy",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-018",
+      "taskTitle": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "logDate": "2026-04-13",
+      "content": "製程流程圖"
+    },
+    {
+      "id": "cmvqk227400du0dsdjxuhs1eb",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-018",
+      "taskTitle": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "logDate": "2026-04-13",
+      "content": "產品矩陣"
+    },
+    {
+      "id": "cmvqk8ern00dy0dsd7dh2o8qm",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-018",
+      "taskTitle": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "logDate": "2026-05-04",
+      "content": "驗證計畫"
+    },
+    {
+      "id": "cmvqkdajj00e30dsdw8zaa0qk",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-018",
+      "taskTitle": "APQP 3-1 生產流程圖 Process Flow (Wafer & Package)",
+      "logDate": "2026-10-27",
+      "content": "流程圖"
+    },
+    {
+      "id": "cmvgihqd700b30dsda4ejwqfu",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-021",
+      "taskTitle": "APQP 1-7 初期物料清單確認是否為新供應商",
+      "logDate": "2026-10-20",
+      "content": "所有原物料皆為既有供應商，提供供應商合格承認名冊"
+    },
+    {
+      "id": "cmvgi0v3v00b00dsdillm2itb",
+      "publishedAt": null,
+      "publishedBy": null,
+      "projectCode": "RD-2026-021",
+      "taskTitle": "APQP 1-4 核心團隊成員名單",
+      "logDate": "2026-10-20",
+      "content": "更新名單"
+    }
+  ]
+}

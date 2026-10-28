@@ -308,11 +308,29 @@ export async function PUT(
       }
     }
 
-    // 發布到官方更新紀錄「只由 A 送出自己的週報時觸發」(publishLogs)。
-    // 「審核通過(reviewEvent=confirmed)」只是認可 R 的回報，不代表 A 的報告，故不發布。
+    // 發布到官方更新紀錄。publishLogs 是舊的顯式旗標，目前沒有呼叫端，保留相容。
     if (body.publishLogs) {
       await prisma.taskLog.updateMany({
         where: { taskId, publishedAt: null },
+        data: { publishedAt: new Date(), publishedBy: body.reviewActor || '' },
+      })
+    }
+
+    // A 確認完成 → 一併發布這個任務「還沒發布、也沒被駁回」的執行者報告。
+    //   原本確認完成與核准報告是兩件分開的事，但任務一旦完成就離開審核佇列
+    //   （畫面顯示「流程已走完，無待辦」），那些報告再也沒有任何路徑能被核准——
+    //   內容與附件都在，卻永遠停在「未進紀錄」，更新紀錄那一格就是空的。
+    //   實際影響：6 個專案、114 筆。客戶決策 2026-10-28：確認完成即視為認可報告。
+    //   三種不發布：
+    //     reportOnly         當責自己在撰寫台寫的，草稿不該被別人的動作推上線
+    //     postDoneSupplement 完成後補充有自己的兩段式審核，由主管→當責收尾
+    //     reviewerRejectedAt 已被駁回的，發布等於讓駁回失效
+    if (body.reviewEvent === 'confirmed' && updated.completedAt) {
+      await prisma.taskLog.updateMany({
+        where: {
+          taskId, publishedAt: null, reviewerRejectedAt: null,
+          reportOnly: false, postDoneSupplement: false,
+        },
         data: { publishedAt: new Date(), publishedBy: body.reviewActor || '' },
       })
     }

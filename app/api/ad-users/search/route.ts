@@ -10,6 +10,7 @@ interface ADMember {
   username: string
   displayName: string
   dept: string
+  title: string      // 職稱（AD 的 title）
 }
 
 // In-memory cache
@@ -19,8 +20,9 @@ let cacheTime = 0
 function flattenTree(node: Record<string, unknown>, dept = ''): ADMember[] {
   const name = (node.name as string) || dept
   const members: ADMember[] = []
-  for (const m of (node.members as { username: string; displayName: string }[]) || []) {
-    members.push({ username: m.username, displayName: m.displayName, dept: name })
+  // AD 的 member 另有 jobCategory（管理職/…），系統沒有對應欄位，先不帶。
+  for (const m of (node.members as { username: string; displayName: string; title?: string | null }[]) || []) {
+    members.push({ username: m.username, displayName: m.displayName, dept: name, title: m.title || '' })
   }
   for (const child of (node.children as Record<string, unknown>[]) || []) {
     members.push(...flattenTree(child, name))
@@ -66,7 +68,7 @@ export async function GET(request: NextRequest) {
           id: m.username,
           name: m.displayName,
           email: '',
-          jobTitle: '',
+          jobTitle: m.title,
           organization: m.dept,
         }))
     } catch {

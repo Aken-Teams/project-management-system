@@ -602,7 +602,13 @@ model ProjectBudgetItem {
   quantity      Float    @default(1)  // 組數
   purchaseType  String   @default("") @map("purchase_type") // 選購方式
   unitPrice     Float?   @map("unit_price")      // 預估單價
-  estimatedCost Float?   @map("estimated_cost") // 預估費用（= 單價 × 組數）
+  // 改機費用：共用機台分攤到本專案時另外要付的改機／安裝／客製費。
+  //   共用設備的總價不是「單價 × 組數」——IE 會另外算一筆改機成本攤進來
+  //   （例：改機約機台價 5%、由 3 個專案分攤 → 單價 × 5%/3）。
+  //   公式每次不同，所以只存「金額」這個結果，推導過程寫在 modificationNote。
+  modificationCost Float?  @map("modification_cost")
+  modificationNote String  @default("") @map("modification_note")
+  estimatedCost Float?   @map("estimated_cost") // 預估費用（= 單價 × 組數 + 改機費用）
   actualCost    Float?   @map("actual_cost")    // 實際費用
   sortOrder     Int      @default(0) @map("sort_order")
   createdAt     DateTime @default(now()) @map("created_at")
