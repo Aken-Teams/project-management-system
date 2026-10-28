@@ -498,6 +498,7 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
                     <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-20">選購方式</th>
                     <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">預估單價 (NT$)</th>
                     <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-32">改機費用 (NT$)</th>
+                    <th className="px-2 py-1.5 text-left font-medium text-muted-foreground w-32">改機說明</th>
                     <th className="px-2 py-1.5 text-right font-medium text-muted-foreground w-36">預估費用 (NT$)</th>
                     <th className="px-2 py-1.5 w-8"></th>
                   </tr>
@@ -540,16 +541,14 @@ export function BudgetListEditor({ items, onChange, onAITotal }: BudgetListEdito
                         <td className="px-1 py-1">
                           {/* 共用機台才會用到，但不限制「現有/新購」——新購也可能有安裝或客製費，
                               擋起來只會逼人把它灌進單價，反而看不出組成。 */}
-                          <div className="flex flex-col gap-0.5">
-                            <Input type="number" min={0} value={item.modificationCost ?? ''}
-                              onChange={e => update(i, 'modificationCost', parseNumber(e.target.value))}
-                              className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
-                            {item.modificationCost != null && item.modificationCost !== 0 && (
-                              <Input value={item.modificationNote}
-                                onChange={e => update(i, 'modificationNote', e.target.value)}
-                                className="h-6 text-[11px] px-1.5 w-28" placeholder="來源說明" />
-                            )}
-                          </div>
+                          <Input type="number" min={0} value={item.modificationCost ?? ''}
+                            onChange={e => update(i, 'modificationCost', parseNumber(e.target.value))}
+                            className="h-7 text-xs px-1.5 w-28 text-right" placeholder="0" />
+                        </td>
+                        <td className="px-1 py-1">
+                          <Input value={item.modificationNote}
+                            onChange={e => update(i, 'modificationNote', e.target.value)}
+                            className="h-7 text-xs px-1.5 w-28" placeholder="例：5%/3 專案分攤" />
                         </td>
                         <td className="px-1 py-1">
                           <div className="flex items-center gap-1">
