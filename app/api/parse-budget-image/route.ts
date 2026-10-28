@@ -227,12 +227,15 @@ ${transcription}
     //   實際踩過：某張 15 列的表被改掉 4 列，合計少了 789,800，
     //   前端對帳對不起來又擋住儲存，使用者完全無解。
     //   表格是真相來源：照實回傳，不一致的列交給人在畫面上判斷。
+    //   只挑「費用比單價 × 組數還少」的列。多出來的那種是共用機台的改機／安裝費
+    //   （IE 的算法例如 單價 × (0.2 + 5%/3)），前端會把差額填進「改機費用」欄，
+    //   驗算得過，不該再報成異常。少掉的才是真的對不起來，要人看。
     const inconsistent = items
       .map((item, idx) => ({ idx, item }))
       .filter(({ item }) =>
         item.unitPrice != null && item.estimatedCost != null
         && !(item.unitPrice === 0 && item.estimatedCost === 0)
-        && Math.abs(item.unitPrice * item.quantity - item.estimatedCost) >= 1)
+        && item.unitPrice * item.quantity - item.estimatedCost >= 1)
       .map(({ idx, item }) => ({
         row: idx + 1,
         equipment: item.equipment,
