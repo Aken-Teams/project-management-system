@@ -1,0 +1,2966 @@
+{
+  "takenAt": "2026-10-29T09:27:25.070Z",
+  "note": "套用 backfill-completed-at-from-worklog 之前的完整快照（所有完成/回報相關欄位）。",
+  "rows": [
+    {
+      "id": "cmnpqvush00cdoxsdmoydx1ur",
+      "title": "設備評估",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-04-08T00:00:00.000Z",
+      "completedBy": "Alice Chen",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "NPI-2026-004"
+      }
+    },
+    {
+      "id": "cmnpqvusq00cgoxsd64mg4g05",
+      "title": "治工具發包",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-16T06:35:08.755Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-13",
+      "reportedDoneAt": "2026-07-16T06:34:51.674Z",
+      "reportedDoneBy": "ivypan 潘彥吟",
+      "reviewedAt": "2026-07-16T06:35:08.755Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "NPI-2026-004"
+      }
+    },
+    {
+      "id": "cmnq5padj0000ogsdull663v7",
+      "title": "設計規劃",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-31T00:00:00.000Z",
+      "completedBy": "Alice Chen",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "NPI-2026-004"
+      }
+    },
+    {
+      "id": "cmnq5paoq0001ogsdplq4rpm4",
+      "title": "設備進廠啟用",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-16T06:30:24.750Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-13",
+      "reportedDoneAt": "2026-07-16T06:30:02.887Z",
+      "reportedDoneBy": "ivypan 潘彥吟",
+      "reviewedAt": "2026-07-16T06:30:24.750Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "NPI-2026-004"
+      }
+    },
+    {
+      "id": "cmoc8q1gx00b4rusdwfjb0007",
+      "title": "APQP 1-1 強茂客戶需求鑑定表 VOC Check list",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-10-01T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmoc8q1lt00b5rusdttq7wmoh",
+      "title": "APQP 2-1 開發里程碑與計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-12-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmoc8q34o00bjrusddbfjw07y",
+      "title": "APQP 2-2 產品矩陣定義",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-12-19T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmpz3ytr5001na7sdag0dwjfg",
+      "title": "更新文件",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T03:56:33.902Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T03:56:33.902Z",
+      "reportedDoneBy": "benson 楊國彬",
+      "reviewedAt": "2026-10-21T06:50:38.185Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmpz4rcbp002fa7sdla8ncuh6",
+      "title": "APQP 2-3 初步製程流程圖",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-12-30T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmpz5mhup002ja7sdagrjou8r",
+      "title": "APQP 1-2 核心團隊成員名單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-10-01T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmpz5mhyt002ka7sdo65fieek",
+      "title": "APQP 1-3 新產品請求",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-10-30T00:00:00.000Z",
+      "completedBy": "Alice Chen",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmpz5mi30002la7sdv2r8u55l",
+      "title": "APQP 1-4 初步PRS報告",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-10-30T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmpz5mi9f002ma7sd1zk27m5f",
+      "title": "APQP 1-5 初步設計可行性研究",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-11-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq9213tt0000oesdhbuwdlfu",
+      "title": "APQP 1-6 初期物料清單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-11-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq92yo510003oesdw1iws6ko",
+      "title": "APQP 1-7 NPD 申請單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-11-15T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nnph000coesd140c99rd",
+      "title": "APQP 2-4 試製品DFMEA",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-12-30T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94noat000doesdyht9f1lw",
+      "title": "APQP 2-5 試製品PFMEA",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2025-12-31T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94noeq000eoesd6qmr1jgu",
+      "title": "APQP 2-6 試製品控制計劃",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-01-19T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94noii000foesds99r5opd",
+      "title": "APQP 2-7 產品風險評估",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-01-30T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nomh000goesdlqyphp4b",
+      "title": "APQP 2-8 試製品驗證計劃",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-02-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94noqu000hoesdjcfumfzg",
+      "title": "APQP 2-9 LAR報告",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-02-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94noy0000ioesds36kcc8d",
+      "title": "APQP 2-10 最終產品需求規格書",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-02-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94np1t000joesd44rux489",
+      "title": "APQP 2-11 設計報告",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-02-19T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94np5k000koesd1nh1sok9",
+      "title": "APQP 2-12 新產品原物料",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-02-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94np9b000loesdl3fnqpl2",
+      "title": "APQP 2-13 晶片供應商製程確認",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-02-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94npd7000moesd1o4bfsyx",
+      "title": "APQP 2-14 封裝設計說明與Package code準則定義",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nqiy000noesdgo3op9ww",
+      "title": "APQP 2-15 新產品開發風險評估表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nqmy000ooesdsmfayey9",
+      "title": "APQP 2-16 新產品HSF有害物質確認表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nqqv000poesdsurzgv7h",
+      "title": "APQP 2-17 工程試作申請單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nr5p000qoesd0h42a8sz",
+      "title": "APQP 2-18 初版打線圖/測試規格 (包含產品線路圖)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nr9t000roesdwy871tvp",
+      "title": "APQP 2-19 包裝規範(初版)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nrdr000soesdpm5ahe44",
+      "title": "APQP 2-20 Qualification Plan",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nrhn000toesdicjqqr7a",
+      "title": "APQP 2-21 能源審查鑑別表-用能設備",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-31T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nrll000uoesdnqygy11e",
+      "title": "APQP 2-22 能源管理使用設備採購規格表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-31T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmq94nrpd000voesdmxuyjq4c",
+      "title": "APQP2-23 環境物質評估表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-31T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwvzk000n6bsdnnsmfh35",
+      "title": "APQP 3-1 生產流程圖",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-04-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjww53000o6bsdd493a2hb",
+      "title": "APQP 3-2 DFMEA設計失效模式與影響分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-05-08T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwwai000p6bsd0m5eglua",
+      "title": "APQP 3-3 PFMEA過程失效模式及效應分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-05-20T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwwfv000q6bsdlxr37upb",
+      "title": "APQP 3-4 Production Control Plan",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-05-29T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwwxx000t6bsdiw9b9c1p",
+      "title": "APQP 3-7 MSA 分析報告",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-09T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwxdb000w6bsdnlut1aru",
+      "title": "APQP 3-10 供應商合格名冊",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-10T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwxih000x6bsdon2xqcsw",
+      "title": "APQP 3-11 產品製作表 (BS)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-19T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwxnh000y6bsd69g4096h",
+      "title": "APQP 3-12 封裝&包裝規範 (AS)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-19T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqcjwxsr000z6bsddah7yzwz",
+      "title": "APQP 3-13 產品測試規格 (TS)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-19T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqnejp1p0000wusdw4130ugp",
+      "title": "APQP P2",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-03-31T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-01-26",
+      "reportedDoneAt": "2026-07-24T07:49:54.264Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqnepx6p0002wusd72lceh34",
+      "title": "原物料準備",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-28T05:45:56.096Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-28T05:33:41.842Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-10-28T05:45:56.096Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp2kzzy000owusdch2zdipt",
+      "title": "1.各站design rule",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-23T00:00:00.000Z",
+      "completedBy": "brian38 龔秉豪",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp2q0yc000twusdihlph1ra",
+      "title": "5.新跳線設計 CLIP B",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-07T02:40:38.814Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-07T02:40:38.814Z",
+      "reportedDoneBy": "michaell 陳勇存",
+      "reviewedAt": "2026-09-15T07:20:58.683Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp2q12i000uwusdlk0o3bum",
+      "title": "3.待辦事項明細列出",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-17T07:03:13.637Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-17",
+      "reportedDoneAt": "2026-08-17T07:03:13.637Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-08-19T08:29:33.817Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp2q16g000vwusdhmgilwid",
+      "title": "4.工程試作的履歷總表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-23T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp2q1aj000wwusdt0zq5dus",
+      "title": "2.Qual run製程條件",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-28T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp2wxfh000zwusdc3v9irce",
+      "title": "工程四部(雷射、切腳、測試)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-16T07:38:19.362Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-07-16T07:38:19.362Z",
+      "reportedDoneBy": "brian38 龔秉豪",
+      "reviewedAt": "2026-08-25T09:16:55.397Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp36skj0011wusdnxezbhkv",
+      "title": "2.Qual run製程條件",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-26T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp36st00013wusd59u53fp1",
+      "title": "4.工程試作的履歷總表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-26T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp37trs0014wusdcoft3u5r",
+      "title": "1.各站design rule",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T03:59:59.625Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T03:59:59.625Z",
+      "reportedDoneBy": "benson 楊國彬",
+      "reviewedAt": "2026-10-21T06:54:36.454Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp37tvt0015wusd3qp0pisv",
+      "title": "2.Qual run製程條件",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-29T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp37u040016wusdfsum66gc",
+      "title": "3.待辦事項明細列出",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T04:03:30.803Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T04:03:30.803Z",
+      "reportedDoneBy": "benson 楊國彬",
+      "reviewedAt": "2026-10-21T06:54:30.875Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp37u480017wusd63f0a0i9",
+      "title": "4.工程試作的履歷總表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-29T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp3jo5o0018wusd6mexcj8i",
+      "title": "6.Qual lot原物料清單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-22T00:00:00.000Z",
+      "completedBy": "brian38 龔秉豪",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp3jocu001awusdbmtffh52",
+      "title": "5.Qual lot原物料清單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-29T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp3yeza001bwusduds5k8l2",
+      "title": "a.點膠P面14苯針製作",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-25T08:31:56.514Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-25T08:31:56.514Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-05T08:13:58.462Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqp3yf2w001cwusd07p7aoqm",
+      "title": "b.Clip剔除機構",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-07T03:37:55.390Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-07T03:37:55.390Z",
+      "reportedDoneBy": "michaell 陳勇存",
+      "reviewedAt": "2026-09-15T07:23:01.546Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmqt1y8zh002nwusdc4k19qw0",
+      "title": "失效分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-28T05:46:00.977Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-28T05:44:18.356Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-10-28T05:46:00.977Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr0d2who003dwusdstgaeh8z",
+      "title": "1.委外分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-06T13:13:12.672Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-06T13:13:04.724Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-09-06T13:13:12.672Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr0d2wl9003ewusd2l6vip8b",
+      "title": "2.FA分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-06-30T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr35vm0r003qwusddiism2w8",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-15T07:23:17.490Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-15T07:10:47.438Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-15T07:23:17.490Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr35vm4v003rwusdpo0x9h3m",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-17T07:09:49.658Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-17",
+      "reportedDoneAt": "2026-08-17T07:09:49.658Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-08-20T07:01:31.355Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr35vm8h003swusd1mxxqbnm",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-16T05:54:51.990Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-20",
+      "reportedDoneAt": "2026-07-16T05:54:51.990Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-07-24T07:43:47.720Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr35vmcx003twusdddevxqeg",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T08:31:13.508Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T08:31:13.508Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:48.084Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr35vmko003vwusdskw1wbqc",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T08:33:15.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T08:33:15.000Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:49.232Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr35vmo8003wwusd540m0xcw",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T05:12:43.708Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T05:12:43.708Z",
+      "reportedDoneBy": "benson 楊國彬",
+      "reviewedAt": "2026-10-21T06:54:21.716Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmr37kbvr0041wusdadkubmqq",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-15T06:11:17.174Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-07-15T06:11:17.174Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-08-25T09:16:53.087Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d82y0000bisd2rzhzzrd",
+      "title": "2. Clip B hot run",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-21T06:54:12.635Z",
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d86i0002bisdtf969gsc",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-08T00:00:00.000Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-13",
+      "reportedDoneAt": "2026-07-14T07:28:37.268Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-07-14T07:29:53.606Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d8ah0004bisdy90a6y08",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-15T07:23:24.001Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-15T07:10:15.812Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-15T07:23:24.001Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d8e20006bisdml79nkfc",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-25T08:51:54.338Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-25T08:51:54.338Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-05T08:13:59.480Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d8hu0008bisdzrzct8eu",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-16T09:15:32.275Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-20",
+      "reportedDoneAt": "2026-07-16T09:15:32.275Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-07-24T07:43:41.318Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d8lk000abisdeycjekrg",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T08:37:43.890Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T08:37:43.890Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:50.306Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d8po000cbisd1xa3cp3u",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-21T01:05:54.856Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-20",
+      "reportedDoneAt": "2026-07-21T01:05:54.856Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-07-24T07:43:48.941Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d8t9000ebisdls8y4kxy",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T08:38:32.591Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T08:38:32.591Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:51.582Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6d94r000gbisdi7arf1gs",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T05:15:53.949Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T05:15:53.949Z",
+      "reportedDoneBy": "benson 楊國彬",
+      "reviewedAt": "2026-10-21T06:54:12.635Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j2uv000ibisdygp5z7os",
+      "title": "3.Clip B  Eng Run",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-21T06:54:02.012Z",
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j2yt000kbisdm41423wp",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-14T06:26:57.063Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-10",
+      "reportedDoneAt": "2026-08-14T06:15:52.160Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-08-14T06:26:57.063Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j32p000mbisd75hy201r",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-19T09:30:01.432Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-19T09:30:01.432Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-05T08:13:52.534Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j36s000obisd29a5ww61",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-25T08:53:04.473Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-25T08:53:04.473Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-05T08:14:01.031Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j3ah000qbisdii6nej09",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-16T06:03:33.855Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-20",
+      "reportedDoneAt": "2026-07-16T06:03:33.855Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-07-24T07:43:42.724Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j3ec000sbisdid8o8o17",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T08:36:11.052Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T08:36:11.052Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:52.800Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j3i2000ubisdajthflrn",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-21T06:23:02.785Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-20",
+      "reportedDoneAt": "2026-07-21T06:23:02.785Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-07-24T07:43:46.013Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j3tv000wbisd7waiwo39",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T11:14:26.445Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T11:14:26.445Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:54.690Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrj6j3xg000ybisdjd839hy5",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T05:16:46.520Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T05:16:46.520Z",
+      "reportedDoneBy": "benson 楊國彬",
+      "reviewedAt": "2026-10-21T06:54:02.012Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmrxd7x1f000fcsgvuf6hs7bn",
+      "title": "1.1 新產品項目開發製造可行性分析",
+      "status": "in_progress",
+      "progress": 99,
+      "completedAt": null,
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": "2026-08-29T16:45:09.856Z",
+      "reportedDoneBy": "Bob Wang",
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "NPI-2026-013"
+      }
+    },
+    {
+      "id": "cmrxd7x9o001icsgv2zcl47zn",
+      "title": "1.1.2 利潤分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-14T00:00:00.000Z",
+      "completedBy": "Alice Chen",
+      "completedWeekOf": "2026-08-10",
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "NPI-2026-013"
+      }
+    },
+    {
+      "id": "cms2m55vg00005esdxlmgdz04",
+      "title": "4.清潔與擠膠壓力實驗",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-05T08:14:02.647Z",
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m55zn00025esdpz58qp7h",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-28T09:13:44.906Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-27",
+      "reportedDoneAt": "2026-07-28T01:34:02.173Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-07-28T09:13:44.906Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m56c500045esdabe0inzl",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-20T04:42:03.138Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-20T04:42:03.138Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-05T08:13:53.862Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m56gi00065esd9ige98d6",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-27T06:35:36.990Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-27T06:35:36.990Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-05T08:14:02.647Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m56ko00085esdvooa7uo6",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-28T05:40:22.833Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-07-28T05:40:22.833Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-09-04T02:00:50.008Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m56p1000a5esdfs8a77aj",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-27T12:50:09.693Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-27T12:50:09.693Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:26:03.575Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m56t3000c5esd7mp13bzs",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-10T08:37:59.097Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-10T08:37:59.097Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-08-30T13:25:41.985Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m56x5000e5esdyajqha01",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-27T12:52:49.004Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-27T12:52:49.004Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:26:05.357Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2m571f000g5esd0u4m7flq",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-21T05:04:35.271Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-21T05:04:35.271Z",
+      "reportedDoneBy": "peterlin 林俊旭",
+      "reviewedAt": "2026-08-25T07:53:34.850Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mg2pq000i5esduyz9wy92",
+      "title": "5.雷射切腳實驗",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-07T05:58:38.018Z",
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mjx4z000k5esd5su9x9ly",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-07-28T09:13:49.773Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-07-27",
+      "reportedDoneAt": "2026-07-28T01:33:20.378Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-07-28T09:13:49.773Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mjxj1000m5esdj26nncwt",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-20T04:42:14.634Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-20T04:42:14.634Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-05T08:13:54.871Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mjxvk000o5esdr2q4rhvp",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-04T09:28:49.605Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-04T09:28:49.605Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-06T13:10:18.877Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mm13c000q5esdu06483h7",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-05T09:34:35.855Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-05T09:34:35.855Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-09-04T02:00:52.107Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mm17d000s5esdkq7vcfps",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-10T07:47:32.928Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-10T07:47:32.928Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-09-15T07:23:26.168Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mo48e000u5esdu24e4ea5",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-29T02:23:23.159Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-05",
+      "reportedDoneAt": "2026-09-29T02:23:23.159Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-10-07T05:58:38.018Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mo4cd000w5esdkkx7rqat",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T11:34:32.928Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T11:34:32.928Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:55.893Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms2mo4ge000y5esdvt01g8lk",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T10:32:18.883Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-26T10:32:18.883Z",
+      "reportedDoneBy": "peterlin 林俊旭",
+      "reviewedAt": "2026-09-04T02:00:56.482Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4g8mi000029psdhhurdjqx",
+      "title": "6.PM晶片測試(PJQ64704)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-06T13:10:22.602Z",
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4g9yf200049psd9sanih97",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-14T06:26:59.736Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-10",
+      "reportedDoneAt": "2026-08-14T06:26:05.497Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-08-14T06:26:59.736Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4g9yjy00069psds040g4r8",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-04T09:26:23.640Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-04T09:26:23.640Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-06T13:10:21.267Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4jqahz00089psdz79cd5bv",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-04T10:04:35.468Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-04T10:04:35.468Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-06T13:10:22.602Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4jqals000a9psd5d8ix3zn",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-05T09:35:12.567Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-05T09:35:12.567Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-09-04T02:00:54.195Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4jqaq1000c9psdtnryu9qo",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T11:46:33.531Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T11:46:33.531Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:57.006Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4kbpui000d9psdrnvc2n6v",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-11T05:44:57.454Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-10",
+      "reportedDoneAt": "2026-08-11T05:44:57.454Z",
+      "reportedDoneBy": "peterlin 林俊旭",
+      "reviewedAt": "2026-08-16T05:45:29.409Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4kbq19000f9psdafzxwn9k",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-11T07:49:31.299Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-11T07:49:31.299Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-08-30T13:25:44.321Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cms4kbq5s000h9psdip06eubu",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T11:48:11.407Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T11:48:11.407Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:58.108Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4ek6000m0isdszl8pb2b",
+      "title": "7.腳架硬度實驗",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-14T07:37:37.105Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-10",
+      "reportedDoneAt": "2026-08-14T07:37:37.105Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-08-16T05:46:13.964Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4eqg000o0isdmc0op3rw",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-03T05:57:43.077Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-03",
+      "reportedDoneAt": "2026-08-03T05:57:43.077Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-08-06T04:17:40.606Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4evp000q0isdnpml8uvw",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-20T04:42:27.339Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-20T04:42:27.339Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-05T08:13:56.191Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4ezm000s0isdzmfzqdh0",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-04T08:27:36.953Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-04T08:27:36.953Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-06T13:10:24.273Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4f3q000u0isd75qhgbma",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-14T06:25:05.498Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-14T06:25:05.498Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-08-30T13:25:46.839Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4f80000w0isd1btvld2x",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T11:40:05.858Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T11:40:05.858Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:25:59.472Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4fcg000y0isdcje3138u",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-11T07:50:38.195Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-11T07:50:38.195Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-08-30T13:25:45.695Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4fhq00100isdk1280qho",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T11:41:36.319Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T11:41:36.319Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:26:00.303Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsct4fn000120isdaeu54rkx",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-21T05:06:08.540Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-21T05:06:08.540Z",
+      "reportedDoneBy": "peterlin 林俊旭",
+      "reviewedAt": "2026-08-25T07:53:39.544Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmss9q1c4002beysdni2xsgki",
+      "title": "8.超音波清潔&擠膠壓力實驗",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-22T03:45:40.785Z",
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmss9rtjk002deysd3yny8j3i",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-14T06:01:27.393Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-10",
+      "reportedDoneAt": "2026-08-14T05:56:42.823Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-08-14T06:01:27.393Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagilp002feysdywdfye28",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-20T04:43:44.961Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-08-20T04:43:44.961Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-05T08:13:57.240Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagiw6002heysdsybjta54",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-04T10:35:01.389Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-04T10:35:01.389Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-09-06T13:10:25.611Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagj4j002jeysdq96l0zgk",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-26T09:30:40.869Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-26T09:30:40.869Z",
+      "reportedDoneBy": "boyouwu 吳柏佑",
+      "reviewedAt": "2026-08-30T13:26:01.739Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagjcu002leysd13d2i6z4",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-27T12:35:27.039Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": "2026-08-27T12:35:27.039Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-08-30T13:26:06.980Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagjlq002neysdsm057e3u",
+      "title": "e.除膠、電鍍站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-02T08:16:45.128Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-08-31",
+      "reportedDoneAt": "2026-09-02T08:16:45.128Z",
+      "reportedDoneBy": "erichhchen 陳璿翔",
+      "reviewedAt": "2026-09-04T02:00:58.748Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagju1002peysdi34zaun3",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-10T10:46:11.068Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-10T10:46:11.068Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-09-15T07:23:29.752Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmssagk2d002reysd48eq79jk",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-07T05:05:01.019Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-21",
+      "reportedDoneAt": "2026-09-07T05:05:01.019Z",
+      "reportedDoneBy": "peterlin 林俊旭",
+      "reviewedAt": "2026-09-22T03:45:40.785Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmsspmcxf0001pkgvb7cb9wvc",
+      "title": "1.1.3 測試",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-08-29T15:32:07.597Z",
+      "completedBy": "Alice Chen",
+      "completedWeekOf": "2026-08-24",
+      "reportedDoneAt": null,
+      "reportedDoneBy": null,
+      "reviewedAt": "2026-08-29T15:32:07.597Z",
+      "reviewedBy": "Alice Chen",
+      "project": {
+        "projectCode": "NPI-2026-013"
+      }
+    },
+    {
+      "id": "cmtv6f4uu0001aqsd8k84owlm",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-28T05:46:04.733Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-28T05:41:25.734Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-10-28T05:46:04.733Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmtv6in5w0003aqsdhsg4qwjg",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-15T07:23:33.297Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-14",
+      "reportedDoneAt": "2026-09-15T07:00:13.730Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-09-15T07:23:33.297Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmtv6ineg0005aqsdnl7wdp9u",
+      "title": "b.焊接站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-29T05:10:34.721Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-05",
+      "reportedDoneAt": "2026-09-29T05:10:34.721Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": "2026-10-06T03:00:34.464Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmtv6inmu0007aqsde1rgo8x5",
+      "title": "c.成型站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-01T06:03:42.999Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-28",
+      "reportedDoneAt": "2026-10-01T02:19:23.675Z",
+      "reportedDoneBy": "jiechang 張智傑",
+      "reviewedAt": "2026-10-01T06:03:42.999Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmtv6inwi0009aqsdejdylwjx",
+      "title": "d.雷射去膠+reflow",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T06:20:41.882Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T06:20:41.882Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-10-21T06:53:48.740Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmu0z0arm0003xvsdcyn6tpri",
+      "title": "f.切腳站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T06:27:20.910Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-06T06:27:20.910Z",
+      "reportedDoneBy": "EricChen 陳永進",
+      "reviewedAt": "2026-10-21T06:53:40.428Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmu0z1jpy0005xvsdzlzdvlwg",
+      "title": "g.測試站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-09-22T05:12:25.655Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-09-28",
+      "reportedDoneAt": "2026-09-22T05:12:25.655Z",
+      "reportedDoneBy": "peterlin 林俊旭",
+      "reviewedAt": "2026-09-29T03:13:49.186Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmupgngdg005ztrsd3vh0t9kd",
+      "title": "APQP 1-1 成員工作評估Member work evaluation",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:05.849Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:08:27.543Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:05.849Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph70010064trsdfshbebnj",
+      "title": "APQP 1-4 核心團隊成員名單Core Team Member list",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T05:57:15.937Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-20T05:57:15.937Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:10.447Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph70kz0066trsd7g85tq6v",
+      "title": "APQP 1-6 初步設計可行性研究 (消費品是可選的)Initial Design Feasibility Study (Consumer products are optional)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T05:57:26.753Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-20T05:57:26.753Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:14.528Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph70ve0067trsdocr5mdku",
+      "title": "APQP 1-7 初期物料清單確認是否為新供應商? (晶片/材料(除晶片)/外包封裝) Confirm primary bill of Materials if it is a new supplier? (Chip/Materials (except chips)/Outsourced Packaging)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T05:57:36.736Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-20T05:57:36.736Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:17.999Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph71g60069trsdgclr6gi1",
+      "title": "APQP 1-9 開發里程碑與計畫表 Development plan / schedule",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:21.752Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:08:50.468Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:21.752Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph71se006atrsdifvecjej",
+      "title": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T05:58:24.807Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-20T05:58:24.807Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:25.617Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph722v006btrsdwotimu63",
+      "title": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T05:58:35.816Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-20T05:58:35.816Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:30.246Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph72d6006ctrsdg4bbegco",
+      "title": "APQP 2-3 試製品DFMEA[晶圓和封裝]Prototype DFMEA [Wafer & Package]",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:34.077Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:09:08.757Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:34.077Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph73ie006gtrsd312w9cjm",
+      "title": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:37.610Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:29:38.590Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:37.610Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmuph74nq006ktrsdy8f5qa3z",
+      "title": "APQP 2-12 新產品原物料 (BOM data) New Product BOM Data",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:40.921Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:30:36.990Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:40.921Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmupibrow0076trsdo4pm37a4",
+      "title": "APQP2-17 工程試作申請單 Engineering run (LC) application /工程試作通知單 Engineer Run Notices",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:44.647Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:31:33.590Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:44.647Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmupibs000077trsd7icxh6pk",
+      "title": "APQP2-18 初版打線圖/測試規格 (包含產品線路圖) Preliminary Bonding Diagram/Test Spec. (include Product Circuit Diagram)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:48.063Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:32:24.578Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:48.063Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmupibssx0079trsd5fl30lg7",
+      "title": "APQP2-20 Qualification Plan (特性測試、工程驗證、電性測試、信賴性測試)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:44:52.168Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:33:04.604Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:44:52.168Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmupibv8a007gtrsds20mtuh5",
+      "title": "APQP 3-1 生產流程圖 Process Flow (Wafer & Package)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:45:03.951Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T11:35:05.625Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:45:03.951Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-014"
+      }
+    },
+    {
+      "id": "cmupintjy0085trsdjt49usty",
+      "title": "APQP 1-4 核心團隊成員名單Core Team Member list",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:32:53.397Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:05:20.323Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:32:53.397Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupinu5m0087trsdhlztmcx1",
+      "title": "APQP 1-6 初步設計可行性研究 (消費品是可選的)Initial Design Feasibility Study (Consumer products are optional)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:04.546Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:12:58.681Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:04.546Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupinuoq0088trsds6dm7odb",
+      "title": "APQP 1-7 初期物料清單確認是否為新供應商? (晶片/材料(除晶片)/外包封裝) Confirm primary bill of Materials if it is a new supplier? (Chip/Materials (except chips)/Outsourced Packaging)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:09.246Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:14:17.133Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:09.245Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupinvwk008ctrsdv2poknwh",
+      "title": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:14.409Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:31:59.843Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:14.409Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupiwc2y008dtrsdw59mo6c1",
+      "title": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:18.549Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:16:57.666Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:18.549Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupiwce6008etrsdc5lcha41",
+      "title": "APQP 2-3 試製品DFMEA[晶圓和封裝]Prototype DFMEA [Wafer & Package]",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:22.557Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:17:39.788Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:22.557Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupiwdlv008itrsdhet8axlf",
+      "title": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:27.778Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:20:56.291Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:27.778Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupiwf57008mtrsdbhoqr8s8",
+      "title": "APQP 2-12 新產品原物料 (BOM data) New Product BOM Data",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:31.567Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:22:18.844Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:31.567Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupiwgwy008rtrsddph7v16g",
+      "title": "APQP2-17 工程試作申請單 Engineering run (LC) application /工程試作通知單 Engineer Run Notices",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:35.149Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:23:06.540Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:35.149Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmupiwh81008strsdzy4lc3zx",
+      "title": "APQP2-18 初版打線圖/測試規格 (包含產品線路圖) Preliminary Bonding Diagram/Test Spec. (include Product Circuit Diagram)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T12:33:38.828Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T12:24:25.767Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T12:33:38.828Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-017"
+      }
+    },
+    {
+      "id": "cmuplsrd900a3trsde792i8po",
+      "title": "APQP 1-1 成員工作評估Member work evaluation",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T09:27:26.705Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T09:27:26.705Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-28T01:01:08.385Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuplss9g00a6trsde6qjknbw",
+      "title": "APQP 1-4 核心團隊成員名單Core Team Member list",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:00:15.811Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T09:28:40.106Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:00:15.811Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuplstsd00abtrsdu1nsgqoh",
+      "title": "APQP 1-9 開發里程碑與計畫表 Development plan / schedule",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T09:32:49.873Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T09:32:13.679Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T09:32:49.873Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuplsvag00agtrsdwiab2t2l",
+      "title": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:00:19.380Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T10:41:24.015Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:00:19.380Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuplsvll00ahtrsd5qbde96g",
+      "title": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:00:23.184Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T10:43:57.934Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:00:23.184Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuplsx4p00amtrsdnjwp3gnv",
+      "title": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T11:00:27.280Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T10:46:19.879Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-27T11:00:27.280Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuplt35h00b5trsdrxwl7b4p",
+      "title": "APQP 3-1 生產流程圖 Process Flow (Wafer & Package)",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-27T10:50:01.152Z",
+      "completedBy": "jerryw 王建鈞",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-27T10:50:01.152Z",
+      "reportedDoneBy": "jerryw 王建鈞",
+      "reviewedAt": "2026-10-28T05:15:45.625Z",
+      "reviewedBy": "jerryw 王建鈞",
+      "project": {
+        "projectCode": "RD-2026-018"
+      }
+    },
+    {
+      "id": "cmuqmo2zc00cptrsd45pm8a51",
+      "title": "1.1 製程設計",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-06T01:06:41.178Z",
+      "completedBy": "mickhsieh 謝文軒",
+      "completedWeekOf": "2026-10-05",
+      "reportedDoneAt": "2026-10-06T01:06:07.970Z",
+      "reportedDoneBy": "mickhsieh 謝文軒",
+      "reviewedAt": "2026-10-06T01:06:41.178Z",
+      "reviewedBy": "mickhsieh 謝文軒",
+      "project": {
+        "projectCode": "RD-2026-015"
+      }
+    },
+    {
+      "id": "cmuwgxl7j003gojsdgqylsd73",
+      "title": "APQP 1-4 核心團隊成員名單",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T10:11:26.362Z",
+      "completedBy": "bryanqiu 邱易柏",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-20T09:46:36.320Z",
+      "reportedDoneBy": "bryanqiu 邱易柏",
+      "reviewedAt": "2026-10-20T10:11:26.362Z",
+      "reviewedBy": "bryanqiu 邱易柏",
+      "project": {
+        "projectCode": "RD-2026-021"
+      }
+    },
+    {
+      "id": "cmuwgxmbi003jojsdd3ynw1fn",
+      "title": "APQP 1-7 初期物料清單確認是否為新供應商",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-20T10:11:29.245Z",
+      "completedBy": "bryanqiu 邱易柏",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-20T09:59:56.578Z",
+      "reportedDoneBy": "bryanqiu 邱易柏",
+      "reviewedAt": "2026-10-20T10:11:29.245Z",
+      "reviewedBy": "bryanqiu 邱易柏",
+      "project": {
+        "projectCode": "RD-2026-021"
+      }
+    },
+    {
+      "id": "cmv7wbw0600020dsde4xftcoo",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-28T05:46:08.475Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-28T05:42:59.303Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-10-28T05:46:08.475Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmv7wbwhl00040dsdbf10vubz",
+      "title": "a.切割站",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-15T05:16:03.069Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-19",
+      "reportedDoneAt": "2026-10-15T05:16:03.069Z",
+      "reportedDoneBy": "richardliu 劉乃銘",
+      "reviewedAt": "2026-10-20T01:02:36.363Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmv7wbwyw00060dsd4ge2gqoq",
+      "title": "b.焊接站",
+      "status": "todo",
+      "progress": 0,
+      "completedAt": null,
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": "2026-10-27T05:31:08.493Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmvpcaqe600cp0dsdz123sy18",
+      "title": "o.計畫表",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-28T05:46:12.288Z",
+      "completedBy": "sam 沈順吉",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-28T05:44:37.405Z",
+      "reportedDoneBy": "sam 沈順吉",
+      "reviewedAt": "2026-10-28T05:46:12.288Z",
+      "reviewedBy": "sam 沈順吉",
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmvpce6ld00ct0dsds4vonua3",
+      "title": "b.焊接站",
+      "status": "todo",
+      "progress": 0,
+      "completedAt": null,
+      "completedBy": null,
+      "completedWeekOf": null,
+      "reportedDoneAt": "2026-10-27T07:27:08.306Z",
+      "reportedDoneBy": "gh03157828 簡昌祺",
+      "reviewedAt": null,
+      "reviewedBy": null,
+      "project": {
+        "projectCode": "RD-2026-001"
+      }
+    },
+    {
+      "id": "cmvsvr1y1000eoqsdwqggsy4z",
+      "title": "1.1 逆向工程分析",
+      "status": "done",
+      "progress": 100,
+      "completedAt": "2026-10-29T02:04:21.503Z",
+      "completedBy": "bryanqiu 邱易柏",
+      "completedWeekOf": "2026-10-26",
+      "reportedDoneAt": "2026-10-29T01:55:54.049Z",
+      "reportedDoneBy": "bryanqiu 邱易柏",
+      "reviewedAt": "2026-10-29T02:04:21.503Z",
+      "reviewedBy": "bryanqiu 邱易柏",
+      "project": {
+        "projectCode": "RD-2026-021"
+      }
+    }
+  ]
+}

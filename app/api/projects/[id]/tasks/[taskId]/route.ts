@@ -149,13 +149,34 @@ export async function PUT(
         if (body.markComplete) {
           data.status = 'done'
           data.progress = 100
-          // 完成日＝R 回報完成那天，不是 A 按下確認那天（客戶決策 2026-10-29）。
-          //   原本寫 new Date()，等於把「審核排隊的時間」算進專案績效：
-          //   實測平均卡 5 天、最長 41 天，114 筆遲交裡有 74 筆的天數是這樣灌出來的
-          //   （最誇張一筆多算 40 天），專案看起來 delay 但實際是 on time。
-          //   reportedDoneAt 每次重新回報都會覆寫、被駁回會清空，所以它天生就是「最後一次回報」。
-          //   沒有回報紀錄（A 直接標完成、沒經過 R 回報）才退回用當下時間。
-          if (!task.completedAt) data.completedAt = task.reportedDoneAt ?? new Date()
+          // 完成日＝「工作紀錄上填的日期」，不是按鈕按下的時間（客戶決策 2026-10-29）。
+          //   現場實況：使用者沒辦法當週寫報告，幾乎都是事後補——實測 333 筆工作紀錄裡
+          //   有 51% 是補填的，平均補 83 天、最多 280 天。所以「7 月按下完成、紀錄日寫 3/31」
+          //   的意思是「我 3/31 就做完了，只是 7 月才補這筆資料」，按鈕日只是輸入時間。
+          //   判準是「這次回報有沒有跟著送出新的紀錄」，不是「最後一筆紀錄是哪天」：
+          //     ① 按下回報的同時有填紀錄 → 取那些紀錄裡最晚的 logDate（事實完成日）
+          //        例：7/24 補填一筆 3/31 的紀錄並按下回報 → 完成日 3/31
+          //     ② 什麼都沒寫、只按按鈕 → 按鈕當天就是完成日
+          //        例：3/31 那筆是 6/25 填的，7/24 直接按送出 → 完成日 7/24
+          //           （舊紀錄是上次就交過的東西，不能拿來當這次的完成宣告）
+          //   「跟著送出」＝紀錄的建檔時間落在按下回報前 24 小時內。用建檔時間而不是
+          //   同一天，是為了避免有人 23:50 寫完、00:05 才按送出就被判定成沒寫。
+          //   排除 reportOnly（當責撰寫台的補充）與 postDoneSupplement（完成後補充，
+          //   本來就不該改完成日）；logDate 也不得晚於宣告時間，否則完成日會比宣告日還晚。
+          if (!task.completedAt) {
+            const declaredAt = task.reportedDoneAt ?? new Date()
+            const SUBMIT_WINDOW_MS = 24 * 60 * 60 * 1000
+            const submitted = await prisma.taskLog.findFirst({
+              where: {
+                taskId, reportOnly: false, postDoneSupplement: false,
+                createdAt: { lte: declaredAt, gte: new Date(declaredAt.getTime() - SUBMIT_WINDOW_MS) },
+                logDate: { lte: declaredAt },
+              },
+              orderBy: { logDate: 'desc' },
+              select: { logDate: true },
+            })
+            data.completedAt = submitted ? submitted.logDate : declaredAt
+          }
           data.completedBy = body.reviewActor || null
           if (body.completedWeekOf) data.completedWeekOf = body.completedWeekOf
         }

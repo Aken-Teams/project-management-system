@@ -1,0 +1,342 @@
+{
+  "takenAt": "2026-10-29T09:27:37.323Z",
+  "note": "改動前的 completedAt 原值。還原：把這些 id 的 completedAt 寫回。",
+  "rows": [
+    {
+      "id": "cmnq5paoq0001ogsdplq4rpm4",
+      "projectCode": "NPI-2026-004",
+      "title": "設備進廠啟用",
+      "completedAt": "2026-07-16T06:30:24.750Z",
+      "newCompletedAt": "2026-07-13T00:00:00.000Z"
+    },
+    {
+      "id": "cmnpqvusq00cgoxsd64mg4g05",
+      "projectCode": "NPI-2026-004",
+      "title": "治工具發包",
+      "completedAt": "2026-07-16T06:35:08.755Z",
+      "newCompletedAt": "2026-06-10T00:00:00.000Z"
+    },
+    {
+      "id": "cmqnepx6p0002wusd72lceh34",
+      "projectCode": "RD-2026-001",
+      "title": "原物料準備",
+      "completedAt": "2026-10-28T05:45:56.096Z",
+      "newCompletedAt": "2026-09-27T00:00:00.000Z"
+    },
+    {
+      "id": "cmqt1y8zh002nwusdc4k19qw0",
+      "projectCode": "RD-2026-001",
+      "title": "失效分析",
+      "completedAt": "2026-10-28T05:46:00.977Z",
+      "newCompletedAt": "2026-06-30T00:00:00.000Z"
+    },
+    {
+      "id": "cmr0d2who003dwusdstgaeh8z",
+      "projectCode": "RD-2026-001",
+      "title": "1.委外分析",
+      "completedAt": "2026-09-06T13:13:12.672Z",
+      "newCompletedAt": "2026-06-02T00:00:00.000Z"
+    },
+    {
+      "id": "cmr35vm8h003swusd1mxxqbnm",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-07-16T05:54:51.990Z",
+      "newCompletedAt": "2026-07-06T00:00:00.000Z"
+    },
+    {
+      "id": "cmrj6d8hu0008bisdzrzct8eu",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-07-16T09:15:32.275Z",
+      "newCompletedAt": "2026-07-10T00:00:00.000Z"
+    },
+    {
+      "id": "cmrj6j2yt000kbisdm41423wp",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-08-14T06:26:57.063Z",
+      "newCompletedAt": "2026-07-29T00:00:00.000Z"
+    },
+    {
+      "id": "cmrj6j3ah000qbisdii6nej09",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-07-16T06:03:33.855Z",
+      "newCompletedAt": "2026-07-13T00:00:00.000Z"
+    },
+    {
+      "id": "cmrj6j3ec000sbisdid8o8o17",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-26T08:36:11.052Z",
+      "newCompletedAt": "2026-07-13T00:00:00.000Z"
+    },
+    {
+      "id": "cmrj6j3tv000wbisd7waiwo39",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-26T11:14:26.445Z",
+      "newCompletedAt": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "cms2m55zn00025esdpz58qp7h",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-07-28T09:13:44.906Z",
+      "newCompletedAt": "2026-07-21T00:00:00.000Z"
+    },
+    {
+      "id": "cms2mjx4z000k5esd5su9x9ly",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-07-28T09:13:49.773Z",
+      "newCompletedAt": "2026-07-27T00:00:00.000Z"
+    },
+    {
+      "id": "cms2mm17d000s5esdkq7vcfps",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-09-10T07:47:32.928Z",
+      "newCompletedAt": "2026-08-06T00:00:00.000Z"
+    },
+    {
+      "id": "cms2mo4cd000w5esdkkx7rqat",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-26T11:34:32.928Z",
+      "newCompletedAt": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "cmsct4ek6000m0isdszl8pb2b",
+      "projectCode": "RD-2026-001",
+      "title": "7.腳架硬度實驗",
+      "completedAt": "2026-08-14T07:37:37.105Z",
+      "newCompletedAt": "2026-08-10T00:00:00.000Z"
+    },
+    {
+      "id": "cmsct4f3q000u0isd75qhgbma",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-08-14T06:25:05.498Z",
+      "newCompletedAt": "2026-08-04T00:00:00.000Z"
+    },
+    {
+      "id": "cmsct4fhq00100isdk1280qho",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-26T11:41:36.319Z",
+      "newCompletedAt": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "cmssagilp002feysdywdfye28",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-08-20T04:43:44.961Z",
+      "newCompletedAt": "2026-08-19T00:00:00.000Z"
+    },
+    {
+      "id": "cmssagj4j002jeysdq96l0zgk",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-08-26T09:30:40.869Z",
+      "newCompletedAt": "2026-08-20T00:00:00.000Z"
+    },
+    {
+      "id": "cmssagjcu002leysd13d2i6z4",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-27T12:35:27.039Z",
+      "newCompletedAt": "2026-08-25T00:00:00.000Z"
+    },
+    {
+      "id": "cmssagju1002peysdi34zaun3",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-09-10T10:46:11.068Z",
+      "newCompletedAt": "2026-09-01T00:00:00.000Z"
+    },
+    {
+      "id": "cmtv6f4uu0001aqsd8k84owlm",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-10-28T05:46:04.733Z",
+      "newCompletedAt": "2026-09-09T00:00:00.000Z"
+    },
+    {
+      "id": "cmtv6in5w0003aqsdhsg4qwjg",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-15T07:23:33.297Z",
+      "newCompletedAt": "2026-09-10T00:00:00.000Z"
+    },
+    {
+      "id": "cmu0z0arm0003xvsdcyn6tpri",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-10-06T06:27:20.910Z",
+      "newCompletedAt": "2026-08-18T00:00:00.000Z"
+    },
+    {
+      "id": "cmv7wbw0600020dsde4xftcoo",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-10-28T05:46:08.475Z",
+      "newCompletedAt": "2026-10-11T00:00:00.000Z"
+    },
+    {
+      "id": "cmv7wbwhl00040dsdbf10vubz",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-10-15T05:16:03.069Z",
+      "newCompletedAt": "2026-10-12T00:00:00.000Z"
+    },
+    {
+      "id": "cmvpcaqe600cp0dsdz123sy18",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-10-28T05:46:12.288Z",
+      "newCompletedAt": "2026-10-20T00:00:00.000Z"
+    },
+    {
+      "id": "cmupibv8a007gtrsds20mtuh5",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 3-1 生產流程圖 Process Flow (Wafer & Package)",
+      "completedAt": "2026-10-27T11:45:03.951Z",
+      "newCompletedAt": "2026-08-03T00:00:00.000Z"
+    },
+    {
+      "id": "cmuph73ie006gtrsd312w9cjm",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "completedAt": "2026-10-27T11:44:37.610Z",
+      "newCompletedAt": "2026-10-20T00:00:00.000Z"
+    },
+    {
+      "id": "cmuph74nq006ktrsdy8f5qa3z",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 2-12 新產品原物料 (BOM data) New Product BOM Data",
+      "completedAt": "2026-10-27T11:44:40.921Z",
+      "newCompletedAt": "2026-05-04T00:00:00.000Z"
+    },
+    {
+      "id": "cmupibrow0076trsdo4pm37a4",
+      "projectCode": "RD-2026-014",
+      "title": "APQP2-17 工程試作申請單 Engineering run (LC) application /工程試作通知單 Engineer Run Notices",
+      "completedAt": "2026-10-27T11:44:44.647Z",
+      "newCompletedAt": "2026-05-18T00:00:00.000Z"
+    },
+    {
+      "id": "cmupibs000077trsd7icxh6pk",
+      "projectCode": "RD-2026-014",
+      "title": "APQP2-18 初版打線圖/測試規格 (包含產品線路圖) Preliminary Bonding Diagram/Test Spec. (include Product Circuit Diagram)",
+      "completedAt": "2026-10-27T11:44:48.063Z",
+      "newCompletedAt": "2026-05-25T00:00:00.000Z"
+    },
+    {
+      "id": "cmupibssx0079trsd5fl30lg7",
+      "projectCode": "RD-2026-014",
+      "title": "APQP2-20 Qualification Plan (特性測試、工程驗證、電性測試、信賴性測試)",
+      "completedAt": "2026-10-27T11:44:52.168Z",
+      "newCompletedAt": "2026-06-08T00:00:00.000Z"
+    },
+    {
+      "id": "cmupinvwk008ctrsdv2poknwh",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "completedAt": "2026-10-27T12:33:14.409Z",
+      "newCompletedAt": "2026-03-30T00:00:00.000Z"
+    },
+    {
+      "id": "cmupiwc2y008dtrsdw59mo6c1",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "completedAt": "2026-10-27T12:33:18.549Z",
+      "newCompletedAt": "2026-03-30T00:00:00.000Z"
+    },
+    {
+      "id": "cmupiwce6008etrsdc5lcha41",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 2-3 試製品DFMEA[晶圓和封裝]Prototype DFMEA [Wafer & Package]",
+      "completedAt": "2026-10-27T12:33:22.557Z",
+      "newCompletedAt": "2026-04-06T00:00:00.000Z"
+    },
+    {
+      "id": "cmupinu5m0087trsdhlztmcx1",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 1-6 初步設計可行性研究 (消費品是可選的)Initial Design Feasibility Study (Consumer products are optional)",
+      "completedAt": "2026-10-27T12:33:04.546Z",
+      "newCompletedAt": "2026-02-16T00:00:00.000Z"
+    },
+    {
+      "id": "cmupinuoq0088trsds6dm7odb",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 1-7 初期物料清單確認是否為新供應商? (晶片/材料(除晶片)/外包封裝) Confirm primary bill of Materials if it is a new supplier? (Chip/Materials (except chips)/Outsourced Packaging)",
+      "completedAt": "2026-10-27T12:33:09.246Z",
+      "newCompletedAt": "2026-03-02T00:00:00.000Z"
+    },
+    {
+      "id": "cmupiwdlv008itrsdhet8axlf",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "completedAt": "2026-10-27T12:33:27.778Z",
+      "newCompletedAt": "2026-04-20T00:00:00.000Z"
+    },
+    {
+      "id": "cmupiwf57008mtrsdbhoqr8s8",
+      "projectCode": "RD-2026-017",
+      "title": "APQP 2-12 新產品原物料 (BOM data) New Product BOM Data",
+      "completedAt": "2026-10-27T12:33:31.567Z",
+      "newCompletedAt": "2026-05-04T00:00:00.000Z"
+    },
+    {
+      "id": "cmupiwgwy008rtrsddph7v16g",
+      "projectCode": "RD-2026-017",
+      "title": "APQP2-17 工程試作申請單 Engineering run (LC) application /工程試作通知單 Engineer Run Notices",
+      "completedAt": "2026-10-27T12:33:35.149Z",
+      "newCompletedAt": "2026-05-18T00:00:00.000Z"
+    },
+    {
+      "id": "cmupiwh81008strsdzy4lc3zx",
+      "projectCode": "RD-2026-017",
+      "title": "APQP2-18 初版打線圖/測試規格 (包含產品線路圖) Preliminary Bonding Diagram/Test Spec. (include Product Circuit Diagram)",
+      "completedAt": "2026-10-27T12:33:38.828Z",
+      "newCompletedAt": "2026-05-25T00:00:00.000Z"
+    },
+    {
+      "id": "cmuplsvag00agtrsdwiab2t2l",
+      "projectCode": "RD-2026-018",
+      "title": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "completedAt": "2026-10-27T11:00:19.380Z",
+      "newCompletedAt": "2026-04-13T00:00:00.000Z"
+    },
+    {
+      "id": "cmuplsvll00ahtrsd5qbde96g",
+      "projectCode": "RD-2026-018",
+      "title": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "completedAt": "2026-10-27T11:00:23.184Z",
+      "newCompletedAt": "2026-04-13T00:00:00.000Z"
+    },
+    {
+      "id": "cmuplsx4p00amtrsdnjwp3gnv",
+      "projectCode": "RD-2026-018",
+      "title": "APQP 2-8 試製品驗證計劃Prototype product Verification plan",
+      "completedAt": "2026-10-27T11:00:27.280Z",
+      "newCompletedAt": "2026-05-04T00:00:00.000Z"
+    },
+    {
+      "id": "cmuplstsd00abtrsdu1nsgqoh",
+      "projectCode": "RD-2026-018",
+      "title": "APQP 1-9 開發里程碑與計畫表 Development plan / schedule",
+      "completedAt": "2026-10-27T09:32:49.873Z",
+      "newCompletedAt": "2026-03-30T00:00:00.000Z"
+    },
+    {
+      "id": "cmvsvr1y1000eoqsdwqggsy4z",
+      "projectCode": "RD-2026-021",
+      "title": "1.1 逆向工程分析",
+      "completedAt": "2026-10-29T02:04:21.503Z",
+      "newCompletedAt": "2026-08-10T00:00:00.000Z"
+    }
+  ]
+}
