@@ -243,6 +243,9 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
 
   const grandTotal = useMemo(() => items.reduce((s, i) => s + (i.orderAmount ?? 0), 0), [items])
   const estimatedTotal = useMemo(() => budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0), [budgetItems])
+  // 付款進度從頂部「預算」卡移到這裡（客戶決策 2026-10-29）：
+  //   看板那一格要回答「採購有沒有超出預算」，付款排程是財務的事，屬於這一頁。
+  const paidTotal = useMemo(() => items.reduce((s, i) => s + capexPaidAmount(i), 0), [items])
 
   // ROI
   const { monthlyProfit, paybackMonths } = useMemo(() => {
@@ -266,8 +269,10 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
       {/* ── Full Summary Card (normal flow, not sticky) ── */}
       <Card ref={summaryCardRef}>
         <CardContent className="pt-5 pb-5">
-          {/* Top row: three big numbers */}
-          <div className="grid grid-cols-3 gap-4 mb-5">
+          {/* Top row: 預估支出 / 實際採購 / 差異 / 已付款
+              差異講的是「預估 ↔ 實際採購」，要緊跟在那兩格後面；
+              已付款是另一回事（付款排程），排最後。 */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
             <div className="text-center p-3 bg-muted/40 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">預估支出</div>
               <div className="text-lg font-bold tabular-nums">{estimatedTotal > 0 ? fmtNT(estimatedTotal) : '-'}</div>
@@ -292,6 +297,13 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
               ) : (
                 <div className="text-lg font-bold text-muted-foreground">-</div>
               )}
+            </div>
+            <div className="text-center p-3 bg-muted/40 rounded-lg">
+              <div className="text-xs text-muted-foreground mb-1">已付款</div>
+              <div className="text-lg font-bold tabular-nums">{paidTotal > 0 ? fmtNT(paidTotal) : '-'}</div>
+              <div className="text-[11px] text-muted-foreground">
+                {grandTotal > 0 ? `佔已採購 ${Math.round((paidTotal / grandTotal) * 100)}%` : '尚未採購'}
+              </div>
             </div>
           </div>
 

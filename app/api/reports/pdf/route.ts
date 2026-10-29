@@ -376,7 +376,7 @@ export async function POST(request: NextRequest) {
       <span class="big">${budgetPercent}%</span>
     </div>
     <div class="bar-wrap"><div class="bar-bg"><div class="bar-fg" style="width:${Math.min(budgetPercent, 100)}%; background:${budgetPercent > 100 ? '#ef4444' : '#3b82f6'} !important;"></div></div></div>
-    <div style="font-size:10px; color:#94a3b8; margin-top:4px;">${fmtMoney(totalBudgetUsed)} / ${fmtMoney(totalBudget)}</div>
+    <div style="font-size:10px; color:#94a3b8; margin-top:4px;">已採購 ${fmtMoney(totalBudgetUsed)} / 預算 ${fmtMoney(totalBudget)}</div>
   </div>
   <div class="dash-card">
     <div class="lbl">
@@ -433,8 +433,8 @@ export async function POST(request: NextRequest) {
       <div class="donut-center"><div class="dv" style="color:${budgetPercent > 100 ? '#dc2626' : '#0f172a'};">${budgetPercent}%</div><div class="dl">執行率</div></div>
     </div>
     <div class="legend">
-      <div class="leg-item"><span class="leg-dot" style="background:${budgetDonutColor} !important;"></span><span class="leg-lbl">已使用</span><span class="leg-val">${fmtMoney(totalBudgetUsed)}</span></div>
-      <div class="leg-item"><span class="leg-dot" style="background:#e2e8f0 !important;"></span><span class="leg-lbl">剩餘</span><span class="leg-val">${fmtMoney(Math.max(totalBudget - totalBudgetUsed, 0))}</span></div>
+      <div class="leg-item"><span class="leg-dot" style="background:${budgetDonutColor} !important;"></span><span class="leg-lbl">已採購</span><span class="leg-val">${fmtMoney(totalBudgetUsed)}</span></div>
+      <div class="leg-item"><span class="leg-dot" style="background:#e2e8f0 !important;"></span><span class="leg-lbl">未採購</span><span class="leg-val">${fmtMoney(Math.max(totalBudget - totalBudgetUsed, 0))}</span></div>
     </div>
   </div>
 </div>

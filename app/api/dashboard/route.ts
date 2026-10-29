@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { projectTypeToFe } from '@/lib/enum-mappers'
-import { computeCapexBudget, CAPEX_BUDGET_SELECT } from '@/lib/budget-utils'
+import { computeBudgetVsPurchase, CAPEX_BUDGET_SELECT } from '@/lib/budget-utils'
 
 // ─── Auto-compute project status & progress from tasks ─────
 interface FeTask {
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
           },
         },
         budgetItems: {
-          select: { actualCost: true },
+          select: { actualCost: true, estimatedCost: true },
         },
         capexItems: {
           select: CAPEX_BUDGET_SELECT,
@@ -187,9 +187,9 @@ export async function GET(request: NextRequest) {
       const actualStatus = computeProjectStatus(feTasks, p.endDate)
       const actualProgress = computeProjectProgress(p.milestones)
 
-      // 預算：以採購明細(capex)為主 →「目前付出 / 實際採購」；無採購明細則沿用舊預算表/預算
-      const actualCostTotal = p.budgetItems.reduce((s: number, i: { actualCost: number | null }) => s + (i.actualCost ?? 0), 0)
-      const budget = computeCapexBudget(p.capexItems, { used: actualCostTotal, denom: p.budget })
+      // 金錢：已採購 ÷ 預算（預算＝設備清單預估支出合計，沒有清單才退回專案預算欄位）
+      const estimatedTotal = p.budgetItems.reduce((s: number, i: { estimatedCost: number | null }) => s + (i.estimatedCost ?? 0), 0)
+      const budget = computeBudgetVsPurchase(p.capexItems, { estimatedTotal, projectBudget: p.budget })
 
       return { ...p, actualStatus, actualProgress, budgetComputed: budget }
     })
@@ -206,8 +206,8 @@ export async function GET(request: NextRequest) {
         T3: projectsWithProgress.filter(p => p.projectTier === 'T3').length,
         CIP: projectsWithProgress.filter(p => p.projectTier === 'CIP').length,
       },
-      totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budgetComputed.denom, 0),
-      totalBudgetUsed: projectsWithProgress.reduce((acc, p) => acc + p.budgetComputed.used, 0),
+      totalBudget: projectsWithProgress.reduce((acc, p) => acc + p.budgetComputed.budget, 0),
+      totalBudgetUsed: projectsWithProgress.reduce((acc, p) => acc + p.budgetComputed.purchased, 0),
       budgetUtilization: 0,
     }
     stats.budgetUtilization = stats.totalBudget > 0

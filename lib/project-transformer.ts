@@ -5,7 +5,7 @@ import {
 } from '@/lib/enum-mappers'
 import { todayUtcStr, toUtcDateStr } from '@/lib/date-utils'
 import { safeJsonParse } from '@/lib/utils'
-import { computeCapexBudget, CAPEX_BUDGET_SELECT, type CapexBudgetInput } from '@/lib/budget-utils'
+import { computeBudgetVsPurchase, CAPEX_BUDGET_SELECT, type CapexBudgetInput } from '@/lib/budget-utils'
 // ─── Auto-compute project status & progress from tasks ─────
 
 interface FeTask {
@@ -387,13 +387,15 @@ export function dbProjectToFrontend(
     status: computeProjectStatus(feTasks.filter(t => !t.parentId), proj.endDate),
     progress: computeProjectProgress(feMilestones),
     budget: proj.budget,
-    // 預算數字以採購明細(capex)為主 →「目前付出 / 實際採購」；無採購明細則沿用舊預算表。
+    // 金錢卡＝「已採購 / 預算」。付款進度屬於財務現金流，放在投資報酬頁。
     ...(() => {
-      const fallbackUsed = proj.budgetItems
-        ? proj.budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
-        : proj.budgetUsed
-      const { used, denom } = computeCapexBudget(proj.capexItems, { used: fallbackUsed, denom: proj.budget })
-      return { budgetUsed: used, budgetDenom: denom }
+      const estimatedTotal = proj.budgetItems
+        ? proj.budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
+        : 0
+      const { purchased, budget } = computeBudgetVsPurchase(proj.capexItems, {
+        estimatedTotal, projectBudget: proj.budget,
+      })
+      return { budgetUsed: purchased, budgetDenom: budget }
     })(),
     owner: displayOwner,
     team: teamNames,

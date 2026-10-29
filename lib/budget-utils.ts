@@ -59,14 +59,26 @@ export function capexPaidTotal(items: CapexBudgetInput[]): number {
 }
 
 /**
- * 有採購明細(實際採購>0)時 → { used: 已付款, denom: 實際採購 }；
- * 否則回傳 fallback（沒有採購明細的舊專案沿用舊預算表數字）。
+ * 看板／詳情／報告／儀表板的金錢卡：**已採購 ÷ 預算**。
+ *
+ * 為什麼不是「已付款 ÷ 已採購」（客戶決策 2026-10-29）：
+ *   ① 採購了還沒付款是正常的——訂/交/檢本來就分期付，那個比例反映的是付款排程，
+ *      不是專案狀況，PM 看了不知道要做什麼。
+ *   ② 分母用「已採購」會跟著自己移動：下單越多分母越大，百分比反而可能往下掉，
+ *      根本不能拿來追蹤或跨專案比較。
+ *   ③ 實際踩過：RD-2026-014 預算 28.7M 只下單 0.1M，卻因為那 0.1M 付清了而顯示 100%；
+ *      RD-2026-018 預算 6.6M 全額下單（真的該警示）卻只顯示 44%。兩個都指反方向。
+ *   改成「已採購 ÷ 預算」之後基準固定，超過 100% 就是真的超出預算。
+ *
+ * 分母優先用設備清單的預估支出合計；沒有清單時退回專案預算欄位。
+ * 付款進度不消失，移到投資報酬頁的「已付款」那一格。
  */
-export function computeCapexBudget(
+export function computeBudgetVsPurchase(
   items: CapexBudgetInput[] | undefined | null,
-  fallback: { used: number; denom: number },
-): { used: number; denom: number } {
-  const purchase = items ? capexPurchaseTotal(items) : 0
-  if (purchase <= 0) return fallback
-  return { used: capexPaidTotal(items!), denom: purchase }
+  baseline: { estimatedTotal: number; projectBudget: number },
+): { purchased: number; budget: number } {
+  return {
+    purchased: items ? capexPurchaseTotal(items) : 0,
+    budget: baseline.estimatedTotal > 0 ? baseline.estimatedTotal : baseline.projectBudget,
+  }
 }

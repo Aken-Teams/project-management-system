@@ -1465,8 +1465,12 @@ export default function ReportsPage() {
                 <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                   <div className={cn('h-full rounded-full transition-all', budgetPct > 100 ? 'bg-destructive' : 'bg-emerald-500')} style={{ width: `${Math.min(budgetPct, 100)}%` }} />
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {fmtMoney(displayStats.budgetUsed)} / {fmtMoney(displayStats.budget)}
+                {/* 只寫兩個金額沒人知道各是什麼，標在旁邊不要讓人去猜 */}
+                <div className="text-xs text-muted-foreground mt-1 tabular-nums"
+                  title="已採購＝各專案採購明細的訂單金額合計；預算＝各專案設備清單的預估支出合計">
+                  已採購 {fmtMoney(displayStats.budgetUsed)}
+                  <span className="mx-1 opacity-60">/</span>
+                  預算 {fmtMoney(displayStats.budget)}
                 </div>
               </CardContent>
             </Card>
@@ -1591,8 +1595,8 @@ export default function ReportsPage() {
                   <CardContent className="flex flex-col items-center py-5 gap-4">
                     <DonutChart
                       segments={[
-                        { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
-                        { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
+                        { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已採購' },
+                        { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '未採購' },
                       ]}
                       size={150} strokeWidth={22}
                     >
@@ -1604,12 +1608,12 @@ export default function ReportsPage() {
                     <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
-                        <span className="text-sm text-muted-foreground">已使用</span>
+                        <span className="text-sm text-muted-foreground">已採購</span>
                         <span className="text-sm font-semibold">{fmtMoney(displayStats.budgetUsed)}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
-                        <span className="text-sm text-muted-foreground">剩餘</span>
+                        <span className="text-sm text-muted-foreground">未採購</span>
                         <span className="text-sm font-semibold">{fmtMoney(Math.max(displayStats.budget - displayStats.budgetUsed, 0))}</span>
                       </div>
                     </div>
@@ -1751,8 +1755,8 @@ export default function ReportsPage() {
                     <CardContent className="flex flex-col items-center py-5 gap-4">
                       <DonutChart
                         segments={[
-                          { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已使用' },
-                          { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '剩餘' },
+                          { value: displayStats.budgetUsed, color: budgetPct > 100 ? '#ef4444' : budgetPct > 80 ? '#f59e0b' : '#10b981', label: '已採購' },
+                          { value: Math.max(displayStats.budget - displayStats.budgetUsed, 0), color: '#e2e8f0', label: '未採購' },
                         ]}
                         size={150} strokeWidth={22}
                       >
@@ -1764,12 +1768,12 @@ export default function ReportsPage() {
                       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
                         <div className="flex items-center gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-emerald-500" />
-                          <span className="text-sm text-muted-foreground">已使用</span>
+                          <span className="text-sm text-muted-foreground">已採購</span>
                           <span className="text-sm font-semibold">{fmtMoney(displayStats.budgetUsed)}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-200" />
-                          <span className="text-sm text-muted-foreground">剩餘</span>
+                          <span className="text-sm text-muted-foreground">未採購</span>
                           <span className="text-sm font-semibold">{fmtMoney(Math.max(displayStats.budget - displayStats.budgetUsed, 0))}</span>
                         </div>
                       </div>

@@ -15,7 +15,8 @@ import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useAuth } from '@/lib/auth-context'
 import { useNotificationStore } from '@/lib/notification-store'
 import { TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
-import { computeCapexBudget, capexPurchaseTotal } from '@/lib/budget-utils'
+import { computeBudgetVsPurchase } from '@/lib/budget-utils'
+import { cn } from '@/lib/utils'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { Input } from '@/components/ui/input'
 import { Calendar as CalendarUI } from '@/components/ui/calendar'
@@ -316,20 +317,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   const actualTotal = budgetItems.reduce((s, i) => s + (i.actualCost ?? 0), 0)
   const estimatedTotal = budgetItems.reduce((s, i) => s + (i.estimatedCost ?? 0), 0)
-  // 頂部「預算」卡：以採購明細(capex)為主，顯示「目前付出 / 實際採購」。
-  //   實際採購 = 各明細訂購金額(orderAmount)加總；目前付出 = 訂/交/檢已付款(有付款日)金額加總。
-  //   沒有採購明細的舊專案則沿用舊預算表（實際成本 / 預估支出）。
-  const { used: budgetNumerator, denom: budgetDenom } = computeCapexBudget(capexItems, {
-    used: actualTotal,
-    denom: estimatedTotal > 0 ? estimatedTotal : project.budget,
+  // 頂部「預算」卡：已採購 ÷ 預算。付款進度在投資報酬頁的「已付款」那一格。
+  const { purchased: budgetNumerator, budget: budgetDenom } = computeBudgetVsPurchase(capexItems, {
+    estimatedTotal, projectBudget: project.budget,
   })
   const budgetUtilization = budgetDenom > 0 ? Math.round((budgetNumerator / budgetDenom) * 100) : 0
-  // 這張卡的兩個數字會依「有沒有採購明細」換一套基準，光寫「預算」沒人看得出來
-  //   分別是什麼。把基準直接寫在數字旁邊，不要讓人去猜。
-  const hasCapex = capexPurchaseTotal(capexItems) > 0
-  const budgetBasis = hasCapex
-    ? { num: '已付', den: '已下單', hint: '已付款金額 ÷ 採購明細的訂單金額合計' }
-    : { num: '已花', den: '預估', hint: '實際成本 ÷ 設備清單預估支出（尚無採購明細）' }
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -452,11 +444,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 <DollarSign className="h-3.5 w-3.5" />
                 預算
               </div>
-              <span className="text-xl font-bold">{budgetUtilization}%</span>
-              <div className="text-sm text-muted-foreground tabular-nums" title={budgetBasis.hint}>
-                {budgetBasis.num} ${(budgetNumerator / 1000000).toFixed(1)}M
+              <span className={cn('text-xl font-bold', budgetUtilization > 100 && 'text-destructive')}>{budgetUtilization}%</span>
+              <div className="text-sm text-muted-foreground tabular-nums"
+                title="已採購＝採購明細的訂單金額合計；預算＝設備清單的預估支出合計">
+                已採購 ${(budgetNumerator / 1000000).toFixed(1)}M
                 <span className="mx-1 opacity-60">/</span>
-                {budgetBasis.den} ${(budgetDenom / 1000000).toFixed(1)}M
+                預算 ${(budgetDenom / 1000000).toFixed(1)}M
               </div>
             </div>
           )}
