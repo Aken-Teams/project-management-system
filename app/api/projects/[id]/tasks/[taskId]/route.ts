@@ -149,7 +149,13 @@ export async function PUT(
         if (body.markComplete) {
           data.status = 'done'
           data.progress = 100
-          if (!task.completedAt) data.completedAt = new Date()
+          // 完成日＝R 回報完成那天，不是 A 按下確認那天（客戶決策 2026-10-29）。
+          //   原本寫 new Date()，等於把「審核排隊的時間」算進專案績效：
+          //   實測平均卡 5 天、最長 41 天，114 筆遲交裡有 74 筆的天數是這樣灌出來的
+          //   （最誇張一筆多算 40 天），專案看起來 delay 但實際是 on time。
+          //   reportedDoneAt 每次重新回報都會覆寫、被駁回會清空，所以它天生就是「最後一次回報」。
+          //   沒有回報紀錄（A 直接標完成、沒經過 R 回報）才退回用當下時間。
+          if (!task.completedAt) data.completedAt = task.reportedDoneAt ?? new Date()
           data.completedBy = body.reviewActor || null
           if (body.completedWeekOf) data.completedWeekOf = body.completedWeekOf
         }

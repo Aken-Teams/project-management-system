@@ -1,0 +1,538 @@
+{
+  "takenAt": "2026-10-29T06:09:34.279Z",
+  "note": "改動前的 completedAt 原值。還原：把這些 id 的 completedAt 寫回 completedAt 欄位。",
+  "rows": [
+    {
+      "id": "cmpz3ytr5001na7sdag0dwjfg",
+      "projectCode": "RD-2026-001",
+      "title": "更新文件",
+      "completedAt": "2026-10-21T06:50:38.185Z",
+      "newCompletedAt": "2026-10-06T03:56:33.902Z"
+    },
+    {
+      "id": "cmqp2q12i000uwusdlk0o3bum",
+      "projectCode": "RD-2026-001",
+      "title": "3.待辦事項明細列出",
+      "completedAt": "2026-08-19T08:29:33.817Z",
+      "newCompletedAt": "2026-08-17T07:03:13.637Z"
+    },
+    {
+      "id": "cmqp2q0yc000twusdihlph1ra",
+      "projectCode": "RD-2026-001",
+      "title": "5.新跳線設計 CLIP B",
+      "completedAt": "2026-09-15T07:20:58.683Z",
+      "newCompletedAt": "2026-09-07T02:40:38.814Z"
+    },
+    {
+      "id": "cmqp3yeza001bwusduds5k8l2",
+      "projectCode": "RD-2026-001",
+      "title": "a.點膠P面14苯針製作",
+      "completedAt": "2026-09-05T08:13:58.462Z",
+      "newCompletedAt": "2026-08-25T08:31:56.514Z"
+    },
+    {
+      "id": "cmqp3yf2w001cwusd07p7aoqm",
+      "projectCode": "RD-2026-001",
+      "title": "b.Clip剔除機構",
+      "completedAt": "2026-09-15T07:23:01.546Z",
+      "newCompletedAt": "2026-09-07T03:37:55.390Z"
+    },
+    {
+      "id": "cmqp2wxfh000zwusdc3v9irce",
+      "projectCode": "RD-2026-001",
+      "title": "工程四部(雷射、切腳、測試)",
+      "completedAt": "2026-08-25T09:16:55.397Z",
+      "newCompletedAt": "2026-07-16T07:38:19.362Z"
+    },
+    {
+      "id": "cmqp37trs0014wusdcoft3u5r",
+      "projectCode": "RD-2026-001",
+      "title": "1.各站design rule",
+      "completedAt": "2026-10-21T06:54:36.454Z",
+      "newCompletedAt": "2026-10-06T03:59:59.625Z"
+    },
+    {
+      "id": "cmqp37u040016wusdfsum66gc",
+      "projectCode": "RD-2026-001",
+      "title": "3.待辦事項明細列出",
+      "completedAt": "2026-10-21T06:54:30.875Z",
+      "newCompletedAt": "2026-10-06T04:03:30.803Z"
+    },
+    {
+      "id": "cmr37kbvr0041wusdadkubmqq",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-08-25T09:16:53.087Z",
+      "newCompletedAt": "2026-07-15T06:11:17.174Z"
+    },
+    {
+      "id": "cmr35vm4v003rwusdpo0x9h3m",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-08-20T07:01:31.355Z",
+      "newCompletedAt": "2026-08-17T07:09:49.658Z"
+    },
+    {
+      "id": "cmr35vm8h003swusd1mxxqbnm",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-07-24T07:43:47.720Z",
+      "newCompletedAt": "2026-07-16T05:54:51.990Z"
+    },
+    {
+      "id": "cmr35vmcx003twusdddevxqeg",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:25:48.084Z",
+      "newCompletedAt": "2026-08-26T08:31:13.508Z"
+    },
+    {
+      "id": "cmr35vmko003vwusdskw1wbqc",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:25:49.232Z",
+      "newCompletedAt": "2026-08-26T08:33:15.000Z"
+    },
+    {
+      "id": "cmr35vmo8003wwusd540m0xcw",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-10-21T06:54:21.716Z",
+      "newCompletedAt": "2026-10-06T05:12:43.708Z"
+    },
+    {
+      "id": "cmrj6d8e20006bisdml79nkfc",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-05T08:13:59.480Z",
+      "newCompletedAt": "2026-08-25T08:51:54.338Z"
+    },
+    {
+      "id": "cmrj6d8hu0008bisdzrzct8eu",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-07-24T07:43:41.318Z",
+      "newCompletedAt": "2026-07-16T09:15:32.275Z"
+    },
+    {
+      "id": "cmrj6d8lk000abisdeycjekrg",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:25:50.306Z",
+      "newCompletedAt": "2026-08-26T08:37:43.890Z"
+    },
+    {
+      "id": "cmrj6d8po000cbisd1xa3cp3u",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-07-24T07:43:48.941Z",
+      "newCompletedAt": "2026-07-21T01:05:54.856Z"
+    },
+    {
+      "id": "cmrj6d8t9000ebisdls8y4kxy",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:25:51.582Z",
+      "newCompletedAt": "2026-08-26T08:38:32.591Z"
+    },
+    {
+      "id": "cmrj6d94r000gbisdi7arf1gs",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-10-21T06:54:12.635Z",
+      "newCompletedAt": "2026-10-06T05:15:53.949Z"
+    },
+    {
+      "id": "cmrj6j32p000mbisd75hy201r",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-05T08:13:52.534Z",
+      "newCompletedAt": "2026-08-19T09:30:01.432Z"
+    },
+    {
+      "id": "cmrj6j36s000obisd29a5ww61",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-05T08:14:01.031Z",
+      "newCompletedAt": "2026-08-25T08:53:04.473Z"
+    },
+    {
+      "id": "cmrj6j3ah000qbisdii6nej09",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-07-24T07:43:42.724Z",
+      "newCompletedAt": "2026-07-16T06:03:33.855Z"
+    },
+    {
+      "id": "cmrj6j3ec000sbisdid8o8o17",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:25:52.800Z",
+      "newCompletedAt": "2026-08-26T08:36:11.052Z"
+    },
+    {
+      "id": "cmrj6j3i2000ubisdajthflrn",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-07-24T07:43:46.013Z",
+      "newCompletedAt": "2026-07-21T06:23:02.785Z"
+    },
+    {
+      "id": "cmrj6j3tv000wbisd7waiwo39",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:25:54.690Z",
+      "newCompletedAt": "2026-08-26T11:14:26.445Z"
+    },
+    {
+      "id": "cmrj6j3xg000ybisdjd839hy5",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-10-21T06:54:02.012Z",
+      "newCompletedAt": "2026-10-06T05:16:46.520Z"
+    },
+    {
+      "id": "cms2m56c500045esdabe0inzl",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-05T08:13:53.862Z",
+      "newCompletedAt": "2026-08-20T04:42:03.138Z"
+    },
+    {
+      "id": "cms2m56gi00065esd9ige98d6",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-05T08:14:02.647Z",
+      "newCompletedAt": "2026-08-27T06:35:36.990Z"
+    },
+    {
+      "id": "cms2m56ko00085esdvooa7uo6",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-09-04T02:00:50.008Z",
+      "newCompletedAt": "2026-07-28T05:40:22.833Z"
+    },
+    {
+      "id": "cms2m56p1000a5esdfs8a77aj",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:26:03.575Z",
+      "newCompletedAt": "2026-08-27T12:50:09.693Z"
+    },
+    {
+      "id": "cms2m56t3000c5esd7mp13bzs",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-08-30T13:25:41.985Z",
+      "newCompletedAt": "2026-08-10T08:37:59.097Z"
+    },
+    {
+      "id": "cms2m56x5000e5esdyajqha01",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:26:05.357Z",
+      "newCompletedAt": "2026-08-27T12:52:49.004Z"
+    },
+    {
+      "id": "cms2m571f000g5esd0u4m7flq",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-08-25T07:53:34.850Z",
+      "newCompletedAt": "2026-08-21T05:04:35.271Z"
+    },
+    {
+      "id": "cms2mjxj1000m5esdj26nncwt",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-05T08:13:54.871Z",
+      "newCompletedAt": "2026-08-20T04:42:14.634Z"
+    },
+    {
+      "id": "cms2mjxvk000o5esdr2q4rhvp",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-06T13:10:18.877Z",
+      "newCompletedAt": "2026-09-04T09:28:49.605Z"
+    },
+    {
+      "id": "cms2mm13c000q5esdu06483h7",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-09-04T02:00:52.107Z",
+      "newCompletedAt": "2026-08-05T09:34:35.855Z"
+    },
+    {
+      "id": "cms2mm17d000s5esdkq7vcfps",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-09-15T07:23:26.168Z",
+      "newCompletedAt": "2026-09-10T07:47:32.928Z"
+    },
+    {
+      "id": "cms2mo48e000u5esdu24e4ea5",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-10-07T05:58:38.018Z",
+      "newCompletedAt": "2026-09-29T02:23:23.159Z"
+    },
+    {
+      "id": "cms2mo4cd000w5esdkkx7rqat",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:25:55.893Z",
+      "newCompletedAt": "2026-08-26T11:34:32.928Z"
+    },
+    {
+      "id": "cms2mo4ge000y5esdvt01g8lk",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-09-04T02:00:56.482Z",
+      "newCompletedAt": "2026-08-26T10:32:18.883Z"
+    },
+    {
+      "id": "cms4g9yjy00069psds040g4r8",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-06T13:10:21.267Z",
+      "newCompletedAt": "2026-09-04T09:26:23.640Z"
+    },
+    {
+      "id": "cms4jqahz00089psdz79cd5bv",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-06T13:10:22.602Z",
+      "newCompletedAt": "2026-09-04T10:04:35.468Z"
+    },
+    {
+      "id": "cms4jqals000a9psd5d8ix3zn",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-09-04T02:00:54.195Z",
+      "newCompletedAt": "2026-08-05T09:35:12.567Z"
+    },
+    {
+      "id": "cms4jqaq1000c9psdtnryu9qo",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:25:57.006Z",
+      "newCompletedAt": "2026-08-26T11:46:33.531Z"
+    },
+    {
+      "id": "cms4kbq19000f9psdafzxwn9k",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-08-30T13:25:44.321Z",
+      "newCompletedAt": "2026-08-11T07:49:31.299Z"
+    },
+    {
+      "id": "cms4kbq5s000h9psdip06eubu",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:25:58.108Z",
+      "newCompletedAt": "2026-08-26T11:48:11.407Z"
+    },
+    {
+      "id": "cms4kbpui000d9psdrnvc2n6v",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-08-16T05:45:29.409Z",
+      "newCompletedAt": "2026-08-11T05:44:57.454Z"
+    },
+    {
+      "id": "cmsct4ek6000m0isdszl8pb2b",
+      "projectCode": "RD-2026-001",
+      "title": "7.腳架硬度實驗",
+      "completedAt": "2026-08-16T05:46:13.964Z",
+      "newCompletedAt": "2026-08-14T07:37:37.105Z"
+    },
+    {
+      "id": "cmsct4eqg000o0isdmc0op3rw",
+      "projectCode": "RD-2026-001",
+      "title": "o.計畫表",
+      "completedAt": "2026-08-06T04:17:40.606Z",
+      "newCompletedAt": "2026-08-03T05:57:43.077Z"
+    },
+    {
+      "id": "cmsct4evp000q0isdnpml8uvw",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-05T08:13:56.191Z",
+      "newCompletedAt": "2026-08-20T04:42:27.339Z"
+    },
+    {
+      "id": "cmsct4ezm000s0isdzmfzqdh0",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-06T13:10:24.273Z",
+      "newCompletedAt": "2026-09-04T08:27:36.953Z"
+    },
+    {
+      "id": "cmsct4f3q000u0isd75qhgbma",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-08-30T13:25:46.839Z",
+      "newCompletedAt": "2026-08-14T06:25:05.498Z"
+    },
+    {
+      "id": "cmsct4f80000w0isd1btvld2x",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:25:59.472Z",
+      "newCompletedAt": "2026-08-26T11:40:05.858Z"
+    },
+    {
+      "id": "cmsct4fcg000y0isdcje3138u",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-08-30T13:25:45.695Z",
+      "newCompletedAt": "2026-08-11T07:50:38.195Z"
+    },
+    {
+      "id": "cmsct4fhq00100isdk1280qho",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-08-30T13:26:00.303Z",
+      "newCompletedAt": "2026-08-26T11:41:36.319Z"
+    },
+    {
+      "id": "cmsct4fn000120isdaeu54rkx",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-08-25T07:53:39.544Z",
+      "newCompletedAt": "2026-08-21T05:06:08.540Z"
+    },
+    {
+      "id": "cmssagilp002feysdywdfye28",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-09-05T08:13:57.240Z",
+      "newCompletedAt": "2026-08-20T04:43:44.961Z"
+    },
+    {
+      "id": "cmssagiw6002heysdsybjta54",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-09-06T13:10:25.611Z",
+      "newCompletedAt": "2026-09-04T10:35:01.389Z"
+    },
+    {
+      "id": "cmssagj4j002jeysdq96l0zgk",
+      "projectCode": "RD-2026-001",
+      "title": "c.成型站",
+      "completedAt": "2026-08-30T13:26:01.739Z",
+      "newCompletedAt": "2026-08-26T09:30:40.869Z"
+    },
+    {
+      "id": "cmssagjcu002leysd13d2i6z4",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-08-30T13:26:06.980Z",
+      "newCompletedAt": "2026-08-27T12:35:27.039Z"
+    },
+    {
+      "id": "cmssagjlq002neysdsm057e3u",
+      "projectCode": "RD-2026-001",
+      "title": "e.除膠、電鍍站",
+      "completedAt": "2026-09-04T02:00:58.748Z",
+      "newCompletedAt": "2026-09-02T08:16:45.128Z"
+    },
+    {
+      "id": "cmssagju1002peysdi34zaun3",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-09-15T07:23:29.752Z",
+      "newCompletedAt": "2026-09-10T10:46:11.068Z"
+    },
+    {
+      "id": "cmssagk2d002reysd48eq79jk",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-09-22T03:45:40.785Z",
+      "newCompletedAt": "2026-09-07T05:05:01.019Z"
+    },
+    {
+      "id": "cmtv6ineg0005aqsdnl7wdp9u",
+      "projectCode": "RD-2026-001",
+      "title": "b.焊接站",
+      "completedAt": "2026-10-06T03:00:34.464Z",
+      "newCompletedAt": "2026-09-29T05:10:34.721Z"
+    },
+    {
+      "id": "cmtv6inwi0009aqsdejdylwjx",
+      "projectCode": "RD-2026-001",
+      "title": "d.雷射去膠+reflow",
+      "completedAt": "2026-10-21T06:53:48.740Z",
+      "newCompletedAt": "2026-10-06T06:20:41.882Z"
+    },
+    {
+      "id": "cmu0z0arm0003xvsdcyn6tpri",
+      "projectCode": "RD-2026-001",
+      "title": "f.切腳站",
+      "completedAt": "2026-10-21T06:53:40.428Z",
+      "newCompletedAt": "2026-10-06T06:27:20.910Z"
+    },
+    {
+      "id": "cmu0z1jpy0005xvsdzlzdvlwg",
+      "projectCode": "RD-2026-001",
+      "title": "g.測試站",
+      "completedAt": "2026-09-29T03:13:49.186Z",
+      "newCompletedAt": "2026-09-22T05:12:25.655Z"
+    },
+    {
+      "id": "cmv7wbwhl00040dsdbf10vubz",
+      "projectCode": "RD-2026-001",
+      "title": "a.切割站",
+      "completedAt": "2026-10-20T01:02:36.363Z",
+      "newCompletedAt": "2026-10-15T05:16:03.069Z"
+    },
+    {
+      "id": "cmuph71se006atrsdifvecjej",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 2-1 產品矩陣定義Product Matrix Define",
+      "completedAt": "2026-10-27T11:44:25.617Z",
+      "newCompletedAt": "2026-10-20T05:58:24.807Z"
+    },
+    {
+      "id": "cmuph722v006btrsdwotimu63",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 2-2 初步製程流程圖[晶圓和封裝]Preliminary Process Flow chart [Wafer & Package]",
+      "completedAt": "2026-10-27T11:44:30.246Z",
+      "newCompletedAt": "2026-10-20T05:58:35.816Z"
+    },
+    {
+      "id": "cmuph70010064trsdfshbebnj",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 1-4 核心團隊成員名單Core Team Member list",
+      "completedAt": "2026-10-27T11:44:10.447Z",
+      "newCompletedAt": "2026-10-20T05:57:15.937Z"
+    },
+    {
+      "id": "cmuph70kz0066trsd7g85tq6v",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 1-6 初步設計可行性研究 (消費品是可選的)Initial Design Feasibility Study (Consumer products are optional)",
+      "completedAt": "2026-10-27T11:44:14.528Z",
+      "newCompletedAt": "2026-10-20T05:57:26.753Z"
+    },
+    {
+      "id": "cmuph70ve0067trsdocr5mdku",
+      "projectCode": "RD-2026-014",
+      "title": "APQP 1-7 初期物料清單確認是否為新供應商? (晶片/材料(除晶片)/外包封裝) Confirm primary bill of Materials if it is a new supplier? (Chip/Materials (except chips)/Outsourced Packaging)",
+      "completedAt": "2026-10-27T11:44:17.999Z",
+      "newCompletedAt": "2026-10-20T05:57:36.736Z"
+    },
+    {
+      "id": "cmuplsrd900a3trsde792i8po",
+      "projectCode": "RD-2026-018",
+      "title": "APQP 1-1 成員工作評估Member work evaluation",
+      "completedAt": "2026-10-28T01:01:08.385Z",
+      "newCompletedAt": "2026-10-27T09:27:26.705Z"
+    },
+    {
+      "id": "cmuplt35h00b5trsdrxwl7b4p",
+      "projectCode": "RD-2026-018",
+      "title": "APQP 3-1 生產流程圖 Process Flow (Wafer & Package)",
+      "completedAt": "2026-10-28T05:15:45.625Z",
+      "newCompletedAt": "2026-10-27T10:50:01.152Z"
+    }
+  ]
+}
