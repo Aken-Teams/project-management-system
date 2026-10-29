@@ -254,7 +254,12 @@ export function CapexTable({ projectId, items: initialItems, budgetItems, roiPar
   }, [roiParams, budget])
 
   const diff = estimatedTotal > 0 && grandTotal > 0 ? grandTotal - estimatedTotal : null
-  const diffPct = estimatedTotal > 0 && grandTotal > 0 ? Math.round((grandTotal / estimatedTotal) * 100) : null
+  // 旁邊的標籤寫的是「節省/超支」，所以這裡要算「差多少」，不是「花了預估的幾成」。
+  //   先前用 grandTotal / estimatedTotal，實際 84.5M、預估 100.5M 會顯示「節省 (84%)」——
+  //   84% 是花掉的比例，真正省下的是 16%，看的人會以為省了八成。
+  const diffPct = estimatedTotal > 0 && grandTotal > 0
+    ? Math.round((Math.abs(grandTotal - estimatedTotal) / estimatedTotal) * 100)
+    : null
 
   return (
     <div className="space-y-5">

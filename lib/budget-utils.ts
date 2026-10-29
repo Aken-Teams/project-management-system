@@ -22,6 +22,24 @@ export interface CapexBudgetInput {
   acceptancePaid?: boolean | null
 }
 
+/**
+ * capexPaidTotal / capexPurchaseTotal 需要的欄位。
+ *
+ * 一定要用這個常數去 select，不要在各自的查詢裡手抄。
+ *   先前看板／儀表板／報告三處各抄一份，而且都漏了 *Paid 與 *Pct：
+ *   - 漏 depositPaid → 退回看「有沒有付款日」。已排定付款日但還沒付的被當成已付（高估），
+ *     勾了已付款卻沒填日期的被當成沒付（低估）。兩個方向的錯同時存在。
+ *   - 漏 depositPct  → 只填比例沒填金額的匯入資料一律算 0。
+ *   實際踩過：RD-2026-001 看板顯示 48.9M，正確值 16.1M（高估 32.8M）；
+ *            RD-2026-017/018 顯示 0，正確值 3.3M / 2.9M。
+ */
+export const CAPEX_BUDGET_SELECT = {
+  orderAmount: true,
+  depositPaid: true, depositAmount: true, depositPct: true, depositPayDate: true,
+  deliveryPaid: true, deliveryAmount: true, deliveryPct: true, deliveryPayDate: true,
+  acceptancePaid: true, acceptanceAmount: true, acceptancePct: true, acceptancePayDate: true,
+} as const
+
 /** 實際採購 = 各明細訂購金額(orderAmount)加總 */
 export function capexPurchaseTotal(items: CapexBudgetInput[]): number {
   return items.reduce((s, i) => s + (i.orderAmount ?? 0), 0)

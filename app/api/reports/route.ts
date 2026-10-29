@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { projectTypeToFe } from '@/lib/enum-mappers'
-import { computeCapexBudget } from '@/lib/budget-utils'
+import { computeCapexBudget, CAPEX_BUDGET_SELECT } from '@/lib/budget-utils'
 
 // ─── Auto-compute project status & progress from tasks ─────
 interface FeTask {
@@ -167,12 +167,7 @@ export async function GET(request: NextRequest) {
           select: { actualCost: true },
         },
         capexItems: {
-          select: {
-            orderAmount: true,
-            depositAmount: true, depositPayDate: true,
-            deliveryAmount: true, deliveryPayDate: true,
-            acceptanceAmount: true, acceptancePayDate: true,
-          },
+          select: CAPEX_BUDGET_SELECT,
         },
       },
       orderBy: { createdAt: 'desc' },

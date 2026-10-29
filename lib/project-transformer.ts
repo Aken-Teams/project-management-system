@@ -5,7 +5,7 @@ import {
 } from '@/lib/enum-mappers'
 import { todayUtcStr, toUtcDateStr } from '@/lib/date-utils'
 import { safeJsonParse } from '@/lib/utils'
-import { computeCapexBudget, type CapexBudgetInput } from '@/lib/budget-utils'
+import { computeCapexBudget, CAPEX_BUDGET_SELECT, type CapexBudgetInput } from '@/lib/budget-utils'
 // ─── Auto-compute project status & progress from tasks ─────
 
 interface FeTask {
@@ -459,11 +459,6 @@ export const projectFullInclude = {
     select: { actualCost: true, estimatedCost: true },
   },
   capexItems: {
-    select: {
-      orderAmount: true,
-      depositAmount: true, depositPayDate: true,
-      deliveryAmount: true, deliveryPayDate: true,
-      acceptanceAmount: true, acceptancePayDate: true,
-    },
+    select: CAPEX_BUDGET_SELECT,
   },
 } as const

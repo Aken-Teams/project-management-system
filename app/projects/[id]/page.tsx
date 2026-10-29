@@ -15,7 +15,7 @@ import { MilestoneTaskView } from '@/components/milestone-task-view'
 import { useAuth } from '@/lib/auth-context'
 import { useNotificationStore } from '@/lib/notification-store'
 import { TEAM_ROLE_LABELS, type ProjectStatus, type Project, type TeamRole } from '@/lib/mock-data'
-import { computeCapexBudget } from '@/lib/budget-utils'
+import { computeCapexBudget, capexPurchaseTotal } from '@/lib/budget-utils'
 import { useProjectTypes } from '@/hooks/use-project-types'
 import { Input } from '@/components/ui/input'
 import { Calendar as CalendarUI } from '@/components/ui/calendar'
@@ -324,6 +324,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     denom: estimatedTotal > 0 ? estimatedTotal : project.budget,
   })
   const budgetUtilization = budgetDenom > 0 ? Math.round((budgetNumerator / budgetDenom) * 100) : 0
+  // 這張卡的兩個數字會依「有沒有採購明細」換一套基準，光寫「預算」沒人看得出來
+  //   分別是什麼。把基準直接寫在數字旁邊，不要讓人去猜。
+  const hasCapex = capexPurchaseTotal(capexItems) > 0
+  const budgetBasis = hasCapex
+    ? { num: '已付', den: '已下單', hint: '已付款金額 ÷ 採購明細的訂單金額合計' }
+    : { num: '已花', den: '預估', hint: '實際成本 ÷ 設備清單預估支出（尚無採購明細）' }
   const completedMilestones = project.milestones.filter(m => m.status === 'done').length
   const pendingDelays = project.delayRequests.filter(r => r.status === 'pending')
   const daysLeft = Math.max(0, Math.ceil((new Date(project.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
@@ -447,8 +453,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 預算
               </div>
               <span className="text-xl font-bold">{budgetUtilization}%</span>
-              <div className="text-sm text-muted-foreground">
-                ${(budgetNumerator / 1000000).toFixed(1)}M / ${(budgetDenom / 1000000).toFixed(1)}M
+              <div className="text-sm text-muted-foreground tabular-nums" title={budgetBasis.hint}>
+                {budgetBasis.num} ${(budgetNumerator / 1000000).toFixed(1)}M
+                <span className="mx-1 opacity-60">/</span>
+                {budgetBasis.den} ${(budgetDenom / 1000000).toFixed(1)}M
               </div>
             </div>
           )}
